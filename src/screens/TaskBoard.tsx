@@ -25,9 +25,10 @@ const STATUS_COLORS: Record<TaskStatus, string> = {
 
 interface Props {
   userRole?: string
+  defaultBuFilter?: string
 }
 
-export function TaskBoard({ userRole }: Props) {
+export function TaskBoard({ userRole, defaultBuFilter }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [buMap, setBuMap] = useState<Record<string, string>>({})
   const [profileMap, setProfileMap] = useState<Record<string, string>>({})
@@ -36,7 +37,11 @@ export function TaskBoard({ userRole }: Props) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [filterPriority, setFilterPriority] = useState<TaskPriority | ''>('')
   const [filterType, setFilterType] = useState<TaskType | ''>('')
-  const [filterBu, setFilterBu] = useState('')
+  const [filterBu, setFilterBu] = useState(defaultBuFilter ?? '')
+
+  useEffect(() => {
+    if (defaultBuFilter !== undefined) setFilterBu(defaultBuFilter)
+  }, [defaultBuFilter])
   const [buList, setBuList] = useState<{ id: string; code: string; name: string }[]>([])
 
   const load = useCallback(async () => {

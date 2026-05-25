@@ -7,25 +7,31 @@ import type { BUOnboarding, BusinessUnit, ScoreResult } from '../types'
 
 interface Props {
   onScoreBU: (buCode: string) => void
+  onViewTasks: (buId: string) => void
   userRole?: string
 }
 
 type SeedBU = { code: string; name: string; category?: string; location?: string; project_phase?: string; revenue_health?: string; [key: string]: unknown }
 type BUWithId = SeedBU & { id?: string }
 
-export function Dashboard({ onScoreBU, userRole }: Props) {
+export function Dashboard({ onScoreBU, onViewTasks, userRole }: Props) {
   const [buData, setBuData] = useState<BusinessUnit[]>([])
   const [onboardings, setOnboardings] = useState<BUOnboarding[]>([])
+  const [taskCounts, setTaskCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [{ data: buses }, { data: obs }] = await Promise.all([
+      const [{ data: buses }, { data: obs }, { data: tasks }] = await Promise.all([
         supabase.from('business_units').select('*').order('name'),
         supabase.from('bu_onboarding').select('*'),
+        supabase.from('tasks').select('bu_id').not('bu_id', 'is', null),
       ])
       setBuData(buses ?? [])
       setOnboardings(obs ?? [])
+      const counts: Record<string, number> = {}
+      tasks?.forEach((t) => { if (t.bu_id) counts[t.bu_id] = (counts[t.bu_id] ?? 0) + 1 })
+      setTaskCounts(counts)
       setLoading(false)
     }
     load()
@@ -132,6 +138,8 @@ export function Dashboard({ onScoreBU, userRole }: Props) {
                   bu={dbBU ?? (bu as unknown as BusinessUnit)}
                   scores={scores}
                   onScore={() => onScoreBU(bu.code)}
+                  taskCount={dbBU ? (taskCounts[dbBU.id] ?? 0) : 0}
+                  onViewTasks={dbBU ? () => onViewTasks(dbBU.id) : undefined}
                 />
               )
             })}

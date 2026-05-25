@@ -7,10 +7,11 @@ interface Props {
   bu: BusinessUnit | typeof import('../../data/seed-business-units').BUSINESS_UNITS[number]
   scores?: ScoreResult
   onScore?: () => void
+  onViewTasks?: () => void
   taskCount?: number
 }
 
-export function BUCard({ bu, scores, onScore, taskCount = 0 }: Props) {
+export function BUCard({ bu, scores, onScore, onViewTasks, taskCount = 0 }: Props) {
   const total = scores?.total ?? 0
   const status = scores?.status ?? 'NO_DATA'
 
@@ -85,10 +86,17 @@ export function BUCard({ bu, scores, onScore, taskCount = 0 }: Props) {
           Score Onboarding
         </button>
         <button
-          style={{ border: '1px solid var(--border-default)', color: 'var(--text-secondary)', background: 'var(--bg-elevated)' }}
+          onClick={onViewTasks}
+          style={{
+            border: `1px solid ${taskCount > 0 ? 'var(--border-default)' : 'var(--border-subtle)'}`,
+            color: taskCount > 0 ? 'var(--text-secondary)' : 'var(--text-tertiary)',
+            background: 'var(--bg-elevated)',
+            cursor: onViewTasks ? 'pointer' : 'default',
+          }}
           className="text-xs py-1.5 px-3 rounded-md font-medium hover:opacity-80 transition-opacity"
+          title={taskCount > 0 ? `View ${taskCount} task${taskCount !== 1 ? 's' : ''} for this BU` : 'No tasks for this BU'}
         >
-          Tasks {taskCount > 0 ? taskCount : '—'}
+          {taskCount > 0 ? `${taskCount} task${taskCount !== 1 ? 's' : ''}` : 'No tasks'}
         </button>
       </div>
     </div>

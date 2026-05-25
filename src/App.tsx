@@ -26,6 +26,12 @@ export default function App() {
     canSeeDashboard(role) ? 'dashboard' : 'tasks'
   )
   const [scoringBU, setScoringBU] = useState<string | null>(null)
+  const [buFilter, setBuFilter] = useState('')
+
+  function goToTasksForBU(buId: string) {
+    setBuFilter(buId)
+    setActiveView('tasks')
+  }
 
   if (loading) {
     return (
@@ -63,9 +69,9 @@ export default function App() {
             />
           )
         }
-        return <Dashboard onScoreBU={(code) => setScoringBU(code)} userRole={role} />
+        return <Dashboard onScoreBU={(code) => setScoringBU(code)} onViewTasks={goToTasksForBU} userRole={role} />
       case 'tasks':
-        return <TaskBoard userRole={role} />
+        return <TaskBoard userRole={role} defaultBuFilter={buFilter} />
       case 'revenue':
       case 'upload':
         return <RevenueUpload />
@@ -79,8 +85,8 @@ export default function App() {
         return profile ? <Profile profile={profile} onUpdated={() => refetchProfile?.()} /> : null
       default:
         return canSeeDashboard(role)
-          ? <Dashboard onScoreBU={(code) => setScoringBU(code)} userRole={role} />
-          : <TaskBoard userRole={role} />
+          ? <Dashboard onScoreBU={(code) => setScoringBU(code)} onViewTasks={goToTasksForBU} userRole={role} />
+          : <TaskBoard userRole={role} defaultBuFilter={buFilter} />
     }
   }
 
