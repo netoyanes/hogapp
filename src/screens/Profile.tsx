@@ -58,11 +58,17 @@ export function Profile({ profile, onUpdated }: Props) {
   async function testSlack() {
     const url = slackWebhook || localStorage.getItem('hog_slack_webhook') || ''
     if (!url) return
+    if (!url.startsWith('https://hooks.slack.com/')) {
+      setSlackStatus('error')
+      return
+    }
     setTestingSlack(true)
     setSlackStatus('idle')
     try {
+      // no-cors: browser blocks reading response but message still delivers
       await fetch(url, {
         method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: '✅ HOG OPS — Slack integration is working!' }),
       })
