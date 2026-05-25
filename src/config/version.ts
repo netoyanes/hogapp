@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.7.0"
+export const APP_VERSION = "0.8.0"
 
 export type ChangelogEntry = {
   version: string
@@ -111,6 +111,18 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Avatar upload fixed — errors now surface, cache-busting prevents stale images",
       "Invitation-only access — Google OAuth and email signup blocked without a valid invite",
       "Uninvited users see an 'Access denied' banner and are signed out immediately"
+    ]
+  },
+  {
+    version: "0.8.0",
+    date: "2026-05-25",
+    type: "MINOR",
+    changes: [
+      "Task archiving — archive any task from the detail panel, restore at any time",
+      "Archived tasks filter — toggle 'Archived' in the Task Board filter bar to view them",
+      "Archived tasks are hidden from the main board by default",
+      "ARCHIVED badge shown in the task header when viewing an archived task",
+      "Archive and restore actions tracked in Activity Log"
     ]
   }
 ]

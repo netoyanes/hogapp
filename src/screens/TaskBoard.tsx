@@ -38,6 +38,7 @@ export function TaskBoard({ userRole, defaultBuFilter }: Props) {
   const [filterPriority, setFilterPriority] = useState<TaskPriority | ''>('')
   const [filterType, setFilterType] = useState<TaskType | ''>('')
   const [filterBu, setFilterBu] = useState(defaultBuFilter ?? '')
+  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
     if (defaultBuFilter !== undefined) setFilterBu(defaultBuFilter)
@@ -46,7 +47,7 @@ export function TaskBoard({ userRole, defaultBuFilter }: Props) {
 
   const load = useCallback(async () => {
     const [{ data: taskData }, { data: buses }, { data: profiles }] = await Promise.all([
-      supabase.from('tasks').select('*').order('created_at', { ascending: false }),
+      supabase.from('tasks').select('*').eq('archived', showArchived).order('created_at', { ascending: false }),
       supabase.from('business_units').select('id, code, name'),
       supabase.from('profiles').select('id, full_name, email'),
     ])
@@ -59,7 +60,7 @@ export function TaskBoard({ userRole, defaultBuFilter }: Props) {
     profiles?.forEach((p) => { pm[p.id] = p.full_name ?? p.email ?? 'Unknown' })
     setProfileMap(pm)
     setLoading(false)
-  }, [])
+  }, [showArchived])
 
   useEffect(() => {
     load()
@@ -140,6 +141,19 @@ export function TaskBoard({ userRole, defaultBuFilter }: Props) {
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
+          <button
+            onClick={() => setShowArchived((v) => !v)}
+            style={{
+              background: showArchived ? '#78350f20' : 'var(--bg-elevated)',
+              border: `1px solid ${showArchived ? '#d9770640' : 'var(--border-default)'}`,
+              color: showArchived ? '#d97706' : 'var(--text-tertiary)',
+              borderRadius: '6px', padding: '5px 9px', fontSize: '12px', cursor: 'pointer', flexShrink: 0,
+              display: 'flex', alignItems: 'center', gap: '4px',
+              fontFamily: 'var(--font-ui)',
+            }}
+          >
+            Archived {showArchived && `· ${tasks.length}`}
+          </button>
           {(filterBu || filterPriority || filterType) && (
             <button onClick={() => { setFilterBu(''); setFilterPriority(''); setFilterType('') }}
               style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: '11px', cursor: 'pointer' }}>

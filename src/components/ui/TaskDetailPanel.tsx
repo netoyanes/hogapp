@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload } from 'lucide-react'
+import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, statusChangedMessage, proofUploadedMessage } from '../../hooks/useSlack'
 import { logActivity } from '../../hooks/useActivityLog'
@@ -188,6 +188,20 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
     setPostingComment(false)
   }
 
+  async function archiveTask() {
+    await supabase.from('tasks').update({ archived: true, updated_at: new Date().toISOString() }).eq('id', taskId)
+    logActivity('task_archived', 'task', taskId, { title: task?.title ?? '' })
+    onUpdated()
+    onClose()
+  }
+
+  async function restoreTask() {
+    await supabase.from('tasks').update({ archived: false, updated_at: new Date().toISOString() }).eq('id', taskId)
+    logActivity('task_restored', 'task', taskId, { title: task?.title ?? '' })
+    setTask((t) => t ? { ...t, archived: false } : t)
+    onUpdated()
+  }
+
   const inputStyle = {
     background: 'var(--bg-base)',
     border: '1px solid var(--border-default)',
@@ -247,6 +261,11 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
           <div className="flex items-center gap-2 mt-3">
             <StatusBadge status={task.status} />
             <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>{task.type}</span>
+            {task.archived && (
+              <span style={{ background: '#78350f20', color: '#d97706', border: '1px solid #d9770640', borderRadius: '4px', fontSize: '10px', fontWeight: 700, padding: '2px 7px', fontFamily: 'var(--font-mono)' }}>
+                ARCHIVED
+              </span>
+            )}
           </div>
         </div>
 
@@ -504,6 +523,27 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
             >
               Post
             </button>
+          </div>
+
+          {/* Archive / restore */}
+          <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
+            {task.archived ? (
+              <button
+                onClick={restoreTask}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: '7px', padding: '8px 14px', fontSize: '12px', cursor: 'pointer', width: '100%', justifyContent: 'center' }}
+              >
+                <ArchiveRestore size={13} />
+                Restore task
+              </button>
+            ) : (
+              <button
+                onClick={archiveTask}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-tertiary)', borderRadius: '7px', padding: '8px 14px', fontSize: '12px', cursor: 'pointer', width: '100%', justifyContent: 'center' }}
+              >
+                <Archive size={13} />
+                Archive task
+              </button>
+            )}
           </div>
         </div>
       </div>
