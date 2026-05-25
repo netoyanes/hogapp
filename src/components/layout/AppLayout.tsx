@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { Sidebar } from './Sidebar'
 import { BottomNav } from './BottomNav'
-import { VersionBadge } from '../ui/VersionBadge'
 import { useIsMobile } from '../../hooks/useIsMobile'
 
 interface Props {
@@ -18,7 +17,7 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, userRol
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      const views: Record<string, string> = { '1': 'dashboard', '2': 'tasks', '3': 'revenue', '4': 'upload', '5': 'invite', '6': 'profile' }
+      const views: Record<string, string> = { '1': 'dashboard', '2': 'tasks', '3': 'revenue', '4': 'activity', '5': 'upload', '6': 'invite', '7': 'profile' }
       if (views[e.key]) onNavigate(views[e.key])
     }
     window.addEventListener('keydown', handler)
@@ -32,7 +31,6 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, userRol
           {children}
         </main>
         <BottomNav activeView={activeView} onNavigate={onNavigate} userRole={userRole} />
-        <VersionBadge />
       </div>
     )
   }
@@ -43,7 +41,6 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, userRol
       <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {children}
       </main>
-      <VersionBadge />
     </div>
   )
 }

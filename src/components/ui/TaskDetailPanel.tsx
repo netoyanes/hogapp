@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, statusChangedMessage, proofUploadedMessage } from '../../hooks/useSlack'
+import { logActivity } from '../../hooks/useActivityLog'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
@@ -107,6 +108,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
     await supabase.from('tasks').update({ status, updated_at: new Date().toISOString() }).eq('id', taskId)
     setTask((t) => t ? { ...t, status } : t)
     notifySlack(statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG OPS'))
+    logActivity('status_changed', 'task', taskId, { title: task?.title ?? '', from: prev, to: status })
     onUpdated()
   }
 
@@ -130,6 +132,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
     await changeStatus('PROOF_SUBMITTED')
     setProofs((prev) => [...prev, { id: Date.now().toString(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString() }])
     notifySlack(proofUploadedMessage(task?.title ?? '', buName || 'HOG OPS', uploaderName))
+    logActivity('proof_uploaded', 'task', taskId, { title: task?.title ?? '' })
     setUploadingProof(false)
   }
 
@@ -176,6 +179,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
       created_at: new Date().toISOString(),
       author: p?.full_name ?? p?.email ?? 'You',
     }])
+    logActivity('comment_posted', 'task', taskId, { title: task?.title ?? '' })
     setNewComment('')
     setPostingComment(false)
   }

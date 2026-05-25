@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { UserPlus, Copy, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { logActivity } from '../hooks/useActivityLog'
 
 type Role = 'C_LEVEL' | 'OPS_MANAGER' | 'MARKETING' | 'TEAM'
 
@@ -64,6 +65,7 @@ export function InviteUsers() {
       return
     }
 
+    logActivity('user_invited', 'invitation', undefined, { email: email.trim().toLowerCase(), role })
     setSending(false)
     setSent(true)
     setEmail('')

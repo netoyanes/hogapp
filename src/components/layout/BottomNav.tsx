@@ -1,4 +1,4 @@
-import { LayoutDashboard, CheckSquare, UserCircle, UserPlus, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, UserCircle, UserPlus, BarChart3, Activity } from 'lucide-react'
 
 interface Props {
   activeView: string
@@ -13,10 +13,11 @@ function canSeeDashboard(role?: string) {
 export function BottomNav({ activeView, onNavigate, userRole }: Props) {
   const items = [
     canSeeDashboard(userRole) && { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-    { id: 'revenue', label: 'Revenue', icon: BarChart3 },
+    { id: 'tasks',    label: 'Tasks',    icon: CheckSquare },
+    { id: 'revenue',  label: 'Revenue',  icon: BarChart3 },
+    canSeeDashboard(userRole) && { id: 'activity', label: 'Activity', icon: Activity },
     userRole === 'MASTER' && { id: 'invite', label: 'Invite', icon: UserPlus },
-    { id: 'profile', label: 'Profile', icon: UserCircle },
+    { id: 'profile',  label: 'Profile',  icon: UserCircle },
   ].filter(Boolean) as { id: string; label: string; icon: React.ElementType }[]
 
   return (

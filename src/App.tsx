@@ -10,6 +10,7 @@ import { AppLayout } from './components/layout/AppLayout'
 import { Profile } from './screens/Profile'
 import { InviteUsers } from './screens/InviteUsers'
 import { EmptyState } from './components/ui/EmptyState'
+import { ActivityLog } from './screens/ActivityLog'
 
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL'
@@ -67,6 +68,10 @@ export default function App() {
       case 'revenue':
       case 'upload':
         return <RevenueUpload />
+      case 'activity':
+        return canSeeDashboard(role) ? <ActivityLog /> : (
+          <EmptyState icon="🔒" title="Access restricted" description="Activity Log is only available to C-Level and Master users." />
+        )
       case 'invite':
         return role === 'MASTER' ? <InviteUsers /> : null
       case 'profile':
