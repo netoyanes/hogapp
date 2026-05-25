@@ -17,6 +17,7 @@ export function Profile({ profile, onUpdated }: Props) {
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? '')
   const [saving, setSaving] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [testingSlack, setTestingSlack] = useState(false)
   const [slackStatus, setSlackStatus] = useState<'idle' | 'ok' | 'error'>('idle')
@@ -26,14 +27,22 @@ export function Profile({ profile, onUpdated }: Props) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadingAvatar(true)
+    setUploadError(null)
     const ext = file.name.split('.').pop()
-    const path = `avatars/${profile.id}.${ext}`
-    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    if (!error) {
-      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
-      setAvatarUrl(data.publicUrl)
-      await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', profile.id)
+    const path = `${profile.id}.${ext}`
+    // Delete old file first so upsert works regardless of policy setup
+    await supabase.storage.from('avatars').remove([path])
+    const { error } = await supabase.storage.from('avatars').upload(path, file)
+    if (error) {
+      setUploadError(error.message)
+      setUploadingAvatar(false)
+      return
     }
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+    // Cache-bust so browser loads the new image even if URL is the same
+    const freshUrl = `${data.publicUrl}?t=${Date.now()}`
+    setAvatarUrl(freshUrl)
+    await supabase.from('profiles').update({ avatar_url: freshUrl }).eq('id', profile.id)
     setUploadingAvatar(false)
   }
 
@@ -154,6 +163,7 @@ export function Profile({ profile, onUpdated }: Props) {
               </div>
             </div>
             {uploadingAvatar && <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '10px' }}>Uploading…</p>}
+            {uploadError && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '10px' }}>Upload failed: {uploadError}</p>}
           </div>
 
           {/* Personal info */}
