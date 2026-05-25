@@ -37,16 +37,19 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
 
   useEffect(() => {
     async function load() {
-      const [{ data: profiles }, { data: buses }] = await Promise.all([
+      const [{ data: profiles }, { data: buses }, { data: { user } }] = await Promise.all([
         supabase.from('profiles').select('id, full_name, email'),
         supabase.from('business_units').select('id, code, name').order('name'),
+        supabase.auth.getUser(),
       ])
       setTeamMembers(profiles ?? [])
       setBuList(buses ?? [])
       if (!defaultBuId && buses && buses.length > 0) setBuId(buses[0].id)
+      // Non C-Level users are always assigned to themselves
+      if (!canReassign && user?.id) setAssignedTo(user.id)
     }
     load()
-  }, [defaultBuId])
+  }, [defaultBuId, canReassign])
 
   async function handleSave() {
     if (!title.trim()) { setError('Title is required.'); return }
@@ -190,8 +193,13 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
                 </select>
               </div>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
-                <span style={{ color: 'var(--text-tertiary)', fontSize: '12px', fontStyle: 'italic' }}>Assignment by C-Level only</span>
+              <div>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Assigned to</label>
+                <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: 'var(--text-tertiary)' }}>👤</span>
+                  {teamMembers.find(m => m.id === assignedTo)?.full_name ?? teamMembers.find(m => m.id === assignedTo)?.email ?? 'You'}
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginLeft: 'auto' }}>auto</span>
+                </div>
               </div>
             )}
           </div>
