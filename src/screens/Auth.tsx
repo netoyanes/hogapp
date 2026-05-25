@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 
 interface Props {
   onSignIn: (email: string, password: string) => Promise<{ error: unknown }>
+  accessDenied?: boolean
 }
 
 function GoogleIcon() {
@@ -17,7 +18,7 @@ function GoogleIcon() {
   )
 }
 
-export function Auth({ onSignIn }: Props) {
+export function Auth({ onSignIn, accessDenied }: Props) {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -46,6 +47,17 @@ export function Auth({ onSignIn }: Props) {
     setSuccess(null)
 
     if (mode === 'signup') {
+      // Verify invitation before creating account
+      const { data: invite } = await supabase
+        .from('invitations')
+        .select('id')
+        .ilike('email', email.trim())
+        .maybeSingle()
+      if (!invite) {
+        setError('You need an invitation to create an account. Contact your administrator.')
+        setLoading(false)
+        return
+      }
       const { error } = await supabase.auth.signUp({ email, password })
       if (error) {
         setError(error.message)
@@ -99,6 +111,15 @@ export function Auth({ onSignIn }: Props) {
         <p style={{ color: 'var(--text-secondary)' }} className="text-sm mb-6">
           {mode === 'login' ? 'Use your HOG OPS credentials.' : 'Set up your HOG OPS account.'}
         </p>
+
+        {accessDenied && (
+          <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '12px 14px', marginBottom: '16px' }}>
+            <p style={{ color: '#EF4444', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>Access denied</p>
+            <p style={{ color: '#EF4444', fontSize: '12px', opacity: 0.85 }}>
+              Your account is not on the invite list. Ask your administrator to send you an invitation.
+            </p>
+          </div>
+        )}
 
         {/* Google button */}
         <button

@@ -7,6 +7,7 @@ export function useAuth() {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [accessDenied, setAccessDenied] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -28,12 +29,29 @@ export function useAuth() {
   }, [])
 
   async function fetchProfile(userId: string) {
-    const { data } = await supabase
+    const { data: profile } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single()
-    setProfile(data)
+
+    // No role means they just signed up without a valid invitation
+    if (profile && !profile.role) {
+      const { data: invite } = await supabase
+        .from('invitations')
+        .select('id')
+        .ilike('email', profile.email ?? '')
+        .maybeSingle()
+
+      if (!invite) {
+        await supabase.auth.signOut()
+        setAccessDenied(true)
+        setLoading(false)
+        return
+      }
+    }
+
+    setProfile(profile)
     setLoading(false)
   }
 
@@ -46,5 +64,5 @@ export function useAuth() {
     await supabase.auth.signOut()
   }
 
-  return { session, profile, loading, signIn, signOut, refetchProfile: () => session?.user && fetchProfile(session.user.id) }
+  return { session, profile, loading, accessDenied, signIn, signOut, refetchProfile: () => session?.user && fetchProfile(session.user.id) }
 }

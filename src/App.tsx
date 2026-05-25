@@ -17,7 +17,7 @@ export function canSeeDashboard(role?: string | null) {
 }
 
 export default function App() {
-  const { session, profile, loading, signIn, signOut, refetchProfile } = useAuth()
+  const { session, profile, loading, accessDenied, signIn, signOut, refetchProfile } = useAuth()
   const role = profile?.role ?? undefined
 
   // Default view: dashboard for MASTER/C_LEVEL, tasks for everyone else
@@ -39,7 +39,7 @@ export default function App() {
     )
   }
 
-  if (!session) return <Auth onSignIn={signIn} />
+  if (!session) return <Auth onSignIn={signIn} accessDenied={accessDenied} />
 
   if (profile && !profile.onboarding_completed) {
     return <UserOnboarding profile={profile} onComplete={() => refetchProfile?.()} />
