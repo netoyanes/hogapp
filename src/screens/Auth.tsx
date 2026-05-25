@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { VersionBadge } from '../components/ui/VersionBadge'
 import { supabase } from '../lib/supabase'
+import { APP_VERSION } from '../config/version'
 
 interface Props {
   onSignIn: (email: string, password: string) => Promise<{ error: unknown }>
@@ -200,7 +200,9 @@ export function Auth({ onSignIn, accessDenied }: Props) {
         </form>
       </div>
 
-      <VersionBadge />
+      <p style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '11px', marginTop: '20px', textAlign: 'center' }}>
+        v{APP_VERSION}
+      </p>
     </div>
   )
 }
