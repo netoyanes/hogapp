@@ -3,6 +3,7 @@ import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload } 
 import { supabase } from '../../lib/supabase'
 import { notifySlack, statusChangedMessage, proofUploadedMessage } from '../../hooks/useSlack'
 import { logActivity } from '../../hooks/useActivityLog'
+import { notifyAdminsAndAssignee } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
@@ -109,6 +110,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
     setTask((t) => t ? { ...t, status } : t)
     notifySlack(statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG OPS'))
     logActivity('status_changed', 'task', taskId, { title: task?.title ?? '', from: prev, to: status })
+    notifyAdminsAndAssignee(`Status → ${status}`, task?.title ?? '', 'status_changed', taskId, task?.assigned_to ?? undefined)
     onUpdated()
   }
 
@@ -133,6 +135,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
     setProofs((prev) => [...prev, { id: Date.now().toString(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString() }])
     notifySlack(proofUploadedMessage(task?.title ?? '', buName || 'HOG OPS', uploaderName))
     logActivity('proof_uploaded', 'task', taskId, { title: task?.title ?? '' })
+    notifyAdminsAndAssignee('Proof uploaded', task?.title ?? '', 'proof_uploaded', taskId, task?.assigned_to ?? undefined)
     setUploadingProof(false)
   }
 
@@ -180,6 +183,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
       author: p?.full_name ?? p?.email ?? 'You',
     }])
     logActivity('comment_posted', 'task', taskId, { title: task?.title ?? '' })
+    notifyAdminsAndAssignee('New comment', task?.title ?? '', 'comment_posted', taskId, task?.assigned_to ?? undefined)
     setNewComment('')
     setPostingComment(false)
   }

@@ -11,6 +11,7 @@ import { Profile } from './screens/Profile'
 import { InviteUsers } from './screens/InviteUsers'
 import { EmptyState } from './components/ui/EmptyState'
 import { ActivityLog } from './screens/ActivityLog'
+import { NotificationBell } from './components/ui/NotificationBell'
 
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL'
@@ -84,21 +85,25 @@ export default function App() {
   }
 
   return (
-    <AppLayout
-      activeView={activeView}
-      onNavigate={handleNavigate}
-      onSignOut={signOut}
-      userRole={role}
-    >
-      {renderView()}
+    <>
+      <AppLayout
+        activeView={activeView}
+        onNavigate={handleNavigate}
+        onSignOut={signOut}
+        userRole={role}
+      >
+        {renderView()}
 
-      {scoringBU && (
-        <BUOnboardingForm
-          buCode={scoringBU}
-          onClose={() => setScoringBU(null)}
-          onSaved={() => setScoringBU(null)}
-        />
-      )}
-    </AppLayout>
+        {scoringBU && (
+          <BUOnboardingForm
+            buCode={scoringBU}
+            onClose={() => setScoringBU(null)}
+            onSaved={() => setScoringBU(null)}
+          />
+        )}
+      </AppLayout>
+
+      {profile && <NotificationBell userId={profile.id} />}
+    </>
   )
 }

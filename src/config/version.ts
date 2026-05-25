@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.6.0"
+export const APP_VERSION = "0.7.0"
 
 export type ChangelogEntry = {
   version: string
@@ -86,6 +86,18 @@ export const CHANGELOG: ChangelogEntry[] = [
     changes: [
       "Version badge hidden — now lives at the bottom of the Activity Log",
       "Collapsible dot replaced with inline badge (hover to reveal, click to open changelog)"
+    ]
+  },
+  {
+    version: "0.7.0",
+    date: "2026-05-25",
+    type: "MINOR",
+    changes: [
+      "Notification bell — real-time badge with unread count, per-user dropdown",
+      "Push notifications via browser Notification API (Android + iOS PWA)",
+      "Notifies admins and task assignees on: task created, status changed, proof uploaded, comment posted",
+      "Mark all read / mark individual read on click",
+      "Enable push banner inside the bell if permission not yet granted"
     ]
   },
   {
