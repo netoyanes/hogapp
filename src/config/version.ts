@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.4.0"
+export const APP_VERSION = "0.5.0"
 
 export type ChangelogEntry = {
   version: string
@@ -65,6 +65,18 @@ export const CHANGELOG: ChangelogEntry[] = [
       "User Invitations — MASTER can invite team members with pre-assigned roles",
       "Slack auto-notifications — task created, status changed, proof uploaded",
       "App-wide Slack webhook stored in Supabase settings"
+    ]
+  },
+  {
+    version: "0.5.0",
+    date: "2026-05-25",
+    type: "MINOR",
+    changes: [
+      "Mobile-first layout — bottom navigation bar replaces sidebar on small screens",
+      "Task detail panel goes full-screen on mobile",
+      "Create task modal goes full-screen on mobile",
+      "Changelog modal goes full-screen on mobile",
+      "Filter bar and KPI strip scroll horizontally on small screens"
     ]
   }
 ]

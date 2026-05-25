@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, taskCreatedMessage } from '../../hooks/useSlack'
+import { useIsMobile } from '../../hooks/useIsMobile'
 import type { TaskType, TaskPriority, DeadlineType } from '../../types'
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 
 export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: Props) {
   const canReassign = userRole === 'MASTER' || userRole === 'C_LEVEL'
+  const isMobile = useIsMobile()
   const [title, setTitle] = useState('')
   const [buId, setBuId] = useState(defaultBuId ?? '')
   const [type, setType] = useState<TaskType>('MAINTENANCE')
@@ -107,7 +109,10 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflow: 'auto' }}
+        style={isMobile
+          ? { background: 'var(--bg-surface)', width: '100%', height: '100%', overflow: 'auto', display: 'flex', flexDirection: 'column' }
+          : { background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflow: 'auto' }
+        }
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

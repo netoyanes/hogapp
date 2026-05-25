@@ -87,7 +87,7 @@ export function Dashboard({ onScoreBU, userRole }: Props) {
         </div>
 
         {/* KPI strip */}
-        <div className="flex gap-4">
+        <div className="flex gap-3" style={{ overflowX: 'auto', paddingBottom: '2px' }}>
           {[
             { label: 'Total BUs', value: filteredBUs.length, color: 'var(--text-primary)' },
             { label: 'Scored', value: scored, color: 'var(--text-primary)' },

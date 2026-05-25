@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, statusChangedMessage, proofUploadedMessage } from '../../hooks/useSlack'
+import { useIsMobile } from '../../hooks/useIsMobile'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
 import type { Task, TaskStatus, TaskPriority } from '../../types'
@@ -24,6 +25,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 
 export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props) {
   const canReassign = userRole === 'MASTER' || userRole === 'C_LEVEL'
+  const isMobile = useIsMobile()
   const [task, setTask] = useState<Task | null>(null)
   const [buName, setBuName] = useState('')
   const [assigneeName, setAssigneeName] = useState('')
@@ -201,9 +203,10 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
       <div
         style={{
           position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 50,
-          width: '100%', maxWidth: '480px',
+          ...(isMobile ? { left: 0 } : {}),
+          width: '100%', maxWidth: isMobile ? '100%' : '480px',
           background: 'var(--bg-surface)',
-          borderLeft: '1px solid var(--border-default)',
+          borderLeft: isMobile ? 'none' : '1px solid var(--border-default)',
           display: 'flex', flexDirection: 'column',
           overflowY: 'auto',
         }}

@@ -96,6 +96,7 @@ export function TaskBoard({ userRole }: Props) {
     fontFamily: 'var(--font-ui)',
     outline: 'none',
     cursor: 'pointer',
+    flexShrink: 0,
   }
 
   return (
@@ -116,8 +117,8 @@ export function TaskBoard({ userRole }: Props) {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-2">
-          <Filter size={13} style={{ color: 'var(--text-tertiary)' }} />
+        <div className="flex items-center gap-2" style={{ overflowX: 'auto', paddingBottom: '2px' }}>
+          <Filter size={13} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
           <select value={filterBu} onChange={(e) => setFilterBu(e.target.value)} style={selectStyle}>
             <option value="">All BUs</option>
             {buList.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}

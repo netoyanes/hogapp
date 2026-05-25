@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
 import { CHANGELOG, APP_VERSION } from '../../config/version'
+import { useIsMobile } from '../../hooks/useIsMobile'
 
 interface Props {
   onClose: () => void
@@ -13,6 +14,7 @@ const TYPE_COLORS = {
 }
 
 export function ChangelogModal({ onClose }: Props) {
+  const isMobile = useIsMobile()
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
@@ -24,12 +26,14 @@ export function ChangelogModal({ onClose }: Props) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.7)' }}
+      style={{ background: 'rgba(0,0,0,0.7)', padding: isMobile ? 0 : undefined }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', width: '100%', maxWidth: '480px', maxHeight: '80vh' }}
-        className="flex flex-col overflow-hidden"
+        style={isMobile
+          ? { background: 'var(--bg-surface)', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+          : { background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', width: '100%', maxWidth: '480px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+        }
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -83,3 +87,4 @@ export function ChangelogModal({ onClose }: Props) {
     </div>
   )
 }
+
