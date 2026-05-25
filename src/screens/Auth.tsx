@@ -1,20 +1,37 @@
 import { useState } from 'react'
 import { VersionBadge } from '../components/ui/VersionBadge'
+import { supabase } from '../lib/supabase'
 
 interface Props {
   onSignIn: (email: string, password: string) => Promise<{ error: unknown }>
 }
 
 export function Auth({ onSignIn }: Props) {
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setSuccess(null)
+
+    if (mode === 'signup') {
+      const { error } = await supabase.auth.signUp({ email, password })
+      if (error) {
+        setError(error.message)
+      } else {
+        setSuccess('Account created! You can now sign in.')
+        setMode('login')
+      }
+      setLoading(false)
+      return
+    }
+
     const { error } = await onSignIn(email, password)
     if (error) {
       setError(error instanceof Error ? error.message : 'Invalid credentials. Check your email and password.')
@@ -56,10 +73,10 @@ export function Auth({ onSignIn }: Props) {
         </div>
 
         <h1 style={{ color: 'var(--text-primary)' }} className="text-xl font-semibold mb-1">
-          Sign in
+          {mode === 'login' ? 'Sign in' : 'Create account'}
         </h1>
         <p style={{ color: 'var(--text-secondary)' }} className="text-sm mb-6">
-          Use your HOG OPS credentials to access the platform.
+          {mode === 'login' ? 'Use your HOG OPS credentials to access the platform.' : 'Set up your HOG OPS account.'}
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -110,31 +127,32 @@ export function Auth({ onSignIn }: Props) {
           </div>
 
           {error && (
-            <div
-              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#EF4444' }}
-              className="px-3 py-2.5 text-sm"
-            >
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#EF4444' }} className="px-3 py-2.5 text-sm">
               {error}
+            </div>
+          )}
+
+          {success && (
+            <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '8px', color: '#22C55E' }} className="px-3 py-2.5 text-sm">
+              {success}
             </div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            style={{
-              background: loading ? 'var(--accent-dim)' : 'var(--accent)',
-              color: '#000',
-              borderRadius: '8px',
-              padding: '11px',
-              fontSize: '14px',
-              fontWeight: 600,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              border: 'none',
-              fontFamily: 'var(--font-ui)',
-              marginTop: '2px',
-            }}
+            style={{ background: loading ? 'var(--accent-dim)' : 'var(--accent)', color: '#000', borderRadius: '8px', padding: '11px', fontSize: '14px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', border: 'none', fontFamily: 'var(--font-ui)', marginTop: '2px' }}
           >
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(null); setSuccess(null) }}
+            style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer', textAlign: 'center' }}
+          >
+            {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+            <span style={{ color: 'var(--accent)' }}>{mode === 'login' ? 'Create one' : 'Sign in'}</span>
           </button>
         </form>
       </div>
