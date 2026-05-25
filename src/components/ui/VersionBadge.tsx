@@ -4,37 +4,36 @@ import { ChangelogModal } from './ChangelogModal'
 
 export function VersionBadge() {
   const [open, setOpen] = useState(false)
+  const [hovered, setHovered] = useState(false)
 
   return (
     <>
       <button
         onClick={() => setOpen(true)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        title="View changelog"
         style={{
           position: 'fixed',
-          bottom: '16px',
-          left: '16px',
+          bottom: '12px',
+          left: '12px',
           zIndex: 40,
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border-default)',
-          color: 'var(--text-tertiary)',
+          background: hovered ? 'var(--bg-elevated)' : 'transparent',
+          border: `1px solid ${hovered ? 'var(--accent-border)' : 'transparent'}`,
+          color: hovered ? 'var(--accent)' : 'var(--border-default)',
           fontFamily: 'var(--font-mono)',
           borderRadius: '6px',
-          padding: '4px 8px',
+          padding: hovered ? '4px 8px' : '4px',
           fontSize: '11px',
           cursor: 'pointer',
-          transition: 'all 0.15s',
+          transition: 'all 0.2s',
+          overflow: 'hidden',
+          maxWidth: hovered ? '80px' : '14px',
+          whiteSpace: 'nowrap',
+          opacity: hovered ? 1 : 0.3,
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.color = 'var(--accent)'
-          e.currentTarget.style.borderColor = 'var(--accent-border)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.color = 'var(--text-tertiary)'
-          e.currentTarget.style.borderColor = 'var(--border-default)'
-        }}
-        title="View changelog"
       >
-        v{APP_VERSION}
+        {hovered ? `v${APP_VERSION}` : '·'}
       </button>
 
       {open && <ChangelogModal onClose={() => setOpen(false)} />}
