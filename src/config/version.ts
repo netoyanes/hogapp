@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.2.0"
+export const APP_VERSION = "0.3.0"
 
 export type ChangelogEntry = {
   version: string
@@ -33,6 +33,17 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Task cards with priority, assignee, due date, proof indicator",
       "Filters by BU, priority, type, status",
       "Real-time task updates via Supabase"
+    ]
+  },
+  {
+    version: "0.3.0",
+    date: "2026-05-25",
+    type: "MINOR",
+    changes: [
+      "Task detail slide-over panel — view, edit, and change status inline",
+      "Profile screen — avatar upload, personal info editor",
+      "Slack webhook integration — connect a channel for task notifications",
+      "Profile accessible from sidebar"
     ]
   }
 ]

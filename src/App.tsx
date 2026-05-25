@@ -7,6 +7,7 @@ import { TaskBoard } from './screens/TaskBoard'
 import { RevenueUpload } from './screens/RevenueUpload'
 import { BUOnboardingForm } from './screens/BUOnboardingForm'
 import { AppLayout } from './components/layout/AppLayout'
+import { Profile } from './screens/Profile'
 
 export default function App() {
   const { session, profile, loading, signIn, signOut, refetchProfile } = useAuth()
@@ -46,6 +47,8 @@ export default function App() {
       case 'revenue':
       case 'upload':
         return <RevenueUpload />
+      case 'profile':
+        return profile ? <Profile profile={profile} onUpdated={() => refetchProfile?.()} /> : null
       default:
         return <Dashboard onScoreBU={(code) => setScoringBU(code)} userRole={profile?.role ?? undefined} />
     }

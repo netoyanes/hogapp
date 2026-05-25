@@ -3,6 +3,7 @@ import { Filter } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { TaskCard } from '../components/ui/TaskCard'
 import { CreateTaskModal } from '../components/ui/CreateTaskModal'
+import { TaskDetailPanel } from '../components/ui/TaskDetailPanel'
 import { EmptyState } from '../components/ui/EmptyState'
 import type { Task, TaskStatus, TaskPriority, TaskType } from '../types'
 
@@ -32,6 +33,7 @@ export function TaskBoard({ userRole }: Props) {
   const [profileMap, setProfileMap] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [filterPriority, setFilterPriority] = useState<TaskPriority | ''>('')
   const [filterType, setFilterType] = useState<TaskType | ''>('')
   const [filterBu, setFilterBu] = useState('')
@@ -174,6 +176,7 @@ export function TaskBoard({ userRole }: Props) {
                         task={task}
                         buName={task.bu_id ? buMap[task.bu_id] : undefined}
                         assigneeName={task.assigned_to ? profileMap[task.assigned_to] : undefined}
+                        onClick={() => setSelectedTaskId(task.id)}
                       />
                     ))
                   )}
@@ -205,9 +208,14 @@ export function TaskBoard({ userRole }: Props) {
       )}
 
       {showCreate && (
-        <CreateTaskModal
-          onClose={() => setShowCreate(false)}
-          onCreated={load}
+        <CreateTaskModal onClose={() => setShowCreate(false)} onCreated={load} />
+      )}
+
+      {selectedTaskId && (
+        <TaskDetailPanel
+          taskId={selectedTaskId}
+          onClose={() => setSelectedTaskId(null)}
+          onUpdated={load}
         />
       )}
     </div>
