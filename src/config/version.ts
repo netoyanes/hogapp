@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.1.0"
+export const APP_VERSION = "0.2.0"
 
 export type ChangelogEntry = {
   version: string
@@ -21,6 +21,18 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Version badge + Changelog modal",
       "Role-based auth (MASTER / OPS_MANAGER / MARKETING / TEAM)",
       "Full design system — Geist fonts, green accent, dark base"
+    ]
+  },
+  {
+    version: "0.2.0",
+    date: "2026-05-25",
+    type: "MINOR",
+    changes: [
+      "Task Board — full kanban with 5 columns (Open, In Progress, Proof Submitted, Approved, Revision)",
+      "Create Task modal — keyboard shortcut C from anywhere",
+      "Task cards with priority, assignee, due date, proof indicator",
+      "Filters by BU, priority, type, status",
+      "Real-time task updates via Supabase"
     ]
   }
 ]

@@ -42,7 +42,7 @@ export default function App() {
       case 'dashboard':
         return <Dashboard onScoreBU={(code) => setScoringBU(code)} userRole={profile?.role ?? undefined} />
       case 'tasks':
-        return <TaskBoard />
+        return <TaskBoard userRole={profile?.role ?? undefined} />
       case 'revenue':
       case 'upload':
         return <RevenueUpload />
