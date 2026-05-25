@@ -35,8 +35,10 @@ export function useAuth() {
       .eq('id', userId)
       .single()
 
-    // No role means they just signed up without a valid invitation
-    if (profile && !profile.role) {
+    // MASTER always gets through.
+    // Everyone else must have an active invitation — checked on every login
+    // so revoking an invite immediately locks the account out.
+    if (profile && profile.role !== 'MASTER') {
       const { data: invite } = await supabase
         .from('invitations')
         .select('id')

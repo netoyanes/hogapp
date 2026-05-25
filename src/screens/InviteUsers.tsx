@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { UserPlus, Copy, Check } from 'lucide-react'
+import { UserPlus, Copy, Check, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 
@@ -35,6 +35,7 @@ export function InviteUsers() {
   const [error, setError] = useState<string | null>(null)
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => { loadInvitations() }, [])
 
@@ -71,6 +72,13 @@ export function InviteUsers() {
     setEmail('')
     await loadInvitations()
     setTimeout(() => setSent(false), 2000)
+  }
+
+  async function revokeInvite(id: string) {
+    setDeletingId(id)
+    await supabase.from('invitations').delete().eq('id', id)
+    await loadInvitations()
+    setDeletingId(null)
   }
 
   function copyLink(email: string) {
@@ -207,6 +215,14 @@ export function InviteUsers() {
                         {copiedId === inv.email ? 'Copied' : 'Link'}
                       </button>
                     )}
+                    <button
+                      onClick={() => revokeInvite(inv.id)}
+                      disabled={deletingId === inv.id}
+                      style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '6px', padding: '4px 6px', color: deletingId === inv.id ? 'var(--text-tertiary)' : '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: deletingId === inv.id ? 0.5 : 1 }}
+                      title="Revoke invitation"
+                    >
+                      <Trash2 size={11} />
+                    </button>
                   </div>
                 ))}
               </div>
