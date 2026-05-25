@@ -1,4 +1,4 @@
-export type UserRole = "MASTER" | "OPS_MANAGER" | "MARKETING" | "TEAM"
+export type UserRole = "MASTER" | "C_LEVEL" | "OPS_MANAGER" | "MARKETING" | "TEAM"
 
 export type HealthStatus = "HEALTHY" | "ATTENTION" | "AT_RISK" | "NO_DATA"
 

@@ -9,12 +9,16 @@ interface Props {
 }
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, shortcut: '1' },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, shortcut: '1', cLevelOnly: true },
   { id: 'tasks', label: 'Tasks', icon: CheckSquare, shortcut: '2' },
   { id: 'revenue', label: 'Revenue', icon: BarChart3, shortcut: '3' },
   { id: 'upload', label: 'CSV Upload', icon: Upload, shortcut: '4', masterOnly: true },
   { id: 'profile', label: 'Profile', icon: UserCircle, shortcut: '5' },
 ]
+
+function canSeeDashboard(role?: string) {
+  return role === 'MASTER' || role === 'C_LEVEL'
+}
 
 export function Sidebar({ activeView, onNavigate, onSignOut, userRole }: Props) {
   const [expanded, setExpanded] = useState(false)
@@ -55,7 +59,11 @@ export function Sidebar({ activeView, onNavigate, onSignOut, userRole }: Props) 
 
       {/* Nav items */}
       <nav className="flex-1 flex flex-col gap-1 p-2 overflow-hidden">
-        {NAV_ITEMS.filter(item => !item.masterOnly || userRole === 'MASTER').map((item) => {
+        {NAV_ITEMS.filter(item => {
+          if (item.masterOnly && userRole !== 'MASTER') return false
+          if (item.cLevelOnly && !canSeeDashboard(userRole)) return false
+          return true
+        }).map((item) => {
           const Icon = item.icon
           const active = activeView === item.id
           return (

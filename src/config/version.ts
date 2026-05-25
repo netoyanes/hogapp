@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.3.0"
+export const APP_VERSION = "0.3.1"
 
 export type ChangelogEntry = {
   version: string
@@ -44,6 +44,16 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Profile screen — avatar upload, personal info editor",
       "Slack webhook integration — connect a channel for task notifications",
       "Profile accessible from sidebar"
+    ]
+  },
+  {
+    version: "0.3.1",
+    date: "2026-05-25",
+    type: "PATCH",
+    changes: [
+      "Marketing Dashboard restricted to MASTER and C_LEVEL roles only",
+      "Added C_LEVEL role — full dashboard visibility, no admin controls",
+      "Non-privileged users land on Task Board by default"
     ]
   }
 ]
