@@ -208,12 +208,13 @@ export function TaskBoard({ userRole }: Props) {
       )}
 
       {showCreate && (
-        <CreateTaskModal onClose={() => setShowCreate(false)} onCreated={load} />
+        <CreateTaskModal onClose={() => setShowCreate(false)} onCreated={load} userRole={userRole} />
       )}
 
       {selectedTaskId && (
         <TaskDetailPanel
           taskId={selectedTaskId}
+          userRole={userRole}
           onClose={() => setSelectedTaskId(null)}
           onUpdated={load}
         />

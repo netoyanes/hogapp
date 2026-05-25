@@ -8,9 +8,11 @@ interface Props {
   onClose: () => void
   onCreated: () => void
   defaultBuId?: string
+  userRole?: string
 }
 
-export function CreateTaskModal({ onClose, onCreated, defaultBuId }: Props) {
+export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: Props) {
+  const canReassign = userRole === 'MASTER' || userRole === 'C_LEVEL'
   const [title, setTitle] = useState('')
   const [buId, setBuId] = useState(defaultBuId ?? '')
   const [type, setType] = useState<TaskType>('MAINTENANCE')
@@ -172,18 +174,26 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId }: Props) {
                 <option value="LOW">🟢 LOW</option>
               </select>
             </div>
-            <div>
-              {label('Assign to')}
-              <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={selectStyle}
-                onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-                onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
-              >
-                <option value="">— Unassigned —</option>
-                {teamMembers.map((m) => (
-                  <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
-                ))}
-              </select>
-            </div>
+            {canReassign ? (
+              <div>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>
+                  Assign to <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '9px' }}>C-LEVEL</span>
+                </label>
+                <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={selectStyle}
+                  onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                  onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+                >
+                  <option value="">— Unassigned —</option>
+                  {teamMembers.map((m) => (
+                    <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
+                <span style={{ color: 'var(--text-tertiary)', fontSize: '12px', fontStyle: 'italic' }}>Assignment by C-Level only</span>
+              </div>
+            )}
           </div>
 
           {/* Advanced toggle */}

@@ -10,6 +10,7 @@ interface Props {
   taskId: string
   onClose: () => void
   onUpdated: () => void
+  userRole?: string
 }
 
 const STATUSES: TaskStatus[] = ['OPEN', 'IN_PROGRESS', 'PROOF_SUBMITTED', 'APPROVED', 'REVISION']
@@ -21,10 +22,13 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   REVISION: 'Revision',
 }
 
-export function TaskDetailPanel({ taskId, onClose, onUpdated }: Props) {
+export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props) {
+  const canReassign = userRole === 'MASTER' || userRole === 'C_LEVEL'
   const [task, setTask] = useState<Task | null>(null)
   const [buName, setBuName] = useState('')
   const [assigneeName, setAssigneeName] = useState('')
+  const [assignedTo, setAssignedTo] = useState('')
+  const [teamMembers, setTeamMembers] = useState<{ id: string; full_name: string | null; email: string | null }[]>([])
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -55,6 +59,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated }: Props) {
       setDescription(t.description ?? '')
       setDueDate(t.due_date ?? '')
       setPriority(t.priority)
+      setAssignedTo(t.assigned_to ?? '')
 
       if (t.bu_id) {
         const { data: bu } = await supabase.from('business_units').select('code, name').eq('id', t.bu_id).single()
@@ -63,6 +68,11 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated }: Props) {
       if (t.assigned_to) {
         const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', t.assigned_to).single()
         if (p) setAssigneeName(p.full_name ?? p.email ?? '')
+      }
+
+      if (canReassign) {
+        const { data: members } = await supabase.from('profiles').select('id, full_name, email')
+        setTeamMembers(members ?? [])
       }
 
       // Load comments
@@ -135,9 +145,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated }: Props) {
       description: description || null,
       due_date: dueDate || null,
       priority,
+      ...(canReassign ? { assigned_to: assignedTo || null } : {}),
       updated_at: new Date().toISOString(),
     }).eq('id', taskId)
-    setTask((prev) => prev ? { ...prev, title, description, due_date: dueDate, priority } : prev)
+    const newAssigneeName = canReassign
+      ? (teamMembers.find(m => m.id === assignedTo)?.full_name ?? teamMembers.find(m => m.id === assignedTo)?.email ?? 'Unassigned')
+      : assigneeName
+    setAssigneeName(newAssigneeName)
+    setTask((prev) => prev ? { ...prev, title, description, due_date: dueDate, priority, assigned_to: assignedTo || null } : prev)
     setSaving(false)
     setEditing(false)
     onUpdated()
@@ -302,6 +317,25 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated }: Props) {
                   </select>
                 </div>
               </div>
+              {/* Assignee — C-Level/Master only */}
+              {canReassign && (
+                <div>
+                  <label style={{ color: 'var(--text-tertiary)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
+                    Assigned to
+                    <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '9px', marginLeft: '6px' }}>C-LEVEL</span>
+                  </label>
+                  <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}
+                    onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                    onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+                  >
+                    <option value="">— Unassigned —</option>
+                    {teamMembers.map((m) => (
+                      <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <button onClick={() => setEditing(false)} style={{ flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: '7px', padding: '8px', fontSize: '12px', cursor: 'pointer' }}>
                   Cancel
