@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { notifySlack, taskCreatedMessage } from '../../hooks/useSlack'
 import type { TaskType, TaskPriority, DeadlineType } from '../../types'
 
 interface Props {
@@ -66,6 +67,12 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId }: Props) {
     })
     setSaving(false)
     if (error) { setError(error.message); return }
+
+    // Slack notification
+    const buName = buList.find(b => b.id === buId)
+    const assigneeName = teamMembers.find(m => m.id === assignedTo)?.full_name ?? undefined
+    notifySlack(taskCreatedMessage(title.trim(), buName ? `${buName.code} · ${buName.name}` : 'No BU', priority, assigneeName ?? undefined))
+
     onCreated()
     onClose()
   }

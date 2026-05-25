@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { X, Calendar, Clock, User, Building2, CheckCircle2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { notifySlack, statusChangedMessage, proofUploadedMessage } from '../../hooks/useSlack'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
 import type { Task, TaskStatus, TaskPriority } from '../../types'
@@ -33,6 +34,10 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated }: Props) {
   const [comments, setComments] = useState<{ id: string; content: string; created_at: string; author: string }[]>([])
   const [newComment, setNewComment] = useState('')
   const [postingComment, setPostingComment] = useState(false)
+  const [proofs, setProofs] = useState<{ id: string; file_url: string; file_type: string; created_at: string }[]>([])
+  const [uploadingProof, setUploadingProof] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -72,14 +77,54 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated }: Props) {
         }))
         setComments(withAuthors)
       }
+
+      // Load proofs
+      const { data: pr } = await supabase
+        .from('task_proofs')
+        .select('id, file_url, file_type, created_at')
+        .eq('task_id', taskId)
+        .order('created_at')
+      setProofs(pr ?? [])
     }
     load()
   }, [taskId])
 
   async function changeStatus(status: TaskStatus) {
+    const prev = task?.status ?? 'OPEN'
     await supabase.from('tasks').update({ status, updated_at: new Date().toISOString() }).eq('id', taskId)
-    setTask((prev) => prev ? { ...prev, status } : prev)
+    setTask((t) => t ? { ...t, status } : t)
+    notifySlack(statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG OPS'))
     onUpdated()
+  }
+
+  async function uploadProof(file: File) {
+    setUploadingProof(true)
+    const ext = file.name.split('.').pop()
+    const path = `proofs/${taskId}/${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('proofs').upload(path, file, { upsert: false })
+    if (error) { setUploadingProof(false); return }
+    const { data: urlData } = supabase.storage.from('proofs').getPublicUrl(path)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: pRow } = await supabase.from('profiles').select('full_name, email').eq('id', user?.id ?? '').single()
+    const uploaderName = pRow?.full_name ?? pRow?.email ?? 'Someone'
+    await supabase.from('task_proofs').insert({
+      task_id: taskId,
+      file_url: urlData.publicUrl,
+      file_type: file.type,
+      uploaded_by: user?.id,
+    })
+    // Auto-set status to PROOF_SUBMITTED
+    await changeStatus('PROOF_SUBMITTED')
+    setProofs((prev) => [...prev, { id: Date.now().toString(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString() }])
+    notifySlack(proofUploadedMessage(task?.title ?? '', buName || 'HOG OPS', uploaderName))
+    setUploadingProof(false)
+  }
+
+  function handleFileDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) uploadProof(file)
   }
 
   async function saveEdits() {
@@ -277,6 +322,61 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated }: Props) {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Proofs */}
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Paperclip size={12} style={{ color: 'var(--text-tertiary)' }} />
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', margin: 0 }}>PROOF {proofs.length > 0 && `· ${proofs.length} file${proofs.length > 1 ? 's' : ''}`}</p>
+          </div>
+
+          {/* Existing proofs */}
+          {proofs.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {proofs.map((p) => (
+                <a key={p.id} href={p.file_url} target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'block', border: '1px solid var(--border-default)', borderRadius: '6px', overflow: 'hidden' }}
+                >
+                  {p.file_type.startsWith('image/') ? (
+                    <img src={p.file_url} alt="proof" style={{ width: '80px', height: '80px', objectFit: 'cover', display: 'block' }} />
+                  ) : (
+                    <div style={{ width: '80px', height: '80px', background: 'var(--bg-elevated)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '24px' }}>{p.file_type.startsWith('video/') ? '🎥' : '📄'}</span>
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: '9px', fontFamily: 'var(--font-mono)' }}>
+                        {p.file_type.split('/')[1]?.toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Drop zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleFileDrop}
+            onClick={() => fileRef.current?.click()}
+            style={{
+              border: `1px dashed ${dragOver ? 'var(--accent)' : 'var(--border-default)'}`,
+              borderRadius: '8px',
+              padding: '12px',
+              cursor: 'pointer',
+              background: dragOver ? 'var(--accent-bg)' : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              transition: 'all 0.15s',
+            }}
+          >
+            <Upload size={13} style={{ color: dragOver ? 'var(--accent)' : 'var(--text-tertiary)' }} />
+            <span style={{ color: dragOver ? 'var(--accent)' : 'var(--text-tertiary)', fontSize: '12px' }}>
+              {uploadingProof ? 'Uploading…' : 'Drop file or click to upload proof'}
+            </span>
+            <input ref={fileRef} type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadProof(f) }}
+            />
+          </div>
         </div>
 
         {/* Comments */}

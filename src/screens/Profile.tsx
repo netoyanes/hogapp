@@ -46,8 +46,11 @@ export function Profile({ profile, onUpdated }: Props) {
       birth_date: birthDate || null,
     }).eq('id', profile.id)
 
-    // Save slack webhook to localStorage (not stored in DB for security)
-    if (slackWebhook) localStorage.setItem('hog_slack_webhook', slackWebhook)
+    // Save Slack webhook to both localStorage and app_settings
+    if (slackWebhook) {
+      localStorage.setItem('hog_slack_webhook', slackWebhook)
+      await supabase.from('app_settings').upsert({ key: 'slack_webhook', value: slackWebhook }, { onConflict: 'key' })
+    }
 
     setSaving(false)
     setSaved(true)

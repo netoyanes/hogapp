@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutDashboard, CheckSquare, BarChart3, Upload, ChevronRight, LogOut, UserCircle } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus } from 'lucide-react'
 
 interface Props {
   activeView: string
@@ -13,7 +13,8 @@ const NAV_ITEMS = [
   { id: 'tasks', label: 'Tasks', icon: CheckSquare, shortcut: '2' },
   { id: 'revenue', label: 'Revenue', icon: BarChart3, shortcut: '3' },
   { id: 'upload', label: 'CSV Upload', icon: Upload, shortcut: '4', masterOnly: true },
-  { id: 'profile', label: 'Profile', icon: UserCircle, shortcut: '5' },
+  { id: 'invite', label: 'Invite Users', icon: UserPlus, shortcut: '5', masterOnly: true },
+  { id: 'profile', label: 'Profile', icon: UserCircle, shortcut: '6' },
 ]
 
 function canSeeDashboard(role?: string) {

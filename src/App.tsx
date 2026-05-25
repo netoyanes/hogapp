@@ -8,6 +8,7 @@ import { RevenueUpload } from './screens/RevenueUpload'
 import { BUOnboardingForm } from './screens/BUOnboardingForm'
 import { AppLayout } from './components/layout/AppLayout'
 import { Profile } from './screens/Profile'
+import { InviteUsers } from './screens/InviteUsers'
 import { EmptyState } from './components/ui/EmptyState'
 
 export function canSeeDashboard(role?: string | null) {
@@ -66,6 +67,8 @@ export default function App() {
       case 'revenue':
       case 'upload':
         return <RevenueUpload />
+      case 'invite':
+        return role === 'MASTER' ? <InviteUsers /> : null
       case 'profile':
         return profile ? <Profile profile={profile} onUpdated={() => refetchProfile?.()} /> : null
       default:

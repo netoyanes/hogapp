@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.3.1"
+export const APP_VERSION = "0.4.0"
 
 export type ChangelogEntry = {
   version: string
@@ -54,6 +54,17 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Marketing Dashboard restricted to MASTER and C_LEVEL roles only",
       "Added C_LEVEL role — full dashboard visibility, no admin controls",
       "Non-privileged users land on Task Board by default"
+    ]
+  },
+  {
+    version: "0.4.0",
+    date: "2026-05-25",
+    type: "MINOR",
+    changes: [
+      "Task Proofs — upload photos/videos as evidence, auto-sets PROOF_SUBMITTED",
+      "User Invitations — MASTER can invite team members with pre-assigned roles",
+      "Slack auto-notifications — task created, status changed, proof uploaded",
+      "App-wide Slack webhook stored in Supabase settings"
     ]
   }
 ]
