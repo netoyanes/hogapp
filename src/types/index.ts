@@ -101,6 +101,7 @@ export interface Task {
   deadline_type: DeadlineType
   estimated_hours: number | null
   completed_at: string | null
+  archived: boolean
   created_at: string
   updated_at: string
 }
