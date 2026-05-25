@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.5.0"
+export const APP_VERSION = "0.6.0"
 
 export type ChangelogEntry = {
   version: string
@@ -77,6 +77,28 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Create task modal goes full-screen on mobile",
       "Changelog modal goes full-screen on mobile",
       "Filter bar and KPI strip scroll horizontally on small screens"
+    ]
+  },
+  {
+    version: "0.5.1",
+    date: "2026-05-25",
+    type: "PATCH",
+    changes: [
+      "Version badge hidden — now lives at the bottom of the Activity Log",
+      "Collapsible dot replaced with inline badge (hover to reveal, click to open changelog)"
+    ]
+  },
+  {
+    version: "0.6.0",
+    date: "2026-05-25",
+    type: "MINOR",
+    changes: [
+      "Activity Log — real-time audit trail of all platform actions with user attribution",
+      "Tracks: task created, status changed, proof uploaded, comment posted, user invited",
+      "Activity stats: actions today, this week, total, most active user",
+      "Avatar upload fixed — errors now surface, cache-busting prevents stale images",
+      "Invitation-only access — Google OAuth and email signup blocked without a valid invite",
+      "Uninvited users see an 'Access denied' banner and are signed out immediately"
     ]
   }
 ]
