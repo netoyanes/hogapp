@@ -37,6 +37,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated }: Props) {
   const [proofs, setProofs] = useState<{ id: string; file_url: string; file_type: string; created_at: string }[]>([])
   const [uploadingProof, setUploadingProof] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -333,23 +334,64 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated }: Props) {
 
           {/* Existing proofs */}
           {proofs.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {proofs.map((p) => (
-                <a key={p.id} href={p.file_url} target="_blank" rel="noopener noreferrer"
-                  style={{ display: 'block', border: '1px solid var(--border-default)', borderRadius: '6px', overflow: 'hidden' }}
-                >
-                  {p.file_type.startsWith('image/') ? (
-                    <img src={p.file_url} alt="proof" style={{ width: '80px', height: '80px', objectFit: 'cover', display: 'block' }} />
-                  ) : (
-                    <div style={{ width: '80px', height: '80px', background: 'var(--bg-elevated)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                      <span style={{ fontSize: '24px' }}>{p.file_type.startsWith('video/') ? '🎥' : '📄'}</span>
-                      <span style={{ color: 'var(--text-tertiary)', fontSize: '9px', fontFamily: 'var(--font-mono)' }}>
-                        {p.file_type.split('/')[1]?.toUpperCase()}
+            <div className="flex flex-col gap-2 mb-3">
+              {proofs.map((p) => {
+                const isImage = p.file_type.startsWith('image/')
+                const isPDF = p.file_type === 'application/pdf'
+                const isVideo = p.file_type.startsWith('video/')
+                const ext = p.file_type.split('/')[1]?.toUpperCase() ?? 'FILE'
+                const EXT_COLORS: Record<string, string> = { PDF: '#EF4444', PNG: '#3B82F6', JPG: '#3B82F6', JPEG: '#3B82F6', WEBP: '#3B82F6', MP4: '#A855F7', MOV: '#A855F7', QUICKTIME: '#A855F7' }
+                const extColor = EXT_COLORS[ext] ?? '#888888'
+
+                return (
+                  <div key={p.id} style={{ border: '1px solid var(--border-default)', borderRadius: '8px', overflow: 'hidden', background: 'var(--bg-elevated)' }}>
+                    {/* File header row */}
+                    <div className="flex items-center gap-3 px-3 py-2">
+                      <span style={{ background: `${extColor}20`, color: extColor, fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}>
+                        {ext}
                       </span>
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', flex: 1 }}>
+                        {new Date(p.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <button
+                        onClick={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
+                        style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', cursor: 'pointer' }}
+                      >
+                        Preview
+                      </button>
+                      <a href={p.file_url} target="_blank" rel="noopener noreferrer"
+                        style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', textDecoration: 'none' }}
+                      >
+                        Open ↗
+                      </a>
                     </div>
-                  )}
-                </a>
-              ))}
+
+                    {/* Inline preview */}
+                    {isImage && (
+                      <img
+                        src={p.file_url}
+                        alt="proof"
+                        onClick={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
+                        style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', display: 'block', cursor: 'zoom-in', borderTop: '1px solid var(--border-subtle)' }}
+                      />
+                    )}
+                    {isPDF && (
+                      <iframe
+                        src={`${p.file_url}#toolbar=0`}
+                        style={{ width: '100%', height: '200px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block' }}
+                        title="PDF preview"
+                      />
+                    )}
+                    {isVideo && (
+                      <video
+                        src={p.file_url}
+                        controls
+                        style={{ width: '100%', maxHeight: '200px', display: 'block', borderTop: '1px solid var(--border-subtle)' }}
+                      />
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 
@@ -420,6 +462,49 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Fullscreen preview modal */}
+      {previewProof && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-6"
+          style={{ background: 'rgba(0,0,0,0.92)' }}
+          onClick={() => setPreviewProof(null)}
+        >
+          <button
+            onClick={() => setPreviewProof(null)}
+            style={{ position: 'absolute', top: '16px', right: '20px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '6px', padding: '6px', cursor: 'pointer', color: 'var(--text-secondary)', zIndex: 10 }}
+          >
+            <X size={16} />
+          </button>
+          <div
+            style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: '10px', overflow: 'hidden' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {previewProof.type.startsWith('image/') && (
+              <img src={previewProof.url} alt="proof" style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', display: 'block', borderRadius: '8px' }} />
+            )}
+            {previewProof.type === 'application/pdf' && (
+              <iframe
+                src={previewProof.url}
+                style={{ width: '80vw', height: '85vh', border: 'none', borderRadius: '8px', background: '#fff' }}
+                title="PDF preview"
+              />
+            )}
+            {previewProof.type.startsWith('video/') && (
+              <video src={previewProof.url} controls autoPlay style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: '8px' }} />
+            )}
+          </div>
+          <a
+            href={previewProof.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ position: 'absolute', bottom: '20px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '7px', padding: '8px 16px', color: 'var(--text-secondary)', fontSize: '12px', textDecoration: 'none' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Open original ↗
+          </a>
+        </div>
+      )}
     </>
   )
 }
