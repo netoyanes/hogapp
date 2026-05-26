@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.0.0"
+export const APP_VERSION = "1.1.0"
 
 export type ChangelogEntry = {
   version: string
@@ -123,6 +123,22 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Archived tasks are hidden from the main board by default",
       "ARCHIVED badge shown in the task header when viewing an archived task",
       "Archive and restore actions tracked in Activity Log"
+    ]
+  },
+  {
+    version: "1.1.0",
+    date: "2026-05-26",
+    type: "MINOR",
+    changes: [
+      "Content Calendar — monthly planning grid for social media content by BU and platform",
+      "Plan posts for Instagram, Facebook, WhatsApp, TikTok or Other",
+      "Content types: Post, Story, Reel, Video, Carousel",
+      "Status workflow: Draft → Scheduled → Published (or Cancelled)",
+      "Write full captions/copy with character counter directly in the calendar",
+      "Link content entries to existing tasks for traceability",
+      "Internal notes field for design requests and team instructions",
+      "Filter by BU, platform, and status — platform color legend always visible",
+      "Click any day cell + to add content, click an entry to edit or delete"
     ]
   },
   {

@@ -12,6 +12,7 @@ import { InviteUsers } from './screens/InviteUsers'
 import { EmptyState } from './components/ui/EmptyState'
 import { ActivityLog } from './screens/ActivityLog'
 import { CalendarView } from './screens/CalendarView'
+import { ContentCalendar } from './screens/ContentCalendar'
 import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
 
@@ -76,6 +77,8 @@ export default function App() {
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} />
       case 'calendar':
         return <CalendarView userRole={role} defaultBuFilter={buFilter} />
+      case 'content':
+        return <ContentCalendar userRole={role} />
       case 'revenue':
       case 'upload':
         return <RevenueUpload />

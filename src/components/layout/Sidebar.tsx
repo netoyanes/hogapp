@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate } from 'lucide-react'
 
 interface Props {
   activeView: string
@@ -12,12 +12,13 @@ const NAV_ITEMS = [
   { id: 'dashboard',  label: 'Dashboard',    icon: LayoutDashboard, shortcut: '1', cLevelOnly: true },
   { id: 'tasks',      label: 'Tasks',        icon: CheckSquare,     shortcut: '2' },
   { id: 'calendar',   label: 'Calendar',     icon: CalendarDays,    shortcut: '3' },
-  { id: 'revenue',    label: 'Revenue',      icon: BarChart3,       shortcut: '4' },
-  { id: 'activity',   label: 'Activity Log', icon: Activity,        shortcut: '5', cLevelOnly: true },
-  { id: 'templates',  label: 'Templates',    icon: LayoutTemplate,  shortcut: '6', cLevelOnly: true },
-  { id: 'upload',     label: 'CSV Upload',   icon: Upload,          shortcut: '7', masterOnly: true },
-  { id: 'invite',     label: 'Invite Users', icon: UserPlus,        shortcut: '8', masterOnly: true },
-  { id: 'profile',    label: 'Profile',      icon: UserCircle,      shortcut: '9' },
+  { id: 'content',    label: 'Content',      icon: Megaphone,       shortcut: '4' },
+  { id: 'revenue',    label: 'Revenue',      icon: BarChart3,       shortcut: '5' },
+  { id: 'activity',   label: 'Activity Log', icon: Activity,        shortcut: '6', cLevelOnly: true },
+  { id: 'templates',  label: 'Templates',    icon: LayoutTemplate,  shortcut: '7', cLevelOnly: true },
+  { id: 'upload',     label: 'CSV Upload',   icon: Upload,          shortcut: '8', masterOnly: true },
+  { id: 'invite',     label: 'Invite Users', icon: UserPlus,        shortcut: '9', masterOnly: true },
+  { id: 'profile',    label: 'Profile',      icon: UserCircle,      shortcut: '0' },
 ]
 
 function canSeeDashboard(role?: string) {
