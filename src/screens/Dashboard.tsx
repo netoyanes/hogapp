@@ -64,6 +64,37 @@ export function Dashboard({ onScoreBU, onViewTasks, userRole }: Props) {
     ? displayBUs.filter((bu) => ['BM', 'AM', 'PM'].includes(bu.code))
     : displayBUs
 
+  // Split into scored vs pending
+  const scoredBUs = filteredBUs.filter((bu) => {
+    const dbBU = buData.find((b) => b.code === bu.code)
+    return dbBU && !!getScores(dbBU.id)
+  })
+  const pendingBUs = filteredBUs.filter((bu) => {
+    const dbBU = buData.find((b) => b.code === bu.code)
+    return !dbBU || !getScores(dbBU.id)
+  })
+
+  function renderGrid(list: BUWithId[]) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {list.map((bu) => {
+          const dbBU = buData.find((b) => b.code === bu.code)
+          const scores = dbBU ? getScores(dbBU.id) : undefined
+          return (
+            <BUCard
+              key={bu.code}
+              bu={dbBU ?? (bu as unknown as BusinessUnit)}
+              scores={scores}
+              onScore={() => onScoreBU(bu.code)}
+              taskCount={dbBU ? (taskCounts[dbBU.id] ?? 0) : 0}
+              onViewTasks={dbBU ? () => onViewTasks(dbBU.id) : undefined}
+            />
+          )
+        })}
+      </div>
+    )
+  }
+
   // KPI stats
   const scored = onboardings.length
   const healthy = onboardings.filter((o) => {
@@ -128,21 +159,34 @@ export function Dashboard({ onScoreBU, onViewTasks, userRole }: Props) {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredBUs.map((bu) => {
-              const dbBU = buData.find((b) => b.code === bu.code)
-              const scores = dbBU ? getScores(dbBU.id) : undefined
-              return (
-                <BUCard
-                  key={bu.code}
-                  bu={dbBU ?? (bu as unknown as BusinessUnit)}
-                  scores={scores}
-                  onScore={() => onScoreBU(bu.code)}
-                  taskCount={dbBU ? (taskCounts[dbBU.id] ?? 0) : 0}
-                  onViewTasks={dbBU ? () => onViewTasks(dbBU.id) : undefined}
-                />
-              )
-            })}
+          <div className="flex flex-col gap-8">
+            {/* Scored section */}
+            {scoredBUs.length > 0 && (
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '13px' }}>Scored</span>
+                  <span style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', color: 'var(--accent)', borderRadius: '20px', padding: '1px 9px', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                    {scoredBUs.length}
+                  </span>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+                </div>
+                {renderGrid(scoredBUs)}
+              </div>
+            )}
+
+            {/* Pending section */}
+            {pendingBUs.length > 0 && (
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '13px' }}>Pending Onboarding</span>
+                  <span style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-tertiary)', borderRadius: '20px', padding: '1px 9px', fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                    {pendingBUs.length}
+                  </span>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+                </div>
+                {renderGrid(pendingBUs)}
+              </div>
+            )}
           </div>
         )}
       </div>
