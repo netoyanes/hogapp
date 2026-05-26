@@ -117,8 +117,11 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
 
   async function changeStatus(status: TaskStatus) {
     const prev = task?.status ?? 'OPEN'
-    await supabase.from('tasks').update({ status, updated_at: new Date().toISOString() }).eq('id', taskId)
-    setTask((t) => t ? { ...t, status } : t)
+    const update: Record<string, unknown> = { status, updated_at: new Date().toISOString() }
+    if (status === 'APPROVED') update.priority = 'LOW'
+    await supabase.from('tasks').update(update).eq('id', taskId)
+    setTask((t) => t ? { ...t, status, ...(status === 'APPROVED' ? { priority: 'LOW' } : {}) } : t)
+    setPriority(status === 'APPROVED' ? 'LOW' : priority)
     notifySlack(statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG OPS'))
     logActivity('status_changed', 'task', taskId, { title: task?.title ?? '', from: prev, to: status })
     notifyAdminsAndAssignee(`Status → ${status}`, task?.title ?? '', 'status_changed', taskId, task?.assigned_to ?? undefined)
