@@ -1,4 +1,4 @@
-import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, UserCircle, UserPlus, BarChart3, Activity } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, UserCircle, UserPlus, BarChart3, Activity, Handshake } from 'lucide-react'
 
 interface Props {
   activeView: string
@@ -14,6 +14,7 @@ export function BottomNav({ activeView, onNavigate, userRole }: Props) {
   const items = [
     canSeeDashboard(userRole) && { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'tasks',    label: 'Tasks',    icon: CheckSquare },
+    { id: 'crm',      label: 'CRM',      icon: Handshake },
     { id: 'calendar', label: 'Calendar', icon: CalendarDays },
     { id: 'content',  label: 'Content',  icon: Megaphone },
     { id: 'revenue',  label: 'Revenue',  icon: BarChart3 },

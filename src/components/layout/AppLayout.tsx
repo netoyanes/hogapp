@@ -17,7 +17,7 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, userRol
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      const views: Record<string, string> = { '1': 'dashboard', '2': 'tasks', '3': 'calendar', '4': 'content', '5': 'revenue', '6': 'activity', '7': 'templates', '8': 'upload', '9': 'invite', '0': 'profile' }
+      const views: Record<string, string> = { '1': 'dashboard', '2': 'tasks', '3': 'crm', '4': 'calendar', '5': 'content', '6': 'revenue', '7': 'activity', '8': 'templates', '9': 'upload', '0': 'invite' }
       if (views[e.key]) onNavigate(views[e.key])
     }
     window.addEventListener('keydown', handler)

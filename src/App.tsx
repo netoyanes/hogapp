@@ -15,6 +15,7 @@ import { CalendarView } from './screens/CalendarView'
 import { ContentCalendar } from './screens/ContentCalendar'
 import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
+import { CRM } from './screens/CRM'
 
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL'
@@ -75,6 +76,8 @@ export default function App() {
         return <Dashboard onScoreBU={(code) => setScoringBU(code)} onViewTasks={goToTasksForBU} userRole={role} />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} />
+      case 'crm':
+        return <CRM userRole={role} />
       case 'calendar':
         return <CalendarView userRole={role} defaultBuFilter={buFilter} />
       case 'content':
