@@ -11,6 +11,8 @@ import { Profile } from './screens/Profile'
 import { InviteUsers } from './screens/InviteUsers'
 import { EmptyState } from './components/ui/EmptyState'
 import { ActivityLog } from './screens/ActivityLog'
+import { CalendarView } from './screens/CalendarView'
+import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
 
 export function canSeeDashboard(role?: string | null) {
@@ -72,6 +74,8 @@ export default function App() {
         return <Dashboard onScoreBU={(code) => setScoringBU(code)} onViewTasks={goToTasksForBU} userRole={role} />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} />
+      case 'calendar':
+        return <CalendarView userRole={role} defaultBuFilter={buFilter} />
       case 'revenue':
       case 'upload':
         return <RevenueUpload />
@@ -79,6 +83,8 @@ export default function App() {
         return canSeeDashboard(role) ? <ActivityLog /> : (
           <EmptyState icon="🔒" title="Access restricted" description="Activity Log is only available to C-Level and Master users." />
         )
+      case 'templates':
+        return <TaskTemplates userRole={role} />
       case 'invite':
         return role === 'MASTER' ? <InviteUsers /> : null
       case 'profile':

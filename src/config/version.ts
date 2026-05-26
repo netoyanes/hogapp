@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.9.0"
+export const APP_VERSION = "1.0.0"
 
 export type ChangelogEntry = {
   version: string
@@ -123,6 +123,19 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Archived tasks are hidden from the main board by default",
       "ARCHIVED badge shown in the task header when viewing an archived task",
       "Archive and restore actions tracked in Activity Log"
+    ]
+  },
+  {
+    version: "1.0.0",
+    date: "2026-05-26",
+    type: "MAJOR",
+    changes: [
+      "Calendar view — monthly grid showing all tasks with due dates, color-coded by priority",
+      "Navigate months with arrows, filter by BU, click any task to open its detail panel",
+      "Task Templates — MASTER/C_LEVEL can create, edit and delete reusable task blueprints",
+      "Templates pre-fill type, priority, description, estimated hours, deadline type and BU",
+      "Template picker in Create Task modal — any team member can apply a template",
+      "Keyboard shortcut 3 → Calendar, 6 → Templates"
     ]
   },
   {

@@ -29,6 +29,7 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
   const [estimatedHours, setEstimatedHours] = useState('')
   const [isPrivate, setIsPrivate] = useState(false)
   const [followers, setFollowers] = useState<string[]>([])
+  const [templates, setTemplates] = useState<{ id: string; name: string; description: string | null; type: string; priority: string; deadline_type: string; proof_required: boolean; estimated_hours: number | null; bu_id: string | null }[]>([])
   const [advanced, setAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -43,19 +44,34 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
 
   useEffect(() => {
     async function load() {
-      const [{ data: profiles }, { data: buses }, { data: { user } }] = await Promise.all([
+      const [{ data: profiles }, { data: buses }, { data: { user } }, { data: tpls }] = await Promise.all([
         supabase.from('profiles').select('id, full_name, email'),
         supabase.from('business_units').select('id, code, name').order('name'),
         supabase.auth.getUser(),
+        supabase.from('task_templates').select('*').order('name'),
       ])
       setTeamMembers(profiles ?? [])
       setBuList(buses ?? [])
+      setTemplates(tpls ?? [])
       if (!defaultBuId && buses && buses.length > 0) setBuId(buses[0].id)
-      // Non C-Level users are always assigned to themselves
       if (!canReassign && user?.id) setAssignedTo(user.id)
     }
     load()
   }, [defaultBuId, canReassign])
+
+  function applyTemplate(templateId: string) {
+    const t = templates.find(t => t.id === templateId)
+    if (!t) return
+    setTitle(t.name)
+    setDescription(t.description ?? '')
+    setType(t.type as TaskType)
+    setPriority(t.priority as TaskPriority)
+    setDeadlineType(t.deadline_type as DeadlineType)
+    setProofRequired(t.proof_required)
+    setEstimatedHours(t.estimated_hours ? String(t.estimated_hours) : '')
+    if (t.bu_id) setBuId(t.bu_id)
+    setAdvanced(true)
+  }
 
   async function handleSave() {
     if (!title.trim()) { setError('Title is required.'); return }
@@ -141,6 +157,23 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
         </div>
 
         <div className="p-5 flex flex-col gap-4">
+          {/* Template picker */}
+          {templates.length > 0 && (
+            <div>
+              {label('Use a template (optional)')}
+              <select
+                defaultValue=""
+                onChange={e => { if (e.target.value) applyTemplate(e.target.value) }}
+                style={selectStyle}
+                onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
+                onBlur={e => (e.target.style.borderColor = 'var(--border-default)')}
+              >
+                <option value="">— Start from scratch —</option>
+                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          )}
+
           {/* Title */}
           <div>
             {label('Title *')}
