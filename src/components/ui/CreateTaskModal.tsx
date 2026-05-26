@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Lock, Globe } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, taskCreatedMessage } from '../../hooks/useSlack'
 import { useIsMobile } from '../../hooks/useIsMobile'
@@ -27,6 +27,8 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
   const [deadlineType, setDeadlineType] = useState<DeadlineType>('SOFT')
   const [proofRequired, setProofRequired] = useState(false)
   const [estimatedHours, setEstimatedHours] = useState('')
+  const [isPrivate, setIsPrivate] = useState(false)
+  const [followers, setFollowers] = useState<string[]>([])
   const [advanced, setAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,7 +62,7 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
     setSaving(true)
     setError(null)
     const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('tasks').insert({
+    const { data: newTask, error } = await supabase.from('tasks').insert({
       title: title.trim(),
       description: description || null,
       type,
@@ -73,9 +75,17 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
       deadline_type: deadlineType,
       proof_required: proofRequired,
       estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null,
-    })
+      is_private: isPrivate,
+    }).select('id').single()
     setSaving(false)
     if (error) { setError(error.message); return }
+
+    // Insert followers
+    if (newTask && followers.length > 0) {
+      await supabase.from('task_followers').insert(
+        followers.map(uid => ({ task_id: newTask.id, user_id: uid }))
+      )
+    }
 
     // Slack notification
     const buName = buList.find(b => b.id === buId)
@@ -144,6 +154,27 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
               onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
               onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
             />
+          </div>
+
+          {/* Privacy toggle */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsPrivate(!isPrivate)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                background: isPrivate ? 'rgba(239,68,68,0.08)' : 'var(--bg-elevated)',
+                border: `1px solid ${isPrivate ? 'rgba(239,68,68,0.25)' : 'var(--border-default)'}`,
+                color: isPrivate ? '#EF4444' : 'var(--text-secondary)',
+                borderRadius: '6px', padding: '5px 10px', fontSize: '12px', cursor: 'pointer', flexShrink: 0,
+              }}
+            >
+              {isPrivate ? <Lock size={11} /> : <Globe size={11} />}
+              {isPrivate ? 'Private' : 'Public'}
+            </button>
+            <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>
+              {isPrivate ? 'Only assignee & followers can see this' : 'Visible to all team members'}
+            </span>
           </div>
 
           {/* BU + Type */}
@@ -271,6 +302,34 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
                     Proof required
                   </label>
                 </div>
+              </div>
+
+              {/* Related people */}
+              <div>
+                {label('Related People')}
+                {followers.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                    {followers.map(fId => {
+                      const m = teamMembers.find(tm => tm.id === fId)
+                      return (
+                        <span key={fId} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '20px', padding: '3px 6px 3px 10px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {m?.full_name ?? m?.email}
+                          <button type="button" onClick={() => setFollowers(p => p.filter(id => id !== fId))} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '15px', padding: '0 3px', lineHeight: 1 }}>×</button>
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+                <select
+                  onChange={(e) => { if (e.target.value) { setFollowers(p => [...p, e.target.value]); (e.target as HTMLSelectElement).value = '' } }}
+                  defaultValue=""
+                  style={selectStyle}
+                >
+                  <option value="">Add person…</option>
+                  {teamMembers
+                    .filter(m => !followers.includes(m.id) && m.id !== assignedTo)
+                    .map(m => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
+                </select>
               </div>
             </>
           )}

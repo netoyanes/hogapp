@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.8.0"
+export const APP_VERSION = "0.9.0"
 
 export type ChangelogEntry = {
   version: string
@@ -123,6 +123,19 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Archived tasks are hidden from the main board by default",
       "ARCHIVED badge shown in the task header when viewing an archived task",
       "Archive and restore actions tracked in Activity Log"
+    ]
+  },
+  {
+    version: "0.9.0",
+    date: "2026-05-26",
+    type: "MINOR",
+    changes: [
+      "Public / Private tasks — toggle visibility on any task from the detail panel or at creation",
+      "Private tasks are only visible to creator, assignee, and related people",
+      "Related People — add followers to any task so they can view and track progress",
+      "Followers shown as pills on the task detail panel, removable with one click",
+      "Lock icon on TaskCard for private tasks",
+      "Outsiders with an invite can now use private tasks exclusively for their own work"
     ]
   }
 ]

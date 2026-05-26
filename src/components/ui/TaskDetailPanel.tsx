@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore } from 'lucide-react'
+import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, statusChangedMessage, proofUploadedMessage } from '../../hooks/useSlack'
 import { logActivity } from '../../hooks/useActivityLog'
@@ -44,6 +44,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
   const [postingComment, setPostingComment] = useState(false)
   const [proofs, setProofs] = useState<{ id: string; file_url: string; file_type: string; created_at: string }[]>([])
   const [uploadingProof, setUploadingProof] = useState(false)
+  const [followers, setFollowers] = useState<{ userId: string; name: string }[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -74,9 +75,19 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
         if (p) setAssigneeName(p.full_name ?? p.email ?? '')
       }
 
-      if (canReassign) {
-        const { data: members } = await supabase.from('profiles').select('id, full_name, email')
-        setTeamMembers(members ?? [])
+      const { data: members } = await supabase.from('profiles').select('id, full_name, email')
+      setTeamMembers(members ?? [])
+
+      // Load followers
+      const { data: followerRows } = await supabase
+        .from('task_followers').select('user_id').eq('task_id', taskId)
+      if (followerRows && followerRows.length > 0) {
+        setFollowers(followerRows.map(f => ({
+          userId: f.user_id,
+          name: (members ?? []).find(m => m.id === f.user_id)?.full_name
+            ?? (members ?? []).find(m => m.id === f.user_id)?.email
+            ?? 'Unknown',
+        })))
       }
 
       // Load comments
@@ -202,6 +213,24 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
     onUpdated()
   }
 
+  async function togglePrivacy() {
+    const next = !task?.is_private
+    await supabase.from('tasks').update({ is_private: next, updated_at: new Date().toISOString() }).eq('id', taskId)
+    setTask((t) => t ? { ...t, is_private: next } : t)
+    onUpdated()
+  }
+
+  async function addFollower(userId: string) {
+    await supabase.from('task_followers').insert({ task_id: taskId, user_id: userId })
+    const member = teamMembers.find(m => m.id === userId)
+    setFollowers(prev => [...prev, { userId, name: member?.full_name ?? member?.email ?? 'Unknown' }])
+  }
+
+  async function removeFollower(userId: string) {
+    await supabase.from('task_followers').delete().eq('task_id', taskId).eq('user_id', userId)
+    setFollowers(prev => prev.filter(f => f.userId !== userId))
+  }
+
   const inputStyle = {
     background: 'var(--bg-base)',
     border: '1px solid var(--border-default)',
@@ -258,7 +287,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
           </div>
 
           {/* Status row */}
-          <div className="flex items-center gap-2 mt-3">
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
             <StatusBadge status={task.status} />
             <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>{task.type}</span>
             {task.archived && (
@@ -266,6 +295,13 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
                 ARCHIVED
               </span>
             )}
+            <button
+              onClick={togglePrivacy}
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', background: task.is_private ? 'rgba(239,68,68,0.08)' : 'var(--bg-elevated)', border: `1px solid ${task.is_private ? 'rgba(239,68,68,0.25)' : 'var(--border-default)'}`, color: task.is_private ? '#EF4444' : 'var(--text-tertiary)', borderRadius: '4px', fontSize: '10px', fontWeight: 600, padding: '2px 7px', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
+            >
+              {task.is_private ? <Lock size={9} /> : <Globe size={9} />}
+              {task.is_private ? 'PRIVATE' : 'PUBLIC'}
+            </button>
           </div>
         </div>
 
@@ -309,6 +345,33 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Followers */}
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+          <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginBottom: '10px' }}>
+            RELATED PEOPLE {followers.length > 0 && `· ${followers.length}`}
+          </p>
+          {followers.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+              {followers.map(f => (
+                <span key={f.userId} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '20px', padding: '3px 6px 3px 10px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  {f.name}
+                  <button onClick={() => removeFollower(f.userId)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '15px', padding: '0 3px', lineHeight: 1 }}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <select
+            onChange={(e) => { if (e.target.value) { addFollower(e.target.value); (e.target as HTMLSelectElement).value = '' } }}
+            defaultValue=""
+            style={{ background: 'var(--bg-base)', border: '1px solid var(--border-default)', borderRadius: '6px', color: 'var(--text-secondary)', padding: '5px 8px', fontSize: '12px', fontFamily: 'var(--font-ui)', outline: 'none', cursor: 'pointer', width: '100%' }}
+          >
+            <option value="">+ Add related person…</option>
+            {teamMembers
+              .filter(m => !followers.some(f => f.userId === m.id) && m.id !== task.assigned_to)
+              .map(m => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
+          </select>
         </div>
 
         {/* Edit section */}

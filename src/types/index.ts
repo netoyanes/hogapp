@@ -102,6 +102,7 @@ export interface Task {
   estimated_hours: number | null
   completed_at: string | null
   archived: boolean
+  is_private: boolean
   created_at: string
   updated_at: string
 }

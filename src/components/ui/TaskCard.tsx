@@ -1,3 +1,4 @@
+import { Lock } from 'lucide-react'
 import { PriorityDot } from './PriorityDot'
 import type { Task } from '../../types'
 
@@ -23,6 +24,7 @@ export function TaskCard({ task, buName, assigneeName, onClick }: Props) {
         <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, lineHeight: '1.4', flex: 1 }}>
           {task.title}
         </span>
+        {task.is_private && <Lock size={10} style={{ color: 'var(--text-tertiary)', flexShrink: 0, marginTop: '3px' }} />}
       </div>
 
       {/* BU + Type */}
