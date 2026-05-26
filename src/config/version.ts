@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.1.0"
+export const APP_VERSION = "1.2.0"
 
 export type ChangelogEntry = {
   version: string
@@ -123,6 +123,21 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Archived tasks are hidden from the main board by default",
       "ARCHIVED badge shown in the task header when viewing an archived task",
       "Archive and restore actions tracked in Activity Log"
+    ]
+  },
+  {
+    version: "1.2.0",
+    date: "2026-05-26",
+    type: "MINOR",
+    changes: [
+      "CRM Pipeline — manage commercial opportunities (sponsorships, partnerships, advertising, events) in a 6-stage Kanban",
+      "Deal cards with value, probability bar, contact, BU badge, and close date",
+      "Deal detail panel — stage switcher, lost-reason modal, edit mode, contact block",
+      "Linked Tasks — connect any deal to existing tasks for traceability, open task panel inline",
+      "Activity log per deal — log calls, emails, meetings, and notes with author and timestamp",
+      "Pipeline stats header — total pipeline value, won value, open deal count, win rate",
+      "Contact management — create new contacts inline or pick from existing ones",
+      "Keyboard shortcut 3 → CRM (Calendar shifts to 4, Content to 5, Revenue to 6)"
     ]
   },
   {

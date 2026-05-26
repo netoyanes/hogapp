@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake } from 'lucide-react'
 
 interface Props {
   activeView: string
@@ -11,14 +11,15 @@ interface Props {
 const NAV_ITEMS = [
   { id: 'dashboard',  label: 'Dashboard',    icon: LayoutDashboard, shortcut: '1', cLevelOnly: true },
   { id: 'tasks',      label: 'Tasks',        icon: CheckSquare,     shortcut: '2' },
-  { id: 'calendar',   label: 'Calendar',     icon: CalendarDays,    shortcut: '3' },
-  { id: 'content',    label: 'Content',      icon: Megaphone,       shortcut: '4' },
-  { id: 'revenue',    label: 'Revenue',      icon: BarChart3,       shortcut: '5' },
-  { id: 'activity',   label: 'Activity Log', icon: Activity,        shortcut: '6', cLevelOnly: true },
-  { id: 'templates',  label: 'Templates',    icon: LayoutTemplate,  shortcut: '7', cLevelOnly: true },
-  { id: 'upload',     label: 'CSV Upload',   icon: Upload,          shortcut: '8', masterOnly: true },
-  { id: 'invite',     label: 'Invite Users', icon: UserPlus,        shortcut: '9', masterOnly: true },
-  { id: 'profile',    label: 'Profile',      icon: UserCircle,      shortcut: '0' },
+  { id: 'crm',        label: 'CRM',          icon: Handshake,       shortcut: '3' },
+  { id: 'calendar',   label: 'Calendar',     icon: CalendarDays,    shortcut: '4' },
+  { id: 'content',    label: 'Content',      icon: Megaphone,       shortcut: '5' },
+  { id: 'revenue',    label: 'Revenue',      icon: BarChart3,       shortcut: '6' },
+  { id: 'activity',   label: 'Activity Log', icon: Activity,        shortcut: '7', cLevelOnly: true },
+  { id: 'templates',  label: 'Templates',    icon: LayoutTemplate,  shortcut: '8', cLevelOnly: true },
+  { id: 'upload',     label: 'CSV Upload',   icon: Upload,          shortcut: '9', masterOnly: true },
+  { id: 'invite',     label: 'Invite Users', icon: UserPlus,        shortcut: '0', masterOnly: true },
+  { id: 'profile',    label: 'Profile',      icon: UserCircle },
 ]
 
 function canSeeDashboard(role?: string) {
