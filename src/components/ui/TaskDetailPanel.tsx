@@ -25,8 +25,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   REVISION: 'Revision',
 }
 
-export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props) {
-  const canReassign = userRole === 'MASTER' || userRole === 'C_LEVEL'
+export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRole }: Props) {
   const isMobile = useIsMobile()
   const [task, setTask] = useState<Task | null>(null)
   const [buName, setBuName] = useState('')
@@ -162,19 +161,32 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
 
   async function saveEdits() {
     setSaving(true)
+    const prevAssignee = task?.assigned_to ?? null
     await supabase.from('tasks').update({
       title,
       description: description || null,
       due_date: dueDate || null,
       priority,
-      ...(canReassign ? { assigned_to: assignedTo || null } : {}),
+      assigned_to: assignedTo || null,
       updated_at: new Date().toISOString(),
     }).eq('id', taskId)
-    const newAssigneeName = canReassign
-      ? (teamMembers.find(m => m.id === assignedTo)?.full_name ?? teamMembers.find(m => m.id === assignedTo)?.email ?? 'Unassigned')
-      : assigneeName
+    const newAssigneeName = teamMembers.find(m => m.id === assignedTo)?.full_name
+      ?? teamMembers.find(m => m.id === assignedTo)?.email
+      ?? 'Unassigned'
     setAssigneeName(newAssigneeName)
     setTask((prev) => prev ? { ...prev, title, description, due_date: dueDate, priority, assigned_to: assignedTo || null } : prev)
+
+    // Notify newly assigned person if the assignee changed
+    if (assignedTo && assignedTo !== prevAssignee) {
+      notifyAdminsAndAssignee(
+        `You've been assigned a task`,
+        title,
+        'task_assigned',
+        taskId,
+        assignedTo
+      )
+    }
+
     setSaving(false)
     setEditing(false)
     onUpdated()
@@ -413,24 +425,18 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
                   </select>
                 </div>
               </div>
-              {/* Assignee — C-Level/Master only */}
-              {canReassign && (
-                <div>
-                  <label style={{ color: 'var(--text-tertiary)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
-                    Assigned to
-                    <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '9px', marginLeft: '6px' }}>C-LEVEL</span>
-                  </label>
-                  <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}
-                    onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-                    onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
-                  >
-                    <option value="">— Unassigned —</option>
-                    {teamMembers.map((m) => (
-                      <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label style={{ color: 'var(--text-tertiary)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>Assigned to</label>
+                <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}
+                  onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                  onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+                >
+                  <option value="">— Unassigned —</option>
+                  {teamMembers.map((m) => (
+                    <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
+                  ))}
+                </select>
+              </div>
 
               <div className="flex gap-2">
                 <button onClick={() => setEditing(false)} style={{ flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: '7px', padding: '8px', fontSize: '12px', cursor: 'pointer' }}>
