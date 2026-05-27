@@ -29,7 +29,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   const isMobile = useIsMobile()
   const [task, setTask] = useState<Task | null>(null)
   const [buName, setBuName] = useState('')
-  const [assigneeName, setAssigneeName] = useState('')
+  const [, setAssigneeName] = useState('')
   const [assignedTo, setAssignedTo] = useState('')
   const [teamMembers, setTeamMembers] = useState<{ id: string; full_name: string | null; email: string | null }[]>([])
   const [editing, setEditing] = useState(false)
@@ -161,32 +161,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
 
   async function saveEdits() {
     setSaving(true)
-    const prevAssignee = task?.assigned_to ?? null
     await supabase.from('tasks').update({
       title,
       description: description || null,
       due_date: dueDate || null,
       priority,
-      assigned_to: assignedTo || null,
       updated_at: new Date().toISOString(),
     }).eq('id', taskId)
-    const newAssigneeName = teamMembers.find(m => m.id === assignedTo)?.full_name
-      ?? teamMembers.find(m => m.id === assignedTo)?.email
-      ?? 'Unassigned'
-    setAssigneeName(newAssigneeName)
-    setTask((prev) => prev ? { ...prev, title, description, due_date: dueDate, priority, assigned_to: assignedTo || null } : prev)
-
-    // Notify newly assigned person if the assignee changed
-    if (assignedTo && assignedTo !== prevAssignee) {
-      notifyAdminsAndAssignee(
-        `You've been assigned a task`,
-        title,
-        'task_assigned',
-        taskId,
-        assignedTo
-      )
-    }
-
+    setTask((prev) => prev ? { ...prev, title, description, due_date: dueDate, priority } : prev)
     setSaving(false)
     setEditing(false)
     onUpdated()
@@ -232,6 +214,22 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     const next = !task?.is_private
     await supabase.from('tasks').update({ is_private: next, updated_at: new Date().toISOString() }).eq('id', taskId)
     setTask((t) => t ? { ...t, is_private: next } : t)
+    onUpdated()
+  }
+
+  async function reassignTask(newId: string) {
+    const prev = task?.assigned_to ?? null
+    if (newId === prev) return
+    await supabase.from('tasks').update({ assigned_to: newId || null, updated_at: new Date().toISOString() }).eq('id', taskId)
+    const prevName = prev ? (teamMembers.find(m => m.id === prev)?.full_name ?? teamMembers.find(m => m.id === prev)?.email ?? 'Unknown') : 'Unassigned'
+    const newName = newId ? (teamMembers.find(m => m.id === newId)?.full_name ?? teamMembers.find(m => m.id === newId)?.email ?? 'Unassigned') : 'Unassigned'
+    setAssignedTo(newId)
+    setAssigneeName(newName)
+    setTask(t => t ? { ...t, assigned_to: newId || null } : t)
+    logActivity('assignee_changed', 'task', taskId, { title: task?.title ?? '', from: prevName, to: newName })
+    if (newId && newId !== prev) {
+      notifyAdminsAndAssignee("You've been assigned a task", task?.title ?? '', 'task_assigned', taskId, newId)
+    }
     onUpdated()
   }
 
@@ -346,19 +344,42 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
         {/* Meta info */}
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { icon: <Building2 size={12} />, label: 'BU', value: buName || '—' },
-              { icon: <User size={12} />, label: 'Assigned to', value: assigneeName || 'Unassigned' },
-              { icon: <Calendar size={12} />, label: 'Due date', value: task.due_date ? new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—' },
-              { icon: <Clock size={12} />, label: 'Est. hours', value: task.estimated_hours ? `${task.estimated_hours}h` : '—' },
-            ].map((row) => (
-              <div key={row.label}>
-                <div className="flex items-center gap-1 mb-1" style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>
-                  {row.icon} {row.label}
-                </div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{row.value}</div>
+            <div>
+              <div className="flex items-center gap-1 mb-1" style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>
+                <Building2 size={12} /> BU
               </div>
-            ))}
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{buName || '—'}</div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-1 mb-1" style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>
+                <User size={12} /> Assigned to
+              </div>
+              <select
+                value={assignedTo}
+                onChange={e => reassignTask(e.target.value)}
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-default)', borderRadius: '6px', color: 'var(--text-secondary)', padding: '4px 6px', fontSize: '12px', fontFamily: 'var(--font-ui)', outline: 'none', cursor: 'pointer', width: '100%' }}
+              >
+                <option value="">— Unassigned —</option>
+                {teamMembers.map(m => (
+                  <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-1 mb-1" style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>
+                <Calendar size={12} /> Due date
+              </div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{task.due_date ? new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-1 mb-1" style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>
+                <Clock size={12} /> Est. hours
+              </div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{task.estimated_hours ? `${task.estimated_hours}h` : '—'}</div>
+            </div>
           </div>
         </div>
 
@@ -424,18 +445,6 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
                     <option value="LOW">🟢 LOW</option>
                   </select>
                 </div>
-              </div>
-              <div>
-                <label style={{ color: 'var(--text-tertiary)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>Assigned to</label>
-                <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}
-                  onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-                  onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
-                >
-                  <option value="">— Unassigned —</option>
-                  {teamMembers.map((m) => (
-                    <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
-                  ))}
-                </select>
               </div>
 
               <div className="flex gap-2">
