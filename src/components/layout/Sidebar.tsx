@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText } from 'lucide-react'
 
 interface Props {
   activeView: string
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { id: 'templates',  label: 'Templates',    icon: LayoutTemplate,  shortcut: '8', cLevelOnly: true },
   { id: 'upload',     label: 'CSV Upload',   icon: Upload,          shortcut: '9', masterOnly: true },
   { id: 'invite',     label: 'Invite Users', icon: UserPlus,        shortcut: '0', masterOnly: true },
+  { id: 'reports',    label: 'Reports',      icon: FileText },
   { id: 'profile',    label: 'Profile',      icon: UserCircle },
 ]
 
