@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import {
   LayoutDashboard, CheckSquare, Handshake, CalendarDays, Megaphone,
-  BarChart3, Activity, LayoutTemplate, Upload, UserPlus, UserCircle,
+  BarChart3, Activity, LayoutTemplate, Upload, UserPlus, UserCircle, FileText,
 } from 'lucide-react'
 
 interface App {
@@ -24,6 +24,7 @@ const APPS: App[] = [
   { id: 'templates',  label: 'Templates',     icon: LayoutTemplate,  color: '#6366F1', cLevelOnly: true },
   { id: 'upload',     label: 'CSV Upload',    icon: Upload,          color: '#6B7280', masterOnly: true },
   { id: 'invite',     label: 'Invite Users',  icon: UserPlus,        color: '#14B8A6', masterOnly: true },
+  { id: 'reports',    label: 'Reports',       icon: FileText,        color: '#0EA5E9' },
   { id: 'profile',    label: 'Profile',       icon: UserCircle,      color: '#64748B' },
 ]
 

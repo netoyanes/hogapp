@@ -16,6 +16,7 @@ import { ContentCalendar } from './screens/ContentCalendar'
 import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
 import { CRM } from './screens/CRM'
+import { Reports } from './screens/Reports'
 import { SharedTask } from './screens/SharedTask'
 
 export function canSeeDashboard(role?: string | null) {
@@ -98,6 +99,8 @@ export default function App() {
         )
       case 'templates':
         return <TaskTemplates userRole={role} />
+      case 'reports':
+        return <Reports userRole={role} />
       case 'invite':
         return role === 'MASTER' ? <InviteUsers /> : null
       case 'profile':
