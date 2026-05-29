@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe } from 'lucide-react'
+import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, statusChangedMessage, proofUploadedMessage } from '../../hooks/useSlack'
 import { logActivity } from '../../hooks/useActivityLog'
@@ -7,7 +7,7 @@ import { notifyAdminsAndAssignee } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
-import type { Task, TaskStatus, TaskPriority } from '../../types'
+import type { Task, TaskStatus, TaskPriority, TaskType, DeadlineType } from '../../types'
 
 interface Props {
   taskId: string
@@ -25,19 +25,24 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   REVISION: 'Revision',
 }
 
-export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props) {
-  const canReassign = userRole === 'MASTER' || userRole === 'C_LEVEL'
+export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRole }: Props) {
   const isMobile = useIsMobile()
   const [task, setTask] = useState<Task | null>(null)
   const [buName, setBuName] = useState('')
-  const [assigneeName, setAssigneeName] = useState('')
+  const [, setAssigneeName] = useState('')
   const [assignedTo, setAssignedTo] = useState('')
   const [teamMembers, setTeamMembers] = useState<{ id: string; full_name: string | null; email: string | null }[]>([])
+  const [buList, setBuList] = useState<{ id: string; code: string; name: string }[]>([])
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
+  const [taskType, setTaskType] = useState<TaskType>('PROJECT')
+  const [buId, setBuId] = useState('')
+  const [proofRequired, setProofRequired] = useState(false)
+  const [estimatedHours, setEstimatedHours] = useState('')
+  const [deadlineType, setDeadlineType] = useState<DeadlineType>('SOFT')
   const [saving, setSaving] = useState(false)
   const [comments, setComments] = useState<{ id: string; content: string; created_at: string; author: string }[]>([])
   const [newComment, setNewComment] = useState('')
@@ -47,7 +52,15 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
   const [followers, setFollowers] = useState<{ userId: string; name: string }[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
+  const [copied, setCopied] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  function copyShareLink() {
+    const url = `${window.location.origin}?share=${taskId}`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -64,12 +77,17 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
       setDescription(t.description ?? '')
       setDueDate(t.due_date ?? '')
       setPriority(t.priority)
+      setTaskType(t.type)
+      setBuId(t.bu_id ?? '')
+      setProofRequired(t.proof_required)
+      setEstimatedHours(t.estimated_hours != null ? String(t.estimated_hours) : '')
+      setDeadlineType(t.deadline_type)
       setAssignedTo(t.assigned_to ?? '')
 
-      if (t.bu_id) {
-        const { data: bu } = await supabase.from('business_units').select('code, name').eq('id', t.bu_id).single()
-        if (bu) setBuName(`${bu.code} · ${bu.name}`)
-      }
+      const { data: buses } = await supabase.from('business_units').select('id, code, name').order('code')
+      setBuList(buses ?? [])
+      const matchedBu = buses?.find(b => b.id === t.bu_id)
+      if (matchedBu) setBuName(`${matchedBu.code} · ${matchedBu.name}`)
       if (t.assigned_to) {
         const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', t.assigned_to).single()
         if (p) setAssigneeName(p.full_name ?? p.email ?? '')
@@ -162,19 +180,22 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
 
   async function saveEdits() {
     setSaving(true)
+    const newBuName = buList.find(b => b.id === buId)
     await supabase.from('tasks').update({
       title,
       description: description || null,
       due_date: dueDate || null,
       priority,
-      ...(canReassign ? { assigned_to: assignedTo || null } : {}),
+      type: taskType,
+      bu_id: buId || null,
+      proof_required: proofRequired,
+      estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null,
+      deadline_type: deadlineType,
       updated_at: new Date().toISOString(),
     }).eq('id', taskId)
-    const newAssigneeName = canReassign
-      ? (teamMembers.find(m => m.id === assignedTo)?.full_name ?? teamMembers.find(m => m.id === assignedTo)?.email ?? 'Unassigned')
-      : assigneeName
-    setAssigneeName(newAssigneeName)
-    setTask((prev) => prev ? { ...prev, title, description, due_date: dueDate, priority, assigned_to: assignedTo || null } : prev)
+    if (newBuName) setBuName(`${newBuName.code} · ${newBuName.name}`)
+    else setBuName('')
+    setTask(prev => prev ? { ...prev, title, description: description || null, due_date: dueDate || null, priority, type: taskType, bu_id: buId || null, proof_required: proofRequired, estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null, deadline_type: deadlineType } : prev)
     setSaving(false)
     setEditing(false)
     onUpdated()
@@ -223,6 +244,22 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
     onUpdated()
   }
 
+  async function reassignTask(newId: string) {
+    const prev = task?.assigned_to ?? null
+    if (newId === prev) return
+    await supabase.from('tasks').update({ assigned_to: newId || null, updated_at: new Date().toISOString() }).eq('id', taskId)
+    const prevName = prev ? (teamMembers.find(m => m.id === prev)?.full_name ?? teamMembers.find(m => m.id === prev)?.email ?? 'Unknown') : 'Unassigned'
+    const newName = newId ? (teamMembers.find(m => m.id === newId)?.full_name ?? teamMembers.find(m => m.id === newId)?.email ?? 'Unassigned') : 'Unassigned'
+    setAssignedTo(newId)
+    setAssigneeName(newName)
+    setTask(t => t ? { ...t, assigned_to: newId || null } : t)
+    logActivity('assignee_changed', 'task', taskId, { title: task?.title ?? '', from: prevName, to: newName })
+    if (newId && newId !== prev) {
+      notifyAdminsAndAssignee("You've been assigned a task", task?.title ?? '', 'task_assigned', taskId, newId)
+    }
+    onUpdated()
+  }
+
   async function addFollower(userId: string) {
     await supabase.from('task_followers').insert({ task_id: taskId, user_id: userId })
     const member = teamMembers.find(m => m.id === userId)
@@ -244,7 +281,9 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
     fontFamily: 'var(--font-ui)',
     outline: 'none',
     width: '100%',
+    boxSizing: 'border-box' as const,
   }
+  const lbl: React.CSSProperties = { color: 'var(--text-tertiary)', fontSize: '11px', display: 'block', marginBottom: '4px' }
 
   if (!task) return null
 
@@ -284,9 +323,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
                 </h2>
               )}
             </div>
-            <button onClick={onClose} style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', padding: '5px', borderRadius: '6px', cursor: 'pointer', flexShrink: 0 }}>
-              <X size={13} />
-            </button>
+            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+              <button onClick={copyShareLink} title="Copy share link" style={{ color: copied ? 'var(--accent)' : 'var(--text-secondary)', background: copied ? 'var(--accent-bg)' : 'var(--bg-elevated)', border: `1px solid ${copied ? 'var(--accent-border)' : 'var(--border-default)'}`, padding: '5px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontFamily: 'var(--font-ui)' }}>
+                {copied ? <><Check size={12} /> Copied!</> : <Share2 size={13} />}
+              </button>
+              <button onClick={onClose} style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', padding: '5px', borderRadius: '6px', cursor: 'pointer' }}>
+                <X size={13} />
+              </button>
+            </div>
           </div>
 
           {/* Status row */}
@@ -334,19 +378,34 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
         {/* Meta info */}
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { icon: <Building2 size={12} />, label: 'BU', value: buName || '—' },
-              { icon: <User size={12} />, label: 'Assigned to', value: assigneeName || 'Unassigned' },
-              { icon: <Calendar size={12} />, label: 'Due date', value: task.due_date ? new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—' },
-              { icon: <Clock size={12} />, label: 'Est. hours', value: task.estimated_hours ? `${task.estimated_hours}h` : '—' },
-            ].map((row) => (
-              <div key={row.label}>
-                <div className="flex items-center gap-1 mb-1" style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>
-                  {row.icon} {row.label}
-                </div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{row.value}</div>
-              </div>
-            ))}
+            <div>
+              <div className="flex items-center gap-1 mb-1" style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}><Building2 size={12} /> BU</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{buName || '—'}</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-1 mb-1" style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}><User size={12} /> Assigned to</div>
+              <select value={assignedTo} onChange={e => reassignTask(e.target.value)}
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-default)', borderRadius: '6px', color: 'var(--text-secondary)', padding: '4px 6px', fontSize: '12px', fontFamily: 'var(--font-ui)', outline: 'none', cursor: 'pointer', width: '100%' }}>
+                <option value="">— Unassigned —</option>
+                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="flex items-center gap-1 mb-1" style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}><Calendar size={12} /> Due date</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{task.due_date ? new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-1 mb-1" style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}><Clock size={12} /> Est. hours</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{task.estimated_hours ? `${task.estimated_hours}h` : '—'}</div>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginBottom: '2px' }}>Type</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{task.type}</div>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginBottom: '2px' }}>Deadline</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{task.deadline_type} {task.proof_required ? '· Proof req.' : ''}</div>
+            </div>
           </div>
         </div>
 
@@ -382,56 +441,65 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
           {editing ? (
             <div className="flex flex-col gap-3">
               <div>
-                <label style={{ color: 'var(--text-tertiary)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>Description</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  placeholder="Add context..."
-                  style={{ ...inputStyle, resize: 'vertical' }}
-                  onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-                  onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
-                />
+                <label style={lbl}>Title</label>
+                <input value={title} onChange={e => setTitle(e.target.value)} style={inputStyle}
+                  onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
+                  onBlur={e => (e.target.style.borderColor = 'var(--border-default)')} />
+              </div>
+              <div>
+                <label style={lbl}>Description</label>
+                <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
+                  placeholder="Add context…" style={{ ...inputStyle, resize: 'vertical' }}
+                  onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
+                  onBlur={e => (e.target.style.borderColor = 'var(--border-default)')} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label style={{ color: 'var(--text-tertiary)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>Due date</label>
-                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={inputStyle}
-                    onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-                    onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
-                  />
+                  <label style={lbl}>Type</label>
+                  <select value={taskType} onChange={e => setTaskType(e.target.value as TaskType)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                    {(['MAINTENANCE','HARDWARE','REPORT','CONTENT','PROJECT'] as TaskType[]).map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label style={{ color: 'var(--text-tertiary)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>Priority</label>
-                  <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} style={{ ...inputStyle, cursor: 'pointer' }}
-                    onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-                    onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
-                  >
+                  <label style={lbl}>Business Unit</label>
+                  <select value={buId} onChange={e => setBuId(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                    <option value="">— None —</option>
+                    {buList.map(b => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>Priority</label>
+                  <select value={priority} onChange={e => setPriority(e.target.value as TaskPriority)} style={{ ...inputStyle, cursor: 'pointer' }}>
                     <option value="HIGH">🔴 HIGH</option>
                     <option value="MEDIUM">🟡 MEDIUM</option>
                     <option value="LOW">🟢 LOW</option>
                   </select>
                 </div>
-              </div>
-              {/* Assignee — C-Level/Master only */}
-              {canReassign && (
                 <div>
-                  <label style={{ color: 'var(--text-tertiary)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
-                    Assigned to
-                    <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '9px', marginLeft: '6px' }}>C-LEVEL</span>
-                  </label>
-                  <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}
-                    onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-                    onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
-                  >
-                    <option value="">— Unassigned —</option>
-                    {teamMembers.map((m) => (
-                      <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
-                    ))}
+                  <label style={lbl}>Deadline type</label>
+                  <select value={deadlineType} onChange={e => setDeadlineType(e.target.value as DeadlineType)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                    <option value="SOFT">SOFT</option>
+                    <option value="HARD">HARD</option>
                   </select>
                 </div>
-              )}
-
+                <div>
+                  <label style={lbl}>Due date</label>
+                  <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inputStyle}
+                    onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
+                    onBlur={e => (e.target.style.borderColor = 'var(--border-default)')} />
+                </div>
+                <div>
+                  <label style={lbl}>Est. hours</label>
+                  <input type="number" min={0} step={0.5} value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)}
+                    placeholder="0" style={inputStyle}
+                    onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
+                    onBlur={e => (e.target.style.borderColor = 'var(--border-default)')} />
+                </div>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                <input type="checkbox" checked={proofRequired} onChange={e => setProofRequired(e.target.checked)} />
+                Proof required
+              </label>
               <div className="flex gap-2">
                 <button onClick={() => setEditing(false)} style={{ flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: '7px', padding: '8px', fontSize: '12px', cursor: 'pointer' }}>
                   Cancel
@@ -443,11 +511,10 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole }: Props)
             </div>
           ) : (
             <div>
-              {task.description ? (
-                <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.6', marginBottom: '10px' }}>{task.description}</p>
-              ) : (
-                <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginBottom: '10px' }}>No description.</p>
-              )}
+              {task.description
+                ? <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.6', marginBottom: '10px' }}>{task.description}</p>
+                : <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginBottom: '10px' }}>No description.</p>
+              }
               <button onClick={() => setEditing(true)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', cursor: 'pointer' }}>
                 Edit task
               </button>

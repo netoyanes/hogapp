@@ -16,12 +16,19 @@ import { ContentCalendar } from './screens/ContentCalendar'
 import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
 import { CRM } from './screens/CRM'
+import { SharedTask } from './screens/SharedTask'
 
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL'
 }
 
+// Detect shared task URL before rendering anything else
+const _sharedTaskId = new URLSearchParams(window.location.search).get('share')
+
 export default function App() {
+  // Shared task view — completely isolated, no app shell
+  if (_sharedTaskId) return <SharedTask taskId={_sharedTaskId} />
+
   const { session, profile, loading, accessDenied, signIn, signOut, refetchProfile } = useAuth()
   const role = profile?.role ?? undefined
 

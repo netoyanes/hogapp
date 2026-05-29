@@ -5,6 +5,7 @@ interface Props {
   activeView: string
   onNavigate: (view: string) => void
   onSignOut: () => void
+  onHomeClick: () => void
   userRole?: string
 }
 
@@ -26,7 +27,7 @@ function canSeeDashboard(role?: string) {
   return role === 'MASTER' || role === 'C_LEVEL'
 }
 
-export function Sidebar({ activeView, onNavigate, onSignOut, userRole }: Props) {
+export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRole }: Props) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -48,10 +49,15 @@ export function Sidebar({ activeView, onNavigate, onSignOut, userRole }: Props) 
         style={{ height: '56px', borderBottom: '1px solid var(--border-subtle)' }}
         className="flex items-center px-3 shrink-0"
       >
-        <div className="flex items-center gap-2.5 overflow-hidden">
+        <button
+          onClick={onHomeClick}
+          title="Home"
+          className="flex items-center gap-2.5 overflow-hidden"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
           <div
-            style={{ background: 'var(--accent)', borderRadius: '6px', width: '28px', height: '28px', flexShrink: 0 }}
-            className="flex items-center justify-center"
+            style={{ background: 'var(--accent)', borderRadius: '6px', width: '28px', height: '28px', flexShrink: 0, transition: 'opacity 0.15s' }}
+            className="flex items-center justify-center hover:opacity-80"
           >
             <span style={{ color: '#000', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '12px' }}>H</span>
           </div>
@@ -60,7 +66,7 @@ export function Sidebar({ activeView, onNavigate, onSignOut, userRole }: Props) 
               HOG OPS
             </span>
           )}
-        </div>
+        </button>
       </div>
 
       {/* Nav items */}
