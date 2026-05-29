@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe } from 'lucide-react'
+import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, statusChangedMessage, proofUploadedMessage } from '../../hooks/useSlack'
 import { logActivity } from '../../hooks/useActivityLog'
@@ -52,7 +52,15 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   const [followers, setFollowers] = useState<{ userId: string; name: string }[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
+  const [copied, setCopied] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  function copyShareLink() {
+    const url = `${window.location.origin}?share=${taskId}`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -315,9 +323,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
                 </h2>
               )}
             </div>
-            <button onClick={onClose} style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', padding: '5px', borderRadius: '6px', cursor: 'pointer', flexShrink: 0 }}>
-              <X size={13} />
-            </button>
+            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+              <button onClick={copyShareLink} title="Copy share link" style={{ color: copied ? 'var(--accent)' : 'var(--text-secondary)', background: copied ? 'var(--accent-bg)' : 'var(--bg-elevated)', border: `1px solid ${copied ? 'var(--accent-border)' : 'var(--border-default)'}`, padding: '5px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontFamily: 'var(--font-ui)' }}>
+                {copied ? <><Check size={12} /> Copied!</> : <Share2 size={13} />}
+              </button>
+              <button onClick={onClose} style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', padding: '5px', borderRadius: '6px', cursor: 'pointer' }}>
+                <X size={13} />
+              </button>
+            </div>
           </div>
 
           {/* Status row */}
