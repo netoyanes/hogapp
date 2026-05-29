@@ -150,7 +150,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     setUploadingProof(true)
     const ext = file.name.split('.').pop()
     const path = `proofs/${taskId}/${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('proofs').upload(path, file, { upsert: false })
+    const { error } = await supabase.storage.from('proofs').upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream' })
     if (error) { setUploadingProof(false); return }
     const { data: urlData } = supabase.storage.from('proofs').getPublicUrl(path)
     const { data: { user } } = await supabase.auth.getUser()
@@ -536,8 +536,9 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
                 const isImage = p.file_type.startsWith('image/')
                 const isPDF = p.file_type === 'application/pdf'
                 const isVideo = p.file_type.startsWith('video/')
-                const ext = p.file_type.split('/')[1]?.toUpperCase() ?? 'FILE'
-                const EXT_COLORS: Record<string, string> = { PDF: '#EF4444', PNG: '#3B82F6', JPG: '#3B82F6', JPEG: '#3B82F6', WEBP: '#3B82F6', MP4: '#A855F7', MOV: '#A855F7', QUICKTIME: '#A855F7' }
+                const isHTML = p.file_type === 'text/html'
+                const ext = isHTML ? 'HTML' : p.file_type.split('/')[1]?.toUpperCase() ?? 'FILE'
+                const EXT_COLORS: Record<string, string> = { PDF: '#EF4444', PNG: '#3B82F6', JPG: '#3B82F6', JPEG: '#3B82F6', WEBP: '#3B82F6', MP4: '#A855F7', MOV: '#A855F7', QUICKTIME: '#A855F7', HTML: '#F97316' }
                 const extColor = EXT_COLORS[ext] ?? '#888888'
 
                 return (
@@ -550,12 +551,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
                       <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', flex: 1 }}>
                         {new Date(p.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
-                      <button
-                        onClick={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
-                        style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', cursor: 'pointer' }}
-                      >
-                        Preview
-                      </button>
+                      {!isHTML && (
+                        <button
+                          onClick={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
+                          style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', cursor: 'pointer' }}
+                        >
+                          Preview
+                        </button>
+                      )}
                       <a href={p.file_url} target="_blank" rel="noopener noreferrer"
                         style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', textDecoration: 'none' }}
                       >
@@ -586,6 +589,11 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
                         style={{ width: '100%', maxHeight: '200px', display: 'block', borderTop: '1px solid var(--border-subtle)' }}
                       />
                     )}
+                    {isHTML && (
+                      <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '10px 12px', background: 'var(--bg-base)' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>HTML report — use "Open ↗" to view in browser</span>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -612,7 +620,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
             <span style={{ color: dragOver ? 'var(--accent)' : 'var(--text-tertiary)', fontSize: '12px' }}>
               {uploadingProof ? 'Uploading…' : 'Drop file or click to upload proof'}
             </span>
-            <input ref={fileRef} type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }}
+            <input ref={fileRef} type="file" accept="image/*,video/*,application/pdf,.html,.htm" style={{ display: 'none' }}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadProof(f) }}
             />
           </div>
