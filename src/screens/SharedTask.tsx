@@ -18,6 +18,13 @@ interface TaskData {
   assigned_to: string | null
 }
 
+interface Proof {
+  id: string
+  file_url: string
+  file_type: string
+  created_at: string
+}
+
 const PRIORITY_COLORS: Record<string, string> = { HIGH: '#EF4444', MEDIUM: '#EAB308', LOW: '#22C55E' }
 const STATUS_COLORS: Record<string, string> = {
   OPEN: '#6B7280', IN_PROGRESS: '#3B82F6', PROOF_SUBMITTED: '#F59E0B',
@@ -49,9 +56,11 @@ export function SharedTask({ taskId }: Props) {
   const [task, setTask] = useState<TaskData | null>(null)
   const [buName, setBuName] = useState('')
   const [assigneeName, setAssigneeName] = useState('')
+  const [proofs, setProofs] = useState<Proof[]>([])
   const [taskLoading, setTaskLoading] = useState(false)
   const [notFound, setNotFound] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [lightbox, setLightbox] = useState<Proof | null>(null)
 
   // Watch auth state
   useEffect(() => {
@@ -76,12 +85,14 @@ export function SharedTask({ taskId }: Props) {
       if (!t) { setNotFound(true); setTaskLoading(false); return }
       setTask(t)
 
-      const [{ data: bu }, { data: assignee }] = await Promise.all([
+      const [{ data: bu }, { data: assignee }, { data: proofRows }] = await Promise.all([
         t.bu_id ? supabase.from('business_units').select('code, name').eq('id', t.bu_id).single() : Promise.resolve({ data: null }),
         t.assigned_to ? supabase.from('profiles').select('full_name, email').eq('id', t.assigned_to).single() : Promise.resolve({ data: null }),
+        supabase.from('task_proofs').select('id, file_url, file_type, created_at').eq('task_id', taskId).order('created_at'),
       ])
       if (bu) setBuName(`${bu.code} · ${bu.name}`)
       if (assignee) setAssigneeName(assignee.full_name ?? assignee.email ?? '')
+      setProofs(proofRows ?? [])
 
       // Log view
       await supabase.from('activity_log').insert({
@@ -210,7 +221,7 @@ export function SharedTask({ taskId }: Props) {
         )}
 
         {/* Meta grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '4px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: proofs.length ? '20px' : '4px' }}>
           {buName && <MetaCell label="Business Unit" value={buName} />}
           {assigneeName && <MetaCell label="Assigned to" value={assigneeName} />}
           {task.due_date && <MetaCell label="Due date" value={new Date(task.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} />}
@@ -218,12 +229,75 @@ export function SharedTask({ taskId }: Props) {
           <MetaCell label="Deadline type" value={task.deadline_type} />
           {task.proof_required && <MetaCell label="Proof required" value="Yes" />}
         </div>
+
+        {/* Proofs */}
+        {proofs.length > 0 && (
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px', fontFamily: 'var(--font-ui)' }}>
+              Proof · {proofs.length} file{proofs.length > 1 ? 's' : ''}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {proofs.map(p => {
+                const isImage = p.file_type.startsWith('image/')
+                const isVideo = p.file_type.startsWith('video/')
+                const isPDF   = p.file_type === 'application/pdf'
+                const ext = p.file_type.split('/')[1]?.toUpperCase() ?? 'FILE'
+                const EXT_COLORS: Record<string, string> = { PDF: '#EF4444', PNG: '#3B82F6', JPG: '#3B82F6', JPEG: '#3B82F6', WEBP: '#3B82F6', MP4: '#A855F7', MOV: '#A855F7', QUICKTIME: '#A855F7' }
+                const extColor = EXT_COLORS[ext] ?? '#888'
+                return (
+                  <div key={p.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: '10px', overflow: 'hidden', background: 'var(--bg-base)' }}>
+                    {/* File header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px' }}>
+                      <span style={{ background: `${extColor}20`, color: extColor, fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}>{ext}</span>
+                      <span style={{ flex: 1, fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                        {new Date(p.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {isImage && (
+                        <button onClick={() => setLightbox(p)} style={{ fontSize: '11px', color: 'var(--text-secondary)', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer' }}>
+                          Full screen
+                        </button>
+                      )}
+                      <a href={p.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: 'var(--text-secondary)', textDecoration: 'none', border: '1px solid var(--border-subtle)', borderRadius: '5px', padding: '3px 8px' }}>
+                        Open ↗
+                      </a>
+                    </div>
+
+                    {/* Inline preview */}
+                    {isImage && (
+                      <img src={p.file_url} alt="proof" onClick={() => setLightbox(p)}
+                        style={{ width: '100%', maxHeight: '320px', objectFit: 'cover', display: 'block', borderTop: '1px solid var(--border-subtle)', cursor: 'zoom-in' }} />
+                    )}
+                    {isVideo && (
+                      <video src={p.file_url} controls style={{ width: '100%', maxHeight: '320px', display: 'block', borderTop: '1px solid var(--border-subtle)' }} />
+                    )}
+                    {isPDF && (
+                      <iframe src={`${p.file_url}#toolbar=0`} title="PDF" style={{ width: '100%', height: '400px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block', background: '#fff' }} />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
       <p style={{ marginTop: '16px', fontSize: '11px', color: 'var(--text-tertiary)', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
         Viewing as {session.user.email}
       </p>
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div onClick={() => setLightbox(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <button onClick={() => setLightbox(null)}
+            style={{ position: 'absolute', top: '16px', right: '20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', color: '#fff', fontSize: '13px' }}>
+            ✕ Close
+          </button>
+          <img src={lightbox.file_url} alt="proof" onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '95vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px' }} />
+        </div>
+      )}
     </div>
   )
 }
