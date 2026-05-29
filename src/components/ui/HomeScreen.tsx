@@ -3,6 +3,7 @@ import {
   LayoutDashboard, CheckSquare, Handshake, CalendarDays, Megaphone,
   BarChart3, Activity, LayoutTemplate, Upload, UserPlus, UserCircle, FileText,
 } from 'lucide-react'
+import { AppLogoBadge } from './AppLogo'
 
 interface App {
   id: string
@@ -86,9 +87,7 @@ export function HomeScreen({ onNavigate, onClose, userRole }: Props) {
       >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '28px' }}>
-          <div style={{ background: 'var(--accent)', borderRadius: '8px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <span style={{ color: '#000', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '14px' }}>H</span>
-          </div>
+          <AppLogoBadge size={32} radius={8} />
           <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '15px' }}>HOG OPS</span>
           <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>ESC to close</span>
         </div>

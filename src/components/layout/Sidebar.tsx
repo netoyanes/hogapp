@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText } from 'lucide-react'
+import { AppLogoBadge } from '../ui/AppLogo'
 
 interface Props {
   activeView: string
@@ -56,11 +57,8 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
           className="flex items-center gap-2.5 overflow-hidden"
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
         >
-          <div
-            style={{ background: 'var(--accent)', borderRadius: '6px', width: '28px', height: '28px', flexShrink: 0, transition: 'opacity 0.15s' }}
-            className="flex items-center justify-center hover:opacity-80"
-          >
-            <span style={{ color: '#000', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '12px' }}>H</span>
+          <div className="hover:opacity-80" style={{ transition: 'opacity 0.15s', flexShrink: 0 }}>
+            <AppLogoBadge size={28} radius={6} />
           </div>
           {expanded && (
             <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13px', whiteSpace: 'nowrap' }}>
