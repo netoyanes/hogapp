@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.2.0"
+export const APP_VERSION = "1.3.0"
 
 export type ChangelogEntry = {
   version: string
@@ -123,6 +123,19 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Archived tasks are hidden from the main board by default",
       "ARCHIVED badge shown in the task header when viewing an archived task",
       "Archive and restore actions tracked in Activity Log"
+    ]
+  },
+  {
+    version: "1.3.0",
+    date: "2026-05-29",
+    type: "MINOR",
+    changes: [
+      "Reports — upload HTML reports to Supabase Storage and open them inside the app",
+      "Internal HTML viewer — full-screen iframe overlay with toolbar, ESC to close",
+      "Task proofs now accept HTML files in addition to images, video, and PDF",
+      "HTML proofs render inline (iframe) in the task panel and open full-screen in the proof modal",
+      "Reports accessible from sidebar, bottom nav, and H app launcher",
+      "BU tagging, drag & drop upload, inline rename, and delete on report cards"
     ]
   },
   {
