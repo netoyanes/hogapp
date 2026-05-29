@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { HtmlFrame } from '../components/ui/HtmlFrame'
 import type { Session } from '@supabase/supabase-js'
 
 interface TaskData {
@@ -23,6 +24,7 @@ interface Proof {
   file_url: string
   file_type: string
   created_at: string
+  archived: boolean
 }
 
 const PRIORITY_COLORS: Record<string, string> = { HIGH: '#EF4444', MEDIUM: '#EAB308', LOW: '#22C55E' }
@@ -60,7 +62,7 @@ export function SharedTask({ taskId }: Props) {
   const [taskLoading, setTaskLoading] = useState(false)
   const [notFound, setNotFound] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
-  const [lightbox, setLightbox] = useState<Proof | null>(null)
+  const [previewProof, setPreviewProof] = useState<Proof | null>(null)
 
   // Watch auth state
   useEffect(() => {
@@ -88,11 +90,11 @@ export function SharedTask({ taskId }: Props) {
       const [{ data: bu }, { data: assignee }, { data: proofRows }] = await Promise.all([
         t.bu_id ? supabase.from('business_units').select('code, name').eq('id', t.bu_id).single() : Promise.resolve({ data: null }),
         t.assigned_to ? supabase.from('profiles').select('full_name, email').eq('id', t.assigned_to).single() : Promise.resolve({ data: null }),
-        supabase.from('task_proofs').select('id, file_url, file_type, created_at').eq('task_id', taskId).order('created_at'),
+        supabase.from('task_proofs').select('id, file_url, file_type, created_at, archived').eq('task_id', taskId).order('created_at'),
       ])
       if (bu) setBuName(`${bu.code} · ${bu.name}`)
       if (assignee) setAssigneeName(assignee.full_name ?? assignee.email ?? '')
-      setProofs(proofRows ?? [])
+      setProofs((proofRows ?? []).map(p => ({ ...p, archived: p.archived ?? false })).filter(p => !p.archived))
 
       // Log view
       await supabase.from('activity_log').insert({
@@ -241,8 +243,9 @@ export function SharedTask({ taskId }: Props) {
                 const isImage = p.file_type.startsWith('image/')
                 const isVideo = p.file_type.startsWith('video/')
                 const isPDF   = p.file_type === 'application/pdf'
-                const ext = p.file_type.split('/')[1]?.toUpperCase() ?? 'FILE'
-                const EXT_COLORS: Record<string, string> = { PDF: '#EF4444', PNG: '#3B82F6', JPG: '#3B82F6', JPEG: '#3B82F6', WEBP: '#3B82F6', MP4: '#A855F7', MOV: '#A855F7', QUICKTIME: '#A855F7' }
+                const isHTML  = p.file_type === 'text/html'
+                const ext = isHTML ? 'HTML' : p.file_type.split('/')[1]?.toUpperCase() ?? 'FILE'
+                const EXT_COLORS: Record<string, string> = { PDF: '#EF4444', PNG: '#3B82F6', JPG: '#3B82F6', JPEG: '#3B82F6', WEBP: '#3B82F6', MP4: '#A855F7', MOV: '#A855F7', QUICKTIME: '#A855F7', HTML: '#F97316' }
                 const extColor = EXT_COLORS[ext] ?? '#888'
                 return (
                   <div key={p.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: '10px', overflow: 'hidden', background: 'var(--bg-base)' }}>
@@ -252,11 +255,9 @@ export function SharedTask({ taskId }: Props) {
                       <span style={{ flex: 1, fontSize: '11px', color: 'var(--text-tertiary)' }}>
                         {new Date(p.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
-                      {isImage && (
-                        <button onClick={() => setLightbox(p)} style={{ fontSize: '11px', color: 'var(--text-secondary)', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer' }}>
-                          Full screen
-                        </button>
-                      )}
+                      <button onClick={() => setPreviewProof(p)} style={{ fontSize: '11px', color: 'var(--text-secondary)', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer' }}>
+                        Full screen
+                      </button>
                       <a href={p.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: 'var(--text-secondary)', textDecoration: 'none', border: '1px solid var(--border-subtle)', borderRadius: '5px', padding: '3px 8px' }}>
                         Open ↗
                       </a>
@@ -264,7 +265,7 @@ export function SharedTask({ taskId }: Props) {
 
                     {/* Inline preview */}
                     {isImage && (
-                      <img src={p.file_url} alt="proof" onClick={() => setLightbox(p)}
+                      <img src={p.file_url} alt="proof" onClick={() => setPreviewProof(p)}
                         style={{ width: '100%', maxHeight: '320px', objectFit: 'cover', display: 'block', borderTop: '1px solid var(--border-subtle)', cursor: 'zoom-in' }} />
                     )}
                     {isVideo && (
@@ -272,6 +273,9 @@ export function SharedTask({ taskId }: Props) {
                     )}
                     {isPDF && (
                       <iframe src={`${p.file_url}#toolbar=0`} title="PDF" style={{ width: '100%', height: '400px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block', background: '#fff' }} />
+                    )}
+                    {isHTML && (
+                      <HtmlFrame url={p.file_url} title="HTML preview" style={{ width: '100%', height: '360px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block', background: '#fff' }} />
                     )}
                   </div>
                 )
@@ -286,16 +290,28 @@ export function SharedTask({ taskId }: Props) {
         Viewing as {session.user.email}
       </p>
 
-      {/* Lightbox */}
-      {lightbox && (
-        <div onClick={() => setLightbox(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <button onClick={() => setLightbox(null)}
-            style={{ position: 'absolute', top: '16px', right: '20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', color: '#fff', fontSize: '13px' }}>
+      {/* Fullscreen preview */}
+      {previewProof && (
+        <div onClick={() => setPreviewProof(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={() => setPreviewProof(null)}
+            style={{ position: 'absolute', top: '16px', right: '20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', color: '#fff', fontSize: '13px', zIndex: 10 }}>
             ✕ Close
           </button>
-          <img src={lightbox.file_url} alt="proof" onClick={e => e.stopPropagation()}
-            style={{ maxWidth: '95vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px' }} />
+          <div onClick={e => e.stopPropagation()} style={{ maxWidth: '95vw', maxHeight: '92vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {previewProof.file_type.startsWith('image/') && (
+              <img src={previewProof.file_url} alt="proof" style={{ maxWidth: '95vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px' }} />
+            )}
+            {previewProof.file_type.startsWith('video/') && (
+              <video src={previewProof.file_url} controls autoPlay style={{ maxWidth: '95vw', maxHeight: '90vh', borderRadius: '8px' }} />
+            )}
+            {previewProof.file_type === 'application/pdf' && (
+              <iframe src={previewProof.file_url} title="PDF" style={{ width: '88vw', height: '90vh', border: 'none', borderRadius: '8px', background: '#fff' }} />
+            )}
+            {previewProof.file_type === 'text/html' && (
+              <HtmlFrame url={previewProof.file_url} title="HTML" style={{ width: '90vw', height: '90vh', border: 'none', borderRadius: '8px', background: '#fff' }} />
+            )}
+          </div>
         </div>
       )}
     </div>
