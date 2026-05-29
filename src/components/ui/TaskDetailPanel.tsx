@@ -551,14 +551,12 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
                       <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', flex: 1 }}>
                         {new Date(p.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
-                      {!isHTML && (
-                        <button
-                          onClick={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
-                          style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', cursor: 'pointer' }}
-                        >
-                          Preview
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
+                        style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', cursor: 'pointer' }}
+                      >
+                        Preview
+                      </button>
                       <a href={p.file_url} target="_blank" rel="noopener noreferrer"
                         style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', textDecoration: 'none' }}
                       >
@@ -590,9 +588,12 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
                       />
                     )}
                     {isHTML && (
-                      <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '10px 12px', background: 'var(--bg-base)' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>HTML report — use "Open ↗" to view in browser</span>
-                      </div>
+                      <iframe
+                        src={p.file_url}
+                        title="HTML preview"
+                        sandbox="allow-scripts allow-same-origin"
+                        style={{ width: '100%', height: '220px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block', background: '#fff' }}
+                      />
                     )}
                   </div>
                 )
@@ -718,6 +719,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
             )}
             {previewProof.type.startsWith('video/') && (
               <video src={previewProof.url} controls autoPlay style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: '8px' }} />
+            )}
+            {previewProof.type === 'text/html' && (
+              <iframe
+                src={previewProof.url}
+                title="HTML preview"
+                sandbox="allow-scripts allow-same-origin"
+                style={{ width: '88vw', height: '85vh', border: 'none', borderRadius: '8px', background: '#fff' }}
+              />
             )}
           </div>
           <a
