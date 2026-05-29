@@ -26,6 +26,68 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   REVISION: 'Revision',
 }
 
+interface ProofCardProps {
+  proof: { id: string; file_url: string; file_type: string; created_at: string; archived: boolean }
+  archived?: boolean
+  onPreview: () => void
+  onArchive?: () => void
+  onUnarchive?: () => void
+}
+
+function ProofCard({ proof: p, archived, onPreview, onArchive, onUnarchive }: ProofCardProps) {
+  const isImage = p.file_type.startsWith('image/')
+  const isPDF = p.file_type === 'application/pdf'
+  const isVideo = p.file_type.startsWith('video/')
+  const isHTML = p.file_type === 'text/html'
+  const ext = isHTML ? 'HTML' : p.file_type.split('/')[1]?.toUpperCase() ?? 'FILE'
+  const EXT_COLORS: Record<string, string> = { PDF: '#EF4444', PNG: '#3B82F6', JPG: '#3B82F6', JPEG: '#3B82F6', WEBP: '#3B82F6', MP4: '#A855F7', MOV: '#A855F7', QUICKTIME: '#A855F7', HTML: '#F97316' }
+  const extColor = EXT_COLORS[ext] ?? '#888888'
+
+  return (
+    <div style={{ border: '1px solid var(--border-default)', borderRadius: '8px', overflow: 'hidden', background: 'var(--bg-elevated)', opacity: archived ? 0.55 : 1 }}>
+      <div className="flex items-center gap-3 px-3 py-2">
+        <span style={{ background: `${extColor}20`, color: extColor, fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}>
+          {ext}
+        </span>
+        <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', flex: 1 }}>
+          {new Date(p.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          {archived && <span style={{ marginLeft: '6px', fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>ARCHIVED</span>}
+        </span>
+        <button onClick={onPreview} style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', cursor: 'pointer' }}>
+          Preview
+        </button>
+        <a href={p.file_url} target="_blank" rel="noopener noreferrer" style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', textDecoration: 'none' }}>
+          Open ↗
+        </a>
+        {archived ? (
+          <button onClick={onUnarchive} title="Restore" style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-tertiary)', fontSize: '11px', padding: '3px 8px', cursor: 'pointer' }}>
+            Restore
+          </button>
+        ) : (
+          <button onClick={onArchive} title="Archive" style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-tertiary)', fontSize: '11px', padding: '3px 8px', cursor: 'pointer' }}>
+            Archive
+          </button>
+        )}
+      </div>
+
+      {!archived && isImage && (
+        <img src={p.file_url} alt="proof" onClick={onPreview}
+          style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', display: 'block', cursor: 'zoom-in', borderTop: '1px solid var(--border-subtle)' }}
+        />
+      )}
+      {!archived && isPDF && (
+        <iframe src={`${p.file_url}#toolbar=0`} style={{ width: '100%', height: '200px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block' }} title="PDF preview" />
+      )}
+      {!archived && isVideo && (
+        <video src={p.file_url} controls style={{ width: '100%', maxHeight: '200px', display: 'block', borderTop: '1px solid var(--border-subtle)' }} />
+      )}
+      {!archived && isHTML && (
+        <HtmlFrame url={p.file_url} title="HTML preview" style={{ width: '100%', height: '220px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block', background: '#fff' }} />
+      )}
+    </div>
+  )
+}
+
 export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRole }: Props) {
   const isMobile = useIsMobile()
   const [task, setTask] = useState<Task | null>(null)
@@ -48,8 +110,9 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   const [comments, setComments] = useState<{ id: string; content: string; created_at: string; author: string }[]>([])
   const [newComment, setNewComment] = useState('')
   const [postingComment, setPostingComment] = useState(false)
-  const [proofs, setProofs] = useState<{ id: string; file_url: string; file_type: string; created_at: string }[]>([])
+  const [proofs, setProofs] = useState<{ id: string; file_url: string; file_type: string; created_at: string; archived: boolean }[]>([])
   const [uploadingProof, setUploadingProof] = useState(false)
+  const [showArchivedProofs, setShowArchivedProofs] = useState(false)
   const [followers, setFollowers] = useState<{ userId: string; name: string }[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
@@ -126,10 +189,10 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
       // Load proofs
       const { data: pr } = await supabase
         .from('task_proofs')
-        .select('id, file_url, file_type, created_at')
+        .select('id, file_url, file_type, created_at, archived')
         .eq('task_id', taskId)
         .order('created_at')
-      setProofs(pr ?? [])
+      setProofs((pr ?? []).map(p => ({ ...p, archived: p.archived ?? false })))
     }
     load()
   }, [taskId])
@@ -165,7 +228,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     })
     // Auto-set status to PROOF_SUBMITTED
     await changeStatus('PROOF_SUBMITTED')
-    setProofs((prev) => [...prev, { id: Date.now().toString(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString() }])
+    setProofs((prev) => [...prev, { id: Date.now().toString(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString(), archived: false }])
     notifySlack(proofUploadedMessage(task?.title ?? '', buName || 'HOG OPS', uploaderName))
     logActivity('proof_uploaded', 'task', taskId, { title: task?.title ?? '' })
     notifyAdminsAndAssignee('Proof uploaded', task?.title ?? '', 'proof_uploaded', taskId, task?.assigned_to ?? undefined)
@@ -270,6 +333,16 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   async function removeFollower(userId: string) {
     await supabase.from('task_followers').delete().eq('task_id', taskId).eq('user_id', userId)
     setFollowers(prev => prev.filter(f => f.userId !== userId))
+  }
+
+  async function archiveProof(id: string) {
+    await supabase.from('task_proofs').update({ archived: true }).eq('id', id)
+    setProofs(prev => prev.map(p => p.id === id ? { ...p, archived: true } : p))
+  }
+
+  async function unarchiveProof(id: string) {
+    await supabase.from('task_proofs').update({ archived: false }).eq('id', id)
+    setProofs(prev => prev.map(p => p.id === id ? { ...p, archived: false } : p))
   }
 
   const inputStyle = {
@@ -527,77 +600,46 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
           <div className="flex items-center gap-2 mb-3">
             <Paperclip size={12} style={{ color: 'var(--text-tertiary)' }} />
-            <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', margin: 0 }}>PROOF {proofs.length > 0 && `· ${proofs.length} file${proofs.length > 1 ? 's' : ''}`}</p>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', margin: 0 }}>PROOF {proofs.filter(p => !p.archived).length > 0 && `· ${proofs.filter(p => !p.archived).length} active`}</p>
           </div>
 
-          {/* Existing proofs */}
-          {proofs.length > 0 && (
+          {/* Active proofs */}
+          {proofs.filter(p => !p.archived).length > 0 && (
             <div className="flex flex-col gap-2 mb-3">
-              {proofs.map((p) => {
-                const isImage = p.file_type.startsWith('image/')
-                const isPDF = p.file_type === 'application/pdf'
-                const isVideo = p.file_type.startsWith('video/')
-                const isHTML = p.file_type === 'text/html'
-                const ext = isHTML ? 'HTML' : p.file_type.split('/')[1]?.toUpperCase() ?? 'FILE'
-                const EXT_COLORS: Record<string, string> = { PDF: '#EF4444', PNG: '#3B82F6', JPG: '#3B82F6', JPEG: '#3B82F6', WEBP: '#3B82F6', MP4: '#A855F7', MOV: '#A855F7', QUICKTIME: '#A855F7', HTML: '#F97316' }
-                const extColor = EXT_COLORS[ext] ?? '#888888'
+              {proofs.filter(p => !p.archived).map((p) => (
+                <ProofCard
+                  key={p.id}
+                  proof={p}
+                  onPreview={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
+                  onArchive={() => archiveProof(p.id)}
+                />
+              ))}
+            </div>
+          )}
 
-                return (
-                  <div key={p.id} style={{ border: '1px solid var(--border-default)', borderRadius: '8px', overflow: 'hidden', background: 'var(--bg-elevated)' }}>
-                    {/* File header row */}
-                    <div className="flex items-center gap-3 px-3 py-2">
-                      <span style={{ background: `${extColor}20`, color: extColor, fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}>
-                        {ext}
-                      </span>
-                      <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', flex: 1 }}>
-                        {new Date(p.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <button
-                        onClick={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
-                        style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', cursor: 'pointer' }}
-                      >
-                        Preview
-                      </button>
-                      <a href={p.file_url} target="_blank" rel="noopener noreferrer"
-                        style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', textDecoration: 'none' }}
-                      >
-                        Open ↗
-                      </a>
-                    </div>
-
-                    {/* Inline preview */}
-                    {isImage && (
-                      <img
-                        src={p.file_url}
-                        alt="proof"
-                        onClick={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
-                        style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', display: 'block', cursor: 'zoom-in', borderTop: '1px solid var(--border-subtle)' }}
-                      />
-                    )}
-                    {isPDF && (
-                      <iframe
-                        src={`${p.file_url}#toolbar=0`}
-                        style={{ width: '100%', height: '200px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block' }}
-                        title="PDF preview"
-                      />
-                    )}
-                    {isVideo && (
-                      <video
-                        src={p.file_url}
-                        controls
-                        style={{ width: '100%', maxHeight: '200px', display: 'block', borderTop: '1px solid var(--border-subtle)' }}
-                      />
-                    )}
-                    {isHTML && (
-                      <HtmlFrame
-                        url={p.file_url}
-                        title="HTML preview"
-                        style={{ width: '100%', height: '220px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block', background: '#fff' }}
-                      />
-                    )}
-                  </div>
-                )
-              })}
+          {/* Archived proofs toggle */}
+          {proofs.filter(p => p.archived).length > 0 && (
+            <div style={{ marginBottom: '10px' }}>
+              <button
+                onClick={() => setShowArchivedProofs(v => !v)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: '11px', padding: 0, display: 'flex', alignItems: 'center', gap: '4px' }}
+              >
+                <span style={{ fontSize: '10px' }}>{showArchivedProofs ? '▾' : '▸'}</span>
+                {proofs.filter(p => p.archived).length} archived proof{proofs.filter(p => p.archived).length > 1 ? 's' : ''}
+              </button>
+              {showArchivedProofs && (
+                <div className="flex flex-col gap-2 mt-2">
+                  {proofs.filter(p => p.archived).map((p) => (
+                    <ProofCard
+                      key={p.id}
+                      proof={p}
+                      archived
+                      onPreview={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
+                      onUnarchive={() => unarchiveProof(p.id)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
