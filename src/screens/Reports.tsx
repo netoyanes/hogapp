@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Upload, ExternalLink, Trash2, FileCode, X, Maximize2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { HtmlFrame } from '../components/ui/HtmlFrame'
 import type { BusinessUnit } from '../types'
 
 interface Report {
@@ -318,11 +319,10 @@ export function Reports({ userRole: _userRole }: Props) {
           </div>
 
           {/* iframe */}
-          <iframe
-            src={preview.file_url}
+          <HtmlFrame
+            url={preview.file_url}
             title={preview.name}
-            style={{ flex: 1, border: 'none', background: '#fff' }}
-            sandbox="allow-scripts allow-same-origin"
+            style={{ flex: 1, border: 'none', background: '#fff', width: '100%' }}
           />
         </div>
       )}
