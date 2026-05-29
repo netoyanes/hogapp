@@ -7,6 +7,7 @@ import { notifyAdminsAndAssignee } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
+import { HtmlFrame } from './HtmlFrame'
 import type { Task, TaskStatus, TaskPriority, TaskType, DeadlineType } from '../../types'
 
 interface Props {
@@ -588,10 +589,9 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
                       />
                     )}
                     {isHTML && (
-                      <iframe
-                        src={p.file_url}
+                      <HtmlFrame
+                        url={p.file_url}
                         title="HTML preview"
-                        sandbox="allow-scripts allow-same-origin"
                         style={{ width: '100%', height: '220px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block', background: '#fff' }}
                       />
                     )}
@@ -721,10 +721,9 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
               <video src={previewProof.url} controls autoPlay style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: '8px' }} />
             )}
             {previewProof.type === 'text/html' && (
-              <iframe
-                src={previewProof.url}
+              <HtmlFrame
+                url={previewProof.url}
                 title="HTML preview"
-                sandbox="allow-scripts allow-same-origin"
                 style={{ width: '88vw', height: '85vh', border: 'none', borderRadius: '8px', background: '#fff' }}
               />
             )}
