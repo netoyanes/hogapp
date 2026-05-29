@@ -54,16 +54,27 @@ export function InviteUsers() {
     setError(null)
 
     const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('invitations').insert({
+
+    // Insert invitation record (for role assignment on signup)
+    const { error: insertError } = await supabase.from('invitations').insert({
       email: email.trim().toLowerCase(),
       role,
       invited_by: user?.id,
     })
 
-    if (error) {
-      setError(error.message.includes('duplicate') ? 'This email already has a pending invite.' : error.message)
+    if (insertError) {
+      setError(insertError.message.includes('duplicate') ? 'This email already has a pending invite.' : insertError.message)
       setSending(false)
       return
+    }
+
+    // Send invitation email via Edge Function
+    const { error: fnError } = await supabase.functions.invoke('send-invite', {
+      body: { email: email.trim().toLowerCase(), role, appUrl: window.location.origin },
+    })
+
+    if (fnError) {
+      setError(`Invite saved but email failed: ${fnError.message}. You can copy the link manually.`)
     }
 
     logActivity('user_invited', 'invitation', undefined, { email: email.trim().toLowerCase(), role })
@@ -169,12 +180,12 @@ export function InviteUsers() {
                 disabled={sending || !email.trim()}
                 style={{ background: sent ? '#16A34A' : email.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: email.trim() ? '#000' : 'var(--text-tertiary)', borderRadius: '8px', padding: '11px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: email.trim() ? 'pointer' : 'not-allowed' }}
               >
-                {sent ? '✓ Invitation saved!' : sending ? 'Saving…' : 'Create Invitation'}
+                {sent ? '✓ Invitation sent!' : sending ? 'Sending…' : 'Send Invitation'}
               </button>
             </form>
 
             <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '12px', lineHeight: '1.5' }}>
-              Share the signup link with your teammate. When they create an account with this email, they'll automatically get the assigned role.
+              The person will receive an email with a link to access HOG OPS. They'll complete setup and get their assigned role automatically.
             </p>
           </div>
 

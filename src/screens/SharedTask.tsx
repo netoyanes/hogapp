@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { HtmlFrame } from '../components/ui/HtmlFrame'
+import { AppLogoBadge } from '../components/ui/AppLogo'
 import type { Session } from '@supabase/supabase-js'
 
 interface TaskData {
@@ -122,9 +123,7 @@ export function SharedTask({ taskId }: Props) {
     return (
       <div style={bgStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          <div style={{ background: 'var(--accent)', borderRadius: '8px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: '#000', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '14px' }}>H</span>
-          </div>
+          <AppLogoBadge size={32} radius={8} />
           <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>Loading…</span>
         </div>
       </div>
@@ -137,9 +136,7 @@ export function SharedTask({ taskId }: Props) {
       <div style={bgStyle}>
         <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-            <div style={{ background: 'var(--accent)', borderRadius: '7px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <span style={{ color: '#000', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13px' }}>H</span>
-            </div>
+            <AppLogoBadge size={32} radius={7} />
             <div>
               <div style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '14px' }}>HOG OPS</div>
               <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>Shared Task</div>
@@ -191,9 +188,7 @@ export function SharedTask({ taskId }: Props) {
     <div style={bgStyle}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-        <div style={{ background: 'var(--accent)', borderRadius: '7px', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <span style={{ color: '#000', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '12px' }}>H</span>
-        </div>
+        <AppLogoBadge size={30} radius={7} />
         <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13px' }}>HOG OPS</span>
         <span style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--text-tertiary)', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '4px', padding: '2px 8px', fontFamily: 'var(--font-mono)' }}>
           Shared Task

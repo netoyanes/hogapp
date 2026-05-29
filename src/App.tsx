@@ -18,6 +18,7 @@ import { NotificationBell } from './components/ui/NotificationBell'
 import { CRM } from './screens/CRM'
 import { Reports } from './screens/Reports'
 import { SharedTask } from './screens/SharedTask'
+import { AppLogoBadge } from './components/ui/AppLogo'
 
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL'
@@ -49,8 +50,8 @@ export default function App() {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-base)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '32px', height: '32px', background: 'var(--accent)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="animate-pulse-green">
-            <span style={{ color: '#000', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '14px' }}>H</span>
+          <div className="animate-pulse-green">
+            <AppLogoBadge size={32} radius={8} />
           </div>
           <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>Loading HOG OPS…</span>
         </div>
