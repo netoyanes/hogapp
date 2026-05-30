@@ -73,9 +73,15 @@ export function InviteUsers() {
       body: { email: email.trim().toLowerCase(), role, appUrl: window.location.origin },
     })
 
-    if (fnError || fnData?.error) {
-      const msg = fnData?.error ?? fnError?.message ?? 'Unknown error'
-      setError(`Invite saved but email failed: ${msg}. You can copy the link manually.`)
+    if (fnError) {
+      let msg = fnError.message
+      try {
+        const body = await (fnError as unknown as { context: Response }).context?.json?.()
+        if (body?.error) msg = body.error
+      } catch { /* ignore */ }
+      setError(`Invite saved but email failed: ${msg}. Copy the link from the list below.`)
+    } else if (fnData?.emailError) {
+      setError(`Invite saved. Email not sent (${fnData.emailError}) — copy the link from the list below.`)
     }
 
     logActivity('user_invited', 'invitation', undefined, { email: email.trim().toLowerCase(), role })
