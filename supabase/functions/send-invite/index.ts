@@ -18,37 +18,34 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    // Generate invite link
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'invite',
-      email,
-      options: {
-        data: { role },
-        redirectTo: appUrl,
-      },
+    // Try to send invite email (works for new users)
+    const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
+      data: { role },
+      redirectTo: appUrl,
     })
 
-    if (linkError) {
+    const alreadyRegistered = inviteError?.message?.toLowerCase().includes('already')
+
+    // Generate a magic link regardless (works for new and existing users)
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: alreadyRegistered ? 'magiclink' : 'invite',
+      email,
+      options: { data: { role }, redirectTo: appUrl },
+    })
+
+    if (linkError && !alreadyRegistered) {
       return new Response(
         JSON.stringify({ error: linkError.message }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
-    const inviteLink = linkData.properties?.action_link ?? appUrl
-
-    // Send email via Supabase Auth (uses built-in SMTP)
-    const { error: mailError } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: { role },
-      redirectTo: appUrl,
-    })
-
     return new Response(
       JSON.stringify({
         success: true,
-        emailSent: !mailError,
-        inviteLink,
-        emailError: mailError?.message ?? null,
+        emailSent: !inviteError,
+        alreadyRegistered,
+        inviteLink: linkData?.properties?.action_link ?? appUrl,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
