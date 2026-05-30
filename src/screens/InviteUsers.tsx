@@ -80,8 +80,10 @@ export function InviteUsers() {
         if (body?.error) msg = body.error
       } catch { /* ignore */ }
       setError(`Invite saved but email failed: ${msg}. Copy the link from the list below.`)
-    } else if (fnData?.emailError) {
-      setError(`Invite saved. Email not sent (${fnData.emailError}) — copy the link from the list below.`)
+    } else if (fnData?.alreadyRegistered) {
+      setError('This email is already registered — they can sign in directly. A login link was generated; copy it from the list below.')
+    } else if (!fnData?.emailSent) {
+      setError('Invite saved. Email could not be sent — copy the link from the list below.')
     }
 
     logActivity('user_invited', 'invitation', undefined, { email: email.trim().toLowerCase(), role })
