@@ -69,7 +69,7 @@ export function InviteUsers() {
     }
 
     // Send invitation email via Edge Function
-    const { error: fnError } = await supabase.functions.invoke('send-invite', {
+    const { error: fnError } = await supabase.functions.invoke('hyper-responder', {
       body: { email: email.trim().toLowerCase(), role, appUrl: window.location.origin },
     })
 
