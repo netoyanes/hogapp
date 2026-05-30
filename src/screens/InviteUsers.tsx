@@ -69,12 +69,13 @@ export function InviteUsers() {
     }
 
     // Send invitation email via Edge Function
-    const { error: fnError } = await supabase.functions.invoke('hyper-responder', {
+    const { data: fnData, error: fnError } = await supabase.functions.invoke('hyper-responder', {
       body: { email: email.trim().toLowerCase(), role, appUrl: window.location.origin },
     })
 
-    if (fnError) {
-      setError(`Invite saved but email failed: ${fnError.message}. You can copy the link manually.`)
+    if (fnError || fnData?.error) {
+      const msg = fnData?.error ?? fnError?.message ?? 'Unknown error'
+      setError(`Invite saved but email failed: ${msg}. You can copy the link manually.`)
     }
 
     logActivity('user_invited', 'invitation', undefined, { email: email.trim().toLowerCase(), role })
