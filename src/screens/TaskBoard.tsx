@@ -26,9 +26,10 @@ const STATUS_COLORS: Record<TaskStatus, string> = {
 interface Props {
   userRole?: string
   defaultBuFilter?: string
+  userId?: string
 }
 
-export function TaskBoard({ userRole, defaultBuFilter }: Props) {
+export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [buMap, setBuMap] = useState<Record<string, string>>({})
   const [profileMap, setProfileMap] = useState<Record<string, string>>({})
@@ -38,6 +39,7 @@ export function TaskBoard({ userRole, defaultBuFilter }: Props) {
   const [filterPriority, setFilterPriority] = useState<TaskPriority | ''>('')
   const [filterType, setFilterType] = useState<TaskType | ''>('')
   const [filterBu, setFilterBu] = useState(defaultBuFilter ?? '')
+  const [filterAssignee, setFilterAssignee] = useState(() => userRole !== 'MASTER' ? (userId ?? '') : '')
   const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
@@ -89,6 +91,7 @@ export function TaskBoard({ userRole, defaultBuFilter }: Props) {
     if (filterPriority && t.priority !== filterPriority) return false
     if (filterType && t.type !== filterType) return false
     if (filterBu && t.bu_id !== filterBu) return false
+    if (filterAssignee && t.assigned_to !== filterAssignee) return false
     return true
   })
 
@@ -141,6 +144,27 @@ export function TaskBoard({ userRole, defaultBuFilter }: Props) {
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
+          {userRole === 'MASTER' ? (
+            <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} style={selectStyle}>
+              <option value="">All assignees</option>
+              {Object.entries(profileMap).sort((a, b) => a[1].localeCompare(b[1])).map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          ) : (
+            <button
+              onClick={() => setFilterAssignee(v => v ? '' : (userId ?? ''))}
+              style={{
+                background: filterAssignee ? 'var(--accent-bg)' : 'var(--bg-elevated)',
+                border: `1px solid ${filterAssignee ? 'var(--accent-border)' : 'var(--border-default)'}`,
+                color: filterAssignee ? 'var(--accent)' : 'var(--text-tertiary)',
+                borderRadius: '6px', padding: '5px 9px', fontSize: '12px', cursor: 'pointer', flexShrink: 0,
+                fontFamily: 'var(--font-ui)',
+              }}
+            >
+              {filterAssignee ? 'My Tasks' : 'All Tasks'}
+            </button>
+          )}
           <button
             onClick={() => setShowArchived((v) => !v)}
             style={{
@@ -154,8 +178,8 @@ export function TaskBoard({ userRole, defaultBuFilter }: Props) {
           >
             Archived {showArchived && `· ${tasks.length}`}
           </button>
-          {(filterBu || filterPriority || filterType) && (
-            <button onClick={() => { setFilterBu(''); setFilterPriority(''); setFilterType('') }}
+          {(filterBu || filterPriority || filterType || (userRole === 'MASTER' && filterAssignee)) && (
+            <button onClick={() => { setFilterBu(''); setFilterPriority(''); setFilterType(''); if (userRole === 'MASTER') setFilterAssignee('') }}
               style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: '11px', cursor: 'pointer' }}>
               Clear
             </button>

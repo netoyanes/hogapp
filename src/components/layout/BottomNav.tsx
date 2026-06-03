@@ -11,18 +11,22 @@ function canSeeDashboard(role?: string) {
 }
 
 export function BottomNav({ activeView, onNavigate, userRole }: Props) {
-  const items = [
-    canSeeDashboard(userRole) && { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'tasks',    label: 'Tasks',    icon: CheckSquare },
-    { id: 'crm',      label: 'CRM',      icon: Handshake },
-    { id: 'calendar', label: 'Calendar', icon: CalendarDays },
-    { id: 'content',  label: 'Content',  icon: Megaphone },
-    { id: 'revenue',  label: 'Revenue',  icon: BarChart3 },
-    canSeeDashboard(userRole) && { id: 'activity', label: 'Activity', icon: Activity },
-    userRole === 'MASTER' && { id: 'invite', label: 'Invite', icon: UserPlus },
-    { id: 'reports',  label: 'Reports',  icon: FileText },
-    { id: 'profile',  label: 'Profile',  icon: UserCircle },
-  ].filter(Boolean) as { id: string; label: string; icon: React.ElementType }[]
+  const allItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'tasks',     label: 'Tasks',     icon: CheckSquare },
+    { id: 'crm',       label: 'CRM',       icon: Handshake },
+    { id: 'calendar',  label: 'Calendar',  icon: CalendarDays },
+    { id: 'content',   label: 'Content',   icon: Megaphone },
+    { id: 'revenue',   label: 'Revenue',   icon: BarChart3 },
+    { id: 'activity',  label: 'Activity',  icon: Activity },
+    { id: 'invite',    label: 'Invite',    icon: UserPlus },
+    { id: 'reports',   label: 'Reports',   icon: FileText },
+    { id: 'profile',   label: 'Profile',   icon: UserCircle },
+  ]
+  const items = allItems.filter(item => {
+    if (userRole === 'MASTER') return true
+    return ['tasks', 'crm', 'profile'].includes(item.id)
+  })
 
   return (
     <nav

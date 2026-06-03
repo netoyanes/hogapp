@@ -71,9 +71,8 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
       {/* Nav items */}
       <nav className="flex-1 flex flex-col gap-1 p-2 overflow-hidden">
         {NAV_ITEMS.filter(item => {
-          if (item.masterOnly && userRole !== 'MASTER') return false
-          if (item.cLevelOnly && !canSeeDashboard(userRole)) return false
-          return true
+          if (userRole === 'MASTER') return true
+          return ['tasks', 'crm', 'profile'].includes(item.id)
         }).map((item) => {
           const Icon = item.icon
           const active = activeView === item.id

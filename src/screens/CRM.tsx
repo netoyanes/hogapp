@@ -59,9 +59,10 @@ function fmt(n: number | null) {
 
 interface Props {
   userRole?: string
+  userId?: string
 }
 
-export function CRM({ userRole }: Props) {
+export function CRM({ userRole, userId }: Props) {
   const [deals, setDeals] = useState<CRMDeal[]>([])
   const [contacts, setContacts] = useState<CRMContact[]>([])
   const [buses, setBuses] = useState<BusinessUnit[]>([])
@@ -69,6 +70,7 @@ export function CRM({ userRole }: Props) {
   const [creating, setCreating] = useState(false)
   const [stageFilter, setStageFilter] = useState<DealStage | ''>('')
   const [buFilter, setBuFilter] = useState('')
+  const [ownerFilter, setOwnerFilter] = useState(() => userRole !== 'MASTER' ? (userId ?? '') : '')
 
   // create modal state
   const [cTitle, setCTitle] = useState('')
@@ -110,6 +112,7 @@ export function CRM({ userRole }: Props) {
   const filtered = deals.filter(d => {
     if (stageFilter && d.stage !== stageFilter) return false
     if (buFilter && d.bu_id !== buFilter) return false
+    if (ownerFilter && d.created_by !== ownerFilter) return false
     return true
   })
 
@@ -177,6 +180,18 @@ export function CRM({ userRole }: Props) {
             <option value="">All Stages</option>
             {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
+          <button
+            onClick={() => setOwnerFilter(v => v ? '' : (userId ?? ''))}
+            style={{
+              background: ownerFilter ? 'var(--accent-bg)' : 'var(--bg-elevated)',
+              border: `1px solid ${ownerFilter ? 'var(--accent-border)' : 'var(--border-default)'}`,
+              color: ownerFilter ? 'var(--accent)' : 'var(--text-tertiary)',
+              borderRadius: '6px', padding: '5px 9px', fontSize: '12px', cursor: 'pointer',
+              fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap',
+            }}
+          >
+            {ownerFilter ? 'My Deals' : 'All Deals'}
+          </button>
           <button
             onClick={() => setCreating(true)}
             style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap' }}

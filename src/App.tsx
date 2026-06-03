@@ -34,9 +34,8 @@ export default function App() {
   const { session, profile, loading, accessDenied, signIn, signOut, refetchProfile } = useAuth()
   const role = profile?.role ?? undefined
 
-  // Default view: dashboard for MASTER/C_LEVEL, tasks for everyone else
   const [activeView, setActiveView] = useState(() =>
-    canSeeDashboard(role) ? 'dashboard' : 'tasks'
+    role === 'MASTER' ? 'dashboard' : 'tasks'
   )
   const [scoringBU, setScoringBU] = useState<string | null>(null)
   const [buFilter, setBuFilter] = useState('')
@@ -65,8 +64,12 @@ export default function App() {
     return <UserOnboarding profile={profile} onComplete={() => refetchProfile?.()} />
   }
 
+  const ALLOWED_VIEWS = role === 'MASTER'
+    ? null // null = no restriction
+    : new Set(['tasks', 'crm', 'profile'])
+
   function handleNavigate(view: string) {
-    if (view === 'dashboard' && !canSeeDashboard(role)) return
+    if (ALLOWED_VIEWS && !ALLOWED_VIEWS.has(view)) return
     setActiveView(view)
   }
 
@@ -84,9 +87,9 @@ export default function App() {
         }
         return <Dashboard onScoreBU={(code) => setScoringBU(code)} onViewTasks={goToTasksForBU} userRole={role} />
       case 'tasks':
-        return <TaskBoard userRole={role} defaultBuFilter={buFilter} />
+        return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':
-        return <CRM userRole={role} />
+        return <CRM userRole={role} userId={profile?.id} />
       case 'calendar':
         return <CalendarView userRole={role} defaultBuFilter={buFilter} />
       case 'content':
@@ -107,9 +110,9 @@ export default function App() {
       case 'profile':
         return profile ? <Profile profile={profile} onUpdated={() => refetchProfile?.()} /> : null
       default:
-        return canSeeDashboard(role)
+        return role === 'MASTER'
           ? <Dashboard onScoreBU={(code) => setScoringBU(code)} onViewTasks={goToTasksForBU} userRole={role} />
-          : <TaskBoard userRole={role} defaultBuFilter={buFilter} />
+          : <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
     }
   }
 
