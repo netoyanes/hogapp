@@ -61,6 +61,8 @@ export function InviteUsers() {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null)
+  const [memberError, setMemberError] = useState<string | null>(null)
+  const [memberSuccess, setMemberSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     loadAll()
@@ -130,17 +132,37 @@ export function InviteUsers() {
 
   async function updateRole(userId: string, newRole: UserRole) {
     setSavingRoleId(userId)
-    await supabase.from('profiles').update({ role: newRole }).eq('id', userId)
-    setMembers(prev => prev.map(m => m.id === userId ? { ...m, role: newRole } : m))
+    setMemberError(null)
+    setMemberSuccess(null)
+    const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId)
+    if (error) {
+      setMemberError(`Could not update role: ${error.message}`)
+    } else {
+      setMembers(prev => prev.map(m => m.id === userId ? { ...m, role: newRole } : m))
+      setMemberSuccess('Role updated.')
+      setTimeout(() => setMemberSuccess(null), 2500)
+    }
     setSavingRoleId(null)
   }
 
   async function removeMember(userId: string) {
     setRemovingId(userId)
-    await supabase.from('profiles').delete().eq('id', userId)
+    setMemberError(null)
+    setMemberSuccess(null)
+    const { error } = await supabase.from('profiles').delete().eq('id', userId)
+    if (error) {
+      setMemberError(`Could not remove user: ${error.message}. You may need to delete them directly from the Supabase dashboard.`)
+      setConfirmRemove(null)
+      setRemovingId(null)
+      return
+    }
+    // Also attempt to remove their auth account via edge function if available
+    await supabase.functions.invoke('admin-remove-user', { body: { userId } }).catch(() => {})
     setMembers(prev => prev.filter(m => m.id !== userId))
     setConfirmRemove(null)
     setRemovingId(null)
+    setMemberSuccess('User removed.')
+    setTimeout(() => setMemberSuccess(null), 2500)
   }
 
   function copyLink(email: string) {
@@ -196,6 +218,17 @@ export function InviteUsers() {
                 {members.length}
               </span>
             </div>
+
+            {memberError && (
+              <div style={{ margin: '0', padding: '10px 20px', background: 'rgba(239,68,68,0.08)', borderBottom: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', fontSize: '12px' }}>
+                {memberError}
+              </div>
+            )}
+            {memberSuccess && (
+              <div style={{ margin: '0', padding: '10px 20px', background: 'rgba(34,197,94,0.08)', borderBottom: '1px solid rgba(34,197,94,0.2)', color: '#22C55E', fontSize: '12px' }}>
+                {memberSuccess}
+              </div>
+            )}
 
             {members.length === 0 ? (
               <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '13px' }}>
