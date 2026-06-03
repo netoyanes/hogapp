@@ -53,7 +53,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     const [{ data: taskData }, { data: buses }, { data: profiles }, { data: followers }] = await Promise.all([
       supabase.from('tasks').select('*').eq('archived', showArchived).order('created_at', { ascending: false }),
       supabase.from('business_units').select('id, code, name'),
-      supabase.from('profiles').select('id, full_name, email'),
+      supabase.from('profiles').select('id, full_name, email').not('full_name', 'is', null),
       supabase.from('task_followers').select('task_id, user_id'),
     ])
     setTasks(taskData ?? [])

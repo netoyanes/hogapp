@@ -157,7 +157,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
         if (p) setAssigneeName(p.full_name ?? p.email ?? '')
       }
 
-      const { data: members } = await supabase.from('profiles').select('id, full_name, email')
+      const { data: members } = await supabase.from('profiles').select('id, full_name, email').not('full_name', 'is', null)
       setTeamMembers(members ?? [])
 
       // Load followers
