@@ -5,6 +5,7 @@ import { TaskCard } from '../components/ui/TaskCard'
 import { CreateTaskModal } from '../components/ui/CreateTaskModal'
 import { TaskDetailPanel } from '../components/ui/TaskDetailPanel'
 import { EmptyState } from '../components/ui/EmptyState'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import type { Task, TaskStatus, TaskPriority, TaskType } from '../types'
 
 const COLUMNS: { id: TaskStatus; label: string }[] = [
@@ -78,7 +79,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  // Real-time
+  // Real-time + auto-refresh fallback
   useEffect(() => {
     const channel = supabase
       .channel('tasks-changes')
@@ -86,6 +87,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [load])
+  useAutoRefresh(load)
 
   const filtered = tasks.filter((t) => {
     if (filterPriority && t.priority !== filterPriority) return false

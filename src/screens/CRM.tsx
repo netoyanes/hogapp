@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { BusinessUnit } from '../types'
 import { Plus, DollarSign, TrendingUp, Target, Briefcase } from 'lucide-react'
 import { DealDetailPanel } from '../components/ui/DealDetailPanel'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
 
 type DealType = 'SPONSORSHIP' | 'PARTNERSHIP' | 'ADVERTISING' | 'EVENT' | 'OTHER'
 type DealStage = 'LEAD' | 'CONTACTED' | 'PROPOSAL' | 'NEGOTIATING' | 'WON' | 'LOST'
@@ -100,6 +101,16 @@ export function CRM({ userRole, userId }: Props) {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('crm-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_deals' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_contacts' }, () => load())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [load])
+  useAutoRefresh(load)
 
   const openDeals = deals.filter(d => d.stage !== 'WON' && d.stage !== 'LOST')
   const wonDeals  = deals.filter(d => d.stage === 'WON')
