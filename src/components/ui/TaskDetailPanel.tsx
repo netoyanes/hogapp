@@ -112,7 +112,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   const [postingComment, setPostingComment] = useState(false)
   const [proofs, setProofs] = useState<{ id: string; file_url: string; file_type: string; created_at: string; archived: boolean }[]>([])
   const [uploadingProof, setUploadingProof] = useState(false)
-  const [showArchivedProofs, setShowArchivedProofs] = useState(false)
+
   const [followers, setFollowers] = useState<{ userId: string; name: string }[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
@@ -337,12 +337,9 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
 
   async function archiveProof(id: string) {
     await supabase.from('task_proofs').update({ archived: true }).eq('id', id)
+    const proof = proofs.find(p => p.id === id)
+    logActivity('proof_archived', 'task', taskId, { title: task?.title ?? '', fileType: proof?.file_type ?? '' })
     setProofs(prev => prev.map(p => p.id === id ? { ...p, archived: true } : p))
-  }
-
-  async function unarchiveProof(id: string) {
-    await supabase.from('task_proofs').update({ archived: false }).eq('id', id)
-    setProofs(prev => prev.map(p => p.id === id ? { ...p, archived: false } : p))
   }
 
   const inputStyle = {
@@ -614,32 +611,6 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
                   onArchive={() => archiveProof(p.id)}
                 />
               ))}
-            </div>
-          )}
-
-          {/* Archived proofs toggle */}
-          {proofs.filter(p => p.archived).length > 0 && (
-            <div style={{ marginBottom: '10px' }}>
-              <button
-                onClick={() => setShowArchivedProofs(v => !v)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: '11px', padding: 0, display: 'flex', alignItems: 'center', gap: '4px' }}
-              >
-                <span style={{ fontSize: '10px' }}>{showArchivedProofs ? '▾' : '▸'}</span>
-                {proofs.filter(p => p.archived).length} archived proof{proofs.filter(p => p.archived).length > 1 ? 's' : ''}
-              </button>
-              {showArchivedProofs && (
-                <div className="flex flex-col gap-2 mt-2">
-                  {proofs.filter(p => p.archived).map((p) => (
-                    <ProofCard
-                      key={p.id}
-                      proof={p}
-                      archived
-                      onPreview={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
-                      onUnarchive={() => unarchiveProof(p.id)}
-                    />
-                  ))}
-                </div>
-              )}
             </div>
           )}
 

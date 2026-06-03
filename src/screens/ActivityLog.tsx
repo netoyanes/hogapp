@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckSquare, ArrowRight, Paperclip, MessageSquare, UserPlus, Activity } from 'lucide-react'
+import { CheckSquare, ArrowRight, Paperclip, MessageSquare, UserPlus, Activity, Archive } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { APP_VERSION } from '../config/version'
 import { ChangelogModal } from '../components/ui/ChangelogModal'
@@ -21,6 +21,7 @@ const ACTION_CONFIG: Record<string, { color: string; icon: React.ElementType; la
   proof_uploaded: { color: '#EAB308', icon: Paperclip,     label: (d) => `uploaded proof for "${d?.title}"` },
   comment_posted: { color: '#6B7280', icon: MessageSquare, label: (d) => `commented on "${d?.title}"` },
   user_invited:   { color: '#A855F7', icon: UserPlus,      label: (d) => `invited ${d?.email} as ${d?.role}` },
+  proof_archived: { color: '#EF4444', icon: Archive,       label: (d) => `archived a proof for "${d?.title}"` },
 }
 
 function timeAgo(dateStr: string) {
