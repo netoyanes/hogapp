@@ -45,7 +45,7 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
   useEffect(() => {
     async function load() {
       const [{ data: profiles }, { data: buses }, { data: { user } }, { data: tpls }] = await Promise.all([
-        supabase.from('profiles').select('id, full_name, email'),
+        supabase.from('profiles').select('id, full_name, email').not('full_name', 'is', null),
         supabase.from('business_units').select('id, code, name').order('name'),
         supabase.auth.getUser(),
         supabase.from('task_templates').select('*').order('name'),
