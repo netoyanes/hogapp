@@ -149,15 +149,13 @@ export function InviteUsers() {
     setRemovingId(userId)
     setMemberError(null)
     setMemberSuccess(null)
-    const { error } = await supabase.from('profiles').delete().eq('id', userId)
+    const { error } = await supabase.functions.invoke('admin-remove-user', { body: { userId } })
     if (error) {
-      setMemberError(`Could not remove user: ${error.message}. You may need to delete them directly from the Supabase dashboard.`)
+      setMemberError(`Could not remove user: ${error.message}`)
       setConfirmRemove(null)
       setRemovingId(null)
       return
     }
-    // Also attempt to remove their auth account via edge function if available
-    await supabase.functions.invoke('admin-remove-user', { body: { userId } }).catch(() => {})
     setMembers(prev => prev.filter(m => m.id !== userId))
     setConfirmRemove(null)
     setRemovingId(null)
