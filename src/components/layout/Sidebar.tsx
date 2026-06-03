@@ -25,10 +25,6 @@ const NAV_ITEMS = [
   { id: 'profile',    label: 'Profile',      icon: UserCircle },
 ]
 
-function canSeeDashboard(role?: string) {
-  return role === 'MASTER' || role === 'C_LEVEL'
-}
-
 export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRole }: Props) {
   const [expanded, setExpanded] = useState(false)
 

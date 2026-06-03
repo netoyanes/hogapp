@@ -6,10 +6,6 @@ interface Props {
   userRole?: string
 }
 
-function canSeeDashboard(role?: string) {
-  return role === 'MASTER' || role === 'C_LEVEL'
-}
-
 export function BottomNav({ activeView, onNavigate, userRole }: Props) {
   const allItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
