@@ -10,28 +10,22 @@ interface App {
   label: string
   icon: React.ElementType
   color: string
-  masterOnly?: boolean
-  cLevelOnly?: boolean
 }
 
 const APPS: App[] = [
-  { id: 'dashboard',  label: 'Dashboard',     icon: LayoutDashboard, color: '#39FF14', cLevelOnly: true },
+  { id: 'dashboard',  label: 'Dashboard',     icon: LayoutDashboard, color: '#39FF14' },
   { id: 'tasks',      label: 'Tasks',         icon: CheckSquare,     color: '#3B82F6' },
   { id: 'crm',        label: 'CRM',           icon: Handshake,       color: '#EC4899' },
   { id: 'calendar',   label: 'Calendar',      icon: CalendarDays,    color: '#8B5CF6' },
   { id: 'content',    label: 'Content',       icon: Megaphone,       color: '#F97316' },
   { id: 'revenue',    label: 'Revenue',       icon: BarChart3,       color: '#22C55E' },
-  { id: 'activity',   label: 'Activity Log',  icon: Activity,        color: '#F59E0B', cLevelOnly: true },
-  { id: 'templates',  label: 'Templates',     icon: LayoutTemplate,  color: '#6366F1', cLevelOnly: true },
-  { id: 'upload',     label: 'CSV Upload',    icon: Upload,          color: '#6B7280', masterOnly: true },
-  { id: 'invite',     label: 'Invite Users',  icon: UserPlus,        color: '#14B8A6', masterOnly: true },
+  { id: 'activity',   label: 'Activity Log',  icon: Activity,        color: '#F59E0B' },
+  { id: 'templates',  label: 'Templates',     icon: LayoutTemplate,  color: '#6366F1' },
+  { id: 'upload',     label: 'CSV Upload',    icon: Upload,          color: '#6B7280' },
+  { id: 'invite',     label: 'Invite Users',  icon: UserPlus,        color: '#14B8A6' },
   { id: 'reports',    label: 'Reports',       icon: FileText,        color: '#0EA5E9' },
   { id: 'profile',    label: 'Profile',       icon: UserCircle,      color: '#64748B' },
 ]
-
-function canSeeDashboard(role?: string) {
-  return role === 'MASTER' || role === 'C_LEVEL'
-}
 
 interface Props {
   onNavigate: (view: string) => void
@@ -49,9 +43,8 @@ export function HomeScreen({ onNavigate, onClose, userRole }: Props) {
   }, [onClose])
 
   const visible = APPS.filter(app => {
-    if (app.masterOnly && userRole !== 'MASTER') return false
-    if (app.cLevelOnly && !canSeeDashboard(userRole)) return false
-    return true
+    if (userRole === 'MASTER') return true
+    return ['tasks', 'crm', 'profile'].includes(app.id)
   })
 
   function go(id: string) {
