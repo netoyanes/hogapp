@@ -151,7 +151,12 @@ export function InviteUsers() {
     setMemberSuccess(null)
     const { error } = await supabase.functions.invoke('admin-remove-user', { body: { userId } })
     if (error) {
-      setMemberError(`Could not remove user: ${error.message}`)
+      let msg = error.message
+      try {
+        const body = await (error as unknown as { context: Response }).context?.json?.()
+        if (body?.error) msg = body.error
+      } catch { /* ignore */ }
+      setMemberError(`Could not remove user: ${msg}`)
       setConfirmRemove(null)
       setRemovingId(null)
       return
