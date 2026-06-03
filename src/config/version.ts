@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.3.0"
+export const APP_VERSION = "1.4.0"
 
 export type ChangelogEntry = {
   version: string
@@ -123,6 +123,23 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Archived tasks are hidden from the main board by default",
       "ARCHIVED badge shown in the task header when viewing an archived task",
       "Archive and restore actions tracked in Activity Log"
+    ]
+  },
+  {
+    version: "1.4.0",
+    date: "2026-06-03",
+    type: "MINOR",
+    changes: [
+      "User Management — view all team members, edit roles inline, remove with confirmation",
+      "Role changes and removals now show success/error feedback (surfaces RLS failures)",
+      "Task Board & CRM default to showing the logged-in user's tasks/deals on load",
+      "Task visibility extended — see tasks you're assigned to, created, or following",
+      "Real-time auto-refresh — live updates on tab focus, visibility change, and 20s polling",
+      "Notification bell converted to a fixed floating FAB, sits above mobile bottom nav",
+      "Nav restricted to Task Board, CRM, and Profile for non-MASTER users",
+      "Assignee and team-member dropdowns now filter out incomplete/ghost profiles",
+      "Version number displayed below the login card",
+      "Archived proofs hidden from task panel, archive events logged in Activity Log"
     ]
   },
   {
