@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Bell, CheckCheck } from 'lucide-react'
+import { Bell, CheckCheck, X } from 'lucide-react'
 import { useNotifications } from '../../hooks/useNotifications'
+import { useIsMobile } from '../../hooks/useIsMobile'
 
 const TYPE_ICONS: Record<string, string> = {
   task_created:   '🟢',
@@ -25,13 +26,21 @@ interface Props {
 }
 
 export function NotificationBell({ userId }: Props) {
+  const isMobile = useIsMobile()
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications(userId)
   const [open, setOpen] = useState(false)
   const [permissionAsked, setPermissionAsked] = useState(false)
 
+  // Layout constants
+  const btnBottom = isMobile ? 72 : 24   // above bottom nav on mobile
+  const btnRight  = isMobile ? 16 : 24
+  const panelBottom = btnBottom + 52      // panel sits above the button
+  const panelRight  = btnRight
+  const panelWidth  = isMobile ? `calc(100vw - ${btnRight * 2}px)` : '320px'
+  const panelMaxH   = isMobile ? 'calc(100dvh - 160px)' : '480px'
+
   function handleOpen() {
     setOpen((v) => !v)
-    // Request browser push permission the first time they open the bell
     if (!permissionAsked && typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission()
       setPermissionAsked(true)
@@ -40,35 +49,6 @@ export function NotificationBell({ userId }: Props) {
 
   return (
     <>
-      {/* Bell button */}
-      <div style={{ position: 'relative', display: 'inline-flex' }}>
-        <button
-          onClick={handleOpen}
-          style={{
-            width: '36px', height: '36px', borderRadius: '50%',
-            background: open ? 'var(--accent-bg)' : 'var(--bg-surface)',
-            border: `1px solid ${open ? 'var(--accent-border)' : 'var(--border-default)'}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', position: 'relative', flexShrink: 0,
-          }}
-          title="Notifications"
-        >
-          <Bell size={15} style={{ color: open ? 'var(--accent)' : 'var(--text-secondary)' }} />
-          {unreadCount > 0 && (
-            <span style={{
-              position: 'absolute', top: '-4px', right: '-4px',
-              minWidth: '17px', height: '17px', borderRadius: '9px',
-              background: '#EF4444', color: '#fff',
-              fontSize: '10px', fontWeight: 700, fontFamily: 'var(--font-mono)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '0 3px',
-            }}>
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </button>
-      </div>
-
       {/* Backdrop */}
       {open && (
         <div
@@ -78,14 +58,75 @@ export function NotificationBell({ userId }: Props) {
         />
       )}
 
-      {/* Dropdown panel */}
+      {/* Floating bell button */}
+      <button
+        onClick={handleOpen}
+        title="Notifications"
+        style={{
+          position: 'fixed',
+          bottom: `${btnBottom}px`,
+          right: `${btnRight}px`,
+          zIndex: 45,
+          width: '44px',
+          height: '44px',
+          borderRadius: '50%',
+          background: open
+            ? 'var(--accent)'
+            : unreadCount > 0
+              ? 'var(--accent)'
+              : 'var(--bg-surface)',
+          border: `1px solid ${open || unreadCount > 0 ? 'var(--accent)' : 'var(--border-default)'}`,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          transition: 'transform 0.15s, background 0.15s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+      >
+        <Bell size={18} style={{ color: open || unreadCount > 0 ? '#000' : 'var(--text-secondary)' }} />
+        {unreadCount > 0 && (
+          <span style={{
+            position: 'absolute',
+            top: '-3px',
+            right: '-3px',
+            minWidth: '18px',
+            height: '18px',
+            borderRadius: '9px',
+            background: '#EF4444',
+            color: '#fff',
+            fontSize: '10px',
+            fontWeight: 700,
+            fontFamily: 'var(--font-mono)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 3px',
+            border: '2px solid var(--bg-base)',
+          }}>
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {/* Notification panel — opens upward from the button */}
       {open && (
         <div style={{
-          position: 'fixed', top: '56px', right: '12px', zIndex: 45,
-          width: '320px', maxHeight: '480px',
-          background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
-          borderRadius: '12px', display: 'flex', flexDirection: 'column', overflow: 'hidden',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          position: 'fixed',
+          bottom: `${panelBottom}px`,
+          right: `${panelRight}px`,
+          zIndex: 45,
+          width: panelWidth,
+          maxHeight: panelMaxH,
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-default)',
+          borderRadius: '14px',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
         }}>
           {/* Header */}
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -97,14 +138,22 @@ export function NotificationBell({ userId }: Props) {
                 </span>
               )}
             </div>
-            {unreadCount > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllRead}
+                  style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <CheckCheck size={13} /> All read
+                </button>
+              )}
               <button
-                onClick={markAllRead}
-                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                onClick={() => setOpen(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px' }}
               >
-                <CheckCheck size={13} /> Mark all read
+                <X size={15} />
               </button>
-            )}
+            </div>
           </div>
 
           {/* Push permission banner */}
