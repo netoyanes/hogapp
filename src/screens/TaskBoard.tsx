@@ -34,6 +34,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [buMap, setBuMap] = useState<Record<string, string>>({})
   const [profileMap, setProfileMap] = useState<Record<string, string>>({})
+  const [followerMap, setFollowerMap] = useState<Record<string, Set<string>>>({})
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
@@ -49,10 +50,11 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
   const [buList, setBuList] = useState<{ id: string; code: string; name: string }[]>([])
 
   const load = useCallback(async () => {
-    const [{ data: taskData }, { data: buses }, { data: profiles }] = await Promise.all([
+    const [{ data: taskData }, { data: buses }, { data: profiles }, { data: followers }] = await Promise.all([
       supabase.from('tasks').select('*').eq('archived', showArchived).order('created_at', { ascending: false }),
       supabase.from('business_units').select('id, code, name'),
       supabase.from('profiles').select('id, full_name, email'),
+      supabase.from('task_followers').select('task_id, user_id'),
     ])
     setTasks(taskData ?? [])
     setBuList(buses ?? [])
@@ -62,6 +64,12 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     const pm: Record<string, string> = {}
     profiles?.forEach((p) => { pm[p.id] = p.full_name ?? p.email ?? 'Unknown' })
     setProfileMap(pm)
+    const fm: Record<string, Set<string>> = {}
+    followers?.forEach((f) => {
+      if (!fm[f.user_id]) fm[f.user_id] = new Set()
+      fm[f.user_id].add(f.task_id)
+    })
+    setFollowerMap(fm)
     setLoading(false)
   }, [showArchived])
 
@@ -84,6 +92,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     const channel = supabase
       .channel('tasks-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_followers' }, () => load())
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [load])
@@ -93,7 +102,13 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     if (filterPriority && t.priority !== filterPriority) return false
     if (filterType && t.type !== filterType) return false
     if (filterBu && t.bu_id !== filterBu) return false
-    if (filterAssignee && t.assigned_to !== filterAssignee) return false
+    if (filterAssignee) {
+      const related =
+        t.assigned_to === filterAssignee ||
+        t.created_by === filterAssignee ||
+        (followerMap[filterAssignee]?.has(t.id) ?? false)
+      if (!related) return false
+    }
     return true
   })
 
