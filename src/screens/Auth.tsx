@@ -90,7 +90,7 @@ export function Auth({ onSignIn, accessDenied }: Props) {
   }
 
   return (
-    <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }} className="flex items-center justify-center p-4">
+    <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }} className="flex flex-col items-center justify-center p-4">
       <div
         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '14px', width: '100%', maxWidth: '380px' }}
         className="p-8"
