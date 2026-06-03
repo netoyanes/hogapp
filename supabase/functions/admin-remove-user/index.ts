@@ -66,9 +66,22 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    // Delete profile row first, then the auth user (which may cascade anyway)
+    // Clean up all references to this user before deleting the auth account.
+    // Order matters: child rows first, then profile, then auth user.
+    await Promise.all([
+      supabaseAdmin.from('task_followers').delete().eq('user_id', userId),
+      supabaseAdmin.from('notifications').delete().eq('user_id', userId),
+      supabaseAdmin.from('task_comments').delete().eq('author_id', userId),
+      supabaseAdmin.from('tasks').update({ assigned_to: null }).eq('assigned_to', userId),
+    ])
+
+    // Some schemas store invitations tied to the user — clean those up too
+    await supabaseAdmin.from('invitations').delete().eq('invited_by', userId)
+
+    // Delete profile row
     await supabaseAdmin.from('profiles').delete().eq('id', userId)
 
+    // Now delete the auth user
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)
     if (deleteError) {
       return new Response(
