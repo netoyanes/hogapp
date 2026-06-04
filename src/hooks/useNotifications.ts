@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { swShowNotification } from '../lib/sw'
 
 export type Notif = {
   id: string
@@ -38,10 +39,7 @@ export function useNotifications(userId: string | undefined) {
         (payload) => {
           const notif = payload.new as Notif
           setNotifications((prev) => [notif, ...prev])
-          // Browser push notification
-          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            new Notification(notif.title, { body: notif.body ?? undefined, icon: '/favicon.ico' })
-          }
+          swShowNotification(notif.title, notif.body ?? undefined)
         }
       )
       .subscribe()
