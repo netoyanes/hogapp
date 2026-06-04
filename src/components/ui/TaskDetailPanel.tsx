@@ -226,8 +226,6 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
       file_type: file.type,
       uploaded_by: user?.id,
     })
-    // Auto-set status to PROOF_SUBMITTED
-    await changeStatus('PROOF_SUBMITTED')
     setProofs((prev) => [...prev, { id: Date.now().toString(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString(), archived: false }])
     notifySlack(proofUploadedMessage(task?.title ?? '', buName || 'HOG OPS', uploaderName))
     logActivity('proof_uploaded', 'task', taskId, { title: task?.title ?? '' })
