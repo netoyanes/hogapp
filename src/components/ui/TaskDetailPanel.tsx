@@ -3,7 +3,7 @@ import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, A
 import { supabase } from '../../lib/supabase'
 import { notifySlack, statusChangedMessage, proofUploadedMessage } from '../../hooks/useSlack'
 import { logActivity } from '../../hooks/useActivityLog'
-import { notifyAdminsAndAssignee } from '../../lib/notifications'
+import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
@@ -318,6 +318,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     logActivity('assignee_changed', 'task', taskId, { title: task?.title ?? '', from: prevName, to: newName })
     if (newId && newId !== prev) {
       notifyAdminsAndAssignee("You've been assigned a task", task?.title ?? '', 'task_assigned', taskId, newId)
+      sendTaskAssignmentEmail(taskId, newId)
     }
     onUpdated()
   }
