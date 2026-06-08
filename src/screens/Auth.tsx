@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { APP_VERSION } from '../config/version'
 import { AppLogoBadge } from '../components/ui/AppLogo'
+import { TENANT } from '../config/tenant'
 
 interface Props {
   onSignIn: (email: string, password: string) => Promise<{ error: unknown }>
@@ -99,8 +100,8 @@ export function Auth({ onSignIn, accessDenied }: Props) {
         <div className="flex items-center gap-3 mb-8">
           <AppLogoBadge size={36} radius={8} />
           <div>
-            <div style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '15px' }}>HOG OPS</div>
-            <div style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>Command Center</div>
+            <div style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '15px' }}>{TENANT.appName}</div>
+            <div style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>{TENANT.appSubtitle}</div>
           </div>
         </div>
 

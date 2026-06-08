@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
+import { TENANT } from '../../config/tenant'
 
 interface Props {
   activeView: string
@@ -58,7 +59,7 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
           </div>
           {expanded && (
             <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13px', whiteSpace: 'nowrap' }}>
-              HOG OPS
+              {TENANT.appName}
             </span>
           )}
         </button>
@@ -67,6 +68,7 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
       {/* Nav items */}
       <nav className="flex-1 flex flex-col gap-1 p-2 overflow-hidden">
         {NAV_ITEMS.filter(item => {
+          if (!TENANT.enabledViews.includes(item.id)) return false
           if (userRole === 'MASTER') return true
           return ['tasks', 'crm', 'profile'].includes(item.id)
         }).map((item) => {
