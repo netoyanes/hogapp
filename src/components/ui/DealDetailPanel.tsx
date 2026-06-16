@@ -459,28 +459,30 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                 )
               })}
 
-              {/* Deal created entry — always last */}
-              {creatorName && (
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
+              {/* Deal created entry — always shown as the baseline log entry */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  {creatorName ? (
                     <Avatar name={creatorName} size={28} />
-                    <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '14px', height: '14px', borderRadius: '50%', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Briefcase size={7} style={{ color: 'var(--text-tertiary)' }} />
+                  ) : (
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Briefcase size={12} style={{ color: 'var(--text-tertiary)' }} />
                     </div>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>{creatorName}</span>
-                      <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                        {new Date(deal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.4, fontStyle: 'italic' }}>Deal created</div>
+                  )}
+                  <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '14px', height: '14px', borderRadius: '50%', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Briefcase size={7} style={{ color: 'var(--text-tertiary)' }} />
                   </div>
                 </div>
-              )}
-
-              {activities.length === 0 && !creatorName && <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>No activity yet.</div>}
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>{creatorName ?? 'Unknown'}</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                      {new Date(deal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.4, fontStyle: 'italic' }}>Deal created</div>
+                </div>
+              </div>
             </div>
           </section>
 
