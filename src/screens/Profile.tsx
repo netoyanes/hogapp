@@ -14,6 +14,7 @@ export function Profile({ profile, onUpdated }: Props) {
   const [address, setAddress] = useState(profile.address ?? '')
   const [birthDate, setBirthDate] = useState(profile.birth_date ?? '')
   const [slackWebhook, setSlackWebhook] = useState('')
+  const [slackUserId, setSlackUserId] = useState(profile.slack_user_id ?? '')
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? '')
   const [saving, setSaving] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
@@ -53,6 +54,7 @@ export function Profile({ profile, onUpdated }: Props) {
       last_name: lastName || null,
       address: address || null,
       birth_date: birthDate || null,
+      slack_user_id: slackUserId.trim() || null,
     }).eq('id', profile.id)
 
     // Save Slack webhook to both localStorage and app_settings
@@ -214,30 +216,47 @@ export function Profile({ profile, onUpdated }: Props) {
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '14px', lineHeight: '1.5' }}>
               Connect a Slack Incoming Webhook to receive task notifications in your channel.
             </p>
-            <div className="flex flex-col gap-3">
-              {label('Webhook URL')}
-              <input
-                value={slackWebhook}
-                onChange={(e) => setSlackWebhook(e.target.value)}
-                placeholder="https://hooks.slack.com/services/..."
-                style={inputStyle}
-                onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-                onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
-              />
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={testSlack}
-                  disabled={testingSlack || !slackWebhook}
-                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: slackWebhook ? 'var(--text-secondary)' : 'var(--text-tertiary)', borderRadius: '7px', padding: '8px 14px', fontSize: '12px', cursor: slackWebhook ? 'pointer' : 'not-allowed' }}
-                >
-                  {testingSlack ? 'Sending…' : 'Test connection'}
-                </button>
-                {slackStatus === 'ok' && <span style={{ color: '#22C55E', fontSize: '12px' }}>✓ Message sent!</span>}
-                {slackStatus === 'error' && <span style={{ color: '#EF4444', fontSize: '12px' }}>✗ Failed — check the URL</span>}
+            <div className="flex flex-col gap-4">
+              <div>
+                {label('Channel Webhook URL (admin)')}
+                <input
+                  value={slackWebhook}
+                  onChange={(e) => setSlackWebhook(e.target.value)}
+                  placeholder="https://hooks.slack.com/services/..."
+                  style={inputStyle}
+                  onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                  onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+                />
+                <div className="flex items-center gap-3 mt-2">
+                  <button
+                    onClick={testSlack}
+                    disabled={testingSlack || !slackWebhook}
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: slackWebhook ? 'var(--text-secondary)' : 'var(--text-tertiary)', borderRadius: '7px', padding: '8px 14px', fontSize: '12px', cursor: slackWebhook ? 'pointer' : 'not-allowed' }}
+                  >
+                    {testingSlack ? 'Sending…' : 'Test connection'}
+                  </button>
+                  {slackStatus === 'ok' && <span style={{ color: '#22C55E', fontSize: '12px' }}>✓ Message sent!</span>}
+                  {slackStatus === 'error' && <span style={{ color: '#EF4444', fontSize: '12px' }}>✗ Failed — check the URL</span>}
+                </div>
+                <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', lineHeight: '1.5', marginTop: '8px' }}>
+                  Slack → Your workspace → Apps → Incoming Webhooks. All notifications go to this channel.
+                </p>
               </div>
-              <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', lineHeight: '1.5' }}>
-                Get the webhook URL from Slack → Apps → Incoming Webhooks. The URL stays in your browser only.
-              </p>
+
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '14px' }}>
+                {label('Your Slack Member ID')}
+                <input
+                  value={slackUserId}
+                  onChange={(e) => setSlackUserId(e.target.value)}
+                  placeholder="U07ABC1234"
+                  style={inputStyle}
+                  onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                  onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+                />
+                <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', lineHeight: '1.5', marginTop: '6px' }}>
+                  Used to @mention you in notifications. Find it in Slack: click your avatar → <strong>View Profile</strong> → <strong>⋯ More</strong> → <strong>Copy member ID</strong>.
+                </p>
+              </div>
             </div>
           </div>
 

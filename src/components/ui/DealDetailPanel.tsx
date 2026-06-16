@@ -5,6 +5,7 @@ import type { BusinessUnit } from '../../types'
 import type { CRMContact, CRMDeal } from '../../screens/CRM'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { Avatar } from './Avatar'
+import { notifySlack, dealStageChangedMessage, dealActivityMessage } from '../../hooks/useSlack'
 
 type DealStage = 'LEAD' | 'CONTACTED' | 'PROPOSAL' | 'NEGOTIATING' | 'WON' | 'LOST'
 type DealType  = 'SPONSORSHIP' | 'PARTNERSHIP' | 'ADVERTISING' | 'EVENT' | 'OTHER'
@@ -150,8 +151,14 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
 
   async function changeStage(stage: DealStage) {
     if (stage === 'LOST') { setLostModal(true); return }
+    const prevStage = deal?.stage ?? ''
     await supabase.from('crm_deals').update({ stage, lost_reason: null, updated_at: new Date().toISOString() }).eq('id', dealId)
     setDeal(d => d ? { ...d, stage, lost_reason: null } : d)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.id) {
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+      notifySlack(dealStageChangedMessage(deal?.title ?? '', prevStage, stage, profile?.full_name ?? 'Someone'))
+    }
     onUpdated()
   }
 
@@ -190,12 +197,17 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
   async function addActivity() {
     if (!actBody.trim()) return
     const { data: { user } } = await supabase.auth.getUser()
+    const body = actBody.trim()
     await supabase.from('crm_activities').insert({
       deal_id: dealId,
       type: actType,
-      body: actBody.trim(),
+      body,
       created_by: user?.id ?? null,
     })
+    if (user?.id) {
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+      notifySlack(dealActivityMessage(deal?.title ?? '', actType, body, profile?.full_name ?? 'Someone'))
+    }
     setActBody('')
     await loadActivities()
   }
@@ -459,28 +471,30 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                 )
               })}
 
-              {/* Deal created entry — always last */}
-              {creatorName && (
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
+              {/* Deal created entry — always shown as the baseline log entry */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  {creatorName ? (
                     <Avatar name={creatorName} size={28} />
-                    <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '14px', height: '14px', borderRadius: '50%', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Briefcase size={7} style={{ color: 'var(--text-tertiary)' }} />
+                  ) : (
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Briefcase size={12} style={{ color: 'var(--text-tertiary)' }} />
                     </div>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>{creatorName}</span>
-                      <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                        {new Date(deal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.4, fontStyle: 'italic' }}>Deal created</div>
+                  )}
+                  <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '14px', height: '14px', borderRadius: '50%', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Briefcase size={7} style={{ color: 'var(--text-tertiary)' }} />
                   </div>
                 </div>
-              )}
-
-              {activities.length === 0 && !creatorName && <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>No activity yet.</div>}
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>{creatorName ?? 'Unknown'}</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                      {new Date(deal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.4, fontStyle: 'italic' }}>Deal created</div>
+                </div>
+              </div>
             </div>
           </section>
 
