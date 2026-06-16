@@ -93,6 +93,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   const isMobile = useIsMobile()
   const [task, setTask] = useState<Task | null>(null)
   const [buName, setBuName] = useState('')
+  const [creatorName, setCreatorName] = useState<string | null>(null)
   const [, setAssigneeName] = useState('')
   const [assignedTo, setAssignedTo] = useState('')
   const [teamMembers, setTeamMembers] = useState<{ id: string; full_name: string | null; email: string | null }[]>([])
@@ -156,6 +157,10 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
       if (t.assigned_to) {
         const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', t.assigned_to).single()
         if (p) setAssigneeName(p.full_name ?? p.email ?? '')
+      }
+      if (t.created_by) {
+        const { data: creator } = await supabase.from('profiles').select('full_name, email').eq('id', t.created_by).single()
+        if (creator) setCreatorName(creator.full_name ?? creator.email ?? null)
       }
 
       const { data: members } = await supabase.from('profiles').select('id, full_name, email').not('full_name', 'is', null)
@@ -671,6 +676,23 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
                 </div>
               </div>
             ))}
+
+            {/* Task created baseline entry */}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', opacity: 0.6 }}>
+              {creatorName
+                ? <Avatar name={creatorName} size={28} />
+                : <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', flexShrink: 0 }}>✦</div>
+              }
+              <div style={{ flex: 1, background: 'var(--bg-elevated)', borderRadius: '8px', padding: '8px 12px', borderLeft: '2px solid var(--border-subtle)' }}>
+                <div className="flex items-center gap-2">
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600 }}>{creatorName ?? 'Unknown'}</span>
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
+                    {new Date(task.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', fontStyle: 'italic', margin: '2px 0 0' }}>Task created</p>
+              </div>
+            </div>
           </div>
 
           {/* New comment */}
