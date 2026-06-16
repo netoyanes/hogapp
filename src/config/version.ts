@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.5.1"
+export const APP_VERSION = "1.5.2"
 
 export type ChangelogEntry = {
   version: string
@@ -123,6 +123,15 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Archived tasks are hidden from the main board by default",
       "ARCHIVED badge shown in the task header when viewing an archived task",
       "Archive and restore actions tracked in Activity Log"
+    ]
+  },
+  {
+    version: "1.5.2",
+    date: "2026-06-16",
+    type: "PATCH",
+    changes: [
+      "Slack DM on task comment — assignee gets a DM when someone comments on their task",
+      "Slack DM on CRM activity — deal owner gets a DM when someone logs a note/call/email on their deal",
     ]
   },
   {

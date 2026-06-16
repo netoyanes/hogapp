@@ -59,6 +59,14 @@ export function taskAssignedMessage(title: string, assignee: string) {
   return `📋 *You've been assigned a task* — ${title}\nAssigned to: ${assignee}`
 }
 
+export function taskCommentMessage(title: string, author: string, comment: string) {
+  return `💬 *New comment on* — ${title}\n${author}: "${comment}"`
+}
+
+export function dealCommentMessage(title: string, author: string, body: string) {
+  return `💬 *New activity on* — ${title}\n${author}: "${body}"`
+}
+
 // ── CRM messages ───────────────────────────────────────────────────────────────
 
 export function dealCreatedMessage(title: string, type: string, value: string | null, creator: string) {
