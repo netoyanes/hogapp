@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.4.0"
+export const APP_VERSION = "1.5.0"
 
 export type ChangelogEntry = {
   version: string
@@ -123,6 +123,18 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Archived tasks are hidden from the main board by default",
       "ARCHIVED badge shown in the task header when viewing an archived task",
       "Archive and restore actions tracked in Activity Log"
+    ]
+  },
+  {
+    version: "1.5.0",
+    date: "2026-06-16",
+    type: "MINOR",
+    changes: [
+      "Contacts directory — shared prospect/client list accessible to all users with search and deal count badge",
+      "Author avatars — initials avatar shown on every task comment and CRM activity log entry",
+      "Deal creator tracking — 'Deal created by' is always shown at the bottom of the activity timeline",
+      "Slack DM bot — per-user Slack notifications via bot (task assigned, status changed) instead of channel-only",
+      "Slack ID management — MASTER can assign Slack Member IDs to teammates from User Management"
     ]
   },
   {
