@@ -15,7 +15,7 @@ export const TENANT: TenantConfig = {
   appSubtitle: 'Command Center',
   logo: { type: 'symbol' },
   enabledViews: [
-    'dashboard', 'tasks', 'crm', 'calendar', 'content',
+    'dashboard', 'tasks', 'crm', 'contacts', 'calendar', 'content',
     'revenue', 'reports', 'activity', 'upload', 'templates',
     'invite', 'profile',
   ],
@@ -27,5 +27,5 @@ export const TENANT: TenantConfig = {
 //   appName: 'SWELLS',
 //   appSubtitle: 'Command Center',
 //   logo: { type: 'letter', letter: 'S', bg: '#0C4A6E', fg: '#FFFFFF' },
-//   enabledViews: ['dashboard', 'tasks', 'crm', 'invite', 'profile'],
+//   enabledViews: ['dashboard', 'tasks', 'crm', 'contacts', 'invite', 'profile'],
 // }

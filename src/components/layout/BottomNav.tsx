@@ -1,4 +1,4 @@
-import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, UserCircle, UserPlus, BarChart3, Activity, Handshake, FileText } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, UserCircle, UserPlus, BarChart3, Activity, Handshake, FileText, Contact2 } from 'lucide-react'
 import { TENANT } from '../../config/tenant'
 
 interface Props {
@@ -12,6 +12,7 @@ export function BottomNav({ activeView, onNavigate, userRole }: Props) {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'tasks',     label: 'Tasks',     icon: CheckSquare },
     { id: 'crm',       label: 'CRM',       icon: Handshake },
+    { id: 'contacts',  label: 'Contacts',  icon: Contact2 },
     { id: 'calendar',  label: 'Calendar',  icon: CalendarDays },
     { id: 'content',   label: 'Content',   icon: Megaphone },
     { id: 'revenue',   label: 'Revenue',   icon: BarChart3 },
@@ -23,7 +24,7 @@ export function BottomNav({ activeView, onNavigate, userRole }: Props) {
   const items = allItems.filter(item => {
     if (!TENANT.enabledViews.includes(item.id)) return false
     if (userRole === 'MASTER') return true
-    return ['tasks', 'crm', 'profile'].includes(item.id)
+    return ['tasks', 'crm', 'contacts', 'profile'].includes(item.id)
   })
 
   return (

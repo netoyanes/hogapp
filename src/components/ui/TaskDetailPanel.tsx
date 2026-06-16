@@ -8,6 +8,7 @@ import { useIsMobile } from '../../hooks/useIsMobile'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
 import { HtmlFrame } from './HtmlFrame'
+import { Avatar } from './Avatar'
 import type { Task, TaskStatus, TaskPriority, TaskType, DeadlineType } from '../../types'
 
 interface Props {
@@ -647,14 +648,17 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
               <p style={{ color: 'var(--text-tertiary)', fontSize: '12px' }}>No comments yet.</p>
             )}
             {comments.map((c) => (
-              <div key={c.id} style={{ background: 'var(--bg-elevated)', borderRadius: '8px', padding: '10px 12px' }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 600 }}>{c.author}</span>
-                  <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
-                    {new Date(c.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </span>
+              <div key={c.id} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <Avatar name={c.author} size={28} />
+                <div style={{ flex: 1, background: 'var(--bg-elevated)', borderRadius: '8px', padding: '10px 12px' }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 600 }}>{c.author}</span>
+                    <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
+                      {new Date(c.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', margin: 0 }}>{c.content}</p>
                 </div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', margin: 0 }}>{c.content}</p>
               </div>
             ))}
           </div>

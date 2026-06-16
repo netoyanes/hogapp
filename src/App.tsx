@@ -16,6 +16,7 @@ import { ContentCalendar } from './screens/ContentCalendar'
 import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
 import { CRM } from './screens/CRM'
+import { Contacts } from './screens/Contacts'
 import { Reports } from './screens/Reports'
 import { SharedTask } from './screens/SharedTask'
 import { AppLogoBadge } from './components/ui/AppLogo'
@@ -66,7 +67,7 @@ export default function App() {
 
   const ALLOWED_VIEWS = role === 'MASTER'
     ? null // null = no restriction
-    : new Set(['tasks', 'crm', 'profile'])
+    : new Set(['tasks', 'crm', 'contacts', 'profile'])
 
   function handleNavigate(view: string) {
     if (ALLOWED_VIEWS && !ALLOWED_VIEWS.has(view)) return
@@ -90,6 +91,8 @@ export default function App() {
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':
         return <CRM userRole={role} userId={profile?.id} />
+      case 'contacts':
+        return <Contacts />
       case 'calendar':
         return <CalendarView userRole={role} defaultBuFilter={buFilter} />
       case 'content':
