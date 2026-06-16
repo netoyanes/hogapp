@@ -26,14 +26,21 @@ export async function notifySlack(text: string) {
 // Falls back to channel broadcast if the user has no slack_user_id configured.
 export async function notifyUserDM(supabaseUserId: string, message: string) {
   try {
-    const { data } = await supabase.from('profiles').select('slack_user_id').eq('id', supabaseUserId).single()
+    const { data, error } = await supabase.from('profiles').select('slack_user_id').eq('id', supabaseUserId).single()
+    if (error) console.warn('[notifyUserDM] profile lookup error', error.message)
+    console.log('[notifyUserDM] target', supabaseUserId, 'slack_user_id:', data?.slack_user_id ?? '(none)')
     if (data?.slack_user_id) {
-      await supabase.functions.invoke('send-slack-dm', {
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('send-slack-dm', {
         body: { slackUserId: data.slack_user_id, message },
       })
+      if (fnError) console.error('[notifyUserDM] edge function error', fnError)
+      else console.log('[notifyUserDM] edge function response', fnData)
       return
     }
-  } catch { /* best-effort */ }
+    console.warn('[notifyUserDM] no slack_user_id, falling back to channel')
+  } catch (e) {
+    console.error('[notifyUserDM] exception', e)
+  }
   // Fallback: post to channel if user hasn't set up their Slack ID
   await notifySlack(message)
 }
