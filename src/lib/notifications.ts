@@ -29,3 +29,9 @@ export async function notifyAdminsAndAssignee(
     }))
   )
 }
+
+export async function sendTaskAssignmentEmail(taskId: string, assigneeId: string) {
+  await supabase.functions.invoke('send-task-email', {
+    body: { taskId, assigneeId, appUrl: window.location.origin },
+  })
+}

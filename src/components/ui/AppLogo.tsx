@@ -1,3 +1,5 @@
+import { TENANT } from '../../config/tenant'
+
 interface Props {
   size?: number
   color?: string
@@ -18,8 +20,30 @@ export function AppLogo({ size = 20, color = 'currentColor' }: Props) {
   )
 }
 
-// Self-contained badge — dark green square with cream symbol
 export function AppLogoBadge({ size = 28, radius = 6 }: { size?: number; radius?: number }) {
+  const logo = TENANT.logo
+
+  if (logo.type === 'letter') {
+    return (
+      <div style={{
+        width: size, height: size, borderRadius: radius, flexShrink: 0,
+        background: logo.bg,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <span style={{
+          color: logo.fg,
+          fontWeight: 900,
+          fontSize: size * 0.55,
+          fontFamily: 'var(--font-mono)',
+          lineHeight: 1,
+          userSelect: 'none',
+        }}>
+          {logo.letter}
+        </span>
+      </div>
+    )
+  }
+
   return (
     <div style={{
       width: size, height: size, borderRadius: radius, flexShrink: 0,
@@ -30,3 +54,4 @@ export function AppLogoBadge({ size = 28, radius = 6 }: { size?: number; radius?
     </div>
   )
 }
+

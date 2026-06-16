@@ -4,6 +4,7 @@ import { X, Edit2, Check, ChevronDown, Phone, Mail, MessageSquare, Calendar } fr
 import type { BusinessUnit } from '../../types'
 import type { CRMContact, CRMDeal } from '../../screens/CRM'
 import { TaskDetailPanel } from './TaskDetailPanel'
+import { Avatar } from './Avatar'
 
 type DealStage = 'LEAD' | 'CONTACTED' | 'PROPOSAL' | 'NEGOTIATING' | 'WON' | 'LOST'
 type DealType  = 'SPONSORSHIP' | 'PARTNERSHIP' | 'ADVERTISING' | 'EVENT' | 'OTHER'
@@ -70,6 +71,7 @@ interface Props {
 
 export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, userRole }: Props) {
   const [deal, setDeal] = useState<CRMDeal | null>(null)
+  const [creatorName, setCreatorName] = useState<string | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [linkedTasks, setLinkedTasks] = useState<LinkedTask[]>([])
   const [availTasks, setAvailTasks] = useState<LinkedTask[]>([])
@@ -104,6 +106,10 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
       setEBu(data.bu_id ?? '')
       setEContactId(data.contact_id ?? '')
       setEDesc(data.description ?? '')
+      if (data.created_by) {
+        const { data: creator } = await supabase.from('profiles').select('full_name, email').eq('id', data.created_by).single()
+        setCreatorName(creator?.full_name ?? creator?.email ?? null)
+      }
     }
   }, [dealId])
 
@@ -330,6 +336,14 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                 </MetaRow>
                 <MetaRow label="Close Date">{deal.close_date ? new Date(deal.close_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</MetaRow>
                 <MetaRow label="Business Unit">{bu?.code ?? '—'}</MetaRow>
+                {creatorName && (
+                  <MetaRow label="Created by">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                      <Avatar name={creatorName} size={18} />
+                      <span>{creatorName}</span>
+                    </div>
+                  </MetaRow>
+                )}
               </div>
             )}
           </section>
@@ -414,19 +428,26 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
             </div>
 
             {/* Timeline */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
               {activities.map(a => {
                 const Icon = ACT_ICONS[a.type]
+                const authorName = a.profile?.full_name ?? 'Unknown'
                 return (
                   <div key={a.id} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '1px' }}>
-                      <Icon size={10} style={{ color: 'var(--text-tertiary)' }} />
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <Avatar name={authorName} size={28} />
+                      <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '14px', height: '14px', borderRadius: '50%', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon size={7} style={{ color: 'var(--text-tertiary)' }} />
+                      </div>
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '12px', color: 'var(--text-primary)', lineHeight: 1.4 }}>{a.body}</div>
-                      <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-                        {a.profile?.full_name ?? 'Unknown'} · {new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>{authorName}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                          {new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{a.body}</div>
                     </div>
                   </div>
                 )

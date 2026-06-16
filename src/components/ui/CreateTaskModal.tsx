@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { notifySlack, taskCreatedMessage } from '../../hooks/useSlack'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { logActivity } from '../../hooks/useActivityLog'
-import { notifyAdminsAndAssignee } from '../../lib/notifications'
+import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
 import type { TaskType, TaskPriority, DeadlineType } from '../../types'
 
 interface Props {
@@ -110,6 +110,7 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
 
     logActivity('task_created', 'task', undefined, { title: title.trim(), bu: buName ? `${buName.code} · ${buName.name}` : null, priority })
     notifyAdminsAndAssignee('New task created', title.trim(), 'task_created', undefined, assignedTo || undefined)
+    if (assignedTo && newTask) sendTaskAssignmentEmail(newTask.id, assignedTo)
     onCreated()
     onClose()
   }

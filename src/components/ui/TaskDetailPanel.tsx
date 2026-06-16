@@ -3,11 +3,12 @@ import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, A
 import { supabase } from '../../lib/supabase'
 import { notifySlack, statusChangedMessage, proofUploadedMessage } from '../../hooks/useSlack'
 import { logActivity } from '../../hooks/useActivityLog'
-import { notifyAdminsAndAssignee } from '../../lib/notifications'
+import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
 import { HtmlFrame } from './HtmlFrame'
+import { Avatar } from './Avatar'
 import type { Task, TaskStatus, TaskPriority, TaskType, DeadlineType } from '../../types'
 
 interface Props {
@@ -226,8 +227,6 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
       file_type: file.type,
       uploaded_by: user?.id,
     })
-    // Auto-set status to PROOF_SUBMITTED
-    await changeStatus('PROOF_SUBMITTED')
     setProofs((prev) => [...prev, { id: Date.now().toString(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString(), archived: false }])
     notifySlack(proofUploadedMessage(task?.title ?? '', buName || 'HOG OPS', uploaderName))
     logActivity('proof_uploaded', 'task', taskId, { title: task?.title ?? '' })
@@ -320,6 +319,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     logActivity('assignee_changed', 'task', taskId, { title: task?.title ?? '', from: prevName, to: newName })
     if (newId && newId !== prev) {
       notifyAdminsAndAssignee("You've been assigned a task", task?.title ?? '', 'task_assigned', taskId, newId)
+      sendTaskAssignmentEmail(taskId, newId)
     }
     onUpdated()
   }
@@ -648,14 +648,17 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
               <p style={{ color: 'var(--text-tertiary)', fontSize: '12px' }}>No comments yet.</p>
             )}
             {comments.map((c) => (
-              <div key={c.id} style={{ background: 'var(--bg-elevated)', borderRadius: '8px', padding: '10px 12px' }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 600 }}>{c.author}</span>
-                  <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
-                    {new Date(c.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </span>
+              <div key={c.id} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <Avatar name={c.author} size={28} />
+                <div style={{ flex: 1, background: 'var(--bg-elevated)', borderRadius: '8px', padding: '10px 12px' }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 600 }}>{c.author}</span>
+                    <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
+                      {new Date(c.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', margin: 0 }}>{c.content}</p>
                 </div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', margin: 0 }}>{c.content}</p>
               </div>
             ))}
           </div>

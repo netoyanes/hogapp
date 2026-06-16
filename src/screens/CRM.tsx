@@ -144,6 +144,8 @@ export function CRM({ userRole, userId }: Props) {
         if (nc) contactId = nc.id
       }
 
+      const { data: { user } } = await supabase.auth.getUser()
+
       await supabase.from('crm_deals').insert({
         title:       cTitle.trim(),
         deal_type:   cType,
@@ -154,6 +156,7 @@ export function CRM({ userRole, userId }: Props) {
         bu_id:       cBu || null,
         contact_id:  contactId,
         description: cDesc || null,
+        created_by:  user?.id ?? null,
       })
 
       await load()

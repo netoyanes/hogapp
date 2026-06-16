@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Contact2 } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
+import { TENANT } from '../../config/tenant'
 
 interface Props {
   activeView: string
@@ -14,13 +15,14 @@ const NAV_ITEMS = [
   { id: 'dashboard',  label: 'Dashboard',    icon: LayoutDashboard, shortcut: '1', cLevelOnly: true },
   { id: 'tasks',      label: 'Tasks',        icon: CheckSquare,     shortcut: '2' },
   { id: 'crm',        label: 'CRM',          icon: Handshake,       shortcut: '3' },
-  { id: 'calendar',   label: 'Calendar',     icon: CalendarDays,    shortcut: '4' },
-  { id: 'content',    label: 'Content',      icon: Megaphone,       shortcut: '5' },
-  { id: 'revenue',    label: 'Revenue',      icon: BarChart3,       shortcut: '6' },
-  { id: 'activity',   label: 'Activity Log', icon: Activity,        shortcut: '7', cLevelOnly: true },
-  { id: 'templates',  label: 'Templates',    icon: LayoutTemplate,  shortcut: '8', cLevelOnly: true },
-  { id: 'upload',     label: 'CSV Upload',   icon: Upload,          shortcut: '9', masterOnly: true },
-  { id: 'invite',     label: 'Invite Users', icon: UserPlus,        shortcut: '0', masterOnly: true },
+  { id: 'contacts',   label: 'Contacts',     icon: Contact2,        shortcut: '4' },
+  { id: 'calendar',   label: 'Calendar',     icon: CalendarDays,    shortcut: '5' },
+  { id: 'content',    label: 'Content',      icon: Megaphone,       shortcut: '6' },
+  { id: 'revenue',    label: 'Revenue',      icon: BarChart3,       shortcut: '7' },
+  { id: 'activity',   label: 'Activity Log', icon: Activity,        shortcut: '8', cLevelOnly: true },
+  { id: 'templates',  label: 'Templates',    icon: LayoutTemplate,  shortcut: '9', cLevelOnly: true },
+  { id: 'upload',     label: 'CSV Upload',   icon: Upload,          shortcut: '0', masterOnly: true },
+  { id: 'invite',     label: 'Invite Users', icon: UserPlus,        masterOnly: true },
   { id: 'reports',    label: 'Reports',      icon: FileText },
   { id: 'profile',    label: 'Profile',      icon: UserCircle },
 ]
@@ -58,7 +60,7 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
           </div>
           {expanded && (
             <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13px', whiteSpace: 'nowrap' }}>
-              HOG OPS
+              {TENANT.appName}
             </span>
           )}
         </button>
@@ -67,8 +69,9 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
       {/* Nav items */}
       <nav className="flex-1 flex flex-col gap-1 p-2 overflow-hidden">
         {NAV_ITEMS.filter(item => {
+          if (!TENANT.enabledViews.includes(item.id)) return false
           if (userRole === 'MASTER') return true
-          return ['tasks', 'crm', 'profile'].includes(item.id)
+          return ['tasks', 'crm', 'contacts', 'profile'].includes(item.id)
         }).map((item) => {
           const Icon = item.icon
           const active = activeView === item.id

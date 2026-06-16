@@ -4,6 +4,7 @@ import {
   BarChart3, Activity, LayoutTemplate, Upload, UserPlus, UserCircle, FileText,
 } from 'lucide-react'
 import { AppLogoBadge } from './AppLogo'
+import { TENANT } from '../../config/tenant'
 
 interface App {
   id: string
@@ -43,6 +44,7 @@ export function HomeScreen({ onNavigate, onClose, userRole }: Props) {
   }, [onClose])
 
   const visible = APPS.filter(app => {
+    if (!TENANT.enabledViews.includes(app.id)) return false
     if (userRole === 'MASTER') return true
     return ['tasks', 'crm', 'profile'].includes(app.id)
   })
@@ -81,7 +83,7 @@ export function HomeScreen({ onNavigate, onClose, userRole }: Props) {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '28px' }}>
           <AppLogoBadge size={32} radius={8} />
-          <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '15px' }}>HOG OPS</span>
+          <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '15px' }}>{TENANT.appName}</span>
           <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>ESC to close</span>
         </div>
 
