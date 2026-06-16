@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { notifySlack, statusChangedMessage, proofUploadedMessage, taskAssignedMessage, taskCommentMessage, notifyUserDM } from '../../hooks/useSlack'
+import { notifySlack, statusChangedMessage, proofUploadedMessage, taskAssignedMessage, taskCommentMessage, notifyUserDM, taskLink } from '../../hooks/useSlack'
 import { logActivity } from '../../hooks/useActivityLog'
 import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
@@ -207,7 +207,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     setPriority(status === 'APPROVED' ? 'LOW' : priority)
     notifySlack(statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG OPS'))
     if (task?.assigned_to) {
-      notifyUserDM(task.assigned_to, statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG OPS'))
+      notifyUserDM(task.assigned_to, statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG OPS', taskLink(taskId)))
     }
     logActivity('status_changed', 'task', taskId, { title: task?.title ?? '', from: prev, to: status })
     notifyAdminsAndAssignee(`Status → ${status}`, task?.title ?? '', 'status_changed', taskId, task?.assigned_to ?? undefined)
@@ -231,7 +231,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
       uploaded_by: user?.id,
     })
     setProofs((prev) => [...prev, { id: Date.now().toString(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString(), archived: false }])
-    notifySlack(proofUploadedMessage(task?.title ?? '', buName || 'HOG OPS', uploaderName))
+    notifySlack(proofUploadedMessage(task?.title ?? '', buName || 'HOG OPS', uploaderName, taskLink(taskId)))
     logActivity('proof_uploaded', 'task', taskId, { title: task?.title ?? '' })
     notifyAdminsAndAssignee('Proof uploaded', task?.title ?? '', 'proof_uploaded', taskId, task?.assigned_to ?? undefined)
     setUploadingProof(false)
@@ -289,7 +289,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     notifyAdminsAndAssignee('New comment', task?.title ?? '', 'comment_posted', taskId, task?.assigned_to ?? undefined)
     // DM the assignee if they're not the one commenting
     if (task?.assigned_to && task.assigned_to !== user?.id) {
-      notifyUserDM(task.assigned_to, taskCommentMessage(task.title, authorName, content))
+      notifyUserDM(task.assigned_to, taskCommentMessage(task.title, authorName, content, taskLink(taskId)))
     }
     setNewComment('')
     setPostingComment(false)
@@ -329,7 +329,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     if (newId && newId !== prev) {
       notifyAdminsAndAssignee("You've been assigned a task", task?.title ?? '', 'task_assigned', taskId, newId)
       sendTaskAssignmentEmail(taskId, newId)
-      notifyUserDM(newId, taskAssignedMessage(task?.title ?? '', newName))
+      notifyUserDM(newId, taskAssignedMessage(task?.title ?? '', newName, taskLink(taskId)))
     }
     onUpdated()
   }

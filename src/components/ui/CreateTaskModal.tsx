@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, Lock, Globe } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { notifySlack, taskCreatedMessage, taskAssignedMessage, notifyUserDM } from '../../hooks/useSlack'
+import { notifySlack, taskCreatedMessage, taskAssignedMessage, notifyUserDM, taskLink } from '../../hooks/useSlack'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { logActivity } from '../../hooks/useActivityLog'
 import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
@@ -108,11 +108,11 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
     const assigneeName = teamMembers.find(m => m.id === assignedTo)?.full_name ?? undefined
     notifySlack(taskCreatedMessage(title.trim(), buName ? `${buName.code} · ${buName.name}` : 'No BU', priority, assigneeName ?? undefined))
     if (assignedTo && assigneeName) {
-      notifyUserDM(assignedTo, taskAssignedMessage(title.trim(), assigneeName))
+      notifyUserDM(assignedTo, taskAssignedMessage(title.trim(), assigneeName, newTask ? taskLink(newTask.id) : undefined))
     }
 
-    logActivity('task_created', 'task', undefined, { title: title.trim(), bu: buName ? `${buName.code} · ${buName.name}` : null, priority })
-    notifyAdminsAndAssignee('New task created', title.trim(), 'task_created', undefined, assignedTo || undefined)
+    logActivity('task_created', 'task', newTask?.id, { title: title.trim(), bu: buName ? `${buName.code} · ${buName.name}` : null, priority })
+    notifyAdminsAndAssignee('New task created', title.trim(), 'task_created', newTask?.id, assignedTo || undefined)
     if (assignedTo && newTask) sendTaskAssignmentEmail(newTask.id, assignedTo)
     onCreated()
     onClose()

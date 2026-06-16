@@ -54,51 +54,66 @@ export async function notifyUserDM(supabaseUserId: string, message: string) {
   await notifySlack(message)
 }
 
-// ── Task messages ──────────────────────────────────────────────────────────────
+// ── Deep-link helpers ────────────────────────────────────────────────────────────
 
-export function taskCreatedMessage(title: string, bu: string, priority: string, assignee?: string) {
-  return `🆕 *New Task* — ${title}\n*BU:* ${bu} · *Priority:* ${priority}${assignee ? ` · *Assigned to:* ${assignee}` : ''}`
+// Builds a link that opens the task/deal as an overlay on top of the app.
+export function taskLink(taskId: string) {
+  return `${window.location.origin}/?task=${taskId}`
+}
+export function dealLink(dealId: string) {
+  return `${window.location.origin}/?deal=${dealId}`
 }
 
-export function statusChangedMessage(title: string, from: string, to: string, bu: string) {
+// Appends a Slack-formatted "Open" link to a message, when a link is provided.
+function withLink(text: string, link?: string) {
+  return link ? `${text}\n👉 <${link}|Open in HOG OPS>` : text
+}
+
+// ── Task messages ──────────────────────────────────────────────────────────────
+
+export function taskCreatedMessage(title: string, bu: string, priority: string, assignee?: string, link?: string) {
+  return withLink(`🆕 *New Task* — ${title}\n*BU:* ${bu} · *Priority:* ${priority}${assignee ? ` · *Assigned to:* ${assignee}` : ''}`, link)
+}
+
+export function statusChangedMessage(title: string, from: string, to: string, bu: string, link?: string) {
   const ICONS: Record<string, string> = {
     OPEN: '⬜', IN_PROGRESS: '🟦', PROOF_SUBMITTED: '🟡', APPROVED: '✅', REVISION: '🔴',
   }
-  return `${ICONS[to] ?? '🔄'} *Task updated* — ${title}\n*${bu}* · ${from} → *${to}*`
+  return withLink(`${ICONS[to] ?? '🔄'} *Task updated* — ${title}\n*${bu}* · ${from} → *${to}*`, link)
 }
 
-export function proofUploadedMessage(title: string, bu: string, uploader: string) {
-  return `📎 *Proof submitted* — ${title}\n*BU:* ${bu} · Uploaded by ${uploader}`
+export function proofUploadedMessage(title: string, bu: string, uploader: string, link?: string) {
+  return withLink(`📎 *Proof submitted* — ${title}\n*BU:* ${bu} · Uploaded by ${uploader}`, link)
 }
 
-export function taskAssignedMessage(title: string, assignee: string) {
-  return `📋 *You've been assigned a task* — ${title}\nAssigned to: ${assignee}`
+export function taskAssignedMessage(title: string, assignee: string, link?: string) {
+  return withLink(`📋 *You've been assigned a task* — ${title}\nAssigned to: ${assignee}`, link)
 }
 
-export function taskCommentMessage(title: string, author: string, comment: string) {
-  return `💬 *New comment on* — ${title}\n${author}: "${comment}"`
+export function taskCommentMessage(title: string, author: string, comment: string, link?: string) {
+  return withLink(`💬 *New comment on* — ${title}\n${author}: "${comment}"`, link)
 }
 
-export function dealCommentMessage(title: string, author: string, body: string) {
-  return `💬 *New activity on* — ${title}\n${author}: "${body}"`
+export function dealCommentMessage(title: string, author: string, body: string, link?: string) {
+  return withLink(`💬 *New activity on* — ${title}\n${author}: "${body}"`, link)
 }
 
 // ── CRM messages ───────────────────────────────────────────────────────────────
 
-export function dealCreatedMessage(title: string, type: string, value: string | null, creator: string) {
-  return `🤝 *New Deal* — ${title}\n*Type:* ${type}${value ? ` · *Value:* ${value}` : ''} · Created by ${creator}`
+export function dealCreatedMessage(title: string, type: string, value: string | null, creator: string, link?: string) {
+  return withLink(`🤝 *New Deal* — ${title}\n*Type:* ${type}${value ? ` · *Value:* ${value}` : ''} · Created by ${creator}`, link)
 }
 
-export function dealStageChangedMessage(title: string, from: string, to: string, updater: string) {
+export function dealStageChangedMessage(title: string, from: string, to: string, updater: string, link?: string) {
   const ICONS: Record<string, string> = {
     LEAD: '🎯', CONTACTED: '📞', PROPOSAL: '📋', NEGOTIATING: '🤝', WON: '🏆', LOST: '❌',
   }
-  return `${ICONS[to] ?? '🔄'} *Deal updated* — ${title}\n${updater} · ${from} → *${to}*`
+  return withLink(`${ICONS[to] ?? '🔄'} *Deal updated* — ${title}\n${updater} · ${from} → *${to}*`, link)
 }
 
-export function dealActivityMessage(title: string, type: ActivityType, body: string, author: string) {
+export function dealActivityMessage(title: string, type: ActivityType, body: string, author: string, link?: string) {
   const ICONS: Record<string, string> = { CALL: '📞', EMAIL: '📧', MEETING: '📅', NOTE: '📝' }
-  return `${ICONS[type] ?? '💬'} *CRM ${type}* — ${title}\n${author}: "${body}"`
+  return withLink(`${ICONS[type] ?? '💬'} *CRM ${type}* — ${title}\n${author}: "${body}"`, link)
 }
 
 type ActivityType = 'CALL' | 'EMAIL' | 'MEETING' | 'NOTE'

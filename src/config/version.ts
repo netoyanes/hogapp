@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.5.3"
+export const APP_VERSION = "1.6.0"
 
 export type ChangelogEntry = {
   version: string
@@ -123,6 +123,17 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Archived tasks are hidden from the main board by default",
       "ARCHIVED badge shown in the task header when viewing an archived task",
       "Archive and restore actions tracked in Activity Log"
+    ]
+  },
+  {
+    version: "1.6.0",
+    date: "2026-06-16",
+    type: "MINOR",
+    changes: [
+      "Open tasks/deals in an overlay panel straight from a notification — keep working on the screen you were on",
+      "Click any task notification in the bell to open it in a slide-over without leaving your current view",
+      "Slack DMs now include a direct 'Open in HOG OPS' deep-link to the task or deal",
+      "Deal stage changes now also DM the deal owner",
     ]
   },
   {

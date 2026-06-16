@@ -20,13 +20,23 @@ import { Contacts } from './screens/Contacts'
 import { Reports } from './screens/Reports'
 import { SharedTask } from './screens/SharedTask'
 import { AppLogoBadge } from './components/ui/AppLogo'
+import { TaskDetailPanel } from './components/ui/TaskDetailPanel'
+import { DealOverlay } from './components/ui/DealOverlay'
 
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL'
 }
 
-// Detect shared task URL before rendering anything else
-const _sharedTaskId = new URLSearchParams(window.location.search).get('share')
+// Detect deep-link URLs before rendering anything else
+const _params = new URLSearchParams(window.location.search)
+const _sharedTaskId = _params.get('share')
+
+// Strip a query param from the URL bar without reloading (so an overlay doesn't reopen on refresh)
+function stripUrlParam(key: string) {
+  const url = new URL(window.location.href)
+  url.searchParams.delete(key)
+  window.history.replaceState({}, '', url.pathname + (url.search ? url.search : '') + url.hash)
+}
 
 export default function App() {
   // Shared task view — completely isolated, no app shell
@@ -40,6 +50,15 @@ export default function App() {
   )
   const [scoringBU, setScoringBU] = useState<string | null>(null)
   const [buFilter, setBuFilter] = useState('')
+
+  // Overlay panels — opened from notifications / Slack deep-links, sit ON TOP of the
+  // current screen so you keep working where you were.
+  const [overlayTaskId, setOverlayTaskId] = useState<string | null>(() => _params.get('task'))
+  const [overlayDealId, setOverlayDealId] = useState<string | null>(() => _params.get('deal'))
+
+  function openTaskOverlay(taskId: string) { setOverlayTaskId(taskId) }
+  function closeTaskOverlay() { setOverlayTaskId(null); stripUrlParam('task') }
+  function closeDealOverlay() { setOverlayDealId(null); stripUrlParam('deal') }
 
   function goToTasksForBU(buId: string) {
     setBuFilter(buId)
@@ -138,7 +157,24 @@ export default function App() {
         )}
       </AppLayout>
 
-      {profile && <NotificationBell userId={profile.id} />}
+      {profile && <NotificationBell userId={profile.id} onOpenTask={openTaskOverlay} />}
+
+      {/* Notification / deep-link overlays — render above the whole app shell */}
+      {overlayTaskId && (
+        <TaskDetailPanel
+          taskId={overlayTaskId}
+          onClose={closeTaskOverlay}
+          onUpdated={() => { /* overlay view — background screen refreshes on its own */ }}
+          userRole={role}
+        />
+      )}
+      {overlayDealId && (
+        <DealOverlay
+          dealId={overlayDealId}
+          onClose={closeDealOverlay}
+          userRole={role}
+        />
+      )}
     </>
   )
 }
