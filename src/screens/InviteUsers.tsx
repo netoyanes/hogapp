@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { UserPlus, Copy, Check, Trash2, Users, ShieldCheck } from 'lucide-react'
+import { UserPlus, Copy, Check, Trash2, Users, ShieldCheck, Save } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import type { UserRole } from '../types'
@@ -64,7 +64,9 @@ export function InviteUsers() {
   const [memberError, setMemberError] = useState<string | null>(null)
   const [memberSuccess, setMemberSuccess] = useState<string | null>(null)
   const [slackIds, setSlackIds] = useState<Record<string, string>>({})
+  const [savedSlackIds, setSavedSlackIds] = useState<Record<string, string>>({})
   const [savingSlackId, setSavingSlackId] = useState<string | null>(null)
+  const [savedConfirm, setSavedConfirm] = useState<string | null>(null)
 
   useEffect(() => {
     loadAll()
@@ -82,15 +84,23 @@ export function InviteUsers() {
       const ids: Record<string, string> = {}
       for (const m of mem) ids[m.id] = m.slack_user_id ?? ''
       setSlackIds(ids)
+      setSavedSlackIds(ids)
     }
   }
 
   async function saveSlackId(userId: string) {
     const value = (slackIds[userId] ?? '').trim()
     setSavingSlackId(userId)
-    await supabase.from('profiles').update({ slack_user_id: value || null }).eq('id', userId)
-    setMembers(prev => prev.map(m => m.id === userId ? { ...m, slack_user_id: value || null } : m))
+    const { error } = await supabase.from('profiles').update({ slack_user_id: value || null }).eq('id', userId)
     setSavingSlackId(null)
+    if (!error) {
+      setMembers(prev => prev.map(m => m.id === userId ? { ...m, slack_user_id: value || null } : m))
+      setSavedSlackIds(prev => ({ ...prev, [userId]: value }))
+      setSavedConfirm(userId)
+      setTimeout(() => setSavedConfirm(c => c === userId ? null : c), 2500)
+    } else {
+      setMemberError(`Could not save Slack ID: ${error.message}`)
+    }
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -295,33 +305,52 @@ export function InviteUsers() {
                         <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {m.email}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                          <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>SLACK</span>
-                          <input
-                            value={slackIds[m.id] ?? ''}
-                            onChange={e => setSlackIds(prev => ({ ...prev, [m.id]: e.target.value }))}
-                            onBlur={() => saveSlackId(m.id)}
-                            placeholder="U07ABC1234"
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              borderBottom: `1px solid ${slackIds[m.id] ? 'var(--accent-border)' : 'var(--border-subtle)'}`,
-                              color: slackIds[m.id] ? 'var(--text-secondary)' : 'var(--text-tertiary)',
-                              fontSize: '10px',
-                              fontFamily: 'var(--font-mono)',
-                              outline: 'none',
-                              width: '100px',
-                              padding: '1px 2px',
-                              opacity: savingSlackId === m.id ? 0.5 : 1,
-                            }}
-                          />
-                          {savingSlackId === m.id && (
-                            <span style={{ fontSize: '9px', color: 'var(--text-tertiary)' }}>saving…</span>
-                          )}
-                          {slackIds[m.id] && savingSlackId !== m.id && (
-                            <span style={{ fontSize: '9px', color: '#22C55E', fontFamily: 'var(--font-mono)' }}>✓</span>
-                          )}
-                        </div>
+                        {(() => {
+                          const current = slackIds[m.id] ?? ''
+                          const saved = savedSlackIds[m.id] ?? ''
+                          const isDirty = current.trim() !== saved.trim()
+                          const isSaving = savingSlackId === m.id
+                          const isConfirmed = savedConfirm === m.id
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                              <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>SLACK</span>
+                              <input
+                                value={current}
+                                onChange={e => setSlackIds(prev => ({ ...prev, [m.id]: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter') saveSlackId(m.id) }}
+                                placeholder="U07ABC1234"
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  borderBottom: `1px solid ${saved ? '#22C55E60' : isDirty ? 'var(--accent-border)' : 'var(--border-subtle)'}`,
+                                  color: current ? 'var(--text-secondary)' : 'var(--text-tertiary)',
+                                  fontSize: '10px',
+                                  fontFamily: 'var(--font-mono)',
+                                  outline: 'none',
+                                  width: '100px',
+                                  padding: '1px 2px',
+                                  opacity: isSaving ? 0.5 : 1,
+                                }}
+                              />
+                              {isSaving ? (
+                                <span style={{ fontSize: '9px', color: 'var(--text-tertiary)' }}>saving…</span>
+                              ) : isConfirmed ? (
+                                <span style={{ fontSize: '9px', color: '#22C55E', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                  <Check size={10} /> saved
+                                </span>
+                              ) : isDirty ? (
+                                <button
+                                  onClick={() => saveSlackId(m.id)}
+                                  style={{ background: 'var(--accent)', border: 'none', borderRadius: '4px', color: '#000', fontSize: '9px', fontWeight: 700, padding: '2px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}
+                                >
+                                  <Save size={9} /> Save
+                                </button>
+                              ) : saved ? (
+                                <span style={{ fontSize: '9px', color: '#22C55E50', fontFamily: 'var(--font-mono)' }}>✓</span>
+                              ) : null}
+                            </div>
+                          )
+                        })()}
                       </div>
 
                       {/* Joined */}
