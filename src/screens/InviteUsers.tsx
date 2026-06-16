@@ -3,7 +3,6 @@ import { UserPlus, Copy, Check, Trash2, Users, ShieldCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import type { UserRole } from '../types'
-
 type InviteRole = 'C_LEVEL' | 'OPS_MANAGER' | 'MARKETING' | 'TEAM'
 
 const INVITE_ROLE_OPTIONS: { value: InviteRole; label: string; description: string }[] = [
@@ -43,6 +42,7 @@ interface Member {
   last_name: string | null
   email: string | null
   role: UserRole | null
+  slack_user_id: string | null
   created_at: string
 }
 
@@ -63,6 +63,8 @@ export function InviteUsers() {
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null)
   const [memberError, setMemberError] = useState<string | null>(null)
   const [memberSuccess, setMemberSuccess] = useState<string | null>(null)
+  const [slackIds, setSlackIds] = useState<Record<string, string>>({})
+  const [savingSlackId, setSavingSlackId] = useState<string | null>(null)
 
   useEffect(() => {
     loadAll()
@@ -72,10 +74,23 @@ export function InviteUsers() {
   async function loadAll() {
     const [{ data: inv }, { data: mem }] = await Promise.all([
       supabase.from('invitations').select('*').order('created_at', { ascending: false }),
-      supabase.from('profiles').select('id, full_name, last_name, email, role, created_at').order('created_at', { ascending: true }),
+      supabase.from('profiles').select('id, full_name, last_name, email, role, slack_user_id, created_at').order('created_at', { ascending: true }),
     ])
     setInvitations(inv ?? [])
-    setMembers(mem ?? [])
+    if (mem) {
+      setMembers(mem)
+      const ids: Record<string, string> = {}
+      for (const m of mem) ids[m.id] = m.slack_user_id ?? ''
+      setSlackIds(ids)
+    }
+  }
+
+  async function saveSlackId(userId: string) {
+    const value = (slackIds[userId] ?? '').trim()
+    setSavingSlackId(userId)
+    await supabase.from('profiles').update({ slack_user_id: value || null }).eq('id', userId)
+    setMembers(prev => prev.map(m => m.id === userId ? { ...m, slack_user_id: value || null } : m))
+    setSavingSlackId(null)
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -264,7 +279,7 @@ export function InviteUsers() {
                         </span>
                       </div>
 
-                      {/* Name + email */}
+                      {/* Name + email + Slack ID */}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -279,6 +294,33 @@ export function InviteUsers() {
                         </div>
                         <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {m.email}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                          <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>SLACK</span>
+                          <input
+                            value={slackIds[m.id] ?? ''}
+                            onChange={e => setSlackIds(prev => ({ ...prev, [m.id]: e.target.value }))}
+                            onBlur={() => saveSlackId(m.id)}
+                            placeholder="U07ABC1234"
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              borderBottom: `1px solid ${slackIds[m.id] ? 'var(--accent-border)' : 'var(--border-subtle)'}`,
+                              color: slackIds[m.id] ? 'var(--text-secondary)' : 'var(--text-tertiary)',
+                              fontSize: '10px',
+                              fontFamily: 'var(--font-mono)',
+                              outline: 'none',
+                              width: '100px',
+                              padding: '1px 2px',
+                              opacity: savingSlackId === m.id ? 0.5 : 1,
+                            }}
+                          />
+                          {savingSlackId === m.id && (
+                            <span style={{ fontSize: '9px', color: 'var(--text-tertiary)' }}>saving…</span>
+                          )}
+                          {slackIds[m.id] && savingSlackId !== m.id && (
+                            <span style={{ fontSize: '9px', color: '#22C55E', fontFamily: 'var(--font-mono)' }}>✓</span>
+                          )}
                         </div>
                       </div>
 
