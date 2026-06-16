@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.5.0"
+export const APP_VERSION = "1.5.1"
 
 export type ChangelogEntry = {
   version: string
@@ -123,6 +123,15 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Archived tasks are hidden from the main board by default",
       "ARCHIVED badge shown in the task header when viewing an archived task",
       "Archive and restore actions tracked in Activity Log"
+    ]
+  },
+  {
+    version: "1.5.1",
+    date: "2026-06-16",
+    type: "PATCH",
+    changes: [
+      "Fix Slack ID save for other users — RLS policy now allows MASTER to update all profiles",
+      "Save button replaces unreliable onBlur for Slack ID assignment in User Management",
     ]
   },
   {

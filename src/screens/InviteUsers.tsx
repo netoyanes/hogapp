@@ -91,9 +91,10 @@ export function InviteUsers() {
   async function saveSlackId(userId: string) {
     const value = (slackIds[userId] ?? '').trim()
     setSavingSlackId(userId)
-    const { error } = await supabase.functions.invoke('admin-update-profile', {
-      body: { userId, updates: { slack_user_id: value || null } },
-    })
+    const { error } = await supabase
+      .from('profiles')
+      .update({ slack_user_id: value || null })
+      .eq('id', userId)
     setSavingSlackId(null)
     if (!error) {
       setMembers(prev => prev.map(m => m.id === userId ? { ...m, slack_user_id: value || null } : m))
