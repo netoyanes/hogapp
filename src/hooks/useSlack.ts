@@ -33,8 +33,17 @@ export async function notifyUserDM(supabaseUserId: string, message: string) {
       const { data: fnData, error: fnError } = await supabase.functions.invoke('send-slack-dm', {
         body: { slackUserId: data.slack_user_id, message },
       })
-      if (fnError) console.error('[notifyUserDM] edge function error', fnError)
-      else console.log('[notifyUserDM] edge function response', fnData)
+      if (fnError) {
+        // Try to extract the Slack error from the response body
+        try {
+          const body = await (fnError as unknown as { context?: Response }).context?.json?.()
+          console.error('[notifyUserDM] Slack error:', body?.error ?? fnError.message)
+        } catch {
+          console.error('[notifyUserDM] edge function error', fnError.message)
+        }
+      } else {
+        console.log('[notifyUserDM] delivered', fnData)
+      }
       return
     }
     console.warn('[notifyUserDM] no slack_user_id, falling back to channel')
