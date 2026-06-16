@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { X, Edit2, Check, ChevronDown, Phone, Mail, MessageSquare, Calendar } from 'lucide-react'
+import { X, Edit2, Check, ChevronDown, Phone, Mail, MessageSquare, Calendar, Briefcase } from 'lucide-react'
 import type { BusinessUnit } from '../../types'
 import type { CRMContact, CRMDeal } from '../../screens/CRM'
 import { TaskDetailPanel } from './TaskDetailPanel'
@@ -189,7 +189,13 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
 
   async function addActivity() {
     if (!actBody.trim()) return
-    await supabase.from('crm_activities').insert({ deal_id: dealId, type: actType, body: actBody.trim() })
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('crm_activities').insert({
+      deal_id: dealId,
+      type: actType,
+      body: actBody.trim(),
+      created_by: user?.id ?? null,
+    })
     setActBody('')
     await loadActivities()
   }
@@ -452,7 +458,29 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                   </div>
                 )
               })}
-              {activities.length === 0 && <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>No activity yet.</div>}
+
+              {/* Deal created entry — always last */}
+              {creatorName && (
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <Avatar name={creatorName} size={28} />
+                    <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '14px', height: '14px', borderRadius: '50%', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Briefcase size={7} style={{ color: 'var(--text-tertiary)' }} />
+                    </div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>{creatorName}</span>
+                      <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                        {new Date(deal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.4, fontStyle: 'italic' }}>Deal created</div>
+                  </div>
+                </div>
+              )}
+
+              {activities.length === 0 && !creatorName && <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>No activity yet.</div>}
             </div>
           </section>
 
