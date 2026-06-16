@@ -4,7 +4,7 @@ import type { BusinessUnit } from '../types'
 import { Plus, DollarSign, TrendingUp, Target, Briefcase } from 'lucide-react'
 import { DealDetailPanel } from '../components/ui/DealDetailPanel'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
-import { notifySlack, dealCreatedMessage } from '../hooks/useSlack'
+import { notifySlack, dealCreatedMessage, dealLink } from '../hooks/useSlack'
 
 type DealType = 'SPONSORSHIP' | 'PARTNERSHIP' | 'ADVERTISING' | 'EVENT' | 'OTHER'
 type DealStage = 'LEAD' | 'CONTACTED' | 'PROPOSAL' | 'NEGOTIATING' | 'WON' | 'LOST'
@@ -147,7 +147,7 @@ export function CRM({ userRole, userId }: Props) {
 
       const { data: { user } } = await supabase.auth.getUser()
 
-      await supabase.from('crm_deals').insert({
+      const { data: newDeal } = await supabase.from('crm_deals').insert({
         title:       cTitle.trim(),
         deal_type:   cType,
         stage:       cStage,
@@ -158,13 +158,13 @@ export function CRM({ userRole, userId }: Props) {
         contact_id:  contactId,
         description: cDesc || null,
         created_by:  user?.id ?? null,
-      })
+      }).select('id').single()
 
       if (user?.id) {
         const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
         const creatorName = profile?.full_name ?? 'Someone'
         const fmtValue = cValue ? fmt(parseFloat(cValue)) : null
-        notifySlack(dealCreatedMessage(cTitle.trim(), cType, fmtValue, creatorName))
+        notifySlack(dealCreatedMessage(cTitle.trim(), cType, fmtValue, creatorName, newDeal ? dealLink(newDeal.id) : undefined))
       }
 
       await load()

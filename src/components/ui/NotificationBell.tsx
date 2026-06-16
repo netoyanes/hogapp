@@ -23,9 +23,13 @@ function timeAgo(dateStr: string) {
 
 interface Props {
   userId: string
+  onOpenTask?: (taskId: string) => void
 }
 
-export function NotificationBell({ userId }: Props) {
+// Notification types whose entity_id points at a task
+const TASK_TYPES = new Set(['task_created', 'status_changed', 'proof_uploaded', 'comment_posted'])
+
+export function NotificationBell({ userId, onOpenTask }: Props) {
   const isMobile = useIsMobile()
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications(userId)
   const [open, setOpen] = useState(false)
@@ -177,16 +181,25 @@ export function NotificationBell({ userId }: Props) {
                 <p style={{ color: 'var(--text-tertiary)', fontSize: '13px' }}>No notifications yet</p>
               </div>
             ) : (
-              notifications.map((notif) => (
+              notifications.map((notif) => {
+                const canOpen = !!(onOpenTask && notif.entity_id && TASK_TYPES.has(notif.type ?? ''))
+                function handleClick() {
+                  if (!notif.read) markRead(notif.id)
+                  if (canOpen) {
+                    onOpenTask!(notif.entity_id!)
+                    setOpen(false)
+                  }
+                }
+                return (
                 <div
                   key={notif.id}
-                  onClick={() => !notif.read && markRead(notif.id)}
+                  onClick={handleClick}
                   style={{
                     padding: '11px 16px',
                     borderBottom: '1px solid var(--border-subtle)',
                     background: notif.read ? 'transparent' : 'rgba(34,197,94,0.04)',
                     display: 'flex', gap: '10px', alignItems: 'flex-start',
-                    cursor: notif.read ? 'default' : 'pointer',
+                    cursor: (canOpen || !notif.read) ? 'pointer' : 'default',
                   }}
                 >
                   <span style={{ fontSize: '14px', flexShrink: 0, marginTop: '1px' }}>
@@ -201,15 +214,23 @@ export function NotificationBell({ userId }: Props) {
                         {notif.body}
                       </div>
                     )}
-                    <div style={{ color: 'var(--text-tertiary)', fontSize: '10px', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
-                      {timeAgo(notif.created_at)}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
+                        {timeAgo(notif.created_at)}
+                      </span>
+                      {canOpen && (
+                        <span style={{ color: 'var(--accent)', fontSize: '10px', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                          Open ↗
+                        </span>
+                      )}
                     </div>
                   </div>
                   {!notif.read && (
                     <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--accent)', flexShrink: 0, marginTop: '4px' }} />
                   )}
                 </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>

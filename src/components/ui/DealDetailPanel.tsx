@@ -5,7 +5,7 @@ import type { BusinessUnit } from '../../types'
 import type { CRMContact, CRMDeal } from '../../screens/CRM'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { Avatar } from './Avatar'
-import { notifySlack, dealStageChangedMessage, dealActivityMessage, dealCommentMessage, notifyUserDM } from '../../hooks/useSlack'
+import { notifySlack, dealStageChangedMessage, dealActivityMessage, dealCommentMessage, notifyUserDM, dealLink } from '../../hooks/useSlack'
 
 type DealStage = 'LEAD' | 'CONTACTED' | 'PROPOSAL' | 'NEGOTIATING' | 'WON' | 'LOST'
 type DealType  = 'SPONSORSHIP' | 'PARTNERSHIP' | 'ADVERTISING' | 'EVENT' | 'OTHER'
@@ -157,7 +157,12 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
     const { data: { user } } = await supabase.auth.getUser()
     if (user?.id) {
       const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
-      notifySlack(dealStageChangedMessage(deal?.title ?? '', prevStage, stage, profile?.full_name ?? 'Someone'))
+      const updaterName = profile?.full_name ?? 'Someone'
+      notifySlack(dealStageChangedMessage(deal?.title ?? '', prevStage, stage, updaterName))
+      // DM the deal owner if they're not the one moving the stage
+      if (deal?.created_by && deal.created_by !== user.id) {
+        notifyUserDM(deal.created_by, dealStageChangedMessage(deal.title, prevStage, stage, updaterName, dealLink(dealId)))
+      }
     }
     onUpdated()
   }
@@ -210,7 +215,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
       notifySlack(dealActivityMessage(deal?.title ?? '', actType, body, authorName))
       // DM the deal owner if they're not the one commenting
       if (deal?.created_by && deal.created_by !== user.id) {
-        notifyUserDM(deal.created_by, dealCommentMessage(deal.title, authorName, body))
+        notifyUserDM(deal.created_by, dealCommentMessage(deal.title, authorName, body, dealLink(dealId)))
       }
     }
     setActBody('')
