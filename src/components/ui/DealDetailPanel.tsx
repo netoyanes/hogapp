@@ -5,6 +5,7 @@ import type { BusinessUnit } from '../../types'
 import type { CRMContact, CRMDeal } from '../../screens/CRM'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { Avatar } from './Avatar'
+import { notifySlack, dealStageChangedMessage, dealActivityMessage } from '../../hooks/useSlack'
 
 type DealStage = 'LEAD' | 'CONTACTED' | 'PROPOSAL' | 'NEGOTIATING' | 'WON' | 'LOST'
 type DealType  = 'SPONSORSHIP' | 'PARTNERSHIP' | 'ADVERTISING' | 'EVENT' | 'OTHER'
@@ -150,8 +151,14 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
 
   async function changeStage(stage: DealStage) {
     if (stage === 'LOST') { setLostModal(true); return }
+    const prevStage = deal?.stage ?? ''
     await supabase.from('crm_deals').update({ stage, lost_reason: null, updated_at: new Date().toISOString() }).eq('id', dealId)
     setDeal(d => d ? { ...d, stage, lost_reason: null } : d)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.id) {
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+      notifySlack(dealStageChangedMessage(deal?.title ?? '', prevStage, stage, profile?.full_name ?? 'Someone'))
+    }
     onUpdated()
   }
 
@@ -190,12 +197,17 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
   async function addActivity() {
     if (!actBody.trim()) return
     const { data: { user } } = await supabase.auth.getUser()
+    const body = actBody.trim()
     await supabase.from('crm_activities').insert({
       deal_id: dealId,
       type: actType,
-      body: actBody.trim(),
+      body,
       created_by: user?.id ?? null,
     })
+    if (user?.id) {
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+      notifySlack(dealActivityMessage(deal?.title ?? '', actType, body, profile?.full_name ?? 'Someone'))
+    }
     setActBody('')
     await loadActivities()
   }

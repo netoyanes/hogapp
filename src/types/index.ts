@@ -23,6 +23,7 @@ export interface Profile {
   address: string | null
   birth_date: string | null
   avatar_url: string | null
+  slack_user_id: string | null
   onboarding_completed: boolean
   created_at: string
 }

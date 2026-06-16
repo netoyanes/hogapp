@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { notifySlack, statusChangedMessage, proofUploadedMessage } from '../../hooks/useSlack'
+import { notifySlack, statusChangedMessage, proofUploadedMessage, taskAssignedMessage, slackMention } from '../../hooks/useSlack'
 import { logActivity } from '../../hooks/useActivityLog'
 import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
@@ -205,7 +205,8 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     await supabase.from('tasks').update(update).eq('id', taskId)
     setTask((t) => t ? { ...t, status, ...(status === 'APPROVED' ? { priority: 'LOW' } : {}) } : t)
     setPriority(status === 'APPROVED' ? 'LOW' : priority)
-    notifySlack(statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG OPS'))
+    const mention = task?.assigned_to ? await slackMention(task.assigned_to) : ''
+    notifySlack(statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG OPS', mention || undefined))
     logActivity('status_changed', 'task', taskId, { title: task?.title ?? '', from: prev, to: status })
     notifyAdminsAndAssignee(`Status → ${status}`, task?.title ?? '', 'status_changed', taskId, task?.assigned_to ?? undefined)
     onUpdated()
@@ -320,6 +321,8 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     if (newId && newId !== prev) {
       notifyAdminsAndAssignee("You've been assigned a task", task?.title ?? '', 'task_assigned', taskId, newId)
       sendTaskAssignmentEmail(taskId, newId)
+      const mention = await slackMention(newId)
+      notifySlack(taskAssignedMessage(task?.title ?? '', newName, mention))
     }
     onUpdated()
   }

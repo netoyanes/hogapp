@@ -4,6 +4,7 @@ import type { BusinessUnit } from '../types'
 import { Plus, DollarSign, TrendingUp, Target, Briefcase } from 'lucide-react'
 import { DealDetailPanel } from '../components/ui/DealDetailPanel'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
+import { notifySlack, dealCreatedMessage, slackMention } from '../hooks/useSlack'
 
 type DealType = 'SPONSORSHIP' | 'PARTNERSHIP' | 'ADVERTISING' | 'EVENT' | 'OTHER'
 type DealStage = 'LEAD' | 'CONTACTED' | 'PROPOSAL' | 'NEGOTIATING' | 'WON' | 'LOST'
@@ -158,6 +159,16 @@ export function CRM({ userRole, userId }: Props) {
         description: cDesc || null,
         created_by:  user?.id ?? null,
       })
+
+      if (user?.id) {
+        const [{ data: profile }, mention] = await Promise.all([
+          supabase.from('profiles').select('full_name').eq('id', user.id).single(),
+          slackMention(user.id),
+        ])
+        const creatorName = profile?.full_name ?? 'Someone'
+        const fmtValue = cValue ? fmt(parseFloat(cValue)) : null
+        notifySlack(dealCreatedMessage(cTitle.trim(), cType, fmtValue, creatorName, mention))
+      }
 
       await load()
       setCreating(false)
