@@ -5,7 +5,7 @@ import type { BusinessUnit } from '../../types'
 import type { CRMContact, CRMDeal } from '../../screens/CRM'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { Avatar } from './Avatar'
-import { notifySlack, dealStageChangedMessage, dealActivityMessage } from '../../hooks/useSlack'
+import { notifySlack, dealStageChangedMessage, dealActivityMessage, dealCommentMessage, notifyUserDM } from '../../hooks/useSlack'
 
 type DealStage = 'LEAD' | 'CONTACTED' | 'PROPOSAL' | 'NEGOTIATING' | 'WON' | 'LOST'
 type DealType  = 'SPONSORSHIP' | 'PARTNERSHIP' | 'ADVERTISING' | 'EVENT' | 'OTHER'
@@ -206,7 +206,12 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
     })
     if (user?.id) {
       const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
-      notifySlack(dealActivityMessage(deal?.title ?? '', actType, body, profile?.full_name ?? 'Someone'))
+      const authorName = profile?.full_name ?? 'Someone'
+      notifySlack(dealActivityMessage(deal?.title ?? '', actType, body, authorName))
+      // DM the deal owner if they're not the one commenting
+      if (deal?.created_by && deal.created_by !== user.id) {
+        notifyUserDM(deal.created_by, dealCommentMessage(deal.title, authorName, body))
+      }
     }
     setActBody('')
     await loadActivities()

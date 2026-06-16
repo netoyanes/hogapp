@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { notifySlack, statusChangedMessage, proofUploadedMessage, taskAssignedMessage, notifyUserDM } from '../../hooks/useSlack'
+import { notifySlack, statusChangedMessage, proofUploadedMessage, taskAssignedMessage, taskCommentMessage, notifyUserDM } from '../../hooks/useSlack'
 import { logActivity } from '../../hooks/useActivityLog'
 import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
@@ -271,20 +271,26 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     if (!newComment.trim()) return
     setPostingComment(true)
     const { data: { user } } = await supabase.auth.getUser()
+    const content = newComment.trim()
     await supabase.from('task_comments').insert({
       task_id: taskId,
       author_id: user?.id,
-      content: newComment.trim(),
+      content,
     })
     const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', user?.id ?? '').single()
+    const authorName = p?.full_name ?? p?.email ?? 'Someone'
     setComments((prev) => [...prev, {
       id: Date.now().toString(),
-      content: newComment.trim(),
+      content,
       created_at: new Date().toISOString(),
-      author: p?.full_name ?? p?.email ?? 'You',
+      author: authorName,
     }])
     logActivity('comment_posted', 'task', taskId, { title: task?.title ?? '' })
     notifyAdminsAndAssignee('New comment', task?.title ?? '', 'comment_posted', taskId, task?.assigned_to ?? undefined)
+    // DM the assignee if they're not the one commenting
+    if (task?.assigned_to && task.assigned_to !== user?.id) {
+      notifyUserDM(task.assigned_to, taskCommentMessage(task.title, authorName, content))
+    }
     setNewComment('')
     setPostingComment(false)
   }
