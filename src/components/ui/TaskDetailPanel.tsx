@@ -119,6 +119,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   const [dragOver, setDragOver] = useState(false)
   const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
   const [copied, setCopied] = useState(false)
+  const [approvedAt, setApprovedAt] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   function copyShareLink() {
@@ -199,6 +200,18 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
         .eq('task_id', taskId)
         .order('created_at')
       setProofs((pr ?? []).map(p => ({ ...p, archived: p.archived ?? false })))
+
+      // Find when task was first approved
+      const { data: approvalLog } = await supabase
+        .from('activity_log')
+        .select('created_at, details')
+        .eq('entity_id', taskId)
+        .eq('action', 'status_changed')
+        .order('created_at', { ascending: true })
+      const firstApproval = approvalLog?.find(
+        (e) => (e.details as Record<string, unknown>)?.to === 'APPROVED'
+      )
+      setApprovedAt(firstApproval?.created_at ?? null)
     }
     load()
   }, [taskId])
@@ -722,8 +735,35 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
             </button>
           </div>
 
+          {/* Response time */}
+          {(() => {
+            const start = task.created_at ? new Date(task.created_at).getTime() : null
+            const end = approvedAt ? new Date(approvedAt).getTime() : null
+            if (!start) return null
+            const elapsed = (end ?? Date.now()) - start
+            const totalMins = Math.floor(elapsed / 60000)
+            const days  = Math.floor(totalMins / 1440)
+            const hrs   = Math.floor((totalMins % 1440) / 60)
+            const mins  = totalMins % 60
+            const parts = []
+            if (days) parts.push(`${days}d`)
+            if (hrs)  parts.push(`${hrs}h`)
+            if (!days && mins) parts.push(`${mins}m`)
+            if (!parts.length) parts.push('<1m')
+            const label = end ? 'Tiempo de atención' : 'En proceso desde'
+            const color = end ? '#22C55E' : 'var(--text-tertiary)'
+            return (
+              <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color, fontFamily: 'var(--font-mono)' }}>
+                  {end && '✅ '}{parts.join(' ')}
+                </span>
+              </div>
+            )
+          })()}
+
           {/* Archive / restore */}
-          <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
+          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
             {task.archived ? (
               <button
                 onClick={restoreTask}
