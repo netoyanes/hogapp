@@ -220,24 +220,31 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   }
 
   async function uploadProof(file: File) {
-    setUploadingProof(true)
     const ext = file.name.split('.').pop()
-    const path = `proofs/${taskId}/${Date.now()}.${ext}`
+    const path = `proofs/${taskId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
     const { error } = await supabase.storage.from('proofs').upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream' })
-    if (error) { setUploadingProof(false); return }
+    if (error) return
     const { data: urlData } = supabase.storage.from('proofs').getPublicUrl(path)
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: pRow } = await supabase.from('profiles').select('full_name, email').eq('id', user?.id ?? '').single()
-    const uploaderName = pRow?.full_name ?? pRow?.email ?? 'Someone'
     await supabase.from('task_proofs').insert({
       task_id: taskId,
       file_url: urlData.publicUrl,
       file_type: file.type,
       uploaded_by: user?.id,
     })
-    setProofs((prev) => [...prev, { id: Date.now().toString(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString(), archived: false }])
+    setProofs((prev) => [...prev, { id: Date.now().toString() + Math.random(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString(), archived: false }])
+    return urlData.publicUrl
+  }
+
+  async function uploadFiles(files: File[]) {
+    if (!files.length) return
+    setUploadingProof(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: pRow } = await supabase.from('profiles').select('full_name, email').eq('id', user?.id ?? '').single()
+    const uploaderName = pRow?.full_name ?? pRow?.email ?? 'Someone'
+    await Promise.all(files.map(f => uploadProof(f)))
     notifySlack(proofUploadedMessage(task?.title ?? '', buName || 'HOG OPS', uploaderName, taskLink(taskId)))
-    logActivity('proof_uploaded', 'task', taskId, { title: task?.title ?? '' })
+    logActivity('proof_uploaded', 'task', taskId, { title: task?.title ?? '', count: files.length })
     notifyAdminsAndAssignee('Proof uploaded', task?.title ?? '', 'proof_uploaded', taskId, task?.assigned_to ?? undefined)
     setUploadingProof(false)
   }
@@ -245,8 +252,8 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   function handleFileDrop(e: React.DragEvent) {
     e.preventDefault()
     setDragOver(false)
-    const file = e.dataTransfer.files[0]
-    if (file) uploadProof(file)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length) uploadFiles(files)
   }
 
   async function saveEdits() {
@@ -647,10 +654,10 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
           >
             <Upload size={13} style={{ color: dragOver ? 'var(--accent)' : 'var(--text-tertiary)' }} />
             <span style={{ color: dragOver ? 'var(--accent)' : 'var(--text-tertiary)', fontSize: '12px' }}>
-              {uploadingProof ? 'Uploading…' : 'Drop file or click to upload proof'}
+              {uploadingProof ? 'Uploading…' : 'Drop files or click to upload proofs'}
             </span>
-            <input ref={fileRef} type="file" accept="image/*,video/*,application/pdf,.html,.htm" style={{ display: 'none' }}
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadProof(f) }}
+            <input ref={fileRef} type="file" multiple accept="image/*,video/*,application/pdf,.html,.htm" style={{ display: 'none' }}
+              onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) uploadFiles(files); e.target.value = '' }}
             />
           </div>
         </div>
