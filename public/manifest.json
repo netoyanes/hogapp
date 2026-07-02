@@ -1,7 +1,7 @@
 {
-  "name": "HOG OPS",
-  "short_name": "HOG OPS",
-  "description": "HOG OPS Command Center",
+  "name": "HOG APP",
+  "short_name": "HOG APP",
+  "description": "HOG APP Command Center",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0D0D0D",

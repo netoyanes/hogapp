@@ -1,7 +1,7 @@
 self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {}
   event.waitUntil(
-    self.registration.showNotification(data.title ?? 'HOG OPS', {
+    self.registration.showNotification(data.title ?? 'HOG APP', {
       body: data.body ?? '',
       icon: '/favicon.svg',
       badge: '/favicon.svg',

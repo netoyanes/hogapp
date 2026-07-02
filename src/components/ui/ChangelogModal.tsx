@@ -39,7 +39,7 @@ export function ChangelogModal({ onClose }: Props) {
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
           <div>
             <h2 style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-ui)' }} className="text-base font-semibold">
-              HOG OPS — Changelog
+              HOG APP — Changelog
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }} className="text-xs mt-0.5">
               Current: v{APP_VERSION}

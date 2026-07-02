@@ -109,7 +109,7 @@ export function Auth({ onSignIn, accessDenied }: Props) {
           {mode === 'login' ? 'Sign in' : 'Create account'}
         </h1>
         <p style={{ color: 'var(--text-secondary)' }} className="text-sm mb-6">
-          {mode === 'login' ? 'Use your HOG OPS credentials.' : 'Set up your HOG OPS account.'}
+          {mode === 'login' ? 'Use your HOG APP credentials.' : 'Set up your HOG APP account.'}
         </p>
 
         {accessDenied && (

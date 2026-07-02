@@ -72,7 +72,7 @@ export default function App() {
           <div className="animate-pulse-green">
             <AppLogoBadge size={32} radius={8} />
           </div>
-          <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>Loading HOG OPS…</span>
+          <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>Loading HOG APP…</span>
         </div>
       </div>
     )

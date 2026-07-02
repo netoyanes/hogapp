@@ -65,7 +65,7 @@ export function UserOnboarding({ profile, onComplete }: Props) {
           <div>
             <div style={{ fontSize: '32px', marginBottom: '16px' }}>👋</div>
             <h2 style={{ color: 'var(--text-primary)', fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>
-              Welcome to HOG OPS.
+              Welcome to HOG APP.
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', marginBottom: '24px' }}>
               Let's set up your profile. This takes less than a minute.
@@ -159,14 +159,14 @@ export function UserOnboarding({ profile, onComplete }: Props) {
               You're all set.
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px' }}>
-              Welcome to HOG OPS, {fullName || 'there'}. Your dashboard is ready.
+              Welcome to HOG APP, {fullName || 'there'}. Your dashboard is ready.
             </p>
             <button
               onClick={handleFinish}
               disabled={saving}
               style={{ background: 'var(--accent)', color: '#000', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: saving ? 'not-allowed' : 'pointer', width: '100%' }}
             >
-              {saving ? 'Saving…' : 'Enter HOG OPS →'}
+              {saving ? 'Saving…' : 'Enter HOG APP →'}
             </button>
           </div>
         )}

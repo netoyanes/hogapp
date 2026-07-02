@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Contact2 } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
-import { TENANT } from '../../config/tenant'
+import { TENANT, viewTitle } from '../../config/tenant'
 
 interface Props {
   activeView: string
@@ -59,8 +59,13 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
             <AppLogoBadge size={28} radius={6} />
           </div>
           {expanded && (
-            <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13px', whiteSpace: 'nowrap' }}>
-              {TENANT.appName}
+            <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2, overflow: 'hidden' }}>
+              <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13px', whiteSpace: 'nowrap' }}>
+                {TENANT.appName}
+              </span>
+              <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '9px', whiteSpace: 'nowrap' }}>
+                {viewTitle(activeView)}
+              </span>
             </span>
           )}
         </button>
