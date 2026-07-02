@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Camera, Save, Clock, DollarSign, Trophy, Activity } from 'lucide-react'
+import { Camera, Save, Clock, DollarSign, Trophy, Activity, Eye } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import type { Profile as ProfileType } from '../types'
+import { getViewAsRole, setViewAsRole } from '../lib/viewAs'
+import type { Profile as ProfileType, UserRole } from '../types'
 
 const WEEKLY_GOAL = 40
 
@@ -115,6 +116,56 @@ function MyProductivity({ userId }: { userId: string }) {
 interface Props {
   profile: ProfileType
   onUpdated: () => void
+}
+
+const PREVIEW_ROLES: { id: UserRole; label: string; color: string; desc: string }[] = [
+  { id: 'MASTER',      label: 'Master',      color: '#FF6B35', desc: 'Acceso total (tu vista real)' },
+  { id: 'C_LEVEL',     label: 'C-Level',     color: '#22C55E', desc: 'Dashboard + analítica, sin admin' },
+  { id: 'OPS_MANAGER', label: 'Ops Manager', color: '#EAB308', desc: 'Tareas, CRM, objetivos de equipo' },
+  { id: 'MARKETING',   label: 'Marketing',   color: '#3B82F6', desc: 'Contenido y campañas' },
+  { id: 'TEAM',        label: 'Team',        color: '#888888', desc: 'Solo sus tareas y venue clients' },
+]
+
+// MASTER-only: preview the app as another role to test what each access level sees.
+function RolePreviewCard() {
+  const active = getViewAsRole()
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '20px' }}>
+      <div className="flex items-center gap-2 mb-2">
+        <Eye size={15} style={{ color: '#F59E0B' }} />
+        <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600 }}>Vista previa por rol</h3>
+        {active && (
+          <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', background: '#F59E0B20', color: '#F59E0B', border: '1px solid #F59E0B50', borderRadius: '4px', padding: '1px 6px' }}>
+            ACTIVA: {active}
+          </span>
+        )}
+      </div>
+      <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginBottom: '14px', lineHeight: 1.5 }}>
+        Prueba la app como la vería cada nivel de acceso. La navegación y los permisos cambian; tu cuenta sigue siendo Master.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px' }}>
+        {PREVIEW_ROLES.map(r => {
+          const isActive = active === r.id || (!active && r.id === 'MASTER')
+          return (
+            <button
+              key={r.id}
+              onClick={() => setViewAsRole(r.id === 'MASTER' ? null : r.id)}
+              style={{
+                textAlign: 'left', padding: '10px 12px', borderRadius: '8px', cursor: 'pointer',
+                background: isActive ? `${r.color}15` : 'var(--bg-elevated)',
+                border: `1px solid ${isActive ? r.color : 'var(--border-default)'}`,
+              }}
+            >
+              <div style={{ color: r.color, fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                {r.label} {isActive && '✓'}
+              </div>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: '10px', marginTop: '2px', lineHeight: 1.4 }}>{r.desc}</div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 export function Profile({ profile, onUpdated }: Props) {
@@ -276,6 +327,9 @@ export function Profile({ profile, onUpdated }: Props) {
             {uploadingAvatar && <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '10px' }}>Uploading…</p>}
             {uploadError && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '10px' }}>Upload failed: {uploadError}</p>}
           </div>
+
+          {/* Role preview — MASTER only, uses the real role so it stays visible while simulating */}
+          {profile.role === 'MASTER' && <RolePreviewCard />}
 
           {/* My Productivity */}
           <MyProductivity userId={profile.id} />

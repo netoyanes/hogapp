@@ -333,7 +333,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
             <SectionLabel>Details</SectionLabel>
             {editing ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
                   <EditField label="Type">
                     <select value={eType} onChange={e => setEType(e.target.value as DealType)} style={inputStyle}>
                       {DEAL_TYPES.map(t => <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>)}

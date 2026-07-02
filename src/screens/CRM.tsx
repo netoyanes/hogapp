@@ -281,7 +281,7 @@ export function CRM({ userRole, userId }: Props) {
                 <input value={cTitle} onChange={e => setCTitle(e.target.value)} placeholder="Deal title" style={inputStyle} />
               </Field>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
                 <Field label="Type">
                   <select value={cType} onChange={e => setCType(e.target.value as DealType)} style={inputStyle}>
                     {DEAL_TYPES.map(t => <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>)}
@@ -294,7 +294,7 @@ export function CRM({ userRole, userId }: Props) {
                 </Field>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
                 <Field label="Value (USD)">
                   <input type="number" value={cValue} onChange={e => setCValue(e.target.value)} placeholder="0" style={inputStyle} />
                 </Field>
@@ -309,7 +309,7 @@ export function CRM({ userRole, userId }: Props) {
                 </Field>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
                 <Field label="Close Date">
                   <input type="date" value={cCloseDate} onChange={e => setCCloseDate(e.target.value)} style={inputStyle} />
                 </Field>

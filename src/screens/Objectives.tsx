@@ -393,7 +393,7 @@ function CreateModal({ onClose, onCreated, year, quarter, userId, canCreateCompa
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título del objetivo *" style={inputStyle} autoFocus />
           <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="Descripción (opcional)…" style={{ ...inputStyle, resize: 'vertical' }} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
             <div>
               <label style={{ fontSize: '10px', color: 'var(--text-tertiary)', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Nivel</label>
               <select value={level} onChange={e => setLevel(e.target.value as Level)} style={inputStyle}>
@@ -409,7 +409,7 @@ function CreateModal({ onClose, onCreated, year, quarter, userId, canCreateCompa
               </div>
             )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
             <div>
               <label style={{ fontSize: '10px', color: 'var(--text-tertiary)', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Meta (número)</label>
               <input type="number" value={target} onChange={e => setTarget(e.target.value)} style={inputStyle} />
