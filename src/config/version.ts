@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.9.0"
+export const APP_VERSION = "1.10.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.10.0",
+    date: "2026-06-17",
+    type: "MINOR",
+    changes: [
+      "Objectives — quarterly OKR dashboard with numeric metrics and automatic % progress",
+      "Quarterly goals cascade to a monthly breakdown (per-month target + actual)",
+      "C-Level set company objectives; managers set objectives for themselves and their team",
+      "Self-evaluation (1-5 stars + note) on your own objectives",
+      "Quarter/year selector with Company / Mine / Team sections and progress tiles",
+    ]
+  },
   {
     version: "1.9.0",
     date: "2026-06-17",

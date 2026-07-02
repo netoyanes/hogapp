@@ -18,6 +18,7 @@ import { NotificationBell } from './components/ui/NotificationBell'
 import { CRM } from './screens/CRM'
 import { Contacts } from './screens/Contacts'
 import { Social } from './screens/Social'
+import { Objectives } from './screens/Objectives'
 import { Reports } from './screens/Reports'
 import { SharedTask } from './screens/SharedTask'
 import { AppLogoBadge } from './components/ui/AppLogo'
@@ -87,7 +88,7 @@ export default function App() {
 
   const ALLOWED_VIEWS = role === 'MASTER'
     ? null // null = no restriction
-    : new Set(['tasks', 'crm', 'contacts', 'social', 'profile'])
+    : new Set(['tasks', 'crm', 'contacts', 'social', 'objectives', 'profile'])
 
   function handleNavigate(view: string) {
     if (ALLOWED_VIEWS && !ALLOWED_VIEWS.has(view)) return
@@ -115,6 +116,8 @@ export default function App() {
         return <Contacts userRole={role} userId={profile?.id} />
       case 'social':
         return <Social profile={profile} userId={profile?.id} />
+      case 'objectives':
+        return <Objectives profile={profile} userId={profile?.id} userRole={role} />
       case 'calendar':
         return <CalendarView userRole={role} defaultBuFilter={buFilter} />
       case 'content':

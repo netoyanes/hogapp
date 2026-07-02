@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Contact2, Sparkles } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Contact2, Sparkles, Target } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
 
@@ -17,10 +17,11 @@ const NAV_ITEMS = [
   { id: 'crm',        label: 'CRM',          icon: Handshake,       shortcut: '3' },
   { id: 'contacts',   label: 'Directory',    icon: Contact2,        shortcut: '4' },
   { id: 'social',     label: 'Social',       icon: Sparkles,        shortcut: '5' },
-  { id: 'calendar',   label: 'Calendar',     icon: CalendarDays,    shortcut: '6' },
-  { id: 'content',    label: 'Content',      icon: Megaphone,       shortcut: '7' },
-  { id: 'revenue',    label: 'Revenue',      icon: BarChart3,       shortcut: '8' },
-  { id: 'activity',   label: 'Activity Log', icon: Activity,        shortcut: '9', cLevelOnly: true },
+  { id: 'objectives', label: 'Objectives',   icon: Target,          shortcut: '6' },
+  { id: 'calendar',   label: 'Calendar',     icon: CalendarDays,    shortcut: '7' },
+  { id: 'content',    label: 'Content',      icon: Megaphone,       shortcut: '8' },
+  { id: 'revenue',    label: 'Revenue',      icon: BarChart3,       shortcut: '9' },
+  { id: 'activity',   label: 'Activity Log', icon: Activity,                     cLevelOnly: true },
   { id: 'templates',  label: 'Templates',    icon: LayoutTemplate,               cLevelOnly: true },
   { id: 'upload',     label: 'CSV Upload',   icon: Upload,          shortcut: '0', masterOnly: true },
   { id: 'invite',     label: 'Invite Users', icon: UserPlus,        masterOnly: true },
@@ -77,7 +78,7 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
         {NAV_ITEMS.filter(item => {
           if (!TENANT.enabledViews.includes(item.id)) return false
           if (userRole === 'MASTER') return true
-          return ['tasks', 'crm', 'contacts', 'social', 'profile'].includes(item.id)
+          return ['tasks', 'crm', 'contacts', 'social', 'objectives', 'profile'].includes(item.id)
         }).map((item) => {
           const Icon = item.icon
           const active = activeView === item.id
