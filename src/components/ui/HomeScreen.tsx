@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import {
   LayoutDashboard, CheckSquare, Handshake, CalendarDays, Megaphone,
   BarChart3, Activity, LayoutTemplate, Upload, UserPlus, UserCircle, FileText,
-  Contact2, Sparkles,
+  Contact2, Sparkles, Target,
 } from 'lucide-react'
 import { AppLogoBadge } from './AppLogo'
 import { TENANT } from '../../config/tenant'
@@ -20,6 +20,7 @@ const APPS: App[] = [
   { id: 'crm',        label: 'CRM',           icon: Handshake,       color: '#EC4899' },
   { id: 'contacts',   label: 'Directory',     icon: Contact2,        color: '#0EA5E9' },
   { id: 'social',     label: 'Social',        icon: Sparkles,        color: '#A855F7' },
+  { id: 'objectives', label: 'Objectives',    icon: Target,          color: '#22C55E' },
   { id: 'calendar',   label: 'Calendar',      icon: CalendarDays,    color: '#8B5CF6' },
   { id: 'content',    label: 'Content',       icon: Megaphone,       color: '#F97316' },
   { id: 'revenue',    label: 'Revenue',       icon: BarChart3,       color: '#22C55E' },
@@ -49,7 +50,7 @@ export function HomeScreen({ onNavigate, onClose, userRole }: Props) {
   const visible = APPS.filter(app => {
     if (!TENANT.enabledViews.includes(app.id)) return false
     if (userRole === 'MASTER') return true
-    return ['tasks', 'crm', 'contacts', 'social', 'profile'].includes(app.id)
+    return ['tasks', 'crm', 'contacts', 'social', 'objectives', 'profile'].includes(app.id)
   })
 
   function go(id: string) {
