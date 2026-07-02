@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.12.0"
+export const APP_VERSION = "1.13.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.13.0",
+    date: "2026-06-17",
+    type: "MINOR",
+    changes: [
+      "Social redesigned as a real feed — one thought/copy box plus attachment tools",
+      "Text-only posts supported; attach a link or a file to any thought",
+      "Attachment preview before publishing, removable in one click",
+      "Changelog modal is now collapsible — click any version to see its full log",
+    ]
+  },
   {
     version: "1.12.0",
     date: "2026-06-17",

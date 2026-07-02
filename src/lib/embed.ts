@@ -1,6 +1,6 @@
 // Detects the content kind of a pasted URL and builds an embeddable src.
 
-export type PostKind = 'LINK' | 'YOUTUBE' | 'INSTAGRAM' | 'TIKTOK' | 'PDF' | 'IMAGE' | 'HTML'
+export type PostKind = 'TEXT' | 'LINK' | 'YOUTUBE' | 'INSTAGRAM' | 'TIKTOK' | 'PDF' | 'IMAGE' | 'HTML'
 
 export function detectKind(url: string): PostKind {
   const u = url.toLowerCase()

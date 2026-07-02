@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { X, ChevronDown, ChevronRight } from 'lucide-react'
 import { CHANGELOG, APP_VERSION } from '../../config/version'
 import { useIsMobile } from '../../hooks/useIsMobile'
 
@@ -22,6 +22,15 @@ export function ChangelogModal({ onClose }: Props) {
   }, [onClose])
 
   const sorted = [...CHANGELOG].reverse()
+  // Current version expanded by default; click a version to see its full log
+  const [expanded, setExpanded] = useState<Set<string>>(new Set([sorted[0]?.version]))
+  function toggle(v: string) {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(v)) next.delete(v); else next.add(v)
+      return next
+    })
+  }
 
   return (
     <div
@@ -54,34 +63,46 @@ export function ChangelogModal({ onClose }: Props) {
           </button>
         </div>
 
-        {/* Entries */}
-        <div className="overflow-y-auto flex-1 p-5 flex flex-col gap-5">
-          {sorted.map((entry) => (
-            <div key={entry.version}>
-              <div className="flex items-center gap-3 mb-2">
-                <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }} className="text-sm font-semibold">
-                  v{entry.version}
-                </span>
-                <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }} className="text-xs">
-                  {entry.date}
-                </span>
-                <span
-                  style={{ color: TYPE_COLORS[entry.type], background: `${TYPE_COLORS[entry.type]}18`, border: `1px solid ${TYPE_COLORS[entry.type]}30`, fontFamily: 'var(--font-mono)' }}
-                  className="text-xs px-1.5 py-0.5 rounded"
+        {/* Entries — click a version to expand its full log */}
+        <div className="overflow-y-auto flex-1 p-3 flex flex-col gap-2">
+          {sorted.map((entry) => {
+            const isOpen = expanded.has(entry.version)
+            return (
+              <div key={entry.version} style={{ border: '1px solid var(--border-subtle)', borderRadius: '8px', overflow: 'hidden' }}>
+                <button
+                  onClick={() => toggle(entry.version)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: isOpen ? 'var(--bg-elevated)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                 >
-                  {entry.type}
-                </span>
+                  {isOpen ? <ChevronDown size={13} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} /> : <ChevronRight size={13} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />}
+                  <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }} className="text-sm font-semibold">
+                    v{entry.version}
+                  </span>
+                  <span
+                    style={{ color: TYPE_COLORS[entry.type], background: `${TYPE_COLORS[entry.type]}18`, border: `1px solid ${TYPE_COLORS[entry.type]}30`, fontFamily: 'var(--font-mono)' }}
+                    className="text-xs px-1.5 py-0.5 rounded"
+                  >
+                    {entry.type}
+                  </span>
+                  <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }} className="text-xs">
+                    {entry.date}
+                  </span>
+                  <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }} className="text-xs">
+                    {entry.changes.length}
+                  </span>
+                </button>
+                {isOpen && (
+                  <ul className="flex flex-col gap-1 px-4 pb-3 pt-1">
+                    {entry.changes.map((change, i) => (
+                      <li key={i} style={{ color: 'var(--text-secondary)' }} className="text-sm flex gap-2">
+                        <span style={{ color: 'var(--text-tertiary)' }}>·</span>
+                        {change}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              <ul className="flex flex-col gap-1">
-                {entry.changes.map((change, i) => (
-                  <li key={i} style={{ color: 'var(--text-secondary)' }} className="text-sm flex gap-2">
-                    <span style={{ color: 'var(--text-tertiary)' }}>·</span>
-                    {change}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
