@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.7.0"
+export const APP_VERSION = "1.8.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.8.0",
+    date: "2026-06-17",
+    type: "MINOR",
+    changes: [
+      "Directory — unified internal directory: external contacts + HOG team in one place",
+      "Filter contacts by type (Venue Client, Sponsor, Partner, Vendor, Prospect, HOG Team)",
+      "Finder tracking — every contact records who added it (finder's-fee owner)",
+      "Closer tracking — deals record who closed them (closing-commission owner), shown in the deal log",
+      "Entry-level (TEAM) users only see Venue Clients; managers & C-Level see the full directory",
+      "Only MASTER can archive or delete contacts",
+    ]
+  },
   {
     version: "1.7.0",
     date: "2026-06-17",

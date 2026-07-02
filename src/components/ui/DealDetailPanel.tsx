@@ -73,6 +73,7 @@ interface Props {
 export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, userRole }: Props) {
   const [deal, setDeal] = useState<CRMDeal | null>(null)
   const [creatorName, setCreatorName] = useState<string | null>(null)
+  const [closerName, setCloserName] = useState<string | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [linkedTasks, setLinkedTasks] = useState<LinkedTask[]>([])
   const [availTasks, setAvailTasks] = useState<LinkedTask[]>([])
@@ -110,6 +111,12 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
       if (data.created_by) {
         const { data: creator } = await supabase.from('profiles').select('full_name, email').eq('id', data.created_by).single()
         setCreatorName(creator?.full_name ?? creator?.email ?? null)
+      }
+      if (data.closed_by) {
+        const { data: closer } = await supabase.from('profiles').select('full_name, email').eq('id', data.closed_by).single()
+        setCloserName(closer?.full_name ?? closer?.email ?? null)
+      } else {
+        setCloserName(null)
       }
     }
   }, [dealId])
@@ -152,9 +159,11 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
   async function changeStage(stage: DealStage) {
     if (stage === 'LOST') { setLostModal(true); return }
     const prevStage = deal?.stage ?? ''
-    await supabase.from('crm_deals').update({ stage, lost_reason: null, updated_at: new Date().toISOString() }).eq('id', dealId)
-    setDeal(d => d ? { ...d, stage, lost_reason: null } : d)
     const { data: { user } } = await supabase.auth.getUser()
+    // Record the closer (closing-commission owner) the first time a deal is won
+    const setCloser = stage === 'WON' && !deal?.closed_by ? (user?.id ?? null) : deal?.closed_by ?? null
+    await supabase.from('crm_deals').update({ stage, lost_reason: null, closed_by: setCloser, updated_at: new Date().toISOString() }).eq('id', dealId)
+    setDeal(d => d ? { ...d, stage, lost_reason: null, closed_by: setCloser } : d)
     if (user?.id) {
       const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
       const updaterName = profile?.full_name ?? 'Someone'
@@ -480,6 +489,19 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                   </div>
                 )
               })}
+
+              {/* Deal won entry — closer / closing-commission owner */}
+              {closerName && (
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                  <Avatar name={closerName} size={28} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#22C55E' }}>{closerName}</span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#22C55E', lineHeight: 1.4, fontStyle: 'italic' }}>🏆 Closed the deal (closing commission)</div>
+                  </div>
+                </div>
+              )}
 
               {/* Deal created entry — always shown as the baseline log entry */}
               <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
