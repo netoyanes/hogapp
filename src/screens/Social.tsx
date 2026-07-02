@@ -324,7 +324,69 @@ function PostMedia({ post }: { post: Post }) {
   }
 }
 
+interface LinkPreview { title?: string; description?: string; image?: string; publisher?: string }
+
+// In-memory cache so previews aren't re-fetched every render/refresh
+const previewCache: Record<string, LinkPreview | null> = {}
+
 function LinkCard({ url }: { url: string }) {
+  const [preview, setPreview] = useState<LinkPreview | null | undefined>(previewCache[url])
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (url in previewCache) { setPreview(previewCache[url]); return }
+    let cancelled = false
+    fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`)
+      .then(r => r.json())
+      .then(json => {
+        if (cancelled) return
+        if (json?.status === 'success') {
+          const d = json.data
+          const p: LinkPreview = { title: d.title, description: d.description, image: d.image?.url, publisher: d.publisher }
+          previewCache[url] = p
+          setPreview(p)
+        } else {
+          previewCache[url] = null
+          setFailed(true)
+        }
+      })
+      .catch(() => { if (!cancelled) setFailed(true) })
+    return () => { cancelled = true }
+  }, [url])
+
+  // Rich preview
+  if (preview && (preview.title || preview.image)) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', margin: '0 14px 14px', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '10px', textDecoration: 'none', overflow: 'hidden' }}>
+        {preview.image && (
+          <img src={preview.image} alt={preview.title ?? ''} style={{ width: '100%', maxHeight: '240px', objectFit: 'cover', display: 'block', borderBottom: '1px solid var(--border-subtle)' }} />
+        )}
+        <div style={{ padding: '10px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
+            <Link2 size={11} style={{ color: 'var(--accent)' }} />
+            <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{preview.publisher ?? domainOf(url)}</span>
+          </div>
+          {preview.title && <div style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 600, lineHeight: 1.3 }}>{preview.title}</div>}
+          {preview.description && <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '3px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{preview.description}</div>}
+        </div>
+      </a>
+    )
+  }
+
+  // Loading skeleton (until we know it failed)
+  if (preview === undefined && !failed) {
+    return (
+      <div style={{ margin: '0 14px 14px', padding: '12px 14px', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="animate-pulse-green" style={{ width: '38px', height: '38px', borderRadius: '6px', background: 'var(--bg-elevated)', flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div className="animate-pulse-green" style={{ height: '10px', width: '60%', background: 'var(--bg-elevated)', borderRadius: '4px', marginBottom: '6px' }} />
+          <div className="animate-pulse-green" style={{ height: '9px', width: '85%', background: 'var(--bg-elevated)', borderRadius: '4px' }} />
+        </div>
+      </div>
+    )
+  }
+
+  // Fallback simple card
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 14px 14px', padding: '12px 14px', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '10px', textDecoration: 'none' }}>
       <Link2 size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />

@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.13.0"
+export const APP_VERSION = "1.13.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.13.1",
+    date: "2026-06-17",
+    type: "PATCH",
+    changes: [
+      "Social — rich link previews for articles/links (image, title, description) so you never leave the app",
+      "Video/audio links (YouTube, Instagram, TikTok) already play inline; PDFs, images and HTML render inline too",
+      "Link previews are cached and shown in the composer before publishing",
+    ]
+  },
   {
     version: "1.13.0",
     date: "2026-06-17",
