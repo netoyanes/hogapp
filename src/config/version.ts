@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.10.0"
+export const APP_VERSION = "1.11.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.11.0",
+    date: "2026-06-17",
+    type: "MINOR",
+    changes: [
+      "Activity Log — new Analytics tab with team productivity metrics",
+      "Hours worked per user vs the 40h/week goal (auto from approved task hours)",
+      "Deals brought $ (finder) and closed $ (closer) per user",
+      "Actions per user, directory contact count, HOG team count, pipeline & won value",
+      "Estimated build effort (horas nalga) derived from the changelog",
+    ]
+  },
   {
     version: "1.10.0",
     date: "2026-06-17",

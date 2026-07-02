@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { CheckSquare, ArrowRight, Paperclip, MessageSquare, UserPlus, Activity, Archive } from 'lucide-react'
+import { CheckSquare, ArrowRight, Paperclip, MessageSquare, UserPlus, Activity, Archive, BarChart3, List } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { APP_VERSION } from '../config/version'
 import { ChangelogModal } from '../components/ui/ChangelogModal'
+import { TeamAnalytics } from '../components/ui/TeamAnalytics'
 
 type LogEntry = {
   id: string
@@ -59,6 +60,7 @@ export function ActivityLog() {
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [changelogOpen, setChangelogOpen] = useState(false)
+  const [tab, setTab] = useState<'timeline' | 'analytics'>('timeline')
 
   async function load() {
     const { data } = await supabase
@@ -118,7 +120,27 @@ export function ActivityLog() {
           <Activity size={18} style={{ color: 'var(--text-tertiary)' }} />
         </div>
 
-        {/* KPI strip */}
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
+          {([['timeline', 'Timeline', List], ['analytics', 'Analytics', BarChart3]] as const).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '7px', cursor: 'pointer',
+                fontSize: '12px', fontWeight: 600,
+                background: tab === id ? 'var(--accent-bg)' : 'transparent',
+                border: `1px solid ${tab === id ? 'var(--accent-border)' : 'var(--border-subtle)'}`,
+                color: tab === id ? 'var(--accent)' : 'var(--text-secondary)',
+              }}
+            >
+              <Icon size={13} /> {label}
+            </button>
+          ))}
+        </div>
+
+        {/* KPI strip (timeline only) */}
+        {tab === 'timeline' && (
         <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '2px' }}>
           {[
             { label: 'Today',       value: String(todayEntries.length),  color: 'var(--accent)' },
@@ -132,9 +154,15 @@ export function ActivityLog() {
             </div>
           ))}
         </div>
+        )}
       </div>
 
-      {/* Timeline */}
+      {tab === 'analytics' ? (
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <TeamAnalytics />
+        </div>
+      ) : (
+      /* Timeline */
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -222,6 +250,7 @@ export function ActivityLog() {
           </button>
         </div>
       </div>
+      )}
 
       {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
     </div>
