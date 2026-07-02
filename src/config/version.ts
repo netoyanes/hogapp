@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.11.0"
+export const APP_VERSION = "1.12.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.12.0",
+    date: "2026-06-17",
+    type: "MINOR",
+    changes: [
+      "CRM → Calendar — deals of type EVENT now appear on the Calendar",
+      "New dedicated Event Date field on EVENT deals (create + edit)",
+      "Calendar events are pink with a 🎉 icon; click opens the deal panel inline",
+      "Header shows a monthly events count alongside tasks",
+    ]
+  },
   {
     version: "1.11.0",
     date: "2026-06-17",

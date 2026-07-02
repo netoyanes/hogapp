@@ -90,6 +90,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
   const [eValue, setEValue] = useState('')
   const [eProb, setEProb] = useState('')
   const [eCloseDate, setECloseDate] = useState('')
+  const [eEventDate, setEEventDate] = useState('')
   const [eBu, setEBu] = useState('')
   const [eContactId, setEContactId] = useState('')
   const [eDesc, setEDesc] = useState('')
@@ -105,6 +106,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
       setEValue(data.value != null ? String(data.value) : '')
       setEProb(String(data.probability))
       setECloseDate(data.close_date ?? '')
+      setEEventDate(data.event_date ?? '')
       setEBu(data.bu_id ?? '')
       setEContactId(data.contact_id ?? '')
       setEDesc(data.description ?? '')
@@ -191,6 +193,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
       value: eValue ? parseFloat(eValue) : null,
       probability: parseInt(eProb) || 50,
       close_date: eCloseDate || null,
+      event_date: eType === 'EVENT' ? (eEventDate || null) : null,
       bu_id: eBu || null,
       contact_id: eContactId || null,
       description: eDesc || null,
@@ -345,6 +348,11 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                   <EditField label="Close Date">
                     <input type="date" value={eCloseDate} onChange={e => setECloseDate(e.target.value)} style={inputStyle} />
                   </EditField>
+                  {eType === 'EVENT' && (
+                    <EditField label="📅 Event Date">
+                      <input type="date" value={eEventDate} onChange={e => setEEventDate(e.target.value)} style={inputStyle} />
+                    </EditField>
+                  )}
                   <EditField label="Business Unit">
                     <select value={eBu} onChange={e => setEBu(e.target.value)} style={inputStyle}>
                       <option value="">None</option>
