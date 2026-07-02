@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.8.0"
+export const APP_VERSION = "1.9.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.9.0",
+    date: "2026-06-17",
+    type: "MINOR",
+    changes: [
+      "Social — new team feed with a daily welcome greeting",
+      "Share links with auto-embed: YouTube (videos + shorts), Instagram (posts/reels), TikTok",
+      "Share PDFs, images and HTML — rendered inline like task proofs",
+      "Reactions on every post (👍 ❤️ 🔥); comments coming next",
+      "Accessible to all roles from sidebar, bottom nav, and the app launcher",
+    ]
+  },
   {
     version: "1.8.0",
     date: "2026-06-17",

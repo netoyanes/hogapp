@@ -17,7 +17,7 @@ export const TENANT: TenantConfig = {
   appSubtitle: 'Command Center',
   logo: { type: 'symbol' },
   enabledViews: [
-    'dashboard', 'tasks', 'crm', 'contacts', 'calendar', 'content',
+    'dashboard', 'tasks', 'crm', 'contacts', 'social', 'calendar', 'content',
     'revenue', 'reports', 'activity', 'upload', 'templates',
     'invite', 'profile',
   ],

@@ -21,9 +21,9 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, userRol
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       const views: Record<string, string> = {
-        '1': 'dashboard', '2': 'tasks', '3': 'crm', '4': 'calendar',
-        '5': 'content', '6': 'revenue', '7': 'activity', '8': 'templates',
-        '9': 'upload', '0': 'invite',
+        '1': 'dashboard', '2': 'tasks', '3': 'crm', '4': 'contacts',
+        '5': 'social', '6': 'calendar', '7': 'content', '8': 'revenue',
+        '9': 'activity', '0': 'upload',
       }
       if (views[e.key]) onNavigate(views[e.key])
     }
