@@ -84,7 +84,7 @@ export function Profile({ profile, onUpdated }: Props) {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: '✅ HOG OPS — Slack integration is working!' }),
+        body: JSON.stringify({ text: '✅ HOG APP — Slack integration is working!' }),
       })
       setSlackStatus('ok')
     } catch {

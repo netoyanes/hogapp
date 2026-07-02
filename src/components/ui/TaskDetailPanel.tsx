@@ -223,9 +223,9 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     await supabase.from('tasks').update(update).eq('id', taskId)
     setTask((t) => t ? { ...t, status, ...(status === 'APPROVED' ? { priority: 'LOW' } : {}) } : t)
     setPriority(status === 'APPROVED' ? 'LOW' : priority)
-    notifySlack(statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG OPS'))
+    notifySlack(statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG APP'))
     if (task?.assigned_to) {
-      notifyUserDM(task.assigned_to, statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG OPS', taskLink(taskId)))
+      notifyUserDM(task.assigned_to, statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG APP', taskLink(taskId)))
     }
     logActivity('status_changed', 'task', taskId, { title: task?.title ?? '', from: prev, to: status })
     notifyAdminsAndAssignee(`Status → ${status}`, task?.title ?? '', 'status_changed', taskId, task?.assigned_to ?? undefined)
@@ -256,7 +256,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     const { data: pRow } = await supabase.from('profiles').select('full_name, email').eq('id', user?.id ?? '').single()
     const uploaderName = pRow?.full_name ?? pRow?.email ?? 'Someone'
     await Promise.all(files.map(f => uploadProof(f)))
-    notifySlack(proofUploadedMessage(task?.title ?? '', buName || 'HOG OPS', uploaderName, taskLink(taskId)))
+    notifySlack(proofUploadedMessage(task?.title ?? '', buName || 'HOG APP', uploaderName, taskLink(taskId)))
     logActivity('proof_uploaded', 'task', taskId, { title: task?.title ?? '', count: files.length })
     notifyAdminsAndAssignee('Proof uploaded', task?.title ?? '', 'proof_uploaded', taskId, task?.assigned_to ?? undefined)
     setUploadingProof(false)

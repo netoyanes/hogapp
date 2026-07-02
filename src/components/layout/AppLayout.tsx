@@ -3,6 +3,7 @@ import { Sidebar } from './Sidebar'
 import { BottomNav } from './BottomNav'
 import { HomeScreen } from '../ui/HomeScreen'
 import { useIsMobile } from '../../hooks/useIsMobile'
+import { TENANT, viewTitle } from '../../config/tenant'
 
 interface Props {
   children: React.ReactNode
@@ -42,7 +43,10 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, userRol
             <div style={{ background: 'var(--accent)', borderRadius: '6px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ color: '#000', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '12px' }}>H</span>
             </div>
-            <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13px' }}>HOG OPS</span>
+            <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15, alignItems: 'flex-start' }}>
+              <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13px' }}>{TENANT.appName}</span>
+              <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '9px' }}>{viewTitle(activeView)}</span>
+            </span>
           </button>
         </div>
 

@@ -49,7 +49,7 @@ function buildHtml(task: Record<string, unknown>, buName: string, assigneeName: 
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width"/>
-  <title>HOG OPS Task</title>
+  <title>HOG APP Task</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0D0D0D;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0D0D0D;">
@@ -66,7 +66,7 @@ function buildHtml(task: Record<string, unknown>, buName: string, assigneeName: 
                     ${logoSvg}
                   </td>
                   <td style="padding-left:10px;">
-                    <span style="color:#E5E5E5;font-family:monospace;font-weight:700;font-size:13px;">HOG OPS</span>
+                    <span style="color:#E5E5E5;font-family:monospace;font-weight:700;font-size:13px;">HOG APP</span>
                   </td>
                   <td align="right" style="padding-left:20px;">
                     <span style="font-size:11px;color:#555;background:#1A1A1A;border:1px solid #2A2A2A;border-radius:4px;padding:2px 8px;font-family:monospace;">Task Notification</span>
@@ -126,7 +126,7 @@ function buildHtml(task: Record<string, unknown>, buName: string, assigneeName: 
 
         <!-- Footer -->
         <p style="margin-top:16px;font-size:11px;color:#444;font-family:monospace;text-align:center;">
-          HOG OPS Command Center · You're receiving this because a task was assigned to you.
+          HOG APP Command Center · You're receiving this because a task was assigned to you.
         </p>
 
       </td>
@@ -158,7 +158,7 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    const fromEmail = Deno.env.get('FROM_EMAIL') ?? 'HOG OPS <noreply@hogops.com>'
+    const fromEmail = Deno.env.get('FROM_EMAIL') ?? 'HOG APP <noreply@hogops.com>'
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,

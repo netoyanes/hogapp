@@ -66,7 +66,7 @@ export function dealLink(dealId: string) {
 
 // Appends a Slack-formatted "Open" link to a message, when a link is provided.
 function withLink(text: string, link?: string) {
-  return link ? `${text}\n👉 <${link}|Open in HOG OPS>` : text
+  return link ? `${text}\n👉 <${link}|Open in HOG APP>` : text
 }
 
 // ── Task messages ──────────────────────────────────────────────────────────────

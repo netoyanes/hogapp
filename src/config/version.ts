@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.6.3"
+export const APP_VERSION = "1.7.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.7.0",
+    date: "2026-06-17",
+    type: "MINOR",
+    changes: [
+      "Rebranded HOG OPS → HOG APP across the app, PWA manifest, emails, and notifications",
+      "Each sub-app now shows its own title in the sidebar and mobile top bar",
+    ]
+  },
   {
     version: "0.1.0",
     date: "2026-05-25",
