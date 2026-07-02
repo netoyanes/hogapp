@@ -279,7 +279,7 @@ export function Contacts({ userRole, userId }: Props) {
       {/* Create form */}
       {creating && (
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', flexShrink: 0 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '10px' }}>
             <Field label="Full name *">
               <input value={fName} onChange={e => setFName(e.target.value)} placeholder="Jane Doe" style={inputStyle} autoFocus />
             </Field>
@@ -330,7 +330,7 @@ export function Contacts({ userRole, userId }: Props) {
           if (isEditing) {
             return (
               <div key={contact.id} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--accent-border)', borderRadius: '10px', padding: '14px 16px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '10px' }}>
                   <Field label="Full name *">
                     <input value={fName} onChange={e => setFName(e.target.value)} style={inputStyle} autoFocus />
                   </Field>

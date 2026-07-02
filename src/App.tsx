@@ -24,6 +24,7 @@ import { SharedTask } from './screens/SharedTask'
 import { AppLogoBadge } from './components/ui/AppLogo'
 import { TaskDetailPanel } from './components/ui/TaskDetailPanel'
 import { DealOverlay } from './components/ui/DealOverlay'
+import { getViewAsRole, setViewAsRole } from './lib/viewAs'
 
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL'
@@ -45,7 +46,10 @@ export default function App() {
   if (_sharedTaskId) return <SharedTask taskId={_sharedTaskId} />
 
   const { session, profile, loading, accessDenied, signIn, signOut, refetchProfile } = useAuth()
-  const role = profile?.role ?? undefined
+  const realRole = profile?.role ?? undefined
+  // MASTER can simulate another role to test access; everyone else uses their real role
+  const viewAs = realRole === 'MASTER' ? getViewAsRole() : null
+  const role = (viewAs ?? realRole) as string | undefined
 
   const [activeView, setActiveView] = useState(() =>
     role === 'MASTER' ? 'dashboard' : 'tasks'
@@ -164,6 +168,25 @@ export default function App() {
       </AppLayout>
 
       {profile && <NotificationBell userId={profile.id} onOpenTask={openTaskOverlay} />}
+
+      {/* Role-preview banner — visible while a MASTER is simulating another role */}
+      {viewAs && (
+        <div style={{
+          position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', zIndex: 100,
+          display: 'flex', alignItems: 'center', gap: '10px',
+          background: '#F59E0B', color: '#000', borderRadius: '0 0 10px 10px',
+          padding: '6px 14px', fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font-mono)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+        }}>
+          👁 Viendo como {viewAs}
+          <button
+            onClick={() => setViewAsRole(null)}
+            style={{ background: '#000', color: '#F59E0B', border: 'none', borderRadius: '6px', padding: '3px 10px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
+          >
+            Salir
+          </button>
+        </div>
+      )}
 
       {/* Notification / deep-link overlays — render above the whole app shell */}
       {overlayTaskId && (

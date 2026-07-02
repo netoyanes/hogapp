@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.13.2"
+export const APP_VERSION = "1.14.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.14.0",
+    date: "2026-06-17",
+    type: "MINOR",
+    changes: [
+      "Role preview — MASTER can view the app as any role from Profile to test access levels; amber banner with one-click exit",
+      "Social redesigned as a true feed: centered column, card composer, edge-to-edge media, relative timestamps, bigger touch targets",
+      "Mobile: social cards go full-bleed, greeting/composer scroll with the feed for more reading space",
+      "Mobile: all create/edit forms (CRM, Directory, Objectives, Deal panel) now collapse to one column on narrow screens",
+    ]
+  },
   {
     version: "1.13.2",
     date: "2026-06-17",
