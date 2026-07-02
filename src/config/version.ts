@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.13.1"
+export const APP_VERSION = "1.13.2"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.13.2",
+    date: "2026-06-17",
+    type: "PATCH",
+    changes: [
+      "Profile — new 'My Productivity' card so every user can see their own hours",
+      "Shows weekly hours vs 40h goal, total credited hours, deals brought/closed, and actions",
+      "Warns when approved tasks are missing estimated hours (so they don't count)",
+    ]
+  },
   {
     version: "1.13.1",
     date: "2026-06-17",

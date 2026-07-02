@@ -1,7 +1,116 @@
-import { useState, useRef } from 'react'
-import { Camera, Save } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Camera, Save, Clock, DollarSign, Trophy, Activity } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Profile as ProfileType } from '../types'
+
+const WEEKLY_GOAL = 40
+
+function money(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+}
+
+// Personal productivity — same metrics as the admin Analytics, but scoped to the current user
+// so everyone can see their own hours (credited from approved tasks).
+function MyProductivity({ userId }: { userId: string }) {
+  const [weekHours, setWeekHours] = useState(0)
+  const [totalHours, setTotalHours] = useState(0)
+  const [approvedCount, setApprovedCount] = useState(0)
+  const [missingHours, setMissingHours] = useState(0)
+  const [brought, setBrought] = useState(0)
+  const [closed, setClosed] = useState(0)
+  const [actions, setActions] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
+    const [{ data: tasks }, { data: deals }, { count: actionCount }] = await Promise.all([
+      supabase.from('tasks').select('status, estimated_hours, updated_at').eq('assigned_to', userId),
+      supabase.from('crm_deals').select('created_by, closed_by, value, stage'),
+      supabase.from('activity_log').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+    ])
+    let wh = 0, th = 0, ac = 0, miss = 0
+    for (const t of tasks ?? []) {
+      if (t.status !== 'APPROVED') continue
+      ac += 1
+      const h = t.estimated_hours ?? 0
+      if (!h) miss += 1
+      th += h
+      if (t.updated_at && new Date(t.updated_at) >= weekAgo) wh += h
+    }
+    setWeekHours(wh); setTotalHours(th); setApprovedCount(ac); setMissingHours(miss)
+    let br = 0, cl = 0
+    for (const d of deals ?? []) {
+      if (d.created_by === userId) br += d.value ?? 0
+      if (d.stage === 'WON' && d.closed_by === userId) cl += d.value ?? 0
+    }
+    setBrought(br); setClosed(cl)
+    setActions(actionCount ?? 0)
+    setLoading(false)
+  }, [userId])
+
+  useEffect(() => { load() }, [load])
+
+  const goalPct = Math.min(100, Math.round((weekHours / WEEKLY_GOAL) * 100))
+  const barColor = goalPct >= 100 ? '#22C55E' : goalPct >= 50 ? 'var(--accent)' : '#EAB308'
+
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '20px' }}>
+      <div className="flex items-center gap-2 mb-4">
+        <Clock size={15} style={{ color: 'var(--accent)' }} />
+        <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600 }}>My Productivity</h3>
+      </div>
+
+      {loading ? (
+        <p style={{ color: 'var(--text-tertiary)', fontSize: '13px' }}>Loading…</p>
+      ) : (
+        <>
+          {/* Weekly hours */}
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Horas esta semana</span>
+              <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: barColor }}>{weekHours}h / {WEEKLY_GOAL}h</span>
+            </div>
+            <div style={{ height: '10px', background: 'var(--bg-base)', borderRadius: '5px', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${goalPct}%`, background: barColor, transition: 'width 0.3s' }} />
+            </div>
+            <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '6px' }}>
+              {totalHours}h totales acumuladas · {approvedCount} tareas aprobadas
+            </p>
+          </div>
+
+          {/* Metric tiles */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+            {[
+              { icon: DollarSign, color: 'var(--accent)', label: 'Brought', value: money(brought) },
+              { icon: Trophy, color: '#22C55E', label: 'Closed', value: money(closed) },
+              { icon: Activity, color: '#A855F7', label: 'Actions', value: String(actions) },
+            ].map(t => {
+              const Icon = t.icon
+              return (
+                <div key={t.label} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '8px', padding: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                    <Icon size={11} style={{ color: t.color }} />
+                    <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{t.label}</span>
+                  </div>
+                  <div style={{ color: t.color, fontFamily: 'var(--font-mono)', fontSize: '15px', fontWeight: 700, lineHeight: 1 }}>{t.value}</div>
+                </div>
+              )
+            })}
+          </div>
+
+          {missingHours > 0 && (
+            <p style={{ fontSize: '11px', color: '#EAB308', marginTop: '12px', lineHeight: 1.5 }}>
+              ⚠️ {missingHours} de tus tareas aprobadas no tienen horas estimadas — no suman a tu total. Ponles “Est. hours” al crearlas o editarlas para que cuenten.
+            </p>
+          )}
+          <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '10px', lineHeight: 1.5, fontStyle: 'italic' }}>
+            Las horas se acreditan de las horas estimadas de tus tareas una vez que se aprueban.
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
 
 interface Props {
   profile: ProfileType
@@ -167,6 +276,9 @@ export function Profile({ profile, onUpdated }: Props) {
             {uploadingAvatar && <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '10px' }}>Uploading…</p>}
             {uploadError && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '10px' }}>Upload failed: {uploadError}</p>}
           </div>
+
+          {/* My Productivity */}
+          <MyProductivity userId={profile.id} />
 
           {/* Personal info */}
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '20px' }}>
