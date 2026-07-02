@@ -12,7 +12,7 @@ export function BottomNav({ activeView, onNavigate, userRole }: Props) {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'tasks',     label: 'Tasks',     icon: CheckSquare },
     { id: 'crm',       label: 'CRM',       icon: Handshake },
-    { id: 'contacts',  label: 'Contacts',  icon: Contact2 },
+    { id: 'contacts',  label: 'Directory', icon: Contact2 },
     { id: 'calendar',  label: 'Calendar',  icon: CalendarDays },
     { id: 'content',   label: 'Content',   icon: Megaphone },
     { id: 'revenue',   label: 'Revenue',   icon: BarChart3 },

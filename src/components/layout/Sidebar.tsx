@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { id: 'dashboard',  label: 'Dashboard',    icon: LayoutDashboard, shortcut: '1', cLevelOnly: true },
   { id: 'tasks',      label: 'Tasks',        icon: CheckSquare,     shortcut: '2' },
   { id: 'crm',        label: 'CRM',          icon: Handshake,       shortcut: '3' },
-  { id: 'contacts',   label: 'Contacts',     icon: Contact2,        shortcut: '4' },
+  { id: 'contacts',   label: 'Directory',    icon: Contact2,        shortcut: '4' },
   { id: 'calendar',   label: 'Calendar',     icon: CalendarDays,    shortcut: '5' },
   { id: 'content',    label: 'Content',      icon: Megaphone,       shortcut: '6' },
   { id: 'revenue',    label: 'Revenue',      icon: BarChart3,       shortcut: '7' },

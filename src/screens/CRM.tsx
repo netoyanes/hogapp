@@ -31,6 +31,7 @@ export interface CRMDeal {
   description: string | null
   lost_reason: string | null
   created_by: string | null
+  closed_by: string | null
   created_at: string
   updated_at: string
 }

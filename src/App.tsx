@@ -111,7 +111,7 @@ export default function App() {
       case 'crm':
         return <CRM userRole={role} userId={profile?.id} />
       case 'contacts':
-        return <Contacts />
+        return <Contacts userRole={role} userId={profile?.id} />
       case 'calendar':
         return <CalendarView userRole={role} defaultBuFilter={buFilter} />
       case 'content':
