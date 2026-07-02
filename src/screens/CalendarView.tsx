@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, PartyPopper } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { TaskDetailPanel } from '../components/ui/TaskDetailPanel'
+import { DealOverlay } from '../components/ui/DealOverlay'
 import type { Task } from '../types'
+
+interface EventDeal { id: string; title: string; event_date: string | null }
+const EVENT_COLOR = '#EC4899'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -25,20 +29,32 @@ export function CalendarView({ userRole, defaultBuFilter }: Props) {
   const [buList, setBuList] = useState<{ id: string; code: string; name: string }[]>([])
   const [filterBu, setFilterBu] = useState(defaultBuFilter ?? '')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null)
+  const [eventDeals, setEventDeals] = useState<EventDeal[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [{ data: taskData }, { data: buses }] = await Promise.all([
+      const [{ data: taskData }, { data: buses }, { data: deals }] = await Promise.all([
         supabase.from('tasks').select('*').eq('archived', false).not('due_date', 'is', null),
         supabase.from('business_units').select('id, code, name').order('name'),
+        supabase.from('crm_deals').select('id, title, event_date').eq('deal_type', 'EVENT').not('event_date', 'is', null),
       ])
       setTasks(taskData ?? [])
       setBuList(buses ?? [])
+      setEventDeals((deals ?? []) as EventDeal[])
       setLoading(false)
     }
     load()
   }, [])
+
+  function eventsForDay(day: number): EventDeal[] {
+    return eventDeals.filter(e => {
+      if (!e.event_date) return false
+      const d = new Date(e.event_date + 'T00:00:00')
+      return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day
+    })
+  }
 
   const year = current.getFullYear()
   const month = current.getMonth()
@@ -123,11 +139,18 @@ export function CalendarView({ userRole, defaultBuFilter }: Props) {
               Clear
             </button>
           )}
-          <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginLeft: 'auto' }}>
-            {filtered.filter(t => {
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span>{filtered.filter(t => {
               const d = t.due_date ? new Date(t.due_date + 'T00:00:00') : null
               return d && d.getFullYear() === year && d.getMonth() === month
-            }).length} tasks this month
+            }).length} tasks</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: EVENT_COLOR }}>
+              <PartyPopper size={11} />
+              {eventDeals.filter(e => {
+                const d = e.event_date ? new Date(e.event_date + 'T00:00:00') : null
+                return d && d.getFullYear() === year && d.getMonth() === month
+              }).length} events
+            </span>
           </span>
         </div>
       </div>
@@ -149,6 +172,7 @@ export function CalendarView({ userRole, defaultBuFilter }: Props) {
             if (day === null) return <div key={`e-${i}`} style={{ minHeight: '90px' }} />
 
             const dayTasks = loading ? [] : tasksForDay(day)
+            const dayEvents = loading ? [] : eventsForDay(day)
             const visible = dayTasks.slice(0, 3)
             const overflow = dayTasks.length - 3
 
@@ -175,6 +199,36 @@ export function CalendarView({ userRole, defaultBuFilter }: Props) {
                 }}>
                   {day}
                 </span>
+
+                {/* CRM events */}
+                {dayEvents.map(ev => (
+                  <button
+                    key={ev.id}
+                    onClick={() => setSelectedDealId(ev.id)}
+                    title={`Evento: ${ev.title}`}
+                    style={{
+                      background: `${EVENT_COLOR}20`,
+                      border: `1px solid ${EVENT_COLOR}55`,
+                      borderRadius: '4px',
+                      padding: '2px 5px',
+                      fontSize: '10px',
+                      color: EVENT_COLOR,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      textOverflow: 'ellipsis',
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <PartyPopper size={10} style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.title}</span>
+                  </button>
+                ))}
 
                 {visible.map(task => (
                   <button
@@ -224,6 +278,14 @@ export function CalendarView({ userRole, defaultBuFilter }: Props) {
             supabase.from('tasks').select('*').eq('archived', false).not('due_date', 'is', null)
               .then(({ data }) => setTasks(data ?? []))
           }}
+        />
+      )}
+
+      {selectedDealId && (
+        <DealOverlay
+          dealId={selectedDealId}
+          userRole={userRole}
+          onClose={() => setSelectedDealId(null)}
         />
       )}
     </div>

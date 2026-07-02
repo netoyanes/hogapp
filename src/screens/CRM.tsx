@@ -32,6 +32,7 @@ export interface CRMDeal {
   lost_reason: string | null
   created_by: string | null
   closed_by: string | null
+  event_date: string | null
   created_at: string
   updated_at: string
 }
@@ -82,6 +83,7 @@ export function CRM({ userRole, userId }: Props) {
   const [cValue, setCValue] = useState('')
   const [cProb, setCProb] = useState('50')
   const [cCloseDate, setCCloseDate] = useState('')
+  const [cEventDate, setCEventDate] = useState('')
   const [cBu, setCBu] = useState('')
   const [cContactId, setCContactId] = useState('')
   const [cDesc, setCDesc] = useState('')
@@ -151,6 +153,7 @@ export function CRM({ userRole, userId }: Props) {
       const { data: newDeal } = await supabase.from('crm_deals').insert({
         title:       cTitle.trim(),
         deal_type:   cType,
+        event_date:  cType === 'EVENT' ? (cEventDate || null) : null,
         stage:       cStage,
         value:       cValue ? parseFloat(cValue) : null,
         probability: parseInt(cProb) || 50,
@@ -178,7 +181,7 @@ export function CRM({ userRole, userId }: Props) {
 
   function resetForm() {
     setCTitle(''); setCType('SPONSORSHIP'); setCStage('LEAD'); setCValue('')
-    setCProb('50'); setCCloseDate(''); setCBu(''); setCContactId('')
+    setCProb('50'); setCCloseDate(''); setCEventDate(''); setCBu(''); setCContactId('')
     setCDesc(''); setCContactName(''); setCContactCompany(''); setCContactEmail('')
     setNewContact(false)
   }
@@ -299,6 +302,12 @@ export function CRM({ userRole, userId }: Props) {
                   <input type="number" min={0} max={100} value={cProb} onChange={e => setCProb(e.target.value)} style={inputStyle} />
                 </Field>
               </div>
+
+              {cType === 'EVENT' && (
+                <Field label="📅 Event Date (aparece en el Calendario)">
+                  <input type="date" value={cEventDate} onChange={e => setCEventDate(e.target.value)} style={inputStyle} />
+                </Field>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <Field label="Close Date">
