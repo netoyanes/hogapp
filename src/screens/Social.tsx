@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { Link2, Video, Camera, Music2, FileText, ImageIcon, Code, Send, Upload, Trash2, ExternalLink } from 'lucide-react'
+import { Link2, Video, Camera, Music2, FileText, ImageIcon, Code, Send, Upload, Trash2, ExternalLink, X } from 'lucide-react'
 import { Avatar } from '../components/ui/Avatar'
 import { HtmlFrame } from '../components/ui/HtmlFrame'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
@@ -20,10 +20,16 @@ interface Reaction { post_id: string; user_id: string; emoji: string }
 const EMOJIS = ['👍', '❤️', '🔥']
 
 const KIND_ICON: Record<PostKind, React.ElementType> = {
-  LINK: Link2, YOUTUBE: Video, INSTAGRAM: Camera, TIKTOK: Music2, PDF: FileText, IMAGE: ImageIcon, HTML: Code,
+  TEXT: Link2, LINK: Link2, YOUTUBE: Video, INSTAGRAM: Camera, TIKTOK: Music2, PDF: FileText, IMAGE: ImageIcon, HTML: Code,
 }
 const KIND_COLOR: Record<PostKind, string> = {
-  LINK: '#6B7280', YOUTUBE: '#FF0000', INSTAGRAM: '#E4405F', TIKTOK: '#25F4EE', PDF: '#EF4444', IMAGE: '#3B82F6', HTML: '#F97316',
+  TEXT: '#6B7280', LINK: '#6B7280', YOUTUBE: '#FF0000', INSTAGRAM: '#E4405F', TIKTOK: '#25F4EE', PDF: '#EF4444', IMAGE: '#3B82F6', HTML: '#F97316',
+}
+
+const toolBtn: React.CSSProperties = {
+  background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '8px',
+  padding: '7px 12px', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '12px',
+  display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
 }
 
 interface Props {
@@ -52,11 +58,15 @@ export function Social({ profile, userId }: Props) {
   const [posts, setPosts] = useState<Post[]>([])
   const [reactions, setReactions] = useState<Reaction[]>([])
   const [authors, setAuthors] = useState<Record<string, string>>({})
-  const [url, setUrl] = useState('')
   const [caption, setCaption] = useState('')
   const [posting, setPosting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  // Pending attachment for the current draft (link or uploaded file)
+  const [attachUrl, setAttachUrl] = useState<string | null>(null)
+  const [attachKind, setAttachKind] = useState<PostKind | null>(null)
+  const [linkInput, setLinkInput] = useState('')
+  const [showLinkInput, setShowLinkInput] = useState(false)
 
   const firstName = (profile?.full_name ?? '').split(' ')[0] || 'equipo'
   // Deterministic daily message (same all day, rotates by day of month)
@@ -81,19 +91,17 @@ export function Social({ profile, userId }: Props) {
   useEffect(() => { load() }, [load])
   useAutoRefresh(load)
 
-  async function submitLink() {
-    if (!url.trim()) return
-    setPosting(true)
-    const kind = detectKind(url.trim())
-    await supabase.from('social_posts').insert({
-      author_id: userId ?? null,
-      kind,
-      url: url.trim(),
-      caption: caption.trim() || null,
-    })
-    setUrl(''); setCaption('')
-    setPosting(false)
-    await load()
+  function attachLink() {
+    const u = linkInput.trim()
+    if (!u) return
+    setAttachUrl(u)
+    setAttachKind(detectKind(u))
+    setLinkInput('')
+    setShowLinkInput(false)
+  }
+
+  function clearAttachment() {
+    setAttachUrl(null); setAttachKind(null)
   }
 
   async function uploadFile(file: File) {
@@ -104,16 +112,25 @@ export function Social({ profile, userId }: Props) {
     if (!error) {
       const { data: urlData } = supabase.storage.from('proofs').getPublicUrl(path)
       const kind: PostKind = file.type === 'application/pdf' ? 'PDF' : file.type === 'text/html' ? 'HTML' : 'IMAGE'
-      await supabase.from('social_posts').insert({
-        author_id: userId ?? null,
-        kind,
-        url: urlData.publicUrl,
-        caption: caption.trim() || file.name,
-      })
-      setCaption('')
-      await load()
+      setAttachUrl(urlData.publicUrl)
+      setAttachKind(kind)
     }
     setUploading(false)
+  }
+
+  async function publish() {
+    // Need at least a thought or an attachment
+    if (!caption.trim() && !attachUrl) return
+    setPosting(true)
+    await supabase.from('social_posts').insert({
+      author_id: userId ?? null,
+      kind: attachKind ?? 'TEXT',
+      url: attachUrl,
+      caption: caption.trim() || null,
+    })
+    setCaption(''); clearAttachment()
+    setPosting(false)
+    await load()
   }
 
   async function toggleReaction(postId: string, emoji: string) {
@@ -144,32 +161,63 @@ export function Social({ profile, userId }: Props) {
         <p style={{ color: 'var(--accent)', fontSize: '12px', marginTop: '6px', fontStyle: 'italic' }}>{dailyMsg}</p>
       </div>
 
-      {/* Composer */}
+      {/* Composer — a single thought box + attachment tools */}
       <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-surface)' }}>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input
-            value={url}
-            onChange={e => setUrl(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') submitLink() }}
-            placeholder="Pega un link — YouTube, Instagram, TikTok, artículo…"
-            style={{ flex: 1, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', color: 'var(--text-primary)', outline: 'none' }}
-          />
-          <button onClick={submitLink} disabled={posting || !url.trim()} style={{ background: url.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: url.trim() ? '#000' : 'var(--text-tertiary)', border: 'none', borderRadius: '8px', padding: '0 14px', cursor: url.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600 }}>
-            <Send size={14} /> {posting ? '…' : 'Post'}
-          </button>
-        </div>
-        <div style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
-          <input
-            value={caption}
-            onChange={e => setCaption(e.target.value)}
-            placeholder="Caption (opcional)…"
-            style={{ flex: 1, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '7px 12px', fontSize: '12px', color: 'var(--text-primary)', outline: 'none' }}
-          />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '8px', padding: '7px 12px', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
-            <Upload size={13} /> {uploading ? 'Subiendo…' : 'PDF / imagen / HTML'}
-          </button>
-          <input ref={fileRef} type="file" accept="image/*,application/pdf,.html,.htm" style={{ display: 'none' }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <Avatar name={profile?.full_name ?? 'You'} size={36} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <textarea
+              value={caption}
+              onChange={e => setCaption(e.target.value)}
+              placeholder="¿Qué estás pensando? Comparte una idea, un copy…"
+              rows={2}
+              style={{ width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '10px 12px', fontSize: '14px', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'var(--font-ui)' }}
+            />
+
+            {/* Link input (revealed) */}
+            {showLinkInput && (
+              <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                <input
+                  value={linkInput}
+                  onChange={e => setLinkInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') attachLink() }}
+                  autoFocus
+                  placeholder="Pega un link — YouTube, Instagram, TikTok, artículo…"
+                  style={{ flex: 1, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '7px 10px', fontSize: '12px', color: 'var(--text-primary)', outline: 'none' }}
+                />
+                <button onClick={attachLink} disabled={!linkInput.trim()} style={{ background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '8px', padding: '0 12px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Añadir</button>
+              </div>
+            )}
+
+            {/* Pending attachment preview */}
+            {attachUrl && attachKind && (
+              <div style={{ marginTop: '8px', border: '1px solid var(--border-subtle)', borderRadius: '10px', overflow: 'hidden', position: 'relative' }}>
+                <button onClick={clearAttachment} title="Quitar" style={{ position: 'absolute', top: '6px', right: '6px', zIndex: 2, background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', padding: '3px', display: 'flex' }}>
+                  <X size={13} />
+                </button>
+                <PostMedia post={{ id: 'draft', author_id: null, kind: attachKind, url: attachUrl, caption: null, created_at: '' }} />
+              </div>
+            )}
+
+            {/* Toolbar */}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
+              <button onClick={() => setShowLinkInput(v => !v)} style={toolBtn}>
+                <Link2 size={14} /> Link
+              </button>
+              <button onClick={() => fileRef.current?.click()} disabled={uploading} style={toolBtn}>
+                <Upload size={14} /> {uploading ? 'Subiendo…' : 'Archivo'}
+              </button>
+              <input ref={fileRef} type="file" accept="image/*,application/pdf,.html,.htm" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
+              <button
+                onClick={publish}
+                disabled={posting || (!caption.trim() && !attachUrl)}
+                style={{ marginLeft: 'auto', background: (caption.trim() || attachUrl) ? 'var(--accent)' : 'var(--bg-elevated)', color: (caption.trim() || attachUrl) ? '#000' : 'var(--text-tertiary)', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: (caption.trim() || attachUrl) ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600 }}
+              >
+                <Send size={14} /> {posting ? '…' : 'Publicar'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -196,9 +244,11 @@ export function Social({ profile, userId }: Props) {
                     {new Date(post.created_at).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontFamily: 'var(--font-mono)', color, background: `${color}18`, border: `1px solid ${color}40`, borderRadius: '4px', padding: '2px 6px' }}>
-                  <Icon size={11} /> {post.kind}
-                </span>
+                {post.kind !== 'TEXT' && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontFamily: 'var(--font-mono)', color, background: `${color}18`, border: `1px solid ${color}40`, borderRadius: '4px', padding: '2px 6px' }}>
+                    <Icon size={11} /> {post.kind}
+                  </span>
+                )}
                 {(post.author_id === userId) && (
                   <button onClick={() => deletePost(post.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', padding: '2px' }} title="Eliminar">
                     <Trash2 size={13} />
@@ -206,13 +256,13 @@ export function Social({ profile, userId }: Props) {
                 )}
               </div>
 
-              {/* Caption */}
+              {/* Thought / copy — the main content */}
               {post.caption && (
-                <p style={{ padding: '0 14px 10px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>{post.caption}</p>
+                <p style={{ padding: '0 14px 12px', fontSize: '15px', color: 'var(--text-primary)', lineHeight: 1.55, margin: 0, whiteSpace: 'pre-wrap' }}>{post.caption}</p>
               )}
 
-              {/* Embed / media */}
-              {post.url && <PostMedia post={post} />}
+              {/* Attachment */}
+              {post.url && post.kind !== 'TEXT' && <PostMedia post={post} />}
 
               {/* Reactions */}
               <div style={{ display: 'flex', gap: '6px', padding: '10px 14px', borderTop: '1px solid var(--border-subtle)' }}>
@@ -249,6 +299,8 @@ function PostMedia({ post }: { post: Post }) {
   const frameStyle: React.CSSProperties = { width: '100%', border: 'none', display: 'block', background: '#000' }
 
   switch (post.kind) {
+    case 'TEXT':
+      return null
     case 'YOUTUBE': {
       const src = youtubeEmbed(url)
       return src ? <iframe src={src} title="YouTube" style={{ ...frameStyle, aspectRatio: '16/9' }} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : <LinkCard url={url} />
