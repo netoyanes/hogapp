@@ -24,7 +24,10 @@ import { SharedTask } from './screens/SharedTask'
 import { AppLogoBadge } from './components/ui/AppLogo'
 import { TaskDetailPanel } from './components/ui/TaskDetailPanel'
 import { DealOverlay } from './components/ui/DealOverlay'
+import { CommandPalette } from './components/v2/CommandPalette'
+import { navItemsForRole } from './components/layout/Sidebar'
 import { getViewAsRole, setViewAsRole } from './lib/viewAs'
+import { useEffect } from 'react'
 
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL'
@@ -61,10 +64,23 @@ export default function App() {
   // current screen so you keep working where you were.
   const [overlayTaskId, setOverlayTaskId] = useState<string | null>(() => _params.get('task'))
   const [overlayDealId, setOverlayDealId] = useState<string | null>(() => _params.get('deal'))
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
   function openTaskOverlay(taskId: string) { setOverlayTaskId(taskId) }
   function closeTaskOverlay() { setOverlayTaskId(null); stripUrlParam('task') }
   function closeDealOverlay() { setOverlayDealId(null); stripUrlParam('deal') }
+
+  // ⌘K / Ctrl+K opens the command palette
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen(v => !v)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   function goToTasksForBU(buId: string) {
     setBuFilter(buId)
@@ -154,6 +170,8 @@ export default function App() {
         activeView={activeView}
         onNavigate={handleNavigate}
         onSignOut={signOut}
+        onOpenPalette={() => setPaletteOpen(true)}
+        bell={profile ? <NotificationBell userId={profile.id} onOpenTask={openTaskOverlay} /> : undefined}
         userRole={role}
       >
         {renderView()}
@@ -167,7 +185,20 @@ export default function App() {
         )}
       </AppLayout>
 
-      {profile && <NotificationBell userId={profile.id} onOpenTask={openTaskOverlay} />}
+      {/* Command palette — ⌘K: navigate, search tasks/deals/contacts, quick actions */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        navItems={navItemsForRole(role).map(i => ({ id: i.id, label: i.label }))}
+        onNavigate={handleNavigate}
+        onOpenTask={openTaskOverlay}
+        onOpenDeal={(id) => setOverlayDealId(id)}
+        onCreateTask={() => {
+          handleNavigate('tasks')
+          // TaskBoard listens for this and opens its create modal
+          setTimeout(() => window.dispatchEvent(new CustomEvent('hog:create-task')), 120)
+        }}
+      />
 
       {/* Role-preview banner — visible while a MASTER is simulating another role */}
       {viewAs && (

@@ -15,21 +15,21 @@ interface App {
 }
 
 const APPS: App[] = [
-  { id: 'dashboard',  label: 'Dashboard',     icon: LayoutDashboard, color: '#39FF14' },
-  { id: 'tasks',      label: 'Tasks',         icon: CheckSquare,     color: '#3B82F6' },
-  { id: 'crm',        label: 'CRM',           icon: Handshake,       color: '#EC4899' },
-  { id: 'contacts',   label: 'Directory',     icon: Contact2,        color: '#0EA5E9' },
-  { id: 'social',     label: 'Social',        icon: Sparkles,        color: '#A855F7' },
-  { id: 'objectives', label: 'Objectives',    icon: Target,          color: '#22C55E' },
-  { id: 'calendar',   label: 'Calendar',      icon: CalendarDays,    color: '#8B5CF6' },
-  { id: 'content',    label: 'Content',       icon: Megaphone,       color: '#F97316' },
-  { id: 'revenue',    label: 'Revenue',       icon: BarChart3,       color: '#22C55E' },
-  { id: 'activity',   label: 'Activity Log',  icon: Activity,        color: '#F59E0B' },
-  { id: 'templates',  label: 'Templates',     icon: LayoutTemplate,  color: '#6366F1' },
-  { id: 'upload',     label: 'CSV Upload',    icon: Upload,          color: '#6B7280' },
-  { id: 'invite',     label: 'Invite Users',  icon: UserPlus,        color: '#14B8A6' },
-  { id: 'reports',    label: 'Reports',       icon: FileText,        color: '#0EA5E9' },
-  { id: 'profile',    label: 'Profile',       icon: UserCircle,      color: '#64748B' },
+  { id: 'dashboard',  label: 'Dashboard',   icon: LayoutDashboard, color: '#E8A33D' },
+  { id: 'tasks',      label: 'Tareas',      icon: CheckSquare,     color: '#7FA3C2' },
+  { id: 'crm',        label: 'CRM',         icon: Handshake,       color: '#D98C9F' },
+  { id: 'contacts',   label: 'Directorio',  icon: Contact2,        color: '#6FA8A0' },
+  { id: 'social',     label: 'Social',      icon: Sparkles,        color: '#B08BC9' },
+  { id: 'objectives', label: 'Objetivos',   icon: Target,          color: '#5FBF7A' },
+  { id: 'calendar',   label: 'Calendario',  icon: CalendarDays,    color: '#A79BC8' },
+  { id: 'content',    label: 'Contenido',   icon: Megaphone,       color: '#DB9A6A' },
+  { id: 'revenue',    label: 'Ingresos',    icon: BarChart3,       color: '#8FBF9F' },
+  { id: 'activity',   label: 'Actividad',   icon: Activity,        color: '#C9A76B' },
+  { id: 'templates',  label: 'Plantillas',  icon: LayoutTemplate,  color: '#9BA3C9' },
+  { id: 'upload',     label: 'Carga CSV',   icon: Upload,          color: '#9C9488' },
+  { id: 'invite',     label: 'Usuarios',    icon: UserPlus,        color: '#7FB8AD' },
+  { id: 'reports',    label: 'Reportes',    icon: FileText,        color: '#8CA8C4' },
+  { id: 'profile',    label: 'Perfil',      icon: UserCircle,      color: '#A89F92' },
 ]
 
 interface Props {
