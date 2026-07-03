@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { UserPlus, Copy, Check, Trash2, Users, ShieldCheck, Save } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
+import { BUChip } from '../components/v2'
 import type { UserRole } from '../types'
 type InviteRole = 'C_LEVEL' | 'OPS_MANAGER' | 'MARKETING' | 'TEAM'
 
@@ -67,6 +68,9 @@ export function InviteUsers() {
   const [savedSlackIds, setSavedSlackIds] = useState<Record<string, string>>({})
   const [savingSlackId, setSavingSlackId] = useState<string | null>(null)
   const [savedConfirm, setSavedConfirm] = useState<string | null>(null)
+  // Asignación de venues (controla el alcance de Reservas/visitas para Ops y Team)
+  const [buList, setBuList] = useState<{ id: string; code: string; name: string }[]>([])
+  const [userVenues, setUserVenues] = useState<Record<string, string[]>>({})
 
   useEffect(() => {
     loadAll()
@@ -74,10 +78,16 @@ export function InviteUsers() {
   }, [])
 
   async function loadAll() {
-    const [{ data: inv }, { data: mem }] = await Promise.all([
+    const [{ data: inv }, { data: mem }, { data: buses }, { data: uv }] = await Promise.all([
       supabase.from('invitations').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('id, full_name, last_name, email, role, slack_user_id, created_at').order('created_at', { ascending: true }),
+      supabase.from('business_units').select('id, code, name').order('code'),
+      supabase.from('user_venues').select('user_id, bu_id'),
     ])
+    setBuList(buses ?? [])
+    const vm: Record<string, string[]> = {}
+    for (const r of uv ?? []) { (vm[r.user_id] = vm[r.user_id] ?? []).push(r.bu_id) }
+    setUserVenues(vm)
     setInvitations(inv ?? [])
     if (mem) {
       setMembers(mem)
@@ -104,6 +114,30 @@ export function InviteUsers() {
     } else {
       setMemberError(`Could not save Slack ID: ${error.message}`)
     }
+  }
+
+  async function addVenue(userId: string, buId: string, memberName: string) {
+    setUserVenues(prev => ({ ...prev, [userId]: [...(prev[userId] ?? []), buId] }))
+    const { error } = await supabase.from('user_venues').insert({ user_id: userId, bu_id: buId })
+    if (error) {
+      setMemberError(`No se pudo asignar el venue: ${error.message}`)
+      await loadAll()
+      return
+    }
+    const code = buList.find(b => b.id === buId)?.code
+    logActivity('venue_assigned', 'user', userId, { member: memberName, bu: code })
+  }
+
+  async function removeVenue(userId: string, buId: string, memberName: string) {
+    setUserVenues(prev => ({ ...prev, [userId]: (prev[userId] ?? []).filter(id => id !== buId) }))
+    const { error } = await supabase.from('user_venues').delete().eq('user_id', userId).eq('bu_id', buId)
+    if (error) {
+      setMemberError(`No se pudo quitar el venue: ${error.message}`)
+      await loadAll()
+      return
+    }
+    const code = buList.find(b => b.id === buId)?.code
+    logActivity('venue_unassigned', 'user', userId, { member: memberName, bu: code })
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -354,6 +388,44 @@ export function InviteUsers() {
                             </div>
                           )
                         })()}
+
+                        {/* Venues asignados — controla el alcance de Reservas/visitas (Ops/Team).
+                            Sin asignación = acceso a todos los venues (bootstrap). */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '5px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>VENUES</span>
+                          {(userVenues[m.id] ?? []).length === 0 ? (
+                            <span title="Sin asignación específica: este usuario ve todos los venues" style={{ fontSize: '9px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontStyle: 'italic' }}>
+                              todos
+                            </span>
+                          ) : (
+                            (userVenues[m.id] ?? []).map(buId => {
+                              const bu = buList.find(b => b.id === buId)
+                              if (!bu) return null
+                              return (
+                                <span key={buId} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                  <BUChip code={bu.code} size="sm" />
+                                  <button
+                                    onClick={() => removeVenue(m.id, buId, displayName(m))}
+                                    title={`Quitar ${bu.code}`}
+                                    style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '11px', padding: '0 2px', lineHeight: 1 }}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              )
+                            })
+                          )}
+                          <select
+                            value=""
+                            onChange={e => { if (e.target.value) { addVenue(m.id, e.target.value, displayName(m)); (e.target as HTMLSelectElement).value = '' } }}
+                            style={{ background: 'transparent', border: '1px dashed var(--border-default)', borderRadius: '4px', color: 'var(--text-tertiary)', fontSize: '9px', fontFamily: 'var(--font-mono)', padding: '1px 4px', outline: 'none', cursor: 'pointer', maxWidth: '90px' }}
+                          >
+                            <option value="">+ venue</option>
+                            {buList
+                              .filter(b => !(userVenues[m.id] ?? []).includes(b.id))
+                              .map(b => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
+                          </select>
+                        </div>
                       </div>
 
                       {/* Joined */}

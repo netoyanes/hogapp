@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.11.0"
+export const APP_VERSION = "2.12.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.12.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "Usuarios — asignación de venues por usuario (chips con monograma + selector)",
+      "Controla qué venues ve cada Ops/Team en Reservas; sin asignación = todos (se indica)",
+      "Asignar/quitar venue queda auditado en Actividad",
+    ]
+  },
   {
     version: "2.11.0",
     date: "2026-06-18",
