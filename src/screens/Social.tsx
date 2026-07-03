@@ -165,6 +165,10 @@ export function Social({ profile, userId }: Props) {
   }
 
   const canPublish = !!(caption.trim() || attachUrl)
+  // X/Twitter pattern: single-line input that expands on focus; stays expanded
+  // while there's a draft (text, attachment or link input) so blur never eats it
+  const [composerFocused, setComposerFocused] = useState(false)
+  const composerExpanded = composerFocused || !!caption.trim() || !!attachUrl || showLinkInput
 
   return (
     // Single scroll container — greeting + composer scroll away with the feed,
@@ -190,10 +194,10 @@ export function Social({ profile, userId }: Props) {
                 value={caption}
                 onChange={e => setCaption(e.target.value)}
                 placeholder="¿Qué estás pensando? Comparte una idea, un copy…"
-                rows={isMobile ? 2 : 2}
-                style={{ width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '11px 13px', fontSize: '15px', color: 'var(--text-primary)', outline: 'none', resize: 'none', boxSizing: 'border-box', fontFamily: 'var(--font-ui)', lineHeight: 1.5 }}
-                onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
-                onBlur={e => (e.target.style.borderColor = 'var(--border-subtle)')}
+                rows={composerExpanded ? 3 : 1}
+                style={{ width: '100%', background: 'var(--bg-base)', border: `1px solid ${composerFocused ? 'var(--accent)' : 'var(--border-subtle)'}`, borderRadius: '12px', padding: '11px 13px', fontSize: '15px', color: 'var(--text-primary)', outline: 'none', resize: 'none', boxSizing: 'border-box', fontFamily: 'var(--font-ui)', lineHeight: 1.5, transition: 'var(--motion-fast)' }}
+                onFocus={() => setComposerFocused(true)}
+                onBlur={() => setComposerFocused(false)}
               />
 
               {/* Link input (revealed) */}
@@ -221,7 +225,8 @@ export function Social({ profile, userId }: Props) {
                 </div>
               )}
 
-              {/* Toolbar */}
+              {/* Toolbar — appears when the composer is active (X pattern) */}
+              {composerExpanded && (
               <div style={{ display: 'flex', gap: '6px', marginTop: '10px', alignItems: 'center' }}>
                 <button onClick={() => setShowLinkInput(v => !v)} title="Adjuntar link" style={{ ...toolBtn, minHeight: '38px', borderRadius: '999px', background: showLinkInput ? 'var(--accent-bg)' : 'var(--bg-elevated)', borderColor: showLinkInput ? 'var(--accent-border)' : 'var(--border-default)', color: showLinkInput ? 'var(--accent)' : 'var(--text-secondary)' }}>
                   <Link2 size={15} /> {!isMobile && 'Link'}
@@ -239,6 +244,7 @@ export function Social({ profile, userId }: Props) {
                   <Send size={14} /> {posting ? '…' : 'Publicar'}
                 </button>
               </div>
+              )}
             </div>
           </div>
         </div>
@@ -297,7 +303,7 @@ export function Social({ profile, userId }: Props) {
                       onClick={() => toggleReaction(post.id, emoji)}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                        minHeight: '36px', padding: '0 14px', borderRadius: '999px', cursor: 'pointer',
+                        minHeight: 'var(--touch-target)', padding: '0 14px', borderRadius: '999px', cursor: 'pointer',
                         background: mine ? 'var(--accent-bg)' : 'transparent',
                         border: `1px solid ${mine ? 'var(--accent-border)' : 'var(--border-subtle)'}`,
                         fontSize: '15px', color: 'var(--text-secondary)',

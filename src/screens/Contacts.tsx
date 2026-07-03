@@ -3,15 +3,16 @@ import { supabase } from '../lib/supabase'
 import { Plus, Search, Phone, Mail, Building2, Edit2, Check, X, Archive, ArchiveRestore, Trash2, ShieldCheck } from 'lucide-react'
 import { Avatar } from '../components/ui/Avatar'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 // ── Contact types ────────────────────────────────────────────────────────────
 const CONTACT_TYPES = [
-  { id: 'VENUE_CLIENT', label: 'Venue Client', color: '#22C55E' },
-  { id: 'SPONSOR',      label: 'Sponsor',      color: '#EC4899' },
-  { id: 'PARTNER',      label: 'Partner',      color: '#3B82F6' },
-  { id: 'VENDOR',       label: 'Vendor',       color: '#F97316' },
-  { id: 'PROSPECT',     label: 'Prospect',     color: '#EAB308' },
-  { id: 'OTHER',        label: 'Other',        color: '#6B7280' },
+  { id: 'VENUE_CLIENT', label: 'Cliente venue', color: '#22C55E' },
+  { id: 'SPONSOR',      label: 'Patrocinador',      color: '#EC4899' },
+  { id: 'PARTNER',      label: 'Socio',      color: '#3B82F6' },
+  { id: 'VENDOR',       label: 'Proveedor',       color: '#F97316' },
+  { id: 'PROSPECT',     label: 'Prospecto',     color: '#EAB308' },
+  { id: 'OTHER',        label: 'Otro',        color: '#6B7280' },
 ] as const
 
 const TYPE_COLOR: Record<string, string> = Object.fromEntries(CONTACT_TYPES.map(t => [t.id, t.color]))
@@ -77,6 +78,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export function Contacts({ userRole, userId }: Props) {
+  const isMobile = useIsMobile()
   const isMaster = userRole === 'MASTER'
   // Only entry-level TEAM is restricted to venue clients; everyone else sees all.
   const restrictedToVenue = userRole === 'TEAM'
@@ -219,8 +221,8 @@ export function Contacts({ userRole, userId }: Props) {
 
   // Filter chips available to this user
   const availableTypes = restrictedToVenue
-    ? [{ id: 'VENUE_CLIENT', label: 'Venue Client', color: '#22C55E' }]
-    : [{ id: 'ALL', label: 'All', color: 'var(--accent)' }, ...CONTACT_TYPES, { id: 'HOG_INTERNAL', label: 'HOG Team', color: HOG_COLOR }]
+    ? [{ id: 'VENUE_CLIENT', label: 'Cliente venue', color: '#22C55E' }]
+    : [{ id: 'ALL', label: 'Todos', color: 'var(--accent)' }, ...CONTACT_TYPES, { id: 'HOG_INTERNAL', label: 'Equipo HOG', color: HOG_COLOR }]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -231,26 +233,26 @@ export function Contacts({ userRole, userId }: Props) {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search directory…"
+            placeholder="Buscar en el directorio…"
             style={{ ...inputStyle, paddingLeft: '30px' }}
           />
         </div>
         <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-          {totalShown} entries
+          {totalShown} registros
         </span>
         {isMaster && (
           <button
             onClick={() => setShowArchived(v => !v)}
             style={{ padding: '6px 10px', background: showArchived ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${showArchived ? 'var(--accent-border)' : 'var(--border-subtle)'}`, color: showArchived ? 'var(--accent)' : 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', whiteSpace: 'nowrap' }}
           >
-            {showArchived ? 'Hide archived' : 'Show archived'}
+            {showArchived ? 'Ocultar archivados' : 'Ver archivados'}
           </button>
         )}
         <button
           onClick={startCreate}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap' }}
         >
-          <Plus size={14} /> New Contact
+          <Plus size={14} /> Crear contacto
         </button>
       </div>
 
@@ -280,76 +282,79 @@ export function Contacts({ userRole, userId }: Props) {
       {creating && (
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', flexShrink: 0 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '10px' }}>
-            <Field label="Full name *">
+            <Field label="Nombre completo *">
               <input value={fName} onChange={e => setFName(e.target.value)} placeholder="Jane Doe" style={inputStyle} autoFocus />
             </Field>
-            <Field label="Type">
+            <Field label="Tipo">
               <select value={fType} onChange={e => setFType(e.target.value)} style={inputStyle} disabled={restrictedToVenue}>
                 {(restrictedToVenue ? CONTACT_TYPES.filter(t => t.id === 'VENUE_CLIENT') : CONTACT_TYPES).map(t => (
                   <option key={t.id} value={t.id}>{t.label}</option>
                 ))}
               </select>
             </Field>
-            <Field label="Company">
+            <Field label="Empresa">
               <input value={fCompany} onChange={e => setFCompany(e.target.value)} placeholder="Acme Inc." style={inputStyle} />
             </Field>
-            <Field label="Email">
+            <Field label="Correo">
               <input type="email" value={fEmail} onChange={e => setFEmail(e.target.value)} placeholder="jane@example.com" style={inputStyle} />
             </Field>
-            <Field label="Phone">
+            <Field label="Teléfono">
               <input value={fPhone} onChange={e => setFPhone(e.target.value)} placeholder="+1 555 000 0000" style={inputStyle} />
             </Field>
           </div>
-          <Field label="Notes">
-            <textarea value={fNotes} onChange={e => setFNotes(e.target.value)} rows={2} placeholder="Context about this contact…" style={{ ...inputStyle, resize: 'vertical' }} />
+          <Field label="Notas">
+            <textarea value={fNotes} onChange={e => setFNotes(e.target.value)} rows={2} placeholder="Contexto sobre este contacto…" style={{ ...inputStyle, resize: 'vertical' }} />
           </Field>
           <div style={{ display: 'flex', gap: '8px', marginTop: '10px', justifyContent: 'flex-end' }}>
-            <button onClick={() => { setCreating(false); resetForm() }} style={{ padding: '6px 14px', background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>Cancel</button>
+            <button onClick={() => { setCreating(false); resetForm() }} style={{ padding: '6px 14px', background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>Cancelar</button>
             <button onClick={saveCreate} disabled={saving || !fName.trim()} style={{ padding: '6px 14px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, opacity: saving ? 0.6 : 1 }}>
-              {saving ? 'Saving…' : 'Add Contact'}
+              {saving ? 'Guardando…' : 'Agregar contacto'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Directory list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {/* Directory list (+ alphabet fast-scroll rail on mobile) */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 34px 12px 16px' : '12px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {totalShown === 0 && (
           <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '13px', paddingTop: '48px' }}>
-            {search ? 'No entries match your search.' : 'No entries yet.'}
+            {search ? 'Nada coincide con tu búsqueda.' : 'Aún no hay registros.'}
           </div>
         )}
 
         {/* External contacts */}
-        {visibleContacts.map(contact => {
+        {visibleContacts.map((contact, idx) => {
           const dealCount = dealCounts[contact.id] ?? 0
           const isEditing = editingId === contact.id
           const typeColor = TYPE_COLOR[contact.contact_type ?? 'OTHER'] ?? '#6B7280'
           const finderName = contact.created_by ? finders[contact.created_by] : null
+          const letter = (contact.full_name[0] ?? '#').toUpperCase()
+          const isFirstOfLetter = idx === 0 || (visibleContacts[idx - 1].full_name[0] ?? '#').toUpperCase() !== letter
 
           if (isEditing) {
             return (
               <div key={contact.id} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--accent-border)', borderRadius: '10px', padding: '14px 16px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '10px' }}>
-                  <Field label="Full name *">
+                  <Field label="Nombre completo *">
                     <input value={fName} onChange={e => setFName(e.target.value)} style={inputStyle} autoFocus />
                   </Field>
-                  <Field label="Type">
+                  <Field label="Tipo">
                     <select value={fType} onChange={e => setFType(e.target.value)} style={inputStyle}>
                       {CONTACT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                     </select>
                   </Field>
-                  <Field label="Company">
+                  <Field label="Empresa">
                     <input value={fCompany} onChange={e => setFCompany(e.target.value)} style={inputStyle} />
                   </Field>
-                  <Field label="Email">
+                  <Field label="Correo">
                     <input type="email" value={fEmail} onChange={e => setFEmail(e.target.value)} style={inputStyle} />
                   </Field>
-                  <Field label="Phone">
+                  <Field label="Teléfono">
                     <input value={fPhone} onChange={e => setFPhone(e.target.value)} style={inputStyle} />
                   </Field>
                 </div>
-                <Field label="Notes">
+                <Field label="Notas">
                   <textarea value={fNotes} onChange={e => setFNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
                 </Field>
                 <div style={{ display: 'flex', gap: '8px', marginTop: '10px', justifyContent: 'flex-end' }}>
@@ -357,7 +362,7 @@ export function Contacts({ userRole, userId }: Props) {
                     <X size={12} /> Cancel
                   </button>
                   <button onClick={() => saveEdit(contact.id)} disabled={saving || !fName.trim()} style={{ padding: '5px 12px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', opacity: saving ? 0.6 : 1 }}>
-                    <Check size={12} /> Save
+                    <Check size={12} /> Guardar
                   </button>
                 </div>
               </div>
@@ -367,7 +372,8 @@ export function Contacts({ userRole, userId }: Props) {
           return (
             <div
               key={contact.id}
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: '12px', opacity: contact.archived ? 0.55 : 1 }}
+              id={isFirstOfLetter ? `dir-${letter}` : undefined}
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: '12px', opacity: contact.archived ? 0.55 : 1, scrollMarginTop: '8px' }}
             >
               <Avatar name={contact.full_name} size={38} />
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -415,7 +421,7 @@ export function Contacts({ userRole, userId }: Props) {
                 <button
                   onClick={() => startEdit(contact)}
                   style={{ background: 'none', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '5px', cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center' }}
-                  title="Edit contact"
+                  title="Editar contacto"
                 >
                   <Edit2 size={13} />
                 </button>
@@ -424,20 +430,20 @@ export function Contacts({ userRole, userId }: Props) {
                     <button
                       onClick={() => setArchived(contact.id, !contact.archived)}
                       style={{ background: 'none', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '5px', cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center' }}
-                      title={contact.archived ? 'Restore' : 'Archive'}
+                      title={contact.archived ? 'Restaurar' : 'Archivar'}
                     >
                       {contact.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
                     </button>
                     {confirmDelete === contact.id ? (
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        <button onClick={() => deleteContact(contact.id)} style={{ background: '#EF4444', border: 'none', borderRadius: '6px', color: '#fff', fontSize: '11px', padding: '5px 8px', cursor: 'pointer' }}>Delete</button>
+                        <button onClick={() => deleteContact(contact.id)} style={{ background: '#EF4444', border: 'none', borderRadius: '6px', color: '#fff', fontSize: '11px', padding: '5px 8px', cursor: 'pointer' }}>Eliminar</button>
                         <button onClick={() => setConfirmDelete(null)} style={{ background: 'none', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: 'var(--text-tertiary)', fontSize: '11px', padding: '5px 8px', cursor: 'pointer' }}>No</button>
                       </div>
                     ) : (
                       <button
                         onClick={() => setConfirmDelete(contact.id)}
                         style={{ background: 'none', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '5px', cursor: 'pointer', color: '#EF4444', display: 'flex', alignItems: 'center' }}
-                        title="Delete contact"
+                        title="Eliminar contacto"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -454,7 +460,7 @@ export function Contacts({ userRole, userId }: Props) {
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '12px 0 2px' }}>
               <ShieldCheck size={12} style={{ color: HOG_COLOR }} />
-              <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', fontWeight: 600 }}>HOG TEAM · {visibleHog.length}</span>
+              <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', fontWeight: 600 }}>EQUIPO HOG · {visibleHog.length}</span>
               <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
             </div>
             {visibleHog.map(m => (
@@ -475,6 +481,22 @@ export function Contacts({ userRole, userId }: Props) {
             ))}
           </>
         )}
+      </div>
+
+      {/* Alphabet fast-scroll rail (mobile) */}
+      {isMobile && visibleContacts.length > 8 && (
+        <div style={{ position: 'absolute', right: 2, top: 8, bottom: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 0, zIndex: 5 }}>
+          {[...new Set(visibleContacts.map(c => (c.full_name[0] ?? '#').toUpperCase()))].map(letter => (
+            <button
+              key={letter}
+              onClick={() => document.getElementById(`dir-${letter}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, padding: '1px 8px', lineHeight: 1.4 }}
+            >
+              {letter}
+            </button>
+          ))}
+        </div>
+      )}
       </div>
     </div>
   )

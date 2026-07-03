@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.2.0"
+export const APP_VERSION = "2.3.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.3.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "Social v2 — el composer es una sola línea que se expande al enfocarlo (patrón X/Twitter)",
+      "Reacciones con área táctil de 44px+",
+      "Directorio v2 — riel alfabético de scroll rápido en móvil",
+      "Tipos de contacto en español (Cliente venue, Patrocinador, Socio, Proveedor, Prospecto)",
+      "Directorio completo en español",
+    ]
+  },
   {
     version: "2.2.0",
     date: "2026-06-18",
