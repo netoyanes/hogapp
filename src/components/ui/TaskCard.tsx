@@ -1,57 +1,60 @@
-import { Lock } from 'lucide-react'
-import { PriorityDot } from './PriorityDot'
+import { Lock, Paperclip } from 'lucide-react'
+import { Avatar } from './Avatar'
+import { BUChip, PriorityEdge } from '../v2'
 import type { Task } from '../../types'
 
 interface Props {
   task: Task
-  buName?: string
+  buName?: string          // BU code (monogram source)
   assigneeName?: string
+  proofCount?: number
   onClick?: () => void
 }
 
-export function TaskCard({ task, buName, assigneeName, onClick }: Props) {
+// v2 card — compressed: title, assignee avatar, BU chip, due date;
+// priority as a thin left edge bar, evidence as a paperclip count.
+export function TaskCard({ task, buName, assigneeName, proofCount = 0, onClick }: Props) {
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'APPROVED'
 
   return (
     <div
       onClick={onClick}
-      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '8px', padding: '12px', cursor: 'pointer' }}
-      className="hover:border-[var(--border-strong)] transition-colors"
+      style={{
+        position: 'relative',
+        background: 'var(--bg-elevated)',
+        borderRadius: 'var(--radius-sm)',
+        padding: '10px 12px 10px 15px',
+        cursor: 'pointer',
+      }}
+      className="hover:brightness-110 transition-[filter]"
     >
-      {/* Top row */}
-      <div className="flex items-start gap-2 mb-2">
-        <PriorityDot priority={task.priority} />
-        <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, lineHeight: '1.4', flex: 1 }}>
+      <PriorityEdge priority={task.priority} />
+
+      {/* Title */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '8px' }}>
+        <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, lineHeight: 1.4, flex: 1, minWidth: 0 }}>
           {task.title}
         </span>
-        {task.is_private && <Lock size={10} style={{ color: 'var(--text-tertiary)', flexShrink: 0, marginTop: '3px' }} />}
+        {task.is_private && <Lock size={10} style={{ color: 'var(--text-tertiary)', flexShrink: 0, marginTop: 3 }} />}
       </div>
 
-      {/* BU + Type */}
-      <div className="flex items-center gap-2 mb-2">
-        {buName && (
-          <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '10px', background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '4px' }}>
-            {buName}
+      {/* Footer: avatar · BU chip · clip count · due date */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {assigneeName
+          ? <Avatar name={assigneeName} size={20} />
+          : <span style={{ width: 20, height: 20, borderRadius: '50%', border: '1px dashed var(--border-strong)', flexShrink: 0 }} title="Sin asignar" />}
+        {buName && <BUChip code={buName} size="sm" />}
+        {(proofCount > 0 || task.proof_required) && (
+          <span title={task.proof_required && proofCount === 0 ? 'Requiere evidencia' : `${proofCount} evidencias`}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: proofCount > 0 ? 'var(--text-secondary)' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
+            <Paperclip size={11} />{proofCount > 0 ? proofCount : ''}
           </span>
         )}
-        <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>{task.type}</span>
-      </div>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between">
-        <span style={{ color: assigneeName ? 'var(--text-secondary)' : 'var(--text-tertiary)', fontSize: '11px' }}>
-          {assigneeName ?? 'Unassigned'}
-        </span>
-        <div className="flex items-center gap-2">
-          {task.proof_required && (
-            <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>📎</span>
-          )}
-          {task.due_date && (
-            <span style={{ color: isOverdue ? '#EF4444' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '10px' }}>
-              {new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </span>
-          )}
-        </div>
+        {task.due_date && (
+          <span className="num" style={{ marginLeft: 'auto', color: isOverdue ? 'var(--status-risk)' : 'var(--text-tertiary)', fontSize: 10, fontWeight: isOverdue ? 700 : 400 }}>
+            {new Date(task.due_date + 'T00:00:00').toLocaleDateString('es-MX', { month: 'short', day: 'numeric' })}
+          </span>
+        )}
       </div>
     </div>
   )

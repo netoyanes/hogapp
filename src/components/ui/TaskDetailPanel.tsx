@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { notifySlack, statusChangedMessage, proofUploadedMessage, taskAssignedMessage, taskCommentMessage, notifyUserDM, taskLink } from '../../hooks/useSlack'
+import { notifySlack, proofUploadedMessage, taskAssignedMessage, taskCommentMessage, notifyUserDM, taskLink } from '../../hooks/useSlack'
+import { changeTaskStatus } from '../../lib/taskActions'
 import { logActivity } from '../../hooks/useActivityLog'
 import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
@@ -120,6 +121,8 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
   const [copied, setCopied] = useState(false)
   const [approvedAt, setApprovedAt] = useState<string | null>(null)
+  // Metadata collapses so comments + evidence get the vertical space (mobile-first)
+  const [metaOpen, setMetaOpen] = useState(!isMobile)
   const fileRef = useRef<HTMLInputElement>(null)
 
   function copyShareLink() {
@@ -217,18 +220,11 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   }, [taskId])
 
   async function changeStatus(status: TaskStatus) {
-    const prev = task?.status ?? 'OPEN'
-    const update: Record<string, unknown> = { status, updated_at: new Date().toISOString() }
-    if (status === 'APPROVED') update.priority = 'LOW'
-    await supabase.from('tasks').update(update).eq('id', taskId)
+    if (!task) return
+    // Shared action = DB update + Slack/DM/log/notifications (same as board swipe)
+    await changeTaskStatus(task, status, buName)
     setTask((t) => t ? { ...t, status, ...(status === 'APPROVED' ? { priority: 'LOW' } : {}) } : t)
     setPriority(status === 'APPROVED' ? 'LOW' : priority)
-    notifySlack(statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG APP'))
-    if (task?.assigned_to) {
-      notifyUserDM(task.assigned_to, statusChangedMessage(task?.title ?? '', prev, status, buName || 'HOG APP', taskLink(taskId)))
-    }
-    logActivity('status_changed', 'task', taskId, { title: task?.title ?? '', from: prev, to: status })
-    notifyAdminsAndAssignee(`Status → ${status}`, task?.title ?? '', 'status_changed', taskId, task?.assigned_to ?? undefined)
     onUpdated()
   }
 
@@ -481,7 +477,18 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
           </div>
         </div>
 
-        {/* Meta info */}
+        {/* Meta info — collapsible so comments/evidence get the space */}
+        <button
+          onClick={() => setMetaOpen(v => !v)}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', padding: '10px 20px', background: 'none', border: 'none', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', flexShrink: 0 }}
+        >
+          {metaOpen ? '▾' : '▸'} DETALLES
+          <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 400 }}>
+            {buName || '—'} · {task.due_date ? new Date(task.due_date).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' }) : 'sin fecha'}
+          </span>
+        </button>
+        {metaOpen && (
+        <>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -541,6 +548,8 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
               .map(m => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
           </select>
         </div>
+        </>
+        )}
 
         {/* Edit section */}
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
