@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.3.0"
+export const APP_VERSION = "2.4.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.4.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "Objetivos v2 — el % de avance es el héroe (mono grande), barra delgada",
+      "Desglose mensual como mini-tabla de 3 celdas (real vs meta por mes, con % y barra)",
+      "Selector de trimestre como control segmentado",
+      "El rol Team ahora aterriza en Social al entrar; managers en Tareas, Master en Dashboard",
+      "Corregido: el borrador de autoevaluación ya no se pierde con el auto-refresh",
+      "Objetivos completo en español",
+    ]
+  },
   {
     version: "2.3.0",
     date: "2026-06-18",

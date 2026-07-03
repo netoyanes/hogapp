@@ -27,7 +27,7 @@ import { DealOverlay } from './components/ui/DealOverlay'
 import { CommandPalette } from './components/v2/CommandPalette'
 import { navItemsForRole } from './components/layout/Sidebar'
 import { getViewAsRole, setViewAsRole } from './lib/viewAs'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL'
@@ -54,9 +54,17 @@ export default function App() {
   const viewAs = realRole === 'MASTER' ? getViewAsRole() : null
   const role = (viewAs ?? realRole) as string | undefined
 
-  const [activeView, setActiveView] = useState(() =>
-    role === 'MASTER' ? 'dashboard' : 'tasks'
-  )
+  const [activeView, setActiveView] = useState('tasks')
+
+  // Role-based landing, applied once the profile (and any view-as override)
+  // resolves: MASTER → dashboard · TEAM → social · managers → tasks.
+  // The old initializer ran before the profile loaded, so it never fired.
+  const landedRef = useRef(false)
+  useEffect(() => {
+    if (landedRef.current || !role) return
+    landedRef.current = true
+    setActiveView(role === 'MASTER' ? 'dashboard' : role === 'TEAM' ? 'social' : 'tasks')
+  }, [role])
   const [scoringBU, setScoringBU] = useState<string | null>(null)
   const [buFilter, setBuFilter] = useState('')
 
