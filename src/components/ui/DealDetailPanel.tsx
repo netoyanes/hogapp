@@ -30,11 +30,11 @@ interface LinkedTask {
 
 const STAGES: { id: DealStage; label: string; color: string }[] = [
   { id: 'LEAD',        label: 'Lead',        color: '#6B7280' },
-  { id: 'CONTACTED',   label: 'Contacted',   color: '#3B82F6' },
-  { id: 'PROPOSAL',    label: 'Proposal',    color: '#F59E0B' },
-  { id: 'NEGOTIATING', label: 'Negotiating', color: '#8B5CF6' },
-  { id: 'WON',         label: 'Won',         color: '#22C55E' },
-  { id: 'LOST',        label: 'Lost',        color: '#EF4444' },
+  { id: 'CONTACTED',   label: 'Contactado',   color: '#3B82F6' },
+  { id: 'PROPOSAL',    label: 'Propuesta',    color: '#F59E0B' },
+  { id: 'NEGOTIATING', label: 'Negociación', color: '#8B5CF6' },
+  { id: 'WON',         label: 'Ganado',         color: '#22C55E' },
+  { id: 'LOST',        label: 'Perdido',        color: '#EF4444' },
 ]
 
 const DEAL_TYPE_COLORS: Record<DealType, string> = {
@@ -179,8 +179,9 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
   }
 
   async function confirmLost() {
-    await supabase.from('crm_deals').update({ stage: 'LOST', lost_reason: lostReason || null, updated_at: new Date().toISOString() }).eq('id', dealId)
-    setDeal(d => d ? { ...d, stage: 'LOST', lost_reason: lostReason || null } : d)
+    if (!lostReason.trim()) return
+    await supabase.from('crm_deals').update({ stage: 'LOST', lost_reason: lostReason.trim(), updated_at: new Date().toISOString() }).eq('id', dealId)
+    setDeal(d => d ? { ...d, stage: 'LOST', lost_reason: lostReason.trim() } : d)
     setLostModal(false)
     setLostReason('')
     onUpdated()
@@ -205,7 +206,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
   }
 
   async function deleteDeal() {
-    if (!confirm('Delete this deal? This cannot be undone.')) return
+    if (!confirm('¿Eliminar este deal? No se puede deshacer.')) return
     await supabase.from('crm_deals').delete().eq('id', dealId)
     onUpdated()
     onClose()
@@ -304,7 +305,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Stage pipeline */}
           <section>
-            <SectionLabel>Pipeline Stage</SectionLabel>
+            <SectionLabel>Etapa del pipeline</SectionLabel>
             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
               {STAGES.map(s => (
                 <button
@@ -324,13 +325,13 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
               ))}
             </div>
             {deal.stage === 'LOST' && deal.lost_reason && (
-              <p style={{ fontSize: '11px', color: '#EF4444', marginTop: '6px', fontStyle: 'italic' }}>Reason: {deal.lost_reason}</p>
+              <p style={{ fontSize: '11px', color: '#EF4444', marginTop: '6px', fontStyle: 'italic' }}>Motivo: {deal.lost_reason}</p>
             )}
           </section>
 
           {/* Meta */}
           <section>
-            <SectionLabel>Details</SectionLabel>
+            <SectionLabel>Detalles</SectionLabel>
             {editing ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
@@ -345,7 +346,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                   <EditField label="Probability %">
                     <input type="number" min={0} max={100} value={eProb} onChange={e => setEProb(e.target.value)} style={inputStyle} />
                   </EditField>
-                  <EditField label="Close Date">
+                  <EditField label="Fecha de cierre">
                     <input type="date" value={eCloseDate} onChange={e => setECloseDate(e.target.value)} style={inputStyle} />
                   </EditField>
                   {eType === 'EVENT' && (
@@ -353,7 +354,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                       <input type="date" value={eEventDate} onChange={e => setEEventDate(e.target.value)} style={inputStyle} />
                     </EditField>
                   )}
-                  <EditField label="Business Unit">
+                  <EditField label="Unidad">
                     <select value={eBu} onChange={e => setEBu(e.target.value)} style={inputStyle}>
                       <option value="">None</option>
                       {buses.map(b => <option key={b.id} value={b.id}>{b.code}</option>)}
@@ -372,31 +373,52 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <MetaRow label="Value">{fmt(deal.value)}</MetaRow>
-                <MetaRow label="Probability">
+                <MetaRow label="Valor">{fmt(deal.value)}</MetaRow>
+                <MetaRow label="Probabilidad">
                   <span>{deal.probability}%</span>
                   <div style={{ marginTop: '3px', height: '3px', background: 'var(--bg-base)', borderRadius: '2px' }}>
                     <div style={{ width: `${deal.probability}%`, height: '100%', background: stageInfo?.color ?? '#6B7280', borderRadius: '2px' }} />
                   </div>
                 </MetaRow>
-                <MetaRow label="Close Date">{deal.close_date ? new Date(deal.close_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</MetaRow>
-                <MetaRow label="Business Unit">{bu?.code ?? '—'}</MetaRow>
-                {creatorName && (
-                  <MetaRow label="Created by">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                      <Avatar name={creatorName} size={18} />
-                      <span>{creatorName}</span>
-                    </div>
-                  </MetaRow>
-                )}
+                <MetaRow label="Fecha de cierre">{deal.close_date ? new Date(deal.close_date + 'T00:00:00').toLocaleDateString('es-MX', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</MetaRow>
+                <MetaRow label="Unidad">{bu?.code ?? '—'}</MetaRow>
               </div>
             )}
           </section>
 
+          {/* Créditos — de aquí salen las comisiones: quién trajo y quién cerró */}
+          {!editing && (
+            <section>
+              <SectionLabel>Créditos</SectionLabel>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '8px' }}>
+                <div style={{ background: 'var(--bg-base)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {creatorName
+                    ? <Avatar name={creatorName} size={30} />
+                    : <span style={{ width: 30, height: 30, borderRadius: '50%', border: '1px dashed var(--border-strong)', flexShrink: 0 }} />}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>🔍 Finder</div>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{creatorName ?? 'Desconocido'}</div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>Trajo la oportunidad</div>
+                  </div>
+                </div>
+                <div style={{ background: 'var(--bg-base)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '10px', border: closerName ? '1px solid color-mix(in srgb, var(--status-healthy) 30%, transparent)' : 'none' }}>
+                  {closerName
+                    ? <Avatar name={closerName} size={30} />
+                    : <span style={{ width: 30, height: 30, borderRadius: '50%', border: '1px dashed var(--border-strong)', flexShrink: 0 }} />}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '10px', color: closerName ? 'var(--status-healthy)' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>🏆 Closer</div>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{closerName ?? '—'}</div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>{closerName ? 'Cerró el deal' : 'Se asigna al ganar'}</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* Contact */}
           {contact && !editing && (
             <section>
-              <SectionLabel>Contact</SectionLabel>
+              <SectionLabel>Contacto</SectionLabel>
               <div style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px' }}>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{contact.full_name}</div>
                 {contact.company && <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{contact.company}</div>}
@@ -411,14 +433,14 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
           {/* Description */}
           {deal.description && !editing && (
             <section>
-              <SectionLabel>Description</SectionLabel>
+              <SectionLabel>Descripción</SectionLabel>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>{deal.description}</p>
             </section>
           )}
 
           {/* Linked Tasks */}
           <section>
-            <SectionLabel>Linked Tasks</SectionLabel>
+            <SectionLabel>Tareas ligadas</SectionLabel>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {linkedTasks.map(t => (
                 <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '7px 10px' }}>
@@ -447,7 +469,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
 
           {/* Activity Log */}
           <section>
-            <SectionLabel>Activity</SectionLabel>
+            <SectionLabel>Actividad</SectionLabel>
 
             {/* Input */}
             <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
@@ -466,7 +488,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                 value={actBody}
                 onChange={e => setActBody(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addActivity() } }}
-                placeholder="Add a note, log a call…"
+                placeholder="Agrega una nota, registra una llamada…"
                 style={{ ...inputStyle, flex: 1 }}
               />
               <button onClick={addActivity} disabled={!actBody.trim()} style={{ padding: '7px 12px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 600, opacity: actBody.trim() ? 1 : 0.4 }}>Add</button>
@@ -532,7 +554,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                       {new Date(deal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.4, fontStyle: 'italic' }}>Deal created</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.4, fontStyle: 'italic' }}>Deal creado</div>
                 </div>
               </div>
             </div>
@@ -545,21 +567,29 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
         </div>
       </div>
 
-      {/* Lost reason modal */}
+      {/* Lost reason modal — reason is REQUIRED so every loss is explainable */}
       {lostModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '360px' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>Mark as Lost</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>Marcar como perdido</h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>Escribe el motivo — es obligatorio para poder aprender de cada pérdida.</p>
             <textarea
               value={lostReason}
               onChange={e => setLostReason(e.target.value)}
               rows={3}
-              placeholder="Reason (optional)"
+              autoFocus
+              placeholder="¿Por qué se perdió? (obligatorio)"
               style={{ ...inputStyle, width: '100%', resize: 'vertical', marginBottom: '16px', boxSizing: 'border-box' }}
             />
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setLostModal(false)} style={{ padding: '7px 14px', background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>Cancel</button>
-              <button onClick={confirmLost} style={{ padding: '7px 14px', background: '#EF4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Mark Lost</button>
+              <button onClick={() => setLostModal(false)} style={{ padding: '9px 14px', background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>Cancelar</button>
+              <button
+                onClick={confirmLost}
+                disabled={!lostReason.trim()}
+                style={{ padding: '9px 14px', background: lostReason.trim() ? 'var(--status-risk)' : 'var(--bg-elevated)', color: lostReason.trim() ? '#fff' : 'var(--text-tertiary)', border: 'none', borderRadius: '6px', cursor: lostReason.trim() ? 'pointer' : 'not-allowed', fontSize: '12px', fontWeight: 700 }}
+              >
+                Marcar perdido
+              </button>
             </div>
           </div>
         </div>
