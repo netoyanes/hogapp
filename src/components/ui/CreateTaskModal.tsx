@@ -74,7 +74,7 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
   }
 
   async function handleSave() {
-    if (!title.trim()) { setError('Title is required.'); return }
+    if (!title.trim()) { setError('El título es obligatorio.'); return }
     setSaving(true)
     setError(null)
     const { data: { user } } = await supabase.auth.getUser()
@@ -151,9 +151,9 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-          <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '15px' }}>Create Task</h2>
+          <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '15px' }}>Crear tarea</h2>
           <div className="flex items-center gap-3">
-            <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '10px' }}>ESC to close</span>
+            <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '10px' }}>ESC para cerrar</span>
             <button onClick={onClose} style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', padding: '5px', borderRadius: '6px', cursor: 'pointer' }}>
               <X size={13} />
             </button>
@@ -164,7 +164,7 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
           {/* Template picker */}
           {templates.length > 0 && (
             <div>
-              {label('Use a template (optional)')}
+              {label('Usar plantilla (opcional)')}
               <select
                 defaultValue=""
                 onChange={e => { if (e.target.value) applyTemplate(e.target.value) }}
@@ -172,7 +172,7 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
                 onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
                 onBlur={e => (e.target.style.borderColor = 'var(--border-default)')}
               >
-                <option value="">— Start from scratch —</option>
+                <option value="">— Empezar desde cero —</option>
                 {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
@@ -180,13 +180,13 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
 
           {/* Title */}
           <div>
-            {label('Title *')}
+            {label('Título *')}
             <input
               autoFocus
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="What needs to be done?"
+              placeholder="¿Qué hay que hacer?"
               style={inputStyle}
               onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
               onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
@@ -207,29 +207,29 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
               }}
             >
               {isPrivate ? <Lock size={11} /> : <Globe size={11} />}
-              {isPrivate ? 'Private' : 'Public'}
+              {isPrivate ? 'Privada' : 'Pública'}
             </button>
             <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>
-              {isPrivate ? 'Only assignee & followers can see this' : 'Visible to all team members'}
+              {isPrivate ? 'Solo asignado y seguidores la ven' : 'Visible para todo el equipo'}
             </span>
           </div>
 
           {/* BU + Type */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              {label('Business Unit')}
+              {label('Unidad de negocio')}
               <select value={buId} onChange={(e) => setBuId(e.target.value)} style={selectStyle}
                 onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
                 onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
               >
-                <option value="">— None —</option>
+                <option value="">— Ninguna —</option>
                 {buList.map((bu) => (
                   <option key={bu.id} value={bu.id}>{bu.code} · {bu.name}</option>
                 ))}
               </select>
             </div>
             <div>
-              {label('Type')}
+              {label('Tipo')}
               <select value={type} onChange={(e) => setType(e.target.value as TaskType)} style={selectStyle}
                 onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
                 onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
@@ -244,26 +244,26 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
           {/* Priority + Assigned to */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              {label('Priority')}
+              {label('Prioridad')}
               <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} style={selectStyle}
                 onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
                 onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
               >
-                <option value="HIGH">🔴 HIGH</option>
-                <option value="MEDIUM">🟡 MEDIUM</option>
-                <option value="LOW">🟢 LOW</option>
+                <option value="HIGH">Alta</option>
+                <option value="MEDIUM">Media</option>
+                <option value="LOW">Baja</option>
               </select>
             </div>
             {canReassign ? (
               <div>
                 <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>
-                  Assign to <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '9px' }}>C-LEVEL</span>
+                  Asignar a <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '9px' }}>C-LEVEL</span>
                 </label>
                 <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={selectStyle}
                   onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
                   onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
                 >
-                  <option value="">— Unassigned —</option>
+                  <option value="">— Sin asignar —</option>
                   {teamMembers.map((m) => (
                     <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
                   ))}
@@ -271,7 +271,7 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
               </div>
             ) : (
               <div>
-                <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Assigned to</label>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Asignada a</label>
                 <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ color: 'var(--text-tertiary)' }}>👤</span>
                   {teamMembers.find(m => m.id === assignedTo)?.full_name ?? teamMembers.find(m => m.id === assignedTo)?.email ?? 'You'}
@@ -287,17 +287,17 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
             onClick={() => setAdvanced(!advanced)}
             style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: '12px', cursor: 'pointer', textAlign: 'left', padding: 0 }}
           >
-            {advanced ? '▾' : '▸'} Advanced options
+            {advanced ? '▾' : '▸'} Opciones avanzadas
           </button>
 
           {advanced && (
             <>
               <div>
-                {label('Description / Instructions')}
+                {label('Descripción / instrucciones')}
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Additional context..."
+                  placeholder="Contexto adicional…"
                   rows={3}
                   style={{ ...inputStyle, resize: 'vertical' }}
                   onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
@@ -307,14 +307,14 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  {label('Due Date')}
+                  {label('Fecha límite')}
                   <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={inputStyle}
                     onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
                     onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
                   />
                 </div>
                 <div>
-                  {label('Deadline Type')}
+                  {label('Tipo de deadline')}
                   <select value={deadlineType} onChange={(e) => setDeadlineType(e.target.value as DeadlineType)} style={selectStyle}
                     onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
                     onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
@@ -327,7 +327,7 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  {label('Estimated Hours')}
+                  {label('Horas estimadas')}
                   <input type="number" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} placeholder="2.5" min="0" step="0.5" style={inputStyle}
                     onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
                     onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
@@ -336,14 +336,14 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
                 <div className="flex items-end pb-1">
                   <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
                     <input type="checkbox" checked={proofRequired} onChange={(e) => setProofRequired(e.target.checked)} style={{ accentColor: 'var(--accent)', width: '15px', height: '15px' }} />
-                    Proof required
+                    Requiere evidencia
                   </label>
                 </div>
               </div>
 
               {/* Related people */}
               <div>
-                {label('Related People')}
+                {label('Personas relacionadas')}
                 {followers.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                     {followers.map(fId => {
@@ -362,7 +362,7 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
                   defaultValue=""
                   style={selectStyle}
                 >
-                  <option value="">Add person…</option>
+                  <option value="">Agregar persona…</option>
                   {teamMembers
                     .filter(m => !followers.includes(m.id) && m.id !== assignedTo)
                     .map(m => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
@@ -380,10 +380,10 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
           {/* Actions */}
           <div className="flex gap-3 pt-1">
             <button onClick={onClose} style={{ flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: '8px', padding: '10px', fontSize: '13px', cursor: 'pointer' }}>
-              Cancel
+              Cancelar
             </button>
-            <button onClick={handleSave} disabled={saving || !title.trim()} style={{ flex: 2, background: title.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: title.trim() ? '#000' : 'var(--text-tertiary)', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: title.trim() ? 'pointer' : 'not-allowed' }}>
-              {saving ? 'Creating…' : 'Create Task'}
+            <button onClick={handleSave} disabled={saving || !title.trim()} style={{ flex: 2, background: title.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: title.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: title.trim() ? 'pointer' : 'not-allowed' }}>
+              {saving ? 'Creando…' : 'Crear tarea'}
             </button>
           </div>
         </div>

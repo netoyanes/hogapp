@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.0.0"
+export const APP_VERSION = "2.1.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.1.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "Tareas v2 — tarjetas compactas: prioridad como borde lateral, avatar del asignado, chip de BU con monograma, conteo de evidencias 📎",
+      "Móvil: adiós kanban horizontal — lista por estado con control segmentado fijo bajo el header",
+      "Desliza → para mover de estado (con hoja de selección), ← para abrir el detalle",
+      "Cambio de estado unificado: el swipe y el panel disparan las mismas notificaciones (Slack, DM, log)",
+      "Panel de detalle: metadata colapsable en 'Detalles' — comentarios y evidencia ganan espacio",
+      "Modal de crear tarea y board en español",
+    ]
+  },
   {
     version: "2.0.0",
     date: "2026-06-18",
