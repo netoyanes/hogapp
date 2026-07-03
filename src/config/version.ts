@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.4.0"
+export const APP_VERSION = "2.5.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.5.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "Calendario unificado — un solo módulo con tabs Operación (tareas + eventos) y Contenido",
+      "Los accesos 'Calendario' y 'Contenido' del menú abren el mismo hub con su tab preseleccionado",
+      "Calendario en español (días, meses, header); eventos CRM conservan el tratamiento rosa 🎉",
+    ]
+  },
   {
     version: "2.4.0",
     date: "2026-06-18",
