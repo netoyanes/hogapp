@@ -116,4 +116,14 @@ export function dealActivityMessage(title: string, type: ActivityType, body: str
   return withLink(`${ICONS[type] ?? '💬'} *CRM ${type}* — ${title}\n${author}: "${body}"`, link)
 }
 
+export function reservationCreatedMessage(guest: string, bu: string, date: string, slot: string, pax: number) {
+  return `🍸 *Nueva reserva* — ${bu}\n${guest} · ${date} · ${slot} · ${pax} pax`
+}
+
+export function reservationLostMessage(kind: 'no_show' | 'cancelled', guest: string, bu: string, date: string, slot: string, pax: number, reason?: string) {
+  const icon = kind === 'no_show' ? '👻' : '🚫'
+  const label = kind === 'no_show' ? 'No-show' : 'Cancelación'
+  return `${icon} *${label} (${pax} pax)* — ${bu}\n${guest} · ${date} · ${slot}${reason ? ` · Motivo: ${reason}` : ''}`
+}
+
 type ActivityType = 'CALL' | 'EMAIL' | 'MEETING' | 'NOTE'

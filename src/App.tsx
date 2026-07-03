@@ -84,6 +84,18 @@ export default function App() {
   function closeDealOverlay() { setOverlayDealId(null); stripUrlParam('deal') }
   function closeGuestOverlay() { setOverlayGuestId(null); stripUrlParam('guest') }
 
+  // Cross-module hops: Calendario → Reservas (día) y "Convertir en deal" → overlay
+  useEffect(() => {
+    const goRes = () => handleNavigate('reservations')
+    const openDeal = (e: Event) => { const id = (e as CustomEvent).detail; if (id) setOverlayDealId(id) }
+    window.addEventListener('hog:open-reservations', goRes)
+    window.addEventListener('hog:open-deal', openDeal)
+    return () => {
+      window.removeEventListener('hog:open-reservations', goRes)
+      window.removeEventListener('hog:open-deal', openDeal)
+    }
+  })
+
   // ⌘K / Ctrl+K opens the command palette
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

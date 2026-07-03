@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.9.0"
+export const APP_VERSION = "2.10.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.10.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "Calendario mensual muestra el conteo de reservas por día — tap abre Reservas en esa fecha",
+      "Puente CRM: reserva de 15+ pax → 'Convertir en deal (Evento)' con contacto y deal pre-llenados",
+      "Slack: aviso al canal en cada reserva nueva y en no-shows/cancelaciones de 8+ pax",
+    ]
+  },
   {
     version: "2.9.0",
     date: "2026-06-18",

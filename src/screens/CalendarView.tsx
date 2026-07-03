@@ -7,6 +7,7 @@ import type { Task } from '../types'
 
 interface EventDeal { id: string; title: string; event_date: string | null }
 const EVENT_COLOR = '#EC4899'
+const RES_COLOR = 'var(--accent)'
 
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -31,6 +32,7 @@ export function CalendarView({ userRole, defaultBuFilter }: Props) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null)
   const [eventDeals, setEventDeals] = useState<EventDeal[]>([])
+  const [resCounts, setResCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -48,6 +50,33 @@ export function CalendarView({ userRole, defaultBuFilter }: Props) {
     load()
   }, [])
 
+  const year = current.getFullYear()
+  const month = current.getMonth()
+
+  // Indicador de reservas por día (conteo, sin saturar el grid con reservas individuales)
+  useEffect(() => {
+    async function loadRes() {
+      const first = `${year}-${String(month + 1).padStart(2, '0')}-01`
+      const last = `${year}-${String(month + 1).padStart(2, '0')}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, '0')}`
+      let q = supabase.from('reservations').select('date, bu_id, status').gte('date', first).lte('date', last)
+      if (filterBu) q = q.eq('bu_id', filterBu)
+      const { data } = await q
+      const counts: Record<string, number> = {}
+      for (const r of data ?? []) {
+        if (r.status === 'cancelled') continue
+        counts[r.date] = (counts[r.date] ?? 0) + 1
+      }
+      setResCounts(counts)
+    }
+    loadRes()
+  }, [year, month, filterBu])
+
+  function goToReservations(day: number) {
+    const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    sessionStorage.setItem('hog_res_goto', iso)
+    window.dispatchEvent(new CustomEvent('hog:open-reservations'))
+  }
+
   function eventsForDay(day: number): EventDeal[] {
     return eventDeals.filter(e => {
       if (!e.event_date) return false
@@ -55,9 +84,6 @@ export function CalendarView({ userRole, defaultBuFilter }: Props) {
       return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day
     })
   }
-
-  const year = current.getFullYear()
-  const month = current.getMonth()
 
   const firstDow = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -199,6 +225,21 @@ export function CalendarView({ userRole, defaultBuFilter }: Props) {
                 }}>
                   {day}
                 </span>
+
+                {/* Indicador de reservas del día → tap abre Reservas en esa fecha */}
+                {(resCounts[`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`] ?? 0) > 0 && (
+                  <button
+                    onClick={() => goToReservations(day)}
+                    title="Abrir Reservas de este día"
+                    style={{
+                      background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', borderRadius: '4px',
+                      padding: '2px 5px', fontSize: '9px', fontFamily: 'var(--font-mono)', fontWeight: 700,
+                      color: RES_COLOR, cursor: 'pointer', textAlign: 'left', width: '100%',
+                    }}
+                  >
+                    🍸 {resCounts[`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`]} reservas
+                  </button>
+                )}
 
                 {/* CRM events */}
                 {dayEvents.map(ev => (

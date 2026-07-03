@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Phone, MessageCircle, Camera, Footprints, Building2, AlertTriangle, MoreHorizontal, X, Search, Check, Settings2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Phone, MessageCircle, Camera, Footprints, Building2, AlertTriangle, MoreHorizontal, X, Search, Check, Settings2, Handshake } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatPhone } from '../lib/phone'
 import { logActivity } from '../hooks/useActivityLog'
+import { notifySlack, reservationCreatedMessage, reservationLostMessage, dealCreatedMessage, dealLink } from '../hooks/useSlack'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { Avatar } from '../components/ui/Avatar'
 import { GuestProfile } from '../components/ui/GuestProfile'
@@ -65,7 +66,13 @@ export function Reservations({ userRole, userId }: Props) {
   const isMobile = useIsMobile()
   const today = isoLocal(new Date())
   const [view, setView] = useState<'day' | 'week'>('day')
-  const [date, setDate] = useState(today)
+  const [date, setDate] = useState(() => {
+    // Salto desde el Calendario mensual (indicador de reservas)
+    const goto = sessionStorage.getItem('hog_res_goto')
+    if (goto) { sessionStorage.removeItem('hog_res_goto'); return goto }
+    return today
+  })
+  const [eventPaxThreshold, setEventPaxThreshold] = useState(15)
   const [buList, setBuList] = useState<{ id: string; code: string; name: string }[]>([])
   const [myVenues, setMyVenues] = useState<string[] | null>(null)   // null = sin restricción
   const [buId, setBuId] = useState('')
@@ -102,6 +109,8 @@ export function Reservations({ userRole, userId }: Props) {
         userId ? supabase.from('user_venues').select('bu_id').eq('user_id', userId) : Promise.resolve({ data: null }),
       ])
       setBuList(buses ?? [])
+      supabase.from('app_settings').select('value').eq('key', 'reservation_event_pax_threshold').maybeSingle()
+        .then(({ data }) => { const n = Number(data?.value); if (n > 0) setEventPaxThreshold(n) })
       const venueIds = (uv ?? [])?.map((r: { bu_id: string }) => r.bu_id) ?? []
       setMyVenues(venueIds.length > 0 ? venueIds : null)
       const first = venueIds.length > 0
@@ -151,6 +160,39 @@ export function Reservations({ userRole, userId }: Props) {
   }, [buId, load])
 
   // ── Status machine (optimista con rollback; el trigger DB sella tiempos y crea la visita) ──
+  // Puente CRM (one-way, opcional): reserva grande → deal tipo Evento pre-llenado.
+  // Crea el contacto B2B desde el guest si no existe (match por teléfono) y abre
+  // el deal recién creado para editarlo.
+  async function convertToDeal(res: Reservation) {
+    setMenuRes(null)
+    const g = guestMap[res.guest_id]
+    if (!g) { showToast('No encontramos al cliente de esta reserva.', 'error'); return }
+    // contacto existente por teléfono → si no, crear
+    let contactId: string | null = null
+    const { data: found } = await supabase.from('crm_contacts').select('id').eq('phone', g.phone).maybeSingle()
+    if (found) contactId = found.id
+    else {
+      const { data: nc, error: cErr } = await supabase.from('crm_contacts').insert({
+        full_name: g.full_name, phone: g.phone, contact_type: 'PROSPECT', created_by: userId ?? null,
+        notes: 'Creado desde una reserva grande (puente Reservas → CRM)',
+      }).select('id').single()
+      if (cErr) { showToast(`No se pudo crear el contacto: ${cErr.message}`, 'error'); return }
+      contactId = nc.id
+    }
+    const title = `Evento — ${g.full_name} (${res.party_size} pax)`
+    const { data: deal, error: dErr } = await supabase.from('crm_deals').insert({
+      title, deal_type: 'EVENT', stage: 'LEAD', probability: 50,
+      event_date: res.date, close_date: res.date,
+      bu_id: res.bu_id, contact_id: contactId,
+      description: res.notes ? `Notas de la reserva: ${res.notes}` : `Origen: reserva del ${res.date} · ${res.time_slot}`,
+      created_by: userId ?? null,
+    }).select('id').single()
+    if (dErr) { showToast(`No se pudo crear el deal: ${dErr.message}`, 'error'); return }
+    notifySlack(dealCreatedMessage(title, 'EVENT', null, g.full_name, dealLink(deal.id)))
+    showToast('Deal Evento creado — ábrelo para completar valor y detalles.', 'success')
+    window.dispatchEvent(new CustomEvent('hog:open-deal', { detail: deal.id }))
+  }
+
   async function setStatus(res: Reservation, status: ResStatus, reason?: string) {
     const prev = res.status
     setReservations(rs => rs.map(r => r.id === res.id ? { ...r, status } : r))
@@ -165,6 +207,10 @@ export function Reservations({ userRole, userId }: Props) {
     }
     const gname = guestMap[res.guest_id]?.full_name ?? 'cliente'
     logActivity('reservation_status', 'reservation', res.id, { guest: gname, bu: buMap[res.bu_id], to: STATUS_META[status].label })
+    // Slack al canal: pérdidas grandes (pax ≥ 8)
+    if ((status === 'no_show' || status === 'cancelled') && res.party_size >= 8) {
+      notifySlack(reservationLostMessage(status, gname, buMap[res.bu_id] ?? '', res.date, res.time_slot, res.party_size, reason))
+    }
     if (status === 'completed') showToast('Reserva completada — visita registrada.', 'success')
     else showToast(`Reserva ${STATUS_META[status].label.toLowerCase()}.`, 'success')
   }
@@ -369,6 +415,12 @@ export function Reservations({ userRole, userId }: Props) {
               <button onClick={() => setMenuRes(null)} aria-label="Cerrar" style={{ width: 36, height: 36, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {menuRes.party_size >= eventPaxThreshold && (
+                <button onClick={() => convertToDeal(menuRes)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 48, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  <Handshake size={15} /> Convertir en deal (Evento) · {menuRes.party_size} pax
+                </button>
+              )}
               <button onClick={() => setStatus(menuRes, 'no_show')}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 48, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid color-mix(in srgb, var(--status-risk) 30%, transparent)', background: 'color-mix(in srgb, var(--status-risk) 8%, transparent)', color: 'var(--status-risk)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                 <AlertTriangle size={15} /> Marcar no-show
@@ -514,6 +566,7 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
     if (err) { setError(`No se pudo crear: ${err.message}`); return }
     const buCode = buList.find(b => b.id === venue)?.code
     logActivity('reservation_created', 'reservation', data.id, { guest: guest.full_name, bu: buCode, date, slot, pax })
+    notifySlack(reservationCreatedMessage(guest.full_name, buCode ?? '', date, slot, pax))
     if (overbooking) logActivity('reservation_overbooked', 'reservation', data.id, { guest: guest.full_name, bu: buCode, slot, pax })
     showToast(overbooking ? 'Reserva creada con sobrecupo autorizado.' : 'Reserva creada.', 'success')
     onCreated()
