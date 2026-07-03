@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.10.0"
+export const APP_VERSION = "2.11.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.11.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "Aviso de privacidad completo como página pública (/?aviso=1) — derechos ARCO, finalidades, conservación",
+      "El checkbox de consentimiento enlaza al resumen y a la página completa",
+      "QA del programa Clientes + Reservas: arranque verificado en tablet 1024px y teléfono 390px sin errores",
+    ]
+  },
   {
     version: "2.10.0",
     date: "2026-06-18",
