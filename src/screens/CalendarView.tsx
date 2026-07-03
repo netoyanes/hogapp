@@ -8,8 +8,8 @@ import type { Task } from '../types'
 interface EventDeal { id: string; title: string; event_date: string | null }
 const EVENT_COLOR = '#EC4899'
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
 const PRIORITY_COLORS: Record<string, string> = {
   HIGH: '#EF4444',
@@ -109,13 +109,13 @@ export function CalendarView({ userRole, defaultBuFilter }: Props) {
       {/* Header */}
       <div style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', flexShrink: 0, padding: '14px 20px' }}>
         <div className="flex items-center justify-between mb-3">
-          <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '17px' }}>Calendar</h1>
+          <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '17px' }}>Calendario</h1>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCurrent(new Date(today.getFullYear(), today.getMonth(), 1))}
               style={{ ...selectStyle }}
             >
-              Today
+              Hoy
             </button>
             <button onClick={() => setCurrent(new Date(year, month - 1, 1))} style={btnStyle}>
               <ChevronLeft size={14} />
@@ -131,25 +131,25 @@ export function CalendarView({ userRole, defaultBuFilter }: Props) {
 
         <div className="flex items-center gap-2">
           <select value={filterBu} onChange={e => setFilterBu(e.target.value)} style={selectStyle}>
-            <option value="">All BUs</option>
+            <option value="">Todas las BUs</option>
             {buList.map(b => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
           </select>
           {filterBu && (
             <button onClick={() => setFilterBu('')} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: '11px', cursor: 'pointer' }}>
-              Clear
+              Limpiar
             </button>
           )}
           <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span>{filtered.filter(t => {
               const d = t.due_date ? new Date(t.due_date + 'T00:00:00') : null
               return d && d.getFullYear() === year && d.getMonth() === month
-            }).length} tasks</span>
+            }).length} tareas</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: EVENT_COLOR }}>
               <PartyPopper size={11} />
               {eventDeals.filter(e => {
                 const d = e.event_date ? new Date(e.event_date + 'T00:00:00') : null
                 return d && d.getFullYear() === year && d.getMonth() === month
-              }).length} events
+              }).length} eventos
             </span>
           </span>
         </div>

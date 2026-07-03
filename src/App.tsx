@@ -11,8 +11,7 @@ import { Profile } from './screens/Profile'
 import { InviteUsers } from './screens/InviteUsers'
 import { EmptyState } from './components/ui/EmptyState'
 import { ActivityLog } from './screens/ActivityLog'
-import { CalendarView } from './screens/CalendarView'
-import { ContentCalendar } from './screens/ContentCalendar'
+import { CalendarHub } from './screens/CalendarHub'
 import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
 import { CRM } from './screens/CRM'
@@ -147,9 +146,9 @@ export default function App() {
       case 'objectives':
         return <Objectives profile={profile} userId={profile?.id} userRole={role} />
       case 'calendar':
-        return <CalendarView userRole={role} defaultBuFilter={buFilter} />
+        return <CalendarHub initialTab="ops" userRole={role} defaultBuFilter={buFilter} />
       case 'content':
-        return <ContentCalendar userRole={role} />
+        return <CalendarHub initialTab="content" userRole={role} />
       case 'revenue':
       case 'upload':
         return <RevenueUpload />
