@@ -1,5 +1,5 @@
-import { ScoreBar } from './ScoreBar'
 import { HealthBadge } from './HealthBadge'
+import { BUChip } from '../v2'
 import { SCORE_MAXES, SCORE_LABELS } from '../../lib/scoring'
 import type { BusinessUnit, ScoreResult } from '../../types'
 
@@ -11,68 +11,71 @@ interface Props {
   taskCount?: number
 }
 
+const STATUS_COLOR: Record<string, string> = {
+  HEALTHY: 'var(--status-healthy)',
+  ATTENTION: 'var(--status-attention)',
+  AT_RISK: 'var(--status-risk)',
+  NO_DATA: 'var(--status-none)',
+}
+
+// v2 — health as a colored bar on the top edge + label; BU monogram chip;
+// A–E dimensions as a compact 5-segment strip instead of stacked bars.
 export function BUCard({ bu, scores, onScore, onViewTasks, taskCount = 0 }: Props) {
   const total = scores?.total ?? 0
   const status = scores?.status ?? 'NO_DATA'
+  const statusColor = STATUS_COLOR[status]
 
   return (
     <div
       style={{
         background: 'var(--bg-surface)',
-        border: '1px solid var(--border-default)',
-        borderRadius: '10px',
+        borderRadius: 'var(--radius-md)',
+        position: 'relative',
+        overflow: 'hidden',
       }}
-      className="p-4 flex flex-col gap-3 hover:border-[var(--border-strong)] transition-colors"
+      className="p-4 pt-5 flex flex-col gap-3 hover:brightness-110 transition-[filter]"
     >
-      {/* Header */}
+      {/* Health as top-edge bar */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: 'var(--bg-elevated)' }}>
+        <div style={{ height: '100%', width: `${status === 'NO_DATA' ? 0 : total}%`, background: statusColor, transition: 'width 0.8s ease-out' }} />
+      </div>
+
+      {/* Header: monogram + name + health label */}
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }} className="text-xs shrink-0">
-              {bu.code}
-            </span>
-            <span style={{ color: 'var(--text-primary)' }} className="text-sm font-semibold truncate">
+        <div className="flex items-center gap-2 min-w-0">
+          <BUChip code={bu.code} />
+          <div className="min-w-0">
+            <div style={{ color: 'var(--text-primary)' }} className="text-sm font-semibold truncate">
               {bu.name}
-            </span>
-          </div>
-          <div style={{ color: 'var(--text-secondary)' }} className="text-xs mt-0.5 truncate">
-            {'category' in bu ? bu.category : ''}{bu.location ? ` · ${bu.location}` : ''}
+            </div>
+            <div style={{ color: 'var(--text-tertiary)' }} className="text-xs truncate">
+              {'category' in bu ? bu.category : ''}{bu.location ? ` · ${bu.location}` : ''}
+            </div>
           </div>
         </div>
         <HealthBadge status={status} score={total} size="sm" />
       </div>
 
-      {/* Score total bar */}
-      <div>
-        <div style={{ background: 'var(--border-default)' }} className="h-1.5 rounded-full overflow-hidden">
-          <div
-            style={{
-              width: `${total}%`,
-              background: status === 'HEALTHY' ? '#22C55E' : status === 'ATTENTION' ? '#EAB308' : status === 'AT_RISK' ? '#EF4444' : '#3A3A3A',
-              transition: 'width 0.8s ease-out',
-            }}
-            className="h-full rounded-full"
-          />
+      {/* A–E dimensions as a compact 5-segment strip */}
+      {scores ? (
+        <div>
+          <div style={{ display: 'flex', gap: '3px' }}>
+            {(['a', 'b', 'c', 'd', 'e'] as const).map((dim) => {
+              const p = Math.min(100, Math.round((scores[dim] / SCORE_MAXES[dim]) * 100))
+              return (
+                <div key={dim} title={`${SCORE_LABELS[dim]}: ${scores[dim]}/${SCORE_MAXES[dim]}`} style={{ flex: 1 }}>
+                  <div style={{ height: '6px', background: 'var(--bg-elevated)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${p}%`, background: statusColor, opacity: 0.55 + (p / 100) * 0.45 }} />
+                  </div>
+                  <div className="num" style={{ fontSize: '8px', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: '2px', textTransform: 'uppercase' }}>{dim}</div>
+                </div>
+              )
+            })}
+          </div>
         </div>
-      </div>
-
-      {/* Dimension bars */}
-      {scores && (
-        <div className="flex flex-col gap-1.5">
-          {(['a', 'b', 'c', 'd', 'e'] as const).map((dim) => (
-            <ScoreBar
-              key={dim}
-              label={SCORE_LABELS[dim]}
-              score={scores[dim]}
-              max={SCORE_MAXES[dim]}
-            />
-          ))}
-        </div>
-      )}
-
-      {!scores && (
+      ) : (
         <div style={{ color: 'var(--text-tertiary)' }} className="text-xs text-center py-2">
-          No scoring data yet
+          Sin calificación todavía
         </div>
       )}
 
@@ -80,10 +83,10 @@ export function BUCard({ bu, scores, onScore, onViewTasks, taskCount = 0 }: Prop
       <div className="flex items-center gap-2 pt-1 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
         <button
           onClick={onScore}
-          style={{ border: '1px solid var(--accent-border)', color: 'var(--accent)', background: 'var(--accent-bg)' }}
-          className="flex-1 text-xs py-1.5 rounded-md font-medium hover:opacity-80 transition-opacity"
+          style={{ border: '1px solid var(--accent-border)', color: 'var(--accent)', background: 'var(--accent-bg)', minHeight: '32px' }}
+          className="flex-1 text-xs rounded-md font-medium hover:opacity-80 transition-opacity"
         >
-          Score Onboarding
+          Calificar
         </button>
         <button
           onClick={onViewTasks}
@@ -92,11 +95,12 @@ export function BUCard({ bu, scores, onScore, onViewTasks, taskCount = 0 }: Prop
             color: taskCount > 0 ? 'var(--text-secondary)' : 'var(--text-tertiary)',
             background: 'var(--bg-elevated)',
             cursor: onViewTasks ? 'pointer' : 'default',
+            minHeight: '32px',
           }}
-          className="text-xs py-1.5 px-3 rounded-md font-medium hover:opacity-80 transition-opacity"
-          title={taskCount > 0 ? `View ${taskCount} task${taskCount !== 1 ? 's' : ''} for this BU` : 'No tasks for this BU'}
+          className="text-xs px-3 rounded-md font-medium hover:opacity-80 transition-opacity"
+          title={taskCount > 0 ? `Ver ${taskCount} tarea${taskCount !== 1 ? 's' : ''} de esta BU` : 'Sin tareas para esta BU'}
         >
-          {taskCount > 0 ? `${taskCount} task${taskCount !== 1 ? 's' : ''}` : 'No tasks'}
+          {taskCount > 0 ? `${taskCount} tarea${taskCount !== 1 ? 's' : ''}` : 'Sin tareas'}
         </button>
       </div>
     </div>

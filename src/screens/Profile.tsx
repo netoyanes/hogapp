@@ -58,11 +58,11 @@ function MyProductivity({ userId }: { userId: string }) {
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '20px' }}>
       <div className="flex items-center gap-2 mb-4">
         <Clock size={15} style={{ color: 'var(--accent)' }} />
-        <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600 }}>My Productivity</h3>
+        <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600 }}>Mi productividad</h3>
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--text-tertiary)', fontSize: '13px' }}>Loading…</p>
+        <p style={{ color: 'var(--text-tertiary)', fontSize: '13px' }}>Cargando…</p>
       ) : (
         <>
           {/* Weekly hours */}
@@ -82,9 +82,9 @@ function MyProductivity({ userId }: { userId: string }) {
           {/* Metric tiles */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
             {[
-              { icon: DollarSign, color: 'var(--accent)', label: 'Brought', value: money(brought) },
-              { icon: Trophy, color: '#22C55E', label: 'Closed', value: money(closed) },
-              { icon: Activity, color: '#A855F7', label: 'Actions', value: String(actions) },
+              { icon: DollarSign, color: 'var(--accent)', label: 'Traído', value: money(brought) },
+              { icon: Trophy, color: '#22C55E', label: 'Cerrado', value: money(closed) },
+              { icon: Activity, color: '#A855F7', label: 'Acciones', value: String(actions) },
             ].map(t => {
               const Icon = t.icon
               return (
@@ -286,8 +286,8 @@ export function Profile({ profile, onUpdated }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', padding: '16px 24px', flexShrink: 0 }}>
-        <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '18px' }}>Profile</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Manage your account and integrations</p>
+        <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '18px' }}>Perfil</h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Tu cuenta e integraciones</p>
       </div>
 
       <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>

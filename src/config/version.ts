@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.5.0"
+export const APP_VERSION = "2.6.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.6.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "Dashboard v2 — tarjetas de BU con monograma, salud como barra en el borde superior y dimensiones A–E como tira compacta de 5 segmentos",
+      "Analítica y Mi productividad usan los tiles KPI del sistema v2",
+      "Actividad, Usuarios y Perfil con headers en español",
+      "Rediseño v2 completo: los 8 módulos entregados",
+    ]
+  },
   {
     version: "2.5.0",
     date: "2026-06-18",

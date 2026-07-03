@@ -231,8 +231,8 @@ export function InviteUsers() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', padding: '16px 24px', flexShrink: 0 }}>
-        <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '18px' }}>User Management</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Manage team access and roles</p>
+        <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '18px' }}>Usuarios</h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Gestiona accesos y roles del equipo</p>
       </div>
 
       <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
