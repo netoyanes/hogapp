@@ -21,6 +21,7 @@ import { Social } from './screens/Social'
 import { Objectives } from './screens/Objectives'
 import { Reports } from './screens/Reports'
 import { SharedTask } from './screens/SharedTask'
+import { PrivacyNotice } from './screens/PrivacyNotice'
 import { AppLogoBadge } from './components/ui/AppLogo'
 import { TaskDetailPanel } from './components/ui/TaskDetailPanel'
 import { DealOverlay } from './components/ui/DealOverlay'
@@ -38,6 +39,7 @@ export function canSeeDashboard(role?: string | null) {
 // Detect deep-link URLs before rendering anything else
 const _params = new URLSearchParams(window.location.search)
 const _sharedTaskId = _params.get('share')
+const _aviso = _params.get('aviso')
 
 // Strip a query param from the URL bar without reloading (so an overlay doesn't reopen on refresh)
 function stripUrlParam(key: string) {
@@ -49,6 +51,8 @@ function stripUrlParam(key: string) {
 export default function App() {
   // Shared task view — completely isolated, no app shell
   if (_sharedTaskId) return <SharedTask taskId={_sharedTaskId} />
+  // Aviso de privacidad — página pública estática
+  if (_aviso) return <PrivacyNotice />
 
   const { session, profile, loading, accessDenied, signIn, signOut, refetchProfile } = useAuth()
   const realRole = profile?.role ?? undefined

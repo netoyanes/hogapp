@@ -422,7 +422,10 @@ export function GuestCreateSheet({ buList, tagOptions, userId, defaultBuId, onCl
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>
               HOG utiliza tus datos personales (nombre, teléfono, correo y fecha de cumpleaños) únicamente para gestionar tus reservaciones y visitas en nuestros venues. No compartimos tus datos con terceros. Puedes solicitar la corrección o eliminación de tus datos en cualquier momento en cualquiera de nuestros establecimientos (derechos ARCO, LFPDPPP). La comunicación de marketing es opcional y solo se envía con tu consentimiento explícito, que puedes retirar cuando quieras.
             </p>
-            <button onClick={() => setAvisoOpen(false)} style={{ marginTop: 12, minHeight: 40, padding: '0 16px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Entendido</button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button onClick={() => setAvisoOpen(false)} style={{ minHeight: 40, padding: '0 16px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Entendido</button>
+              <a href="/?aviso=1" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 40, padding: '0 14px', borderRadius: 999, border: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: 12, textDecoration: 'none' }}>Ver página completa ↗</a>
+            </div>
           </div>
         </div>
       )}
