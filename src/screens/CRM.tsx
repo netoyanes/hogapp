@@ -233,10 +233,11 @@ export function CRM({ userRole, userId }: Props) {
           </button>
         </div>
 
-        {/* Mobile: stage segments */}
+        {/* Mobile: stage segments — scrollable bar, tinted per stage */}
         {isMobile && (
           <SegmentedControl
-            options={STAGES.map(s => ({ id: s.id, label: `${s.label.slice(0, 6)} ${byStage(s.id).length}` }))}
+            scrollable
+            options={STAGES.map(s => ({ id: s.id, label: `${s.label} ${byStage(s.id).length}`, color: s.color }))}
             value={mobileStage}
             onChange={(id) => setMobileStage(id as DealStage)}
           />
@@ -406,7 +407,7 @@ function DealCard({ deal, contact, bu, onClick }: { deal: CRMDeal; contact: CRMC
     <button
       onClick={onClick}
       className="hover:brightness-110 transition-[filter]"
-      style={{ width: '100%', textAlign: 'left', background: 'var(--bg-elevated)', border: 'none', borderRadius: 'var(--radius-sm)', padding: '11px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '7px' }}
+      style={{ width: '100%', textAlign: 'left', background: 'var(--bg-elevated)', border: 'none', borderRadius: 'var(--radius-sm)', padding: '11px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '7px', flexShrink: 0 }}
     >
       {/* Title + BU monogram */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>

@@ -210,7 +210,7 @@ export default function App() {
       {/* Role-preview banner — visible while a MASTER is simulating another role */}
       {viewAs && (
         <div style={{
-          position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', zIndex: 100,
+          position: 'fixed', top: 'env(safe-area-inset-top, 0px)', left: '50%', transform: 'translateX(-50%)', zIndex: 100,
           display: 'flex', alignItems: 'center', gap: '10px',
           background: '#F59E0B', color: '#000', borderRadius: '0 0 10px 10px',
           padding: '6px 14px', fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font-mono)',

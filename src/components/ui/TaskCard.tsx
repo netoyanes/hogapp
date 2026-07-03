@@ -25,6 +25,7 @@ export function TaskCard({ task, buName, assigneeName, proofCount = 0, onClick }
         borderRadius: 'var(--radius-sm)',
         padding: '10px 12px 10px 15px',
         cursor: 'pointer',
+        flexShrink: 0, // never let a flex-column scroll container crush the card
       }}
       className="hover:brightness-110 transition-[filter]"
     >

@@ -218,11 +218,17 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
           )}
         </div>
 
-        {/* Mobile: status segments pinned under the header */}
+        {/* Mobile: status segments pinned under the header — scrollable bar
+            with per-phase color so progression reads at a glance */}
         {isMobile && (
           <div style={{ marginTop: '10px' }}>
             <SegmentedControl
-              options={COLUMNS.map(c => ({ id: c.id, label: `${c.label.slice(0, 8)} ${filtered.filter(t => t.status === c.id).length}` }))}
+              scrollable
+              options={COLUMNS.map(c => ({
+                id: c.id,
+                label: `${c.label} ${filtered.filter(t => t.status === c.id).length}`,
+                color: STATUS_COLORS[c.id],
+              }))}
               value={mobileStatus}
               onChange={(id) => setMobileStatus(id as TaskStatus)}
             />
@@ -236,11 +242,11 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', height: '72px' }} className="animate-pulse-green" />
+              <div key={i} style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', height: '72px', flexShrink: 0 }} className="animate-pulse-green" />
             ))
           ) : (
             <>
-              <p style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)', margin: '0 0 2px', textAlign: 'center' }}>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)', margin: '0 0 2px', textAlign: 'center', flexShrink: 0 }}>
                 Desliza → para cambiar estado · ← para abrir
               </p>
               {filtered.filter(t => t.status === mobileStatus).length === 0 && (
@@ -388,7 +394,7 @@ function SwipeableRow({ children, onSwipeRight, onSwipeLeft }: {
   const swiping = useRef(false)
 
   return (
-    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius-sm)' }}>
+    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius-sm)', flexShrink: 0 }}>
       {/* Reveal hints under the card */}
       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' }}>
         <span style={{ color: 'var(--accent)', fontSize: 12, fontWeight: 700, opacity: dx > 24 ? 1 : 0 }}>Mover →</span>
