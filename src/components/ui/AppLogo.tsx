@@ -47,10 +47,11 @@ export function AppLogoBadge({ size = 28, radius = 6 }: { size?: number; radius?
   return (
     <div style={{
       width: size, height: size, borderRadius: radius, flexShrink: 0,
-      background: '#1B3A20',
+      background: 'var(--bg-overlay)',
+      border: '1px solid var(--accent-border)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      <AppLogo size={size * 0.62} color="#F5F0E8" />
+      <AppLogo size={size * 0.62} color="var(--accent)" />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.14.0"
+export const APP_VERSION = "2.0.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.0.0",
+    date: "2026-06-18",
+    type: "MAJOR",
+    changes: [
+      "Rediseño v2 — tema 'back-of-house at midnight': oscuros cálidos + acento latón en toda la app",
+      "Paleta de búsqueda ⌘K / Ctrl+K — salta a módulos, busca tareas/deals/contactos, crea tareas",
+      "Navegación móvil de 5 slots por rol + hoja 'Más' para el resto de vistas",
+      "Campana de notificaciones al top bar (adiós FAB flotante); mismo badge y apertura de tareas",
+      "Navegación y chrome unificados a español (es-MX)",
+      "Sistema de identidad por unidad de negocio (tono fijo + monograma) listo para los siguientes módulos",
+    ]
+  },
   {
     version: "1.14.0",
     date: "2026-06-17",

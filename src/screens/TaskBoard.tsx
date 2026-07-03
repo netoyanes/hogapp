@@ -77,14 +77,19 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     load()
   }, [load])
 
-  // Keyboard shortcut C
+  // Keyboard shortcut C + command-palette "Crear tarea" action
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return
       if (e.key === 'c' || e.key === 'C') setShowCreate(true)
     }
+    const openCreate = () => setShowCreate(true)
     window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    window.addEventListener('hog:create-task', openCreate)
+    return () => {
+      window.removeEventListener('keydown', handler)
+      window.removeEventListener('hog:create-task', openCreate)
+    }
   }, [])
 
   // Real-time + auto-refresh fallback

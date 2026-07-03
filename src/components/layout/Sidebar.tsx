@@ -1,43 +1,57 @@
-import { useState } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Contact2, Sparkles, Target } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Contact2, Sparkles, Target, Command } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
+import { STR } from '../../lib/strings'
 
 interface Props {
   activeView: string
   onNavigate: (view: string) => void
   onSignOut: () => void
   onHomeClick: () => void
+  onOpenPalette?: () => void
+  bell?: ReactNode
   userRole?: string
 }
 
-const NAV_ITEMS = [
-  { id: 'dashboard',  label: 'Dashboard',    icon: LayoutDashboard, shortcut: '1', cLevelOnly: true },
-  { id: 'tasks',      label: 'Tasks',        icon: CheckSquare,     shortcut: '2' },
-  { id: 'crm',        label: 'CRM',          icon: Handshake,       shortcut: '3' },
-  { id: 'contacts',   label: 'Directory',    icon: Contact2,        shortcut: '4' },
-  { id: 'social',     label: 'Social',       icon: Sparkles,        shortcut: '5' },
-  { id: 'objectives', label: 'Objectives',   icon: Target,          shortcut: '6' },
-  { id: 'calendar',   label: 'Calendar',     icon: CalendarDays,    shortcut: '7' },
-  { id: 'content',    label: 'Content',      icon: Megaphone,       shortcut: '8' },
-  { id: 'revenue',    label: 'Revenue',      icon: BarChart3,       shortcut: '9' },
-  { id: 'activity',   label: 'Activity Log', icon: Activity,                     cLevelOnly: true },
-  { id: 'templates',  label: 'Templates',    icon: LayoutTemplate,               cLevelOnly: true },
-  { id: 'upload',     label: 'CSV Upload',   icon: Upload,          shortcut: '0', masterOnly: true },
-  { id: 'invite',     label: 'Invite Users', icon: UserPlus,        masterOnly: true },
-  { id: 'reports',    label: 'Reports',      icon: FileText },
-  { id: 'profile',    label: 'Profile',      icon: UserCircle },
+export const NAV_ITEMS = [
+  { id: 'dashboard',  label: STR.nav.dashboard,  icon: LayoutDashboard, shortcut: '1', cLevelOnly: true },
+  { id: 'tasks',      label: STR.nav.tasks,      icon: CheckSquare,     shortcut: '2' },
+  { id: 'crm',        label: STR.nav.crm,        icon: Handshake,       shortcut: '3' },
+  { id: 'contacts',   label: STR.nav.directory,  icon: Contact2,        shortcut: '4' },
+  { id: 'social',     label: STR.nav.social,     icon: Sparkles,        shortcut: '5' },
+  { id: 'objectives', label: STR.nav.objectives, icon: Target,          shortcut: '6' },
+  { id: 'calendar',   label: STR.nav.calendar,   icon: CalendarDays,    shortcut: '7' },
+  { id: 'content',    label: STR.nav.content,    icon: Megaphone,       shortcut: '8' },
+  { id: 'revenue',    label: STR.nav.revenue,    icon: BarChart3,       shortcut: '9' },
+  { id: 'activity',   label: STR.nav.activity,   icon: Activity,                     cLevelOnly: true },
+  { id: 'templates',  label: STR.nav.templates,  icon: LayoutTemplate,               cLevelOnly: true },
+  { id: 'upload',     label: STR.nav.upload,     icon: Upload,          shortcut: '0', masterOnly: true },
+  { id: 'invite',     label: STR.nav.invite,     icon: UserPlus,        masterOnly: true },
+  { id: 'reports',    label: STR.nav.reports,    icon: FileText },
+  { id: 'profile',    label: STR.nav.profile,    icon: UserCircle },
 ]
 
-export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRole }: Props) {
+// Views every non-MASTER role can navigate to (mirrors ALLOWED_VIEWS in App)
+export const NON_MASTER_VIEWS = ['tasks', 'crm', 'contacts', 'social', 'objectives', 'profile']
+
+export function navItemsForRole(userRole?: string) {
+  return NAV_ITEMS.filter(item => {
+    if (!TENANT.enabledViews.includes(item.id)) return false
+    if (userRole === 'MASTER') return true
+    return NON_MASTER_VIEWS.includes(item.id)
+  })
+}
+
+export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, onOpenPalette, bell, userRole }: Props) {
   const [expanded, setExpanded] = useState(false)
+  const items = navItemsForRole(userRole)
 
   return (
     <aside
       style={{
         width: expanded ? '220px' : '56px',
         background: 'var(--bg-surface)',
-        borderRight: '1px solid var(--border-subtle)',
         transition: 'width 0.2s ease',
         flexShrink: 0,
         display: 'flex',
@@ -46,22 +60,22 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
         zIndex: 10,
       }}
     >
-      {/* Logo area */}
+      {/* Logo + bell */}
       <div
         style={{ height: '56px', borderBottom: '1px solid var(--border-subtle)' }}
-        className="flex items-center px-3 shrink-0"
+        className="flex items-center px-3 shrink-0 gap-1"
       >
         <button
           onClick={onHomeClick}
-          title="Home"
+          title="Inicio"
           className="flex items-center gap-2.5 overflow-hidden"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flex: 1, minWidth: 0 }}
         >
           <div className="hover:opacity-80" style={{ transition: 'opacity 0.15s', flexShrink: 0 }}>
             <AppLogoBadge size={28} radius={6} />
           </div>
           {expanded && (
-            <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2, overflow: 'hidden' }}>
+            <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2, overflow: 'hidden', textAlign: 'left' }}>
               <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13px', whiteSpace: 'nowrap' }}>
                 {TENANT.appName}
               </span>
@@ -71,15 +85,19 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
             </span>
           )}
         </button>
+        {expanded && bell}
       </div>
+
+      {/* Bell when collapsed — its own row so it never crowds the logo */}
+      {!expanded && bell && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+          {bell}
+        </div>
+      )}
 
       {/* Nav items */}
       <nav className="flex-1 flex flex-col gap-1 p-2 overflow-hidden">
-        {NAV_ITEMS.filter(item => {
-          if (!TENANT.enabledViews.includes(item.id)) return false
-          if (userRole === 'MASTER') return true
-          return ['tasks', 'crm', 'contacts', 'social', 'objectives', 'profile'].includes(item.id)
-        }).map((item) => {
+        {items.map((item) => {
           const Icon = item.icon
           const active = activeView === item.id
           return (
@@ -90,7 +108,7 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
                 background: active ? 'var(--accent-bg)' : 'transparent',
                 border: `1px solid ${active ? 'var(--accent-border)' : 'transparent'}`,
                 color: active ? 'var(--accent)' : 'var(--text-secondary)',
-                borderRadius: '6px',
+                borderRadius: 'var(--radius-sm)',
                 height: '36px',
                 display: 'flex',
                 alignItems: 'center',
@@ -98,7 +116,7 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
                 padding: expanded ? '0 10px' : '0',
                 justifyContent: expanded ? 'flex-start' : 'center',
                 cursor: 'pointer',
-                transition: 'all 0.15s',
+                transition: 'var(--motion-fast)',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
               }}
@@ -118,23 +136,39 @@ export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, userRo
         })}
       </nav>
 
-      {/* Expand toggle + sign out */}
+      {/* ⌘K + sign out + expand */}
       <div style={{ borderTop: '1px solid var(--border-subtle)' }} className="p-2 flex flex-col gap-1">
+        {onOpenPalette && (
+          <button
+            onClick={onOpenPalette}
+            style={{ color: 'var(--text-tertiary)', height: '36px', display: 'flex', alignItems: 'center', gap: '10px', padding: expanded ? '0 10px' : '0', justifyContent: expanded ? 'flex-start' : 'center', borderRadius: 'var(--radius-sm)', cursor: 'pointer', background: 'transparent', border: 'none', width: '100%' }}
+            className="hover:text-[var(--text-secondary)] transition-colors"
+            title="Buscar (⌘K)"
+          >
+            <Command size={15} style={{ flexShrink: 0 }} />
+            {expanded && (
+              <>
+                <span style={{ fontSize: '13px' }}>Buscar</span>
+                <kbd style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '9px', border: '1px solid var(--border-default)', borderRadius: 4, padding: '1px 5px', color: 'var(--text-tertiary)' }}>⌘K</kbd>
+              </>
+            )}
+          </button>
+        )}
         <button
           onClick={onSignOut}
-          style={{ color: 'var(--text-tertiary)', height: '36px', display: 'flex', alignItems: 'center', gap: '10px', padding: expanded ? '0 10px' : '0', justifyContent: expanded ? 'flex-start' : 'center', borderRadius: '6px', cursor: 'pointer', background: 'transparent', border: 'none', width: '100%' }}
+          style={{ color: 'var(--text-tertiary)', height: '36px', display: 'flex', alignItems: 'center', gap: '10px', padding: expanded ? '0 10px' : '0', justifyContent: expanded ? 'flex-start' : 'center', borderRadius: 'var(--radius-sm)', cursor: 'pointer', background: 'transparent', border: 'none', width: '100%' }}
           className="hover:text-[var(--status-risk)] transition-colors"
-          title="Sign out"
+          title="Cerrar sesión"
         >
           <LogOut size={15} style={{ flexShrink: 0 }} />
-          {expanded && <span style={{ fontSize: '13px' }}>Sign out</span>}
+          {expanded && <span style={{ fontSize: '13px' }}>Cerrar sesión</span>}
         </button>
 
         <button
           onClick={() => setExpanded(!expanded)}
-          style={{ color: 'var(--text-tertiary)', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', cursor: 'pointer', background: 'transparent', border: 'none', width: '100%' }}
+          style={{ color: 'var(--text-tertiary)', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', cursor: 'pointer', background: 'transparent', border: 'none', width: '100%' }}
           className="hover:text-[var(--text-secondary)] transition-colors"
-          title={expanded ? 'Collapse' : 'Expand'}
+          title={expanded ? 'Colapsar' : 'Expandir'}
         >
           <ChevronRight size={15} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
         </button>
