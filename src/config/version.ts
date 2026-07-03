@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.6.0"
+export const APP_VERSION = "2.6.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.6.1",
+    date: "2026-06-18",
+    type: "PATCH",
+    changes: [
+      "Móvil: las tarjetas de tareas y deals ya no se encogen — la lista scrollea correctamente",
+      "Fases de Tareas y CRM como barra scrolleable horizontal con labels completos",
+      "Color coding por fase: punto de color en cada segmento y tinte en el activo",
+      "Header y banner 'Viendo como' respetan el notch/safe-area de iOS",
+    ]
+  },
   {
     version: "2.6.0",
     date: "2026-06-18",

@@ -112,27 +112,42 @@ export function FilterChips({ options, active, onChange }: {
   )
 }
 
-// ── SegmentedControl — equal-width segments (mobile status switcher, tabs) ──
-export function SegmentedControl({ options, value, onChange }: {
-  options: { id: string; label: string }[]
+// ── SegmentedControl — status switcher / tabs ────────────────────────────────
+// Default: equal-width segments. `scrollable`: natural-width segments in a
+// horizontally scrollable bar (for 5-6 phase switchers on mobile — labels
+// never get crushed). Optional `color` per option tints its dot and the
+// active state so phase progression reads at a glance.
+export function SegmentedControl({ options, value, onChange, scrollable }: {
+  options: { id: string; label: string; color?: string }[]
   value: string
   onChange: (id: string) => void
+  scrollable?: boolean
 }) {
   return (
     <div role="tablist" style={{
       display: 'flex', background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)',
       padding: 'var(--space-1)', gap: 'var(--space-1)',
+      overflowX: scrollable ? 'auto' : undefined,
+      WebkitOverflowScrolling: 'touch',
     }}>
       {options.map(o => {
         const isActive = o.id === value
+        const c = o.color
         return (
           <button key={o.id} role="tab" aria-selected={isActive} onClick={() => onChange(o.id)} style={{
-            flex: 1, minHeight: 36, borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+            flex: scrollable ? '0 0 auto' : 1,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            minHeight: 36, padding: scrollable ? '0 14px' : '0 4px',
+            borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
             fontSize: 'var(--text-size-xs)', fontWeight: isActive ? 700 : 500, fontFamily: 'var(--font-ui)',
-            background: isActive ? 'var(--bg-elevated)' : 'transparent',
-            color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-            transition: 'var(--motion-fast)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            background: isActive
+              ? (c ? `color-mix(in srgb, ${c} 18%, var(--bg-elevated))` : 'var(--bg-elevated)')
+              : 'transparent',
+            color: isActive ? (c ?? 'var(--text-primary)') : 'var(--text-secondary)',
+            transition: 'var(--motion-fast)', whiteSpace: 'nowrap',
+            overflow: scrollable ? undefined : 'hidden', textOverflow: scrollable ? undefined : 'ellipsis',
           }}>
+            {c && <span style={{ width: 7, height: 7, borderRadius: '50%', background: c, flexShrink: 0, opacity: isActive ? 1 : 0.6 }} />}
             {o.label}
           </button>
         )

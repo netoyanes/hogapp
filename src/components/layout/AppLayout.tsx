@@ -48,8 +48,8 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenP
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-base)', overflow: 'hidden' }}>
-        {/* Mobile top bar: logo/title · bell · Más */}
-        <div style={{ height: '48px', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', padding: '0 8px 0 16px', flexShrink: 0, gap: '4px' }}>
+        {/* Mobile top bar: logo/title · bell · Más (respects the notch/status bar) */}
+        <div style={{ height: 'calc(48px + env(safe-area-inset-top))', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', padding: 'env(safe-area-inset-top) 8px 0 16px', flexShrink: 0, gap: '4px' }}>
           <button
             onClick={() => setShowHome(true)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}
