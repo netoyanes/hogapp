@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckSquare, ArrowRight, Paperclip, MessageSquare, UserPlus, Activity, Archive, BarChart3, List } from 'lucide-react'
+import { CheckSquare, ArrowRight, Paperclip, MessageSquare, UserPlus, Activity, Archive, BarChart3, List, AlertTriangle as AlertTriangleIcon } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { APP_VERSION } from '../config/version'
 import { ChangelogModal } from '../components/ui/ChangelogModal'
@@ -31,6 +31,7 @@ const ACTION_CONFIG: Record<string, { color: string; icon: React.ElementType; la
   guest_deleted:    { color: '#E5533C', icon: Archive,  label: (d) => `eliminó al cliente "${d?.name}"` },
   reservation_created: { color: '#5FBF7A', icon: CheckSquare, label: (d) => `creó reserva de ${d?.guest} en ${d?.bu} (${d?.date} · ${d?.pax} pax)` },
   reservation_status:  { color: '#7FA3C2', icon: ArrowRight,  label: (d) => `movió la reserva de ${d?.guest} en ${d?.bu} a ${d?.to}` },
+  reservation_overbooked: { color: '#FACC15', icon: AlertTriangleIcon, label: (d) => `autorizó SOBRECUPO para ${d?.guest} en ${d?.bu} (${d?.slot} · ${d?.pax} pax)` },
 }
 
 function timeAgo(dateStr: string) {

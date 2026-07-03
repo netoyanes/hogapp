@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Phone, MessageCircle, Camera, Footprints, Building2, AlertTriangle, MoreHorizontal, X, Search, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Phone, MessageCircle, Camera, Footprints, Building2, AlertTriangle, MoreHorizontal, X, Search, Check, Settings2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatPhone } from '../lib/phone'
 import { logActivity } from '../hooks/useActivityLog'
@@ -7,6 +7,7 @@ import { useIsMobile } from '../hooks/useIsMobile'
 import { Avatar } from '../components/ui/Avatar'
 import { GuestProfile } from '../components/ui/GuestProfile'
 import { GuestCreateSheet } from './Guests'
+import { CapacityEditor } from '../components/ui/CapacityEditor'
 import { KPITile, SegmentedControl, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -78,10 +79,12 @@ export function Reservations({ userRole, userId }: Props) {
   const [creating, setCreating] = useState(false)
   const [openGuestId, setOpenGuestId] = useState<string | null>(null)
   const [menuRes, setMenuRes] = useState<Reservation | null>(null)
+  const [capOpen, setCapOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
 
   const canWrite = ['MASTER', 'OPS_MANAGER', 'TEAM'].includes(userRole ?? '')
   const isTeam = userRole === 'TEAM'
+  const canManageCapacity = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '')
   const buMap = useMemo(() => Object.fromEntries(buList.map(b => [b.id, b.code])), [buList])
 
   // Venues disponibles (Team queda bloqueado a los suyos si tiene asignación)
@@ -210,6 +213,12 @@ export function Reservations({ userRole, userId }: Props) {
             <button onClick={() => setDate(addDays(date, 1))} aria-label="Día siguiente" style={navBtn}><ChevronRight size={16} /></button>
           </div>
 
+          {canManageCapacity && (
+            <button onClick={() => setCapOpen(true)} title="Configurar capacidad" aria-label="Configurar capacidad"
+              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <Settings2 size={17} />
+            </button>
+          )}
           {canWrite && (
             <button onClick={() => setCreating(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 44, padding: '0 16px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>
               <Plus size={15} /> {!isMobile && 'Nueva reserva'}
@@ -378,12 +387,17 @@ export function Reservations({ userRole, userId }: Props) {
         )}
       </Sheet>
 
+      {capOpen && buId && (
+        <CapacityEditor buId={buId} buCode={buMap[buId] ?? ''} onClose={() => setCapOpen(false)} onSaved={load} />
+      )}
+
       {creating && buId && (
         <CreateReservationSheet
           buId={buId}
           buList={allowedBuList}
           defaultDate={date}
           userId={userId}
+          userRole={userRole}
           onClose={() => setCreating(false)}
           onCreated={() => { setCreating(false); load() }}
         />
@@ -403,14 +417,16 @@ const navBtn: React.CSSProperties = {
 }
 
 // ── Alta de reserva — flujo del host, ≤30 segundos ──────────────────────────
-function CreateReservationSheet({ buId, buList, defaultDate, userId, onClose, onCreated }: {
+function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, onClose, onCreated }: {
   buId: string
   buList: { id: string; code: string; name: string }[]
   defaultDate: string
   userId?: string
+  userRole?: string
   onClose: () => void
   onCreated: () => void
 }) {
+  const canOverride = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '')
   const isMobile = useIsMobile()
   const [venue, setVenue] = useState(buId)
   const [guest, setGuest] = useState<GuestLite | null>(null)
@@ -419,7 +435,8 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, onClose, on
   const [creatingGuest, setCreatingGuest] = useState(false)
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [date, setDate] = useState(defaultDate)
-  const [slots, setSlots] = useState<{ slot: string; used: number; max: number | null }[]>([])
+  const [slots, setSlots] = useState<{ slot: string; used: number; max: number | null; paxUsed: number; maxPax: number | null }[]>([])
+  const [overrideCap, setOverrideCap] = useState(false)
   const [slot, setSlot] = useState('')
   const [pax, setPax] = useState(2)
   const [zone, setZone] = useState('')
@@ -428,6 +445,9 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, onClose, on
   const [confirmNow, setConfirmNow] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // La autorización de sobrecupo no sobrevive a un cambio de slot/fecha/venue/pax
+  useEffect(() => { setOverrideCap(false) }, [slot, date, venue, pax])
 
   useEffect(() => {
     supabase.from('guest_tag_options').select('label').eq('active', true).then(({ data }) => setTagOptions((data ?? []).map(t => t.label)))
@@ -451,37 +471,51 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, onClose, on
     async function loadSlots() {
       const dow = new Date(date + 'T00:00:00').getDay()
       const [{ data: cap }, { data: res }] = await Promise.all([
-        supabase.from('venue_capacity').select('time_slot, max_reservations').eq('bu_id', venue).eq('day_of_week', dow).eq('active', true).order('time_slot'),
-        supabase.from('reservations').select('time_slot, status').eq('bu_id', venue).eq('date', date),
+        supabase.from('venue_capacity').select('time_slot, max_reservations, max_pax').eq('bu_id', venue).eq('day_of_week', dow).eq('active', true).order('time_slot'),
+        supabase.from('reservations').select('time_slot, status, party_size').eq('bu_id', venue).eq('date', date),
       ])
       const used: Record<string, number> = {}
-      for (const r of res ?? []) if (['requested', 'confirmed', 'seated', 'completed'].includes(r.status)) used[r.time_slot] = (used[r.time_slot] ?? 0) + 1
+      const paxUsed: Record<string, number> = {}
+      for (const r of res ?? []) if (['requested', 'confirmed', 'seated', 'completed'].includes(r.status)) {
+        used[r.time_slot] = (used[r.time_slot] ?? 0) + 1
+        paxUsed[r.time_slot] = (paxUsed[r.time_slot] ?? 0) + (r.party_size ?? 0)
+      }
       const rows = (cap && cap.length > 0)
-        ? cap.map(c => ({ slot: c.time_slot, used: used[c.time_slot] ?? 0, max: c.max_reservations }))
-        : DEFAULT_SLOTS.map(s => ({ slot: s, used: used[s] ?? 0, max: null }))   // sin capacidad configurada → slots default
+        ? cap.map(c => ({ slot: c.time_slot, used: used[c.time_slot] ?? 0, max: c.max_reservations, paxUsed: paxUsed[c.time_slot] ?? 0, maxPax: c.max_pax }))
+        : DEFAULT_SLOTS.map(s => ({ slot: s, used: used[s] ?? 0, max: null, paxUsed: paxUsed[s] ?? 0, maxPax: null }))   // sin capacidad configurada → slots default
       setSlots(rows)
       setSlot(prev => rows.some(r => r.slot === prev) ? prev : (rows[0]?.slot ?? ''))
     }
     loadSlots()
   }, [venue, date])
 
-  const valid = !!guest && !!venue && !!date && !!slot && pax > 0
+  // Regla de sobrecupo: lleno por número de reservas o porque el pax no cabe
+  const selectedSlot = slots.find(s => s.slot === slot)
+  const slotFull = !!selectedSlot && (
+    (selectedSlot.max !== null && selectedSlot.used >= selectedSlot.max) ||
+    (selectedSlot.maxPax !== null && selectedSlot.paxUsed + pax > selectedSlot.maxPax)
+  )
+  const blockedByCapacity = slotFull && !(canOverride && overrideCap)
+  const valid = !!guest && !!venue && !!date && !!slot && pax > 0 && !blockedByCapacity
 
   async function save() {
     if (!valid || !guest) return
     setSaving(true); setError(null)
     const status = confirmNow ? 'confirmed' : 'requested'
+    const overbooking = slotFull && canOverride && overrideCap
     const { data, error: err } = await supabase.from('reservations').insert({
       guest_id: guest.id, bu_id: venue, date, time_slot: slot, party_size: pax,
       zone: zone.trim() || null, status, source, notes: notes.trim() || null,
       created_by: userId ?? null, status_changed_by: userId ?? null,
       confirmed_at: confirmNow ? new Date().toISOString() : null,
+      overbooked_by: overbooking ? (userId ?? null) : null,
     }).select('id').single()
     setSaving(false)
     if (err) { setError(`No se pudo crear: ${err.message}`); return }
     const buCode = buList.find(b => b.id === venue)?.code
     logActivity('reservation_created', 'reservation', data.id, { guest: guest.full_name, bu: buCode, date, slot, pax })
-    showToast('Reserva creada.', 'success')
+    if (overbooking) logActivity('reservation_overbooked', 'reservation', data.id, { guest: guest.full_name, bu: buCode, slot, pax })
+    showToast(overbooking ? 'Reserva creada con sobrecupo autorizado.' : 'Reserva creada.', 'success')
     onCreated()
   }
 
@@ -609,6 +643,24 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, onClose, on
               })}
             </div>
           </div>
+
+          {slotFull && (
+            <div style={{ background: 'color-mix(in srgb, var(--status-attention) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 35%, transparent)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+              <p style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--status-attention)', fontSize: 13, fontWeight: 700, margin: 0 }}>
+                <AlertTriangle size={14} /> Slot lleno
+                {selectedSlot?.max !== null && ` — ${selectedSlot?.used}/${selectedSlot?.max} reservas`}
+                {selectedSlot?.maxPax !== null && ` · ${selectedSlot ? selectedSlot.paxUsed + pax : 0}/${selectedSlot?.maxPax} pax con esta reserva`}
+              </p>
+              {canOverride ? (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, cursor: 'pointer', minHeight: 36 }}>
+                  <input type="checkbox" checked={overrideCap} onChange={e => setOverrideCap(e.target.checked)} style={{ accentColor: 'var(--status-attention)', width: 18, height: 18 }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Autorizar sobrecupo — queda registrado a tu nombre en Actividad.</span>
+                </label>
+              ) : (
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '6px 0 0' }}>Solo un Ops Manager o Master puede autorizar sobrecupo. Elige otro slot.</p>
+              )}
+            </div>
+          )}
 
           <div>
             <label style={lbl}>Notas</label>

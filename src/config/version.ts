@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.8.0"
+export const APP_VERSION = "2.9.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.9.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "Capacidad por venue — editor día × slot (máx. reservas y pax, activo) para Ops Manager+",
+      "Atajo 'Copiar a la semana': replica los slots de un día en los otros 6",
+      "Regla de sobrecupo: slot lleno bloquea el alta; Ops+ puede autorizar con registro a su nombre",
+      "El sobrecupo valida tanto número de reservas como pax total del slot",
+    ]
+  },
   {
     version: "2.8.0",
     date: "2026-06-18",
