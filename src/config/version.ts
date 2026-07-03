@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.6.1"
+export const APP_VERSION = "2.7.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.7.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "Clientes — nuevo tab en el Directorio: base de clientes consumidores separada del B2B",
+      "Alta en 2 pasos optimizada para el host stand, con dedupe por teléfono (E.164 único)",
+      "Perfil de cliente: KPIs (visitas, no-shows), historial, próximas reservas, consentimientos, WhatsApp directo",
+      "Privacidad LFPDPPP: consentimientos con timestamp, marketing opt-in nunca pre-marcado, anonimizar/eliminar solo MASTER",
+      "Deep-link ?guest= abre el perfil sobre cualquier vista; todo auditado en Actividad",
+    ]
+  },
   {
     version: "2.6.1",
     date: "2026-06-18",

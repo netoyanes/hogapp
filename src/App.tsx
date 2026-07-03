@@ -23,6 +23,8 @@ import { SharedTask } from './screens/SharedTask'
 import { AppLogoBadge } from './components/ui/AppLogo'
 import { TaskDetailPanel } from './components/ui/TaskDetailPanel'
 import { DealOverlay } from './components/ui/DealOverlay'
+import { GuestOverlay } from './components/ui/GuestOverlay'
+import { Toaster } from './components/v2'
 import { CommandPalette } from './components/v2/CommandPalette'
 import { navItemsForRole } from './components/layout/Sidebar'
 import { getViewAsRole, setViewAsRole } from './lib/viewAs'
@@ -71,11 +73,13 @@ export default function App() {
   // current screen so you keep working where you were.
   const [overlayTaskId, setOverlayTaskId] = useState<string | null>(() => _params.get('task'))
   const [overlayDealId, setOverlayDealId] = useState<string | null>(() => _params.get('deal'))
+  const [overlayGuestId, setOverlayGuestId] = useState<string | null>(() => _params.get('guest'))
   const [paletteOpen, setPaletteOpen] = useState(false)
 
   function openTaskOverlay(taskId: string) { setOverlayTaskId(taskId) }
   function closeTaskOverlay() { setOverlayTaskId(null); stripUrlParam('task') }
   function closeDealOverlay() { setOverlayDealId(null); stripUrlParam('deal') }
+  function closeGuestOverlay() { setOverlayGuestId(null); stripUrlParam('guest') }
 
   // ⌘K / Ctrl+K opens the command palette
   useEffect(() => {
@@ -242,6 +246,15 @@ export default function App() {
           userRole={role}
         />
       )}
+      {overlayGuestId && (
+        <GuestOverlay
+          guestId={overlayGuestId}
+          onClose={closeGuestOverlay}
+          userRole={role}
+        />
+      )}
+
+      <Toaster />
     </>
   )
 }

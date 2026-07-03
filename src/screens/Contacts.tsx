@@ -4,6 +4,8 @@ import { Plus, Search, Phone, Mail, Building2, Edit2, Check, X, Archive, Archive
 import { Avatar } from '../components/ui/Avatar'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { SegmentedControl } from '../components/v2'
+import { Guests } from './Guests'
 
 // ── Contact types ────────────────────────────────────────────────────────────
 const CONTACT_TYPES = [
@@ -79,6 +81,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export function Contacts({ userRole, userId }: Props) {
   const isMobile = useIsMobile()
+  // Directorio con dos mundos separados: B2B (crm_contacts) y Clientes (guests)
+  const [dirTab, setDirTab] = useState<'contactos' | 'clientes'>('contactos')
   const isMaster = userRole === 'MASTER'
   // Only entry-level TEAM is restricted to venue clients; everyone else sees all.
   const restrictedToVenue = userRole === 'TEAM'
@@ -226,6 +230,21 @@ export function Contacts({ userRole, userId }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Tab: B2B vs Clientes consumidores */}
+      <div style={{ padding: '10px 20px 0', flexShrink: 0 }}>
+        <div style={{ maxWidth: 420 }}>
+          <SegmentedControl
+            options={[{ id: 'contactos', label: 'Contactos' }, { id: 'clientes', label: 'Clientes' }]}
+            value={dirTab}
+            onChange={(id) => setDirTab(id as 'contactos' | 'clientes')}
+          />
+        </div>
+      </div>
+
+      {dirTab === 'clientes' ? (
+        <Guests userRole={userRole} userId={userId} />
+      ) : (
+      <>
       {/* Header */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: '200px', maxWidth: '320px' }}>
@@ -498,6 +517,8 @@ export function Contacts({ userRole, userId }: Props) {
         </div>
       )}
       </div>
+      </>
+      )}
     </div>
   )
 }
