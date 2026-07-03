@@ -16,6 +16,7 @@ import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
 import { CRM } from './screens/CRM'
 import { Contacts } from './screens/Contacts'
+import { Reservations } from './screens/Reservations'
 import { Social } from './screens/Social'
 import { Objectives } from './screens/Objectives'
 import { Reports } from './screens/Reports'
@@ -64,7 +65,9 @@ export default function App() {
   useEffect(() => {
     if (landedRef.current || !role) return
     landedRef.current = true
-    setActiveView(role === 'MASTER' ? 'dashboard' : role === 'TEAM' ? 'social' : 'tasks')
+    // Team en tablet (host stand) aterriza en Reservas; en teléfono, en Social
+    const teamLanding = window.innerWidth >= 768 ? 'reservations' : 'social'
+    setActiveView(role === 'MASTER' ? 'dashboard' : role === 'TEAM' ? teamLanding : 'tasks')
   }, [role])
   const [scoringBU, setScoringBU] = useState<string | null>(null)
   const [buFilter, setBuFilter] = useState('')
@@ -119,7 +122,7 @@ export default function App() {
 
   const ALLOWED_VIEWS = role === 'MASTER'
     ? null // null = no restriction
-    : new Set(['tasks', 'crm', 'contacts', 'social', 'objectives', 'profile'])
+    : new Set(['tasks', 'crm', 'reservations', 'contacts', 'social', 'objectives', 'profile'])
 
   function handleNavigate(view: string) {
     if (ALLOWED_VIEWS && !ALLOWED_VIEWS.has(view)) return
@@ -145,6 +148,8 @@ export default function App() {
         return <CRM userRole={role} userId={profile?.id} />
       case 'contacts':
         return <Contacts userRole={role} userId={profile?.id} />
+      case 'reservations':
+        return <Reservations userRole={role} userId={profile?.id} />
       case 'social':
         return <Social profile={profile} userId={profile?.id} />
       case 'objectives':

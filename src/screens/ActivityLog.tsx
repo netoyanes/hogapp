@@ -29,6 +29,8 @@ const ACTION_CONFIG: Record<string, { color: string; icon: React.ElementType; la
   guest_restored:   { color: '#5FBF7A', icon: Archive,  label: (d) => `restauró al cliente "${d?.name}"` },
   guest_anonymized: { color: '#E5533C', icon: Archive,  label: (d) => `anonimizó al cliente "${d?.name}"` },
   guest_deleted:    { color: '#E5533C', icon: Archive,  label: (d) => `eliminó al cliente "${d?.name}"` },
+  reservation_created: { color: '#5FBF7A', icon: CheckSquare, label: (d) => `creó reserva de ${d?.guest} en ${d?.bu} (${d?.date} · ${d?.pax} pax)` },
+  reservation_status:  { color: '#7FA3C2', icon: ArrowRight,  label: (d) => `movió la reserva de ${d?.guest} en ${d?.bu} a ${d?.to}` },
 }
 
 function timeAgo(dateStr: string) {

@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.7.0"
+export const APP_VERSION = "2.8.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.8.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "Reservas — nuevo módulo: board del día por venue con realtime entre dispositivos",
+      "Flujo de estados de un tap: Solicitada → Confirmada → Sentada → Completada (no-show/cancelar en menú)",
+      "Completar una reserva registra la visita del cliente automáticamente — cero doble captura",
+      "Alta de reserva ≤30s: busca cliente por teléfono o créalo inline, slots con disponibilidad",
+      "Vista semanal con totales por día; capacidad por slot visible (6/10 reservas · 24/60 pax)",
+      "Team aterriza en Reservas en tablet (Social en teléfono); Reservas en su bottom nav",
+    ]
+  },
   {
     version: "2.7.0",
     date: "2026-06-18",
