@@ -31,6 +31,8 @@ const ACTION_CONFIG: Record<string, { color: string; icon: React.ElementType; la
   guest_deleted:    { color: '#E5533C', icon: Archive,  label: (d) => `eliminó al cliente "${d?.name}"` },
   reservation_created: { color: '#5FBF7A', icon: CheckSquare, label: (d) => `creó reserva de ${d?.guest} en ${d?.bu} (${d?.date} · ${d?.pax} pax)` },
   reservation_status:  { color: '#7FA3C2', icon: ArrowRight,  label: (d) => `movió la reserva de ${d?.guest} en ${d?.bu} a ${d?.to}` },
+  venue_assigned:   { color: '#5FBF7A', icon: UserPlus, label: (d) => `asignó ${d?.bu} a ${d?.member}` },
+  venue_unassigned: { color: '#EAB308', icon: UserPlus, label: (d) => `quitó ${d?.bu} a ${d?.member}` },
   reservation_overbooked: { color: '#FACC15', icon: AlertTriangleIcon, label: (d) => `autorizó SOBRECUPO para ${d?.guest} en ${d?.bu} (${d?.slot} · ${d?.pax} pax)` },
 }
 
