@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.1.0"
+export const APP_VERSION = "2.2.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.2.0",
+    date: "2026-06-18",
+    type: "MINOR",
+    changes: [
+      "CRM v2 — el valor del deal es el ancla visual (mono grande) con línea de probabilidad debajo",
+      "KPIs como tiles compactos con scroll horizontal en móvil (Pipeline, Ganado, Abiertos, Win rate)",
+      "Móvil: lista por etapa con control segmentado en vez de kanban horizontal",
+      "Créditos en el detalle del deal — 🔍 Finder y 🏆 Closer con avatares (base de comisiones)",
+      "Motivo de pérdida ahora es OBLIGATORIO al marcar un deal como perdido",
+      "Etapas y panel en español (Contactado, Propuesta, Negociación, Ganado, Perdido)",
+    ]
+  },
   {
     version: "2.1.0",
     date: "2026-06-18",

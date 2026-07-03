@@ -3,7 +3,9 @@ import { supabase } from '../lib/supabase'
 import type { BusinessUnit } from '../types'
 import { Plus, DollarSign, TrendingUp, Target, Briefcase } from 'lucide-react'
 import { DealDetailPanel } from '../components/ui/DealDetailPanel'
+import { KPITile, SegmentedControl, BUChip } from '../components/v2'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { notifySlack, dealCreatedMessage, dealLink } from '../hooks/useSlack'
 
 type DealType = 'SPONSORSHIP' | 'PARTNERSHIP' | 'ADVERTISING' | 'EVENT' | 'OTHER'
@@ -39,11 +41,11 @@ export interface CRMDeal {
 
 const STAGES: { id: DealStage; label: string; color: string }[] = [
   { id: 'LEAD',        label: 'Lead',        color: '#6B7280' },
-  { id: 'CONTACTED',   label: 'Contacted',   color: '#3B82F6' },
-  { id: 'PROPOSAL',    label: 'Proposal',    color: '#F59E0B' },
-  { id: 'NEGOTIATING', label: 'Negotiating', color: '#8B5CF6' },
-  { id: 'WON',         label: 'Won',         color: '#22C55E' },
-  { id: 'LOST',        label: 'Lost',        color: '#EF4444' },
+  { id: 'CONTACTED',   label: 'Contactado',   color: '#3B82F6' },
+  { id: 'PROPOSAL',    label: 'Propuesta',    color: '#F59E0B' },
+  { id: 'NEGOTIATING', label: 'Negociación', color: '#8B5CF6' },
+  { id: 'WON',         label: 'Ganado',         color: '#22C55E' },
+  { id: 'LOST',        label: 'Perdido',        color: '#EF4444' },
 ]
 
 const DEAL_TYPE_COLORS: Record<DealType, string> = {
@@ -67,6 +69,8 @@ interface Props {
 }
 
 export function CRM({ userRole, userId }: Props) {
+  const isMobile = useIsMobile()
+  const [mobileStage, setMobileStage] = useState<DealStage>('LEAD')
   const [deals, setDeals] = useState<CRMDeal[]>([])
   const [contacts, setContacts] = useState<CRMContact[]>([])
   const [buses, setBuses] = useState<BusinessUnit[]>([])
@@ -189,74 +193,107 @@ export function CRM({ userRole, userId }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
-          <Stat icon={<DollarSign size={14} />} label="Pipeline" value={fmt(pipelineValue)} color="#3B82F6" />
-          <Stat icon={<TrendingUp size={14} />} label="Won" value={fmt(wonValue)} color="#22C55E" />
-          <Stat icon={<Briefcase size={14} />} label="Open Deals" value={String(openDeals.length)} color="#8B5CF6" />
-          <Stat icon={<Target size={14} />} label="Win Rate" value={`${winRate}%`} color="#F59E0B" />
+      <div style={{ padding: isMobile ? '12px 16px' : '16px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {/* KPI tiles — horizontal scroll on mobile */}
+        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}>
+          <KPITile label="Pipeline" value={fmt(pipelineValue)} color="var(--accent)" icon={<DollarSign size={12} style={{ color: 'var(--accent)' }} />} />
+          <KPITile label="Ganado" value={fmt(wonValue)} color="var(--status-healthy)" icon={<TrendingUp size={12} style={{ color: 'var(--status-healthy)' }} />} />
+          <KPITile label="Abiertos" value={String(openDeals.length)} icon={<Briefcase size={12} style={{ color: 'var(--text-tertiary)' }} />} />
+          <KPITile label="Win rate" value={`${winRate}%`} icon={<Target size={12} style={{ color: 'var(--text-tertiary)' }} />} />
         </div>
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <select value={buFilter} onChange={e => setBuFilter(e.target.value)} className="filter-select" style={selStyle}>
-            <option value="">All BUs</option>
+          <select value={buFilter} onChange={e => setBuFilter(e.target.value)} style={selStyle}>
+            <option value="">Todas las BUs</option>
             {buses.map(b => <option key={b.id} value={b.id}>{b.code}</option>)}
           </select>
-          <select value={stageFilter} onChange={e => setStageFilter(e.target.value as DealStage | '')} style={selStyle}>
-            <option value="">All Stages</option>
-            {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
+          {!isMobile && (
+            <select value={stageFilter} onChange={e => setStageFilter(e.target.value as DealStage | '')} style={selStyle}>
+              <option value="">Todas las etapas</option>
+              {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          )}
           <button
             onClick={() => setOwnerFilter(v => v ? '' : (userId ?? ''))}
             style={{
               background: ownerFilter ? 'var(--accent-bg)' : 'var(--bg-elevated)',
               border: `1px solid ${ownerFilter ? 'var(--accent-border)' : 'var(--border-default)'}`,
               color: ownerFilter ? 'var(--accent)' : 'var(--text-tertiary)',
-              borderRadius: '6px', padding: '5px 9px', fontSize: '12px', cursor: 'pointer',
-              fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap',
+              borderRadius: 'var(--radius-sm)', padding: '6px 10px', fontSize: '12px', cursor: 'pointer',
+              fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap', minHeight: '32px',
             }}
           >
-            {ownerFilter ? 'My Deals' : 'All Deals'}
+            {ownerFilter ? 'Mis deals' : 'Todos'}
           </button>
           <button
             onClick={() => setCreating(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 14px', minHeight: 'var(--touch-target)', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 999, cursor: 'pointer', fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap', marginLeft: 'auto' }}
           >
-            <Plus size={14} /> New Deal
+            <Plus size={14} /> Crear deal
           </button>
         </div>
+
+        {/* Mobile: stage segments */}
+        {isMobile && (
+          <SegmentedControl
+            options={STAGES.map(s => ({ id: s.id, label: `${s.label.slice(0, 6)} ${byStage(s.id).length}` }))}
+            value={mobileStage}
+            onChange={(id) => setMobileStage(id as DealStage)}
+          />
+        )}
       </div>
 
-      {/* Kanban */}
-      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '16px 20px' }}>
-        <div style={{ display: 'flex', gap: '12px', height: '100%', minWidth: `${STAGES.length * 220}px` }}>
-          {STAGES.map(stage => (
-            <div key={stage.id} style={{ flex: 1, minWidth: '200px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* Column header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '8px', borderBottom: `2px solid ${stage.color}` }}>
-                <span style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: stage.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{stage.label}</span>
-                <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{byStage(stage.id).length}</span>
-              </div>
-
-              {/* Cards */}
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {byStage(stage.id).map(deal => (
-                  <DealCard
-                    key={deal.id}
-                    deal={deal}
-                    contact={contacts.find(c => c.id === deal.contact_id) ?? null}
-                    bu={buses.find(b => b.id === deal.bu_id) ?? null}
-                    onClick={() => setSelectedDeal(deal.id)}
-                  />
-                ))}
-                {byStage(stage.id).length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '24px 8px', color: 'var(--text-tertiary)', fontSize: '11px' }}>—</div>
-                )}
-              </div>
+      {/* Body */}
+      {isMobile ? (
+        /* ── Mobile: single-column list for the active stage ── */
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {byStage(mobileStage).length === 0 && (
+            <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '13px', paddingTop: '40px' }}>
+              Nada en "{STAGES.find(s => s.id === mobileStage)?.label}".
             </div>
+          )}
+          {byStage(mobileStage).map(deal => (
+            <DealCard
+              key={deal.id}
+              deal={deal}
+              contact={contacts.find(c => c.id === deal.contact_id) ?? null}
+              bu={buses.find(b => b.id === deal.bu_id) ?? null}
+              onClick={() => setSelectedDeal(deal.id)}
+            />
           ))}
         </div>
-      </div>
+      ) : (
+        /* ── Desktop: 6-stage kanban ── */
+        <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '16px 20px' }}>
+          <div style={{ display: 'flex', gap: '12px', height: '100%', minWidth: `${STAGES.length * 220}px` }}>
+            {STAGES.map(stage => (
+              <div key={stage.id} style={{ flex: 1, minWidth: '200px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {/* Column header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '8px', borderBottom: `2px solid ${stage.color}` }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: stage.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{stage.label}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{byStage(stage.id).length}</span>
+                </div>
+
+                {/* Cards */}
+                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {byStage(stage.id).map(deal => (
+                    <DealCard
+                      key={deal.id}
+                      deal={deal}
+                      contact={contacts.find(c => c.id === deal.contact_id) ?? null}
+                      bu={buses.find(b => b.id === deal.bu_id) ?? null}
+                      onClick={() => setSelectedDeal(deal.id)}
+                    />
+                  ))}
+                  {byStage(stage.id).length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '24px 8px', color: 'var(--text-tertiary)', fontSize: '11px' }}>—</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Deal detail panel */}
       {selectedDeal && (
@@ -274,20 +311,20 @@ export function CRM({ userRole, userId }: Props) {
       {creating && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} onClick={() => setCreating(false)}>
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '12px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto', padding: '24px' }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '20px' }}>New Deal</h2>
+            <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '20px' }}>Crear deal</h2>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <Field label="Title *">
-                <input value={cTitle} onChange={e => setCTitle(e.target.value)} placeholder="Deal title" style={inputStyle} />
+              <Field label="Título *">
+                <input value={cTitle} onChange={e => setCTitle(e.target.value)} placeholder="Nombre de la oportunidad" style={inputStyle} />
               </Field>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-                <Field label="Type">
+                <Field label="Tipo">
                   <select value={cType} onChange={e => setCType(e.target.value as DealType)} style={inputStyle}>
                     {DEAL_TYPES.map(t => <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>)}
                   </select>
                 </Field>
-                <Field label="Stage">
+                <Field label="Etapa">
                   <select value={cStage} onChange={e => setCStage(e.target.value as DealStage)} style={inputStyle}>
                     {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </select>
@@ -295,27 +332,27 @@ export function CRM({ userRole, userId }: Props) {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-                <Field label="Value (USD)">
+                <Field label="Valor (USD)">
                   <input type="number" value={cValue} onChange={e => setCValue(e.target.value)} placeholder="0" style={inputStyle} />
                 </Field>
-                <Field label="Probability %">
+                <Field label="Probabilidad %">
                   <input type="number" min={0} max={100} value={cProb} onChange={e => setCProb(e.target.value)} style={inputStyle} />
                 </Field>
               </div>
 
               {cType === 'EVENT' && (
-                <Field label="📅 Event Date (aparece en el Calendario)">
+                <Field label="📅 Fecha del evento (aparece en el Calendario)">
                   <input type="date" value={cEventDate} onChange={e => setCEventDate(e.target.value)} style={inputStyle} />
                 </Field>
               )}
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-                <Field label="Close Date">
+                <Field label="Fecha de cierre">
                   <input type="date" value={cCloseDate} onChange={e => setCCloseDate(e.target.value)} style={inputStyle} />
                 </Field>
-                <Field label="Business Unit">
+                <Field label="Unidad de negocio">
                   <select value={cBu} onChange={e => setCBu(e.target.value)} style={inputStyle}>
-                    <option value="">None</option>
+                    <option value="">Ninguna</option>
                     {buses.map(b => <option key={b.id} value={b.id}>{b.code}</option>)}
                   </select>
                 </Field>
@@ -324,34 +361,34 @@ export function CRM({ userRole, userId }: Props) {
               {/* Contact */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <label style={labelStyle}>Contact</label>
+                  <label style={labelStyle}>Contacto</label>
                   <button onClick={() => setNewContact(!newContact)} style={{ fontSize: '10px', color: newContact ? 'var(--accent)' : 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                    {newContact ? '← Existing' : '+ New contact'}
+                    {newContact ? '← Elegir existente' : '+ Nuevo contacto'}
                   </button>
                 </div>
                 {newContact ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <input value={cContactName} onChange={e => setCContactName(e.target.value)} placeholder="Full name *" style={inputStyle} />
-                    <input value={cContactCompany} onChange={e => setCContactCompany(e.target.value)} placeholder="Company" style={inputStyle} />
-                    <input value={cContactEmail} onChange={e => setCContactEmail(e.target.value)} placeholder="Email" style={inputStyle} />
+                    <input value={cContactName} onChange={e => setCContactName(e.target.value)} placeholder="Nombre completo *" style={inputStyle} />
+                    <input value={cContactCompany} onChange={e => setCContactCompany(e.target.value)} placeholder="Empresa" style={inputStyle} />
+                    <input value={cContactEmail} onChange={e => setCContactEmail(e.target.value)} placeholder="Correo" style={inputStyle} />
                   </div>
                 ) : (
                   <select value={cContactId} onChange={e => setCContactId(e.target.value)} style={inputStyle}>
-                    <option value="">None</option>
+                    <option value="">Ninguna</option>
                     {contacts.map(c => <option key={c.id} value={c.id}>{c.full_name}{c.company ? ` · ${c.company}` : ''}</option>)}
                   </select>
                 )}
               </div>
 
-              <Field label="Description">
-                <textarea value={cDesc} onChange={e => setCDesc(e.target.value)} rows={3} placeholder="Context, notes…" style={{ ...inputStyle, resize: 'vertical' }} />
+              <Field label="Descripción">
+                <textarea value={cDesc} onChange={e => setCDesc(e.target.value)} rows={3} placeholder="Contexto, notas…" style={{ ...inputStyle, resize: 'vertical' }} />
               </Field>
             </div>
 
             <div style={{ display: 'flex', gap: '8px', marginTop: '20px', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setCreating(false); resetForm() }} style={{ padding: '7px 14px', background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>Cancel</button>
-              <button onClick={save} disabled={saving || !cTitle.trim()} style={{ padding: '7px 14px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, opacity: saving ? 0.6 : 1 }}>
-                {saving ? 'Saving…' : 'Create Deal'}
+              <button onClick={() => { setCreating(false); resetForm() }} style={{ padding: '7px 14px', background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>Cancelar</button>
+              <button onClick={save} disabled={saving || !cTitle.trim()} style={{ padding: '7px 14px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, opacity: saving ? 0.6 : 1 }}>
+                {saving ? 'Guardando…' : 'Crear deal'}
               </button>
             </div>
           </div>
@@ -361,50 +398,45 @@ export function CRM({ userRole, userId }: Props) {
   )
 }
 
-function Stat({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <div style={{ color, display: 'flex' }}>{icon}</div>
-      <div>
-        <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-        <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</div>
-      </div>
-    </div>
-  )
-}
-
+// v2 card — the money is the anchor: value in mono with the probability as a
+// thin progress line right under it. Deal type as a small dot + label.
 function DealCard({ deal, contact, bu, onClick }: { deal: CRMDeal; contact: CRMContact | null; bu: BusinessUnit | null; onClick: () => void }) {
   const typeColor = DEAL_TYPE_COLORS[deal.deal_type]
   return (
     <button
       onClick={onClick}
-      style={{ width: '100%', textAlign: 'left', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderTop: `3px solid ${typeColor}`, borderRadius: '8px', padding: '10px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '6px' }}
+      className="hover:brightness-110 transition-[filter]"
+      style={{ width: '100%', textAlign: 'left', background: 'var(--bg-elevated)', border: 'none', borderRadius: 'var(--radius-sm)', padding: '11px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '7px' }}
     >
+      {/* Title + BU monogram */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-        <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>{deal.title}</span>
-        {bu && <span style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '4px', padding: '1px 4px', flexShrink: 0 }}>{bu.code}</span>}
+        <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.35, minWidth: 0 }}>{deal.title}</span>
+        {bu && <BUChip code={bu.code} size="sm" />}
       </div>
 
-      <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{fmt(deal.value)}</div>
-
-      {contact && (
-        <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
-          {contact.full_name}{contact.company ? <span style={{ color: 'var(--text-tertiary)' }}> · {contact.company}</span> : null}
+      {/* Value — the visual anchor, probability line right under it */}
+      <div>
+        <div className="num" style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>
+          {fmt(deal.value)}
+          <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', marginLeft: 6, fontWeight: 400 }}>{deal.probability}%</span>
         </div>
-      )}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <div style={{ flex: 1, height: '3px', background: 'var(--bg-base)', borderRadius: '2px' }}>
-          <div style={{ width: `${deal.probability}%`, height: '100%', background: typeColor, borderRadius: '2px' }} />
+        <div style={{ marginTop: 5, height: '2px', background: 'var(--bg-base)', borderRadius: '1px' }}>
+          <div style={{ width: `${deal.probability}%`, height: '100%', background: typeColor, borderRadius: '1px' }} />
         </div>
-        <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{deal.probability}%</span>
       </div>
 
-      {deal.close_date && (
-        <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
-          Close: {new Date(deal.close_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-        </div>
-      )}
+      {/* Contact · type · close date */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: typeColor, flexShrink: 0 }} title={deal.deal_type} />
+        <span style={{ fontSize: '10px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          {contact ? contact.full_name : deal.deal_type.charAt(0) + deal.deal_type.slice(1).toLowerCase()}
+        </span>
+        {deal.close_date && (
+          <span className="num" style={{ fontSize: '9px', color: 'var(--text-tertiary)', flexShrink: 0 }}>
+            {new Date(deal.close_date + 'T00:00:00').toLocaleDateString('es-MX', { month: 'short', day: 'numeric' })}
+          </span>
+        )}
+      </div>
     </button>
   )
 }
