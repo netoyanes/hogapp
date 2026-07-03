@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Contact2, Sparkles, Target, Command } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarClock, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Contact2, Sparkles, Target, Command } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
 import { STR } from '../../lib/strings'
@@ -18,6 +18,7 @@ export const NAV_ITEMS = [
   { id: 'dashboard',  label: STR.nav.dashboard,  icon: LayoutDashboard, shortcut: '1', cLevelOnly: true },
   { id: 'tasks',      label: STR.nav.tasks,      icon: CheckSquare,     shortcut: '2' },
   { id: 'crm',        label: STR.nav.crm,        icon: Handshake,       shortcut: '3' },
+  { id: 'reservations', label: STR.nav.reservations, icon: CalendarClock },
   { id: 'contacts',   label: STR.nav.directory,  icon: Contact2,        shortcut: '4' },
   { id: 'social',     label: STR.nav.social,     icon: Sparkles,        shortcut: '5' },
   { id: 'objectives', label: STR.nav.objectives, icon: Target,          shortcut: '6' },
@@ -33,7 +34,7 @@ export const NAV_ITEMS = [
 ]
 
 // Views every non-MASTER role can navigate to (mirrors ALLOWED_VIEWS in App)
-export const NON_MASTER_VIEWS = ['tasks', 'crm', 'contacts', 'social', 'objectives', 'profile']
+export const NON_MASTER_VIEWS = ['tasks', 'crm', 'reservations', 'contacts', 'social', 'objectives', 'profile']
 
 export function navItemsForRole(userRole?: string) {
   return NAV_ITEMS.filter(item => {

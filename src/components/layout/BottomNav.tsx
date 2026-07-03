@@ -1,4 +1,4 @@
-import { LayoutDashboard, CheckSquare, UserCircle, Handshake, Contact2, Sparkles } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, UserCircle, CalendarClock, Handshake, Contact2, Sparkles } from 'lucide-react'
 import { STR } from '../../lib/strings'
 
 interface Props {
@@ -18,8 +18,8 @@ const MASTER_SLOTS = [
 ]
 
 const TEAM_SLOTS = [
+  { id: 'reservations', label: STR.nav.reservations, icon: CalendarClock },
   { id: 'tasks',    label: STR.nav.tasks,     icon: CheckSquare },
-  { id: 'crm',      label: STR.nav.crm,       icon: Handshake },
   { id: 'social',   label: STR.nav.social,    icon: Sparkles },
   { id: 'contacts', label: STR.nav.directory, icon: Contact2 },
   { id: 'profile',  label: STR.nav.profile,   icon: UserCircle },

@@ -21,7 +21,7 @@ interface Props {
 // Views that already live in the mobile bottom nav (per role) — the "Más"
 // sheet shows everything else the role can access.
 const MASTER_BOTTOM = new Set(['dashboard', 'tasks', 'crm', 'social', 'profile'])
-const TEAM_BOTTOM = new Set(['tasks', 'crm', 'social', 'contacts', 'profile'])
+const TEAM_BOTTOM = new Set(['reservations', 'tasks', 'social', 'contacts', 'profile'])
 
 export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenPalette, bell, userRole }: Props) {
   const isMobile = useIsMobile()

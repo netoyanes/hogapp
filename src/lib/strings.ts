@@ -29,6 +29,7 @@ export const STR = {
     dashboard: 'Dashboard',
     tasks: 'Tareas',
     crm: 'CRM',
+    reservations: 'Reservas',
     directory: 'Directorio',
     social: 'Social',
     objectives: 'Objetivos',
