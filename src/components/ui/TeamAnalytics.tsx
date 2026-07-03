@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Clock, DollarSign, Trophy, Users, Contact2, Hammer, Activity as ActivityIcon } from 'lucide-react'
 import { Avatar } from './Avatar'
+import { KPITile } from '../v2'
 import { CHANGELOG } from '../../config/version'
 
 const WEEKLY_GOAL = 40 // hours
@@ -87,11 +88,11 @@ export function TeamAnalytics() {
   useEffect(() => { load() }, [load])
 
   const tiles = [
-    { label: 'Directory contacts', value: String(contactsCount), icon: Contact2, color: '#0EA5E9' },
-    { label: 'HOG team',           value: String(teamCount),     icon: Users,    color: '#A855F7' },
-    { label: 'Pipeline value',     value: money(pipelineValue),  icon: DollarSign, color: 'var(--accent)' },
-    { label: 'Won value',          value: money(wonValue),       icon: Trophy,   color: '#22C55E' },
-    { label: 'Build hours',        value: `~${BUILD_HOURS}h`,    icon: Hammer,   color: '#F59E0B', hint: `Estimación "horas nalga": base 60h + ${BUILD_BULLETS} features × 3.5h` },
+    { label: 'Contactos', value: String(contactsCount), icon: Contact2, color: '#0EA5E9' },
+    { label: 'Equipo HOG',           value: String(teamCount),     icon: Users,    color: '#A855F7' },
+    { label: 'Pipeline',     value: money(pipelineValue),  icon: DollarSign, color: 'var(--accent)' },
+    { label: 'Ganado',          value: money(wonValue),       icon: Trophy,   color: '#22C55E' },
+    { label: 'Horas de build',        value: `~${BUILD_HOURS}h`,    icon: Hammer,   color: '#F59E0B', hint: `Estimación "horas nalga": base 60h + ${BUILD_BULLETS} features × 3.5h` },
   ]
 
   return (
@@ -101,13 +102,8 @@ export function TeamAnalytics() {
         {tiles.map(t => {
           const Icon = t.icon
           return (
-            <div key={t.label} title={t.hint} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '10px', padding: '12px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <Icon size={13} style={{ color: t.color }} />
-                <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t.label}</span>
-              </div>
-              <div style={{ color: t.color, fontFamily: 'var(--font-mono)', fontSize: '18px', fontWeight: 700, lineHeight: 1 }}>{t.value}</div>
-            </div>
+            <KPITile key={t.label} label={t.label} value={t.value} color={t.color} hint={t.hint}
+              icon={<Icon size={13} style={{ color: t.color }} />} />
           )
         })}
       </div>
@@ -116,12 +112,12 @@ export function TeamAnalytics() {
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
           <ActivityIcon size={13} style={{ color: 'var(--accent)' }} />
-          <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', fontWeight: 600 }}>PRODUCTIVITY BY USER</span>
+          <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', fontWeight: 600 }}>PRODUCTIVIDAD POR USUARIO</span>
           <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
         </div>
 
         {loading ? (
-          <div style={{ color: 'var(--text-tertiary)', fontSize: '13px', padding: '20px', textAlign: 'center' }}>Loading…</div>
+          <div style={{ color: 'var(--text-tertiary)', fontSize: '13px', padding: '20px', textAlign: 'center' }}>Cargando…</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {rows.map(r => {

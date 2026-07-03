@@ -40,9 +40,9 @@ function dayLabel(dateStr: string) {
   const today = new Date()
   const yesterday = new Date()
   yesterday.setDate(today.getDate() - 1)
-  if (d.toDateString() === today.toDateString()) return 'Today'
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
-  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  if (d.toDateString() === today.toDateString()) return 'Hoy'
+  if (d.toDateString() === yesterday.toDateString()) return 'Ayer'
+  return d.toLocaleDateString('es-MX', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
 function userName(e: LogEntry) {
@@ -114,15 +114,15 @@ export function ActivityLog() {
       <div style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', flexShrink: 0, padding: '16px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
           <div>
-            <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '17px' }}>Activity Log</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>All platform actions · live</p>
+            <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '17px' }}>Actividad</h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Todas las acciones de la plataforma · en vivo</p>
           </div>
           <Activity size={18} style={{ color: 'var(--text-tertiary)' }} />
         </div>
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
-          {([['timeline', 'Timeline', List], ['analytics', 'Analytics', BarChart3]] as const).map(([id, label, Icon]) => (
+          {([['timeline', 'Cronología', List], ['analytics', 'Analítica', BarChart3]] as const).map(([id, label, Icon]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -143,10 +143,10 @@ export function ActivityLog() {
         {tab === 'timeline' && (
         <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '2px' }}>
           {[
-            { label: 'Today',       value: String(todayEntries.length),  color: 'var(--accent)' },
-            { label: 'This week',   value: String(weekEntries.length),   color: 'var(--text-primary)' },
+            { label: 'Hoy',       value: String(todayEntries.length),  color: 'var(--accent)' },
+            { label: 'Semana',   value: String(weekEntries.length),   color: 'var(--text-primary)' },
             { label: 'Total',       value: String(entries.length),       color: 'var(--text-primary)' },
-            { label: 'Most active', value: mostActive ? `${mostActive.name.split(' ')[0]} ×${mostActive.count}` : '—', color: '#A855F7' },
+            { label: 'Más activo', value: mostActive ? `${mostActive.name.split(' ')[0]} ×${mostActive.count}` : '—', color: '#A855F7' },
           ].map((s) => (
             <div key={s.label} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '8px', padding: '8px 12px', flexShrink: 0, minWidth: '80px' }}>
               <div style={{ color: s.color, fontFamily: 'var(--font-mono)', fontSize: '18px', fontWeight: 700, lineHeight: 1 }}>{s.value}</div>
@@ -188,7 +188,7 @@ export function ActivityLog() {
                   </span>
                   <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
                   <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-                    {group.entries.length} action{group.entries.length !== 1 ? 's' : ''}
+                    {group.entries.length} acción{group.entries.length !== 1 ? 'es' : ''}
                   </span>
                 </div>
 
