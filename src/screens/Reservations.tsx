@@ -487,9 +487,11 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
   const [creatingGuest, setCreatingGuest] = useState(false)
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [date, setDate] = useState(defaultDate)
-  const [slots, setSlots] = useState<{ slot: string; used: number; max: number | null; paxUsed: number; maxPax: number | null }[]>([])
+  const [slots, setSlots] = useState<{ slot: string; used: number; max: number | null; paxUsed: number; maxPax: number | null; custom?: boolean }[]>([])
   const [overrideCap, setOverrideCap] = useState(false)
   const [slot, setSlot] = useState('')
+  const [showCustom, setShowCustom] = useState(false)
+  const [customSlot, setCustomSlot] = useState('')
   const [pax, setPax] = useState(2)
   const [zone, setZone] = useState('')
   const [source, setSource] = useState<ResSource>('phone')
@@ -549,6 +551,15 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
   )
   const blockedByCapacity = slotFull && !(canOverride && overrideCap)
   const valid = !!guest && !!venue && !!date && !!slot && pax > 0 && !blockedByCapacity
+
+  function applyCustomSlot() {
+    const v = customSlot.trim()
+    if (!v) return
+    setSlots(prev => prev.some(s => s.slot === v) ? prev : [...prev, { slot: v, used: 0, max: null, paxUsed: 0, maxPax: null, custom: true }])
+    setSlot(v)
+    setShowCustom(false)
+    setCustomSlot('')
+  }
 
   async function save() {
     if (!valid || !guest) return
@@ -650,15 +661,34 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
                 {slots.map(s => {
                   const full = s.max !== null && s.used >= s.max
                   const on = slot === s.slot
+                  const custom = !!s.custom
                   return (
                     <button key={s.slot} onClick={() => setSlot(s.slot)}
-                      style={{ minHeight: 44, padding: '0 14px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-mono)', background: on ? 'var(--accent-bg)' : 'var(--bg-elevated)', border: `1px solid ${on ? 'var(--accent)' : full ? 'color-mix(in srgb, var(--status-attention) 40%, transparent)' : 'var(--border-default)'}`, color: on ? 'var(--accent)' : full ? 'var(--status-attention)' : 'var(--text-secondary)' }}>
+                      style={{ minHeight: 44, padding: '0 14px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-mono)', background: on ? 'var(--accent-bg)' : 'var(--bg-elevated)', border: `1px solid ${on ? 'var(--accent)' : custom ? 'color-mix(in srgb, var(--accent) 45%, transparent)' : full ? 'color-mix(in srgb, var(--status-attention) 40%, transparent)' : 'var(--border-default)'}`, color: on ? 'var(--accent)' : full ? 'var(--status-attention)' : 'var(--text-secondary)' }}>
                       {s.slot}{s.max !== null && <span style={{ fontSize: 10, marginLeft: 6 }}>{s.used}/{s.max}</span>}
                     </button>
                   )
                 })}
+                {showCustom ? (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexBasis: '100%' }}>
+                    <input value={customSlot} onChange={e => setCustomSlot(e.target.value)} autoFocus
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyCustomSlot() } }}
+                      placeholder="17:00–19:00" className="num"
+                      style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono)' }} />
+                    <button onClick={applyCustomSlot} disabled={!customSlot.trim()}
+                      style={{ minHeight: 44, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: customSlot.trim() ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 700, background: customSlot.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: customSlot.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)' }}>Usar</button>
+                    <button onClick={() => { setShowCustom(false); setCustomSlot('') }} aria-label="Cancelar"
+                      style={{ width: 44, height: 44, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><X size={14} /></button>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowCustom(true)}
+                    style={{ minHeight: 44, padding: '0 14px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: 'transparent', border: '1px dashed var(--accent-border)', color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <Plus size={13} /> Otro horario
+                  </button>
+                )}
               </div>
             )}
+            {showCustom && <p style={{ color: 'var(--text-tertiary)', fontSize: 11, margin: '6px 0 0' }}>Para eventos especiales o apertura anticipada. Sin límite de cupo.</p>}
           </div>
 
           {/* 4. Pax + zona */}
