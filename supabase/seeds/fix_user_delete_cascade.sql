@@ -15,9 +15,10 @@
 --     scored_by, assigned_to…) → ON DELETE SET NULL  (el registro se conserva, el
 --     actor queda como desconocido).
 --
--- El barrido es dinámico: cubre también tablas creadas desde el panel de Supabase
--- (p. ej. activity_log) que no viven en estos archivos. Idempotente: re-ejecutar
--- vuelve a aplicar exactamente las mismas reglas.
+-- El barrido es dinámico pero SOLO toca tablas del esquema public (las nuestras);
+-- el esquema auth (auth.identities, auth.sessions, …) lo gestiona Supabase y ya
+-- tiene su cascada — no somos dueños de esas tablas y no hay que tocarlas.
+-- Cubre también tablas creadas desde el panel (p. ej. activity_log). Idempotente.
 --
 -- Ejecutar en el SQL Editor de Supabase.
 -- ═════════════════════════════════════════════════════════════════════════════
@@ -34,10 +35,13 @@ begin
            att.attname                   as col,
            con.confrelid::regclass::text as reftbl
     from pg_constraint con
+    join pg_class      rel on rel.oid = con.conrelid
+    join pg_namespace  ns  on ns.oid  = rel.relnamespace
     join pg_attribute  att
       on att.attrelid = con.conrelid
      and att.attnum   = con.conkey[1]
     where con.contype = 'f'
+      and ns.nspname = 'public'                           -- solo NUESTRAS tablas; auth.* lo maneja Supabase
       and con.confrelid in ('auth.users'::regclass, 'public.profiles'::regclass)
       and coalesce(array_length(con.conkey, 1), 1) = 1   -- solo FKs de una columna
   loop
