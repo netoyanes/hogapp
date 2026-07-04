@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.12.0"
+export const APP_VERSION = "2.13.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.13.0",
+    date: "2026-07-04",
+    type: "MINOR",
+    changes: [
+      "Nueva reserva — botón \"Otro horario\" para capturar un horario a la medida (ej. 17:00–19:00)",
+      "Pensado para eventos especiales o apertura anticipada; se toma sin límite de cupo",
+      "El horario personalizado se guarda tal cual en la reserva sin tocar la capacidad configurada del venue",
+    ]
+  },
   {
     version: "2.12.0",
     date: "2026-06-18",
