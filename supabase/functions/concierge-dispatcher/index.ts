@@ -55,5 +55,8 @@ async function withinCourtesyWindow(supabaseAdmin: any, buId: string | null, cha
   const { data: cfg } = await supabaseAdmin.from('bot_venue_config').select('followup_window_start, followup_window_end, timezone').eq('bu_id', buId).eq('channel', channel).maybeSingle()
   if (!cfg) return true
   const local = new Intl.DateTimeFormat('en-GB', { timeZone: cfg.timezone || 'America/Mazatlan', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())
-  return local >= cfg.followup_window_start.slice(0, 5) && local <= cfg.followup_window_end.slice(0, 5)
+  const start = cfg.followup_window_start.slice(0, 5)
+  const end = cfg.followup_window_end.slice(0, 5)
+  // Ventanas que cruzan medianoche (nightlife: ej. 08:00–00:20) envuelven el día
+  return start <= end ? (local >= start && local <= end) : (local >= start || local <= end)
 }
