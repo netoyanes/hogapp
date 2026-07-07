@@ -41,6 +41,7 @@ export const STR = {
     upload: 'Carga CSV',
     invite: 'Usuarios',
     reports: 'Reportes',
+    concierge: 'Concierge',
     profile: 'Perfil',
     more: 'Más',
   },

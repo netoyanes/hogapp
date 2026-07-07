@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.13.0"
+export const APP_VERSION = "2.14.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.14.0",
+    date: "2026-07-07",
+    type: "MINOR",
+    changes: [
+      "HOG Concierge (solo Master) — dashboard del bot de reservas: Resumen, Bandeja y Configuración",
+      "Resumen: conversaciones por venue, % resuelto por bot, escalaciones, reservas por bot y conversión",
+      "Bandeja en vivo con handoff humano↔bot: Tomar / Devolver al bot / Cerrar; responder toma la conversación",
+      "Simulador de conversaciones para ensayar el flujo antes de conectar Meta",
+      "Configuración sin deploy: kill switch global, voz por venue, delays (45s / 5min), ventana de cortesía y escalación por pax",
+    ]
+  },
   {
     version: "2.13.0",
     date: "2026-07-04",
