@@ -24,6 +24,12 @@ create index if not exists idx_botconv_next_reply on bot_conversations (next_bot
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
+-- IMPORTANTE: reemplaza los DOS placeholders de abajo con tu Project URL y tu
+-- service_role_key reales (Supabase → Project Settings → API) ANTES de correr
+-- este bloque. En Supabase hosted no se puede usar `alter database ... set`
+-- (no eres superusuario), así que los valores van directo aquí — es el patrón
+-- que la propia doc de Supabase usa. La llave queda guardada en la tabla
+-- cron.job, visible solo para roles privilegiados (nunca anon/authenticated).
 select cron.unschedule('concierge-dispatch') where exists (select 1 from cron.job where jobname = 'concierge-dispatch');
 
 select cron.schedule(
@@ -31,23 +37,12 @@ select cron.schedule(
   '* * * * *',
   $$
   select net.http_post(
-    url := current_setting('app.settings.supabase_url', true) || '/functions/v1/concierge-dispatcher',
+    url := 'https://TU-REF.supabase.co/functions/v1/concierge-dispatcher',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+      'Authorization', 'Bearer TU-SERVICE-ROLE-KEY'
     ),
     body := '{}'::jsonb
   );
   $$
 );
-
--- ─── Config requerida por el cron ────────────────────────────────────────────
--- El cron necesita conocer la URL del proyecto y una llave con permiso para
--- invocar Edge Functions. Corre esto UNA VEZ reemplazando los valores reales
--- (Project Settings → API en Supabase). No lo dejes con los placeholders.
---
--- alter database postgres set app.settings.supabase_url = 'https://TU-PROYECTO.supabase.co';
--- alter database postgres set app.settings.service_role_key = 'TU-SERVICE-ROLE-KEY';
---
--- Después de correr esas dos líneas, reconecta el SQL Editor (o espera unos
--- segundos) para que la sesión recoja la nueva configuración.
