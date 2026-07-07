@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.15.0"
+export const APP_VERSION = "2.15.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.15.1",
+    date: "2026-07-07",
+    type: "PATCH",
+    changes: [
+      "Concierge — arreglado el scroll vertical de la pantalla (el contenido quedaba cortado)",
+      "Bot: la ventana de cortesía ahora soporta horarios que cruzan medianoche (ej. 08:00–00:20)",
+    ]
+  },
   {
     version: "2.15.0",
     date: "2026-07-07",

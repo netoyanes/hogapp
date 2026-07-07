@@ -83,6 +83,7 @@ export function Concierge({ userId }: { userId?: string }) {
   }, [])
 
   return (
+    <div style={{ flex: 1, overflowY: 'auto' }}>
     <div style={{ padding: isMobile ? 'var(--space-3)' : 'var(--space-5)', maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--space-4)' }}>
         <Bot size={20} style={{ color: 'var(--accent)' }} />
@@ -106,6 +107,7 @@ export function Concierge({ userId }: { userId?: string }) {
       {tab === 'summary' && <SummaryTab buList={buList} />}
       {tab === 'inbox' && <InboxTab buList={buList} userId={userId} isMobile={isMobile} />}
       {tab === 'config' && <ConfigTab buList={buList} />}
+    </div>
     </div>
   )
 }
