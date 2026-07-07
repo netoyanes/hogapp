@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.14.0"
+export const APP_VERSION = "2.15.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.15.0",
+    date: "2026-07-07",
+    type: "MINOR",
+    changes: [
+      "Concierge Fase 2 (backend) — webhook + agente Claude conectan WhatsApp e Instagram vía Meta",
+      "El bot busca disponibilidad real, crea clientes, crea reservas y escala a humano por herramientas",
+      "Respeta el handoff: nunca responde si la conversación está en manos de un humano",
+      "Cadena de 45s (batching) y seguimiento de 5 min despachados por cron, respetando ventana de cortesía",
+      "Requiere secrets de Meta/Anthropic y activar el kill switch — inerte hasta configurarse",
+    ]
+  },
   {
     version: "2.14.0",
     date: "2026-07-07",
