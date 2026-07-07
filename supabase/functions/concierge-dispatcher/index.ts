@@ -1,8 +1,14 @@
 // concierge-dispatcher — disparado por pg_cron cada minuto (ver concierge_phase2.sql).
 // Encuentra turnos vencidos (primera respuesta/siguiente mensaje) y seguimientos
 // de 5 min pendientes, y despacha cada uno a concierge-agent.
+// Auto-contenida (sin imports locales) para poder desplegarse desde el editor
+// del dashboard de Supabase, no solo por CLI.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { CORS } from '../_shared/concierge.ts'
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 const CONCURRENCY = 5
 
