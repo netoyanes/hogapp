@@ -19,7 +19,7 @@ export const TENANT: TenantConfig = {
   enabledViews: [
     'dashboard', 'tasks', 'crm', 'reservations', 'contacts', 'social', 'objectives', 'calendar', 'content',
     'revenue', 'reports', 'activity', 'upload', 'templates',
-    'invite', 'profile',
+    'concierge', 'invite', 'profile',
   ],
   viewTitles: {
     dashboard: 'Dashboard',
@@ -34,6 +34,7 @@ export const TENANT: TenantConfig = {
     activity:  'Actividad',
     upload:    'Carga CSV',
     templates: 'Plantillas',
+    concierge: 'Concierge',
     invite:    'Usuarios',
     profile:   'Perfil',
     social:    'Social',

@@ -20,6 +20,7 @@ import { Reservations } from './screens/Reservations'
 import { Social } from './screens/Social'
 import { Objectives } from './screens/Objectives'
 import { Reports } from './screens/Reports'
+import { Concierge } from './screens/Concierge'
 import { SharedTask } from './screens/SharedTask'
 import { PrivacyNotice } from './screens/PrivacyNotice'
 import { AppLogoBadge } from './components/ui/AppLogo'
@@ -185,6 +186,8 @@ export default function App() {
         return <TaskTemplates userRole={role} />
       case 'reports':
         return <Reports userRole={role} />
+      case 'concierge':
+        return role === 'MASTER' ? <Concierge userId={profile?.id} /> : null
       case 'invite':
         return role === 'MASTER' ? <InviteUsers /> : null
       case 'profile':

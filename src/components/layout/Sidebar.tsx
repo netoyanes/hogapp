@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarClock, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Contact2, Sparkles, Target, Command } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarClock, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Contact2, Sparkles, Target, Command, Bot } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
 import { STR } from '../../lib/strings'
@@ -28,6 +28,7 @@ export const NAV_ITEMS = [
   { id: 'activity',   label: STR.nav.activity,   icon: Activity,                     cLevelOnly: true },
   { id: 'templates',  label: STR.nav.templates,  icon: LayoutTemplate,               cLevelOnly: true },
   { id: 'upload',     label: STR.nav.upload,     icon: Upload,          shortcut: '0', masterOnly: true },
+  { id: 'concierge',  label: STR.nav.concierge,  icon: Bot,             masterOnly: true },
   { id: 'invite',     label: STR.nav.invite,     icon: UserPlus,        masterOnly: true },
   { id: 'reports',    label: STR.nav.reports,    icon: FileText },
   { id: 'profile',    label: STR.nav.profile,    icon: UserCircle },
