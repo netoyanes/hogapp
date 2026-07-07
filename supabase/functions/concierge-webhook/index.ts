@@ -3,8 +3,27 @@
 // POST = mensajes entrantes. Guarda, decide si el bot debe responder, agenda
 //        el turno (next_bot_reply_at) y responde 200 rápido — el envío real lo
 //        hace concierge-agent, despachado por concierge-dispatcher (cron).
+// Auto-contenida (sin imports locales) para poder desplegarse desde el editor
+// del dashboard de Supabase, no solo por CLI.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { verifyMetaSignature, CORS } from '../_shared/concierge.ts'
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// Meta firma cada POST con el App Secret (HMAC SHA-256); comparación en tiempo constante.
+async function verifyMetaSignature(rawBody: string, signatureHeader: string | null, appSecret: string): Promise<boolean> {
+  if (!signatureHeader) return false
+  const expected = signatureHeader.replace('sha256=', '')
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(appSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody))
+  const hex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')
+  if (hex.length !== expected.length) return false
+  let diff = 0
+  for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ expected.charCodeAt(i)
+  return diff === 0
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })

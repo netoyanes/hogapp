@@ -2,8 +2,52 @@
 // Invocado por concierge-dispatcher (cron) o directo con { conversationId }.
 // Principio del producto (no negociable): cada mensaje del cliente avanza la
 // reserva; nunca se le pide un dato que ya dio ni cambia de canal sin contexto.
+// Auto-contenida (sin imports locales) para poder desplegarse desde el editor
+// del dashboard de Supabase, no solo por CLI.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { sendChannelMessage, notifySlackFromEdge, CORS } from '../_shared/concierge.ts'
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+const META_API_VERSION = 'v20.0'
+
+async function sendChannelMessage(channel: 'whatsapp' | 'instagram', to: string, text: string) {
+  if (channel === 'whatsapp') {
+    const token = Deno.env.get('WHATSAPP_TOKEN')!
+    const phoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID')!
+    const res = await fetch(`https://graph.facebook.com/${META_API_VERSION}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body: text } }),
+    })
+    const data = await res.json()
+    if (!res.ok) console.error('[concierge] sendWhatsApp error', JSON.stringify(data))
+    return data
+  }
+  const pageToken = Deno.env.get('IG_PAGE_ACCESS_TOKEN')!
+  const res = await fetch(`https://graph.facebook.com/${META_API_VERSION}/me/messages?access_token=${pageToken}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipient: { id: to }, message: { text } }),
+  })
+  const data = await res.json()
+  if (!res.ok) console.error('[concierge] sendInstagram error', JSON.stringify(data))
+  return data
+}
+
+// Mismo webhook de Slack que usa la app (app_settings.slack_webhook)
+// deno-lint-ignore no-explicit-any
+async function notifySlackFromEdge(supabaseAdmin: any, text: string) {
+  const { data } = await supabaseAdmin.from('app_settings').select('value').eq('key', 'slack_webhook').maybeSingle()
+  const url = data?.value
+  if (!url || !url.startsWith('https://hooks.slack.com/')) return
+  try {
+    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
+  } catch (err) {
+    console.error('[concierge] slack notify failed', String(err))
+  }
+}
 
 const ANTHROPIC_VERSION = '2023-06-01'
 const DEFAULT_SLOTS = ['19:00–20:30', '20:30–22:00', '22:00–23:30'] // debe reflejar Reservations.tsx
