@@ -420,7 +420,9 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
   const giveBack = () => setStatus('bot', { assigned_to: null })
   const close = () => setStatus('closed', { closed_at: new Date().toISOString() })
 
-  // Confirmar la reserva solicitada directo desde el hilo — sin ir a buscarla al board
+  // Confirmar la reserva solicitada directo desde el hilo — sin ir a buscarla
+  // al board. Al confirmar, el cliente recibe su confirmación automática por
+  // el mismo canal (nada de "confirmada pero nadie le avisó").
   async function confirmRes() {
     if (!resPreview) return
     setBusy(true)
@@ -428,11 +430,27 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
       status: 'confirmed', confirmed_at: new Date().toISOString(),
       status_changed_by: userId ?? null, confirmed_via: conv.channel,
     }).eq('id', resPreview.id)
-    setBusy(false)
-    if (error) { showToast(`No se pudo confirmar: ${error.message}`, 'error'); return }
+    if (error) { setBusy(false); showToast(`No se pudo confirmar: ${error.message}`, 'error'); return }
     logActivity('reservation_confirmed', 'reservation', resPreview.id, { via: 'concierge_inbox', guest: resPreview.guests?.full_name, bu: bu?.code })
-    showToast('Reserva confirmada — avísale al cliente aquí mismo 👇', 'success')
+
+    const fecha = new Date(resPreview.date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
+    const aviso = `✅ ¡Reserva confirmada! Te esperamos el ${fecha}, ${resPreview.time_slot}, ${resPreview.party_size} ${resPreview.party_size === 1 ? 'persona' : 'personas'}${bu ? ` en ${bu.name}` : ''}. Cualquier cambio, escríbenos por aquí.`
+    if (conv.is_simulated) {
+      await supabase.from('bot_messages').insert({ conversation_id: conv.id, role: 'agent', body: aviso })
+    } else {
+      const { data, error: sendErr } = await supabase.functions.invoke('concierge-send', {
+        body: { conversationId: conv.id, body: aviso },
+      })
+      if (sendErr || data?.error) {
+        setBusy(false)
+        showToast('Reserva confirmada, pero el aviso al cliente falló — mándaselo manual 👇', 'error')
+        loadMessages(); onChanged(); return
+      }
+    }
+    setBusy(false)
+    showToast('Reserva confirmada y cliente avisado ✅', 'success')
     loadMessages()
+    onChanged()
   }
 
   async function sendAs(role: 'agent' | 'guest', body: string, clear: () => void) {

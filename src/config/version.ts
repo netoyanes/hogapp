@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.19.1"
+export const APP_VERSION = "2.20.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.20.0",
+    date: "2026-07-08",
+    type: "MINOR",
+    changes: [
+      "Bandeja — al confirmar una reserva, el cliente recibe su confirmación automática por el mismo canal",
+      "Bot: el nombre del perfil de IG se usa solo para saludar (suele ser apodo) — el nombre real siempre se pide para la reserva",
+      "Bot omnicanal: nombre y @handle de Instagram en la Bandeja, y anti-duplicados de reservas del mismo día",
+    ]
+  },
   {
     version: "2.19.1",
     date: "2026-07-08",
