@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.16.0"
+export const APP_VERSION = "2.16.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.16.1",
+    date: "2026-07-07",
+    type: "PATCH",
+    changes: [
+      "Reservas — cada tarjeta muestra quién reservó (miembro del equipo o Concierge HOG en brass)",
+      "Las reservas del bot quedan en Actividad atribuidas a Concierge HOG",
+      "Bot: el toggle ACTIVO/INACTIVO por venue+canal ahora sí manda — canal apagado pasa la conversación al equipo con aviso",
+    ]
+  },
   {
     version: "2.16.0",
     date: "2026-07-07",

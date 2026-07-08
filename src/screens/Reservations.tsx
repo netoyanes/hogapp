@@ -27,6 +27,8 @@ interface Reservation {
   source: ResSource
   notes: string | null
   created_at: string
+  created_by: string | null
+  bot_conversation_id: string | null
 }
 interface GuestLite { id: string; full_name: string; phone: string; tags: string[] }
 interface CapacityRow { id: string; day_of_week: number; time_slot: string; max_reservations: number; max_pax: number; active: boolean }
@@ -80,6 +82,21 @@ export function Reservations({ userRole, userId }: Props) {
   const [weekRows, setWeekRows] = useState<Reservation[]>([])
   const [guestMap, setGuestMap] = useState<Record<string, GuestLite>>({})
   const [noShowMap, setNoShowMap] = useState<Record<string, number>>({})
+  const [profileMap, setProfileMap] = useState<Record<string, string>>({})
+
+  // Quién reservó: nombres del equipo para el byline de cada tarjeta
+  useEffect(() => {
+    supabase.from('profiles').select('id, full_name').then(({ data }) =>
+      setProfileMap(Object.fromEntries((data ?? []).map(p => [p.id, p.full_name ?? '—']))))
+  }, [])
+
+  // El bot reserva sin usuario; los canales del bot sin conversación ligada
+  // (reservas viejas) también se atribuyen al Concierge.
+  const bookedBy = useCallback((r: Reservation) => {
+    if (r.bot_conversation_id) return 'Concierge HOG'
+    if (r.created_by) return profileMap[r.created_by] ?? '—'
+    return (r.source === 'whatsapp' || r.source === 'instagram') ? 'Concierge HOG' : '—'
+  }, [profileMap])
   const [capacity, setCapacity] = useState<CapacityRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -376,6 +393,7 @@ export function Reservations({ userRole, userId }: Props) {
                                 <span className="num" style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700 }}>{r.party_size} pax</span>
                                 {r.zone && <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{r.zone}</span>}
                                 <SrcIcon size={11} style={{ color: 'var(--text-tertiary)' }} aria-label={SOURCE_LABEL[r.source]} />
+                                <span title={`Reservó: ${bookedBy(r)}`} style={{ fontSize: 10, color: bookedBy(r) === 'Concierge HOG' ? 'var(--accent)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>· {bookedBy(r)}</span>
                                 {r.notes && <span style={{ fontSize: 10, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>· {r.notes}</span>}
                               </div>
                             </div>

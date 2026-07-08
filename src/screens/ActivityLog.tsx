@@ -57,11 +57,13 @@ function dayLabel(dateStr: string) {
 }
 
 function userName(e: LogEntry) {
-  return e.profiles?.full_name ?? e.profiles?.email ?? 'Unknown'
+  // Acciones del bot (sin user_id) declaran su actor en details.actor → "Concierge HOG"
+  const actor = typeof e.details?.actor === 'string' ? e.details.actor : null
+  return e.profiles?.full_name ?? e.profiles?.email ?? actor ?? 'Unknown'
 }
 
 function userInitials(e: LogEntry) {
-  const name = e.profiles?.full_name
+  const name = e.profiles?.full_name ?? (typeof e.details?.actor === 'string' ? e.details.actor : null)
   const email = e.profiles?.email
   if (name) return name.split(' ').map((p) => p[0]).join('').toUpperCase().slice(0, 2)
   return (email?.[0] ?? '?').toUpperCase()

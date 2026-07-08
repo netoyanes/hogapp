@@ -139,6 +139,20 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
   const settingsMap = Object.fromEntries((settings ?? []).map((s: { key: string; value: string }) => [s.key, s.value]))
   if (settingsMap.bot_enabled !== 'true') return // kill switch global
 
+  // La config por canal manda: venue identificado con el canal apagado (o sin
+  // configurar) → el bot no atiende; pasa al equipo con aviso al cliente.
+  if (conv.bu_id && (!cfg || !cfg.enabled)) {
+    const nota = 'Te conecto con el equipo para atenderte, dame un momento 🙌'
+    await supabaseAdmin.from('bot_conversations').update({
+      status: 'needs_human', escalation_reason: 'Canal del bot deshabilitado para este venue',
+      next_bot_reply_at: null, next_followup_at: null,
+    }).eq('id', conversationId)
+    await supabaseAdmin.from('bot_messages').insert({ conversation_id: conversationId, role: 'bot', body: nota })
+    await sendChannelMessage(conv.channel, conv.external_id, nota)
+    await notifySlackFromEdge(supabaseAdmin, `🙋 *Cliente esperando atención humana* — ${bu?.name ?? 'venue'}: canal del bot deshabilitado`)
+    return
+  }
+
   const model = settingsMap.bot_model || 'claude-haiku-4-5-20251001'
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
 
@@ -253,6 +267,9 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       ctx.bu = bu
       const { data: cfg } = await supabaseAdmin.from('bot_venue_config').select('*').eq('bu_id', bu.id).eq('channel', ctx.conv.channel).maybeSingle()
       ctx.cfg = cfg
+      if (!cfg || !cfg.enabled) {
+        return { ok: true, venue: bu.name, aviso: 'Este venue tiene el canal del bot DESHABILITADO — usa escalar_a_humano de inmediato para que el equipo lo atienda directamente.' }
+      }
       return { ok: true, venue: bu.name }
     }
 
@@ -300,6 +317,11 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       }).select('id').single()
       if (error) return { error: error.message }
       await supabaseAdmin.from('bot_conversations').update({ pending_fields: [] }).eq('id', ctx.conv.id)
+      // Auditoría: la reserva del bot queda en Actividad atribuida a "Concierge HOG"
+      await supabaseAdmin.from('activity_log').insert({
+        user_id: null, action: 'reservation_created', entity_type: 'reservation', entity_id: reserva.id,
+        details: { actor: 'Concierge HOG', bu: ctx.bu?.code, date: input.fecha, slot: input.horario, pax: input.pax, channel: ctx.conv.channel },
+      })
       await notifySlackFromEdge(supabaseAdmin, `🤖 *Reserva vía Concierge* — ${ctx.bu?.name ?? ''}\n${input.fecha} · ${input.horario} · ${input.pax} pax`)
       return { ok: true, reservation_id: reserva.id }
     }
