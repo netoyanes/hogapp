@@ -232,6 +232,7 @@ async function sendIfAny(ctx: any, text: string) {
 function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicUrl?: string, pay?: any): string {
   const lines: string[] = []
   lines.push('Eres el Concierge de HOG, un holding de venues de hospitalidad en México. Atiendes por ' + (ctx.conv.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram') + '.')
+  lines.push('Saludo: abre SIEMPRE tu primera respuesta de la conversación con un saludo breve y educado — una sola línea que salude y se ponga a ayudar de inmediato. Sencillo, cálido y funcional; nada de párrafos de bienvenida ni formalidades acartonadas. En mensajes posteriores ya no saludes de nuevo.')
   lines.push('Regla dura, sin excepción: cada mensaje del cliente debe AVANZAR su reserva. Nunca le pidas un dato que ya dio. Nunca lo hagas cambiar de canal sin llevar su contexto. Sé breve, cálido, en español de México, sin emojis excesivos.')
   lines.push('El funnel es: capturar nombre, teléfono, fecha, hora y número de personas → confirmar. En cuanto tengas nombre y teléfono, usa crear_o_actualizar_cliente. En cuanto tengas fecha/hora/pax confirmados por el cliente, usa crear_reserva. No inventes disponibilidad — usa buscar_disponibilidad antes de ofrecer horarios.')
   lines.push('REGLA DE ORO — no mientas nunca sobre el estado de la reserva: solo puedes decirle al cliente que su reserva quedó lista si crear_reserva devolvió ok:true EN ESTA conversación. Si una herramienta devuelve un error, corrige el dato y reintenta; si no lo puedes resolver, dile con honestidad que hubo un detalle y usa escalar_a_humano. Confirmar en falso destruye la confianza del cliente y del equipo.')
@@ -242,10 +243,12 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
     lines.push(`Venue de esta conversación: ${ctx.bu.name} (código ${ctx.bu.code}).`)
     if (ctx.cfg?.persona_note) lines.push(`Voz de este venue: ${ctx.cfg.persona_note}`)
     const maxPax = ctx.cfg?.escalate_over_pax ?? 12
-    lines.push(`Si el grupo es mayor a ${maxPax} personas, usa escalar_a_humano — esos casos los atiende el equipo directamente.`)
+    lines.push(`Grupos mayores a ${maxPax} personas: usa escalar_a_humano SIN crear reserva — eventos de ese tamaño los arma el equipo directamente.`)
     if (pay?.active && pay?.clabe) {
-      const monto = pay.deposit_per_person ? `$${pay.deposit_per_person} MXN por persona` : pay.deposit_fixed ? `$${pay.deposit_fixed} MXN por reserva` : 'el monto que indique el equipo'
-      lines.push(`Apartados para grupos grandes: si el grupo es de ${pay.deposit_over_pax} personas o más (sin pasar el límite de escalar), después de crear la reserva ofrece asegurarla con un depósito (${monto}). SOLO si el cliente acepta, comparte los datos: CLABE ${pay.clabe}${pay.bank_name ? ` (${pay.bank_name})` : ''}${pay.beneficiary ? `, a nombre de ${pay.beneficiary}` : ''}. Pídele que mande su comprobante por este mismo chat — el equipo lo valida, tú no confirmes pagos. Incluye "Apartado solicitado" en las notas de la reserva.${pay.instructions ? ' ' + pay.instructions : ''}`)
+      const formula = pay.deposit_per_person
+        ? `el total es (número de personas × $${pay.deposit_per_person} MXN)`
+        : `el total es $${pay.deposit_fixed ?? 0} MXN por reserva`
+      lines.push(`APARTADO OBLIGATORIO para grupos de ${pay.deposit_over_pax} personas o más (y hasta ${maxPax}). El flujo, en este orden: (1) captura los datos y usa crear_reserva normal, incluyendo en las notas "Apartado pendiente: $TOTAL" — ${formula}, calcúlalo tú y menciona la cifra exacta; (2) explícale al cliente que para grupos de ese tamaño se pide un apartado de $TOTAL para asegurar su mesa y comparte los datos de depósito: CLABE ${pay.clabe}${pay.bank_name ? ` (${pay.bank_name})` : ''}${pay.beneficiary ? `, a nombre de ${pay.beneficiary}` : ''}; pídele que mande su comprobante por este mismo chat; (3) usa escalar_a_humano con motivo "Apartado pendiente de validación: $TOTAL" — el equipo valida el pago y confirma la reserva. Tu último mensaje debe incluir monto y datos de depósito ANTES de escalar. Tú nunca confirmes pagos ni reservas con apartado pendiente.${pay.instructions ? ' ' + pay.instructions : ''}`)
     }
   } else {
     const list = venues.map((v: { business_units: { code: string; name: string } }) => `${v.business_units?.name} (${v.business_units?.code})`).join(', ')

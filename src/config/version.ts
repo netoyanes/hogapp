@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.17.0"
+export const APP_VERSION = "2.18.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.18.0",
+    date: "2026-07-07",
+    type: "MINOR",
+    changes: [
+      "Bandeja — preview de la reserva solicitada dentro del hilo con botón Confirmar (sin ir a buscarla al board)",
+      "Bot: saludo siempre — breve, educado y funcional en el primer mensaje",
+      "Bot: apartado OBLIGATORIO para grupos grandes — calcula pax × costo del onboarding, comparte CLABE y escala para validar el pago",
+    ]
+  },
   {
     version: "2.17.0",
     date: "2026-07-07",
