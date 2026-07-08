@@ -1137,7 +1137,7 @@ function TalentoTab({ buList, userId, isMobile }: { buList: BU[]; userId?: strin
       </div>
 
       {editingDj && (
-        <DJSheet dj={editingDj === 'new' ? null : editingDj} userId={userId} isMobile={isMobile}
+        <DJSheet dj={editingDj === 'new' ? null : editingDj} buList={buList} userId={userId} isMobile={isMobile}
           onClose={() => setEditingDj(null)} onSaved={() => { setEditingDj(null); load() }} />
       )}
       {bookingFor && buId && (
@@ -1155,13 +1155,26 @@ const talBtn: React.CSSProperties = {
 }
 
 // ─── Alta/edición de DJ — lo esencial en 20 segundos, lo demás opcional ──────
-function DJSheet({ dj, userId, isMobile, onClose, onSaved }: {
+function DJSheet({ dj, buList, userId, isMobile, onClose, onSaved }: {
   dj: DJ | null
+  buList: BU[]
   userId?: string
   isMobile: boolean
   onClose: () => void
   onSaved: () => void
 }) {
+  // Log interno del DJ: cuántas veces tocó y cuánto cobró por cada fecha
+  const [history, setHistory] = useState<(DJBooking & { buCode: string })[]>([])
+  useEffect(() => {
+    if (!dj) return
+    supabase.from('dj_bookings').select('*').eq('dj_id', dj.id).order('date', { ascending: false }).limit(40)
+      .then(({ data }) => {
+        const buMapL = Object.fromEntries(buList.map(b => [b.id, b.code]))
+        setHistory(((data ?? []) as DJBooking[]).map(b => ({ ...b, buCode: buMapL[b.bu_id] ?? '—' })))
+      })
+  }, [dj, buList])
+  const played = history.filter(h => h.status === 'played')
+  const totalCobrado = played.reduce((s, h) => s + Number(h.fee ?? 0), 0)
   const [form, setForm] = useState({
     stage_name: dj?.stage_name ?? '', real_name: dj?.real_name ?? '', phone: dj?.phone ?? '',
     instagram: dj?.instagram ?? '', city: dj?.city ?? '', genres: dj?.genres.join(', ') ?? '',
@@ -1235,6 +1248,31 @@ function DJSheet({ dj, userId, isMobile, onClose, onSaved }: {
               <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Vetado (no volver a bookear)</span>
             </label>
           )}
+
+          {/* Log interno: cuántas tocó y cuánto cobró por fecha */}
+          {dj && history.length > 0 && (
+            <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Historial</span>
+                <span className="num" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{played.length} {played.length === 1 ? 'tocada' : 'tocadas'}</span>
+                <span className="num" style={{ fontSize: 12, color: 'var(--status-healthy)', fontWeight: 700 }}>{mxnTal.format(totalCobrado)} cobrado</span>
+                {played.length > 0 && <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>~{mxnTal.format(totalCobrado / played.length)} c/u</span>}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 190, overflowY: 'auto' }}>
+                {history.map(h => (
+                  <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, opacity: h.status === 'cancelled' || h.status === 'no_show' ? 0.55 : 1 }}>
+                    <span className="num" style={{ color: 'var(--text-secondary)', width: 78, flexShrink: 0 }}>
+                      {new Date(h.date + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })}
+                    </span>
+                    <BUChip code={h.buCode} size="sm" />
+                    <span className="num" style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{mxnTal.format(Number(h.fee ?? 0))}</span>
+                    {h.paid && <span style={{ color: 'var(--status-healthy)', fontSize: 10 }}>✓ pagado</span>}
+                    <span style={{ marginLeft: 'auto' }}><StatusBadgeV2 tone={BOOKING_META[h.status].tone} label={BOOKING_META[h.status].label} /></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <button onClick={save} disabled={saving || !form.stage_name.trim()}
             style={{ minHeight: 46, borderRadius: 999, border: 'none', background: form.stage_name.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: form.stage_name.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer' }}>
             {saving ? 'Guardando…' : dj ? 'Guardar cambios' : 'Agregar DJ'}
@@ -1265,13 +1303,36 @@ function BookingSheet({ date, booking, buId, buCode, djs, userId, isMobile, onCl
   const [status, setStatus] = useState<DJBooking['status']>(booking?.status ?? 'confirmed')
   const [requests, setRequests] = useState(booking?.special_requests ?? '')
   const [saving, setSaving] = useState(false)
+  // Alta de DJ sin salir del booking: el DJ nuevo se crea aquí mismo
+  const [localDjs, setLocalDjs] = useState<DJ[]>(djs)
+  const [quickCreating, setQuickCreating] = useState(false)
+  const [quickFee, setQuickFee] = useState('')
+  const [quickGenres, setQuickGenres] = useState('')
 
-  const dj = djs.find(d => d.id === djId)
+  const dj = localDjs.find(d => d.id === djId)
   const matches = useMemo(() => {
     const q = djQuery.trim().toLowerCase()
-    if (!q) return djs.filter(d => d.status === 'active').slice(0, 6)
-    return djs.filter(d => d.status === 'active' && (d.stage_name.toLowerCase().includes(q) || d.genres.some(g => g.toLowerCase().includes(q)))).slice(0, 6)
-  }, [djs, djQuery])
+    if (!q) return localDjs.filter(d => d.status === 'active').slice(0, 6)
+    return localDjs.filter(d => d.status === 'active' && (d.stage_name.toLowerCase().includes(q) || d.genres.some(g => g.toLowerCase().includes(q)))).slice(0, 6)
+  }, [localDjs, djQuery])
+
+  async function quickCreateDj() {
+    const name = djQuery.trim()
+    if (!name) return
+    const { data: nuevo, error } = await supabase.from('djs').insert({
+      stage_name: name,
+      base_fee: quickFee ? Number(quickFee) : null,
+      genres: quickGenres.split(',').map(g => g.trim()).filter(Boolean),
+      created_by: userId ?? null,
+    }).select('*').single()
+    if (error) { showToast(`No se pudo crear: ${error.message}`, 'error'); return }
+    logActivity('dj_created', 'dj', nuevo.id, { stage_name: name, fee: quickFee ? Number(quickFee) : null, via: 'booking' })
+    setLocalDjs(prev => [...prev, nuevo as DJ])
+    setDjId(nuevo.id)
+    if (quickFee && !fee) setFee(quickFee)
+    setQuickCreating(false); setQuickFee(''); setQuickGenres('')
+    showToast(`${name} agregado a la base.`, 'success')
+  }
 
   // Al elegir DJ, el fee se prellena con su base (editable — cada fecha se negocia)
   useEffect(() => {
@@ -1335,7 +1396,31 @@ function BookingSheet({ date, booking, buId, buCode, djs, userId, isMobile, onCl
                       <span className="num" style={{ fontSize: 11, color: 'var(--status-healthy)' }}>{d.base_fee != null ? mxnTal.format(d.base_fee) : ''}</span>
                     </button>
                   ))}
-                  {matches.length === 0 && <p style={{ color: 'var(--text-tertiary)', fontSize: 11, margin: 0 }}>Sin resultados — dalo de alta primero en el directorio (abajo).</p>}
+                  {/* Crear al DJ aquí mismo, sin salir del booking */}
+                  {djQuery.trim().length >= 2 && !quickCreating && (
+                    <button onClick={() => setQuickCreating(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 42, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: '1px dashed var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      <Plus size={13} /> Crear DJ "{djQuery.trim()}"
+                    </button>
+                  )}
+                  {quickCreating && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 10 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>Nuevo: {djQuery.trim()}</span>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                        <input type="number" inputMode="numeric" value={quickFee} onChange={e => setQuickFee(e.target.value)} placeholder="Fee base MXN" className="num"
+                          style={{ minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 12, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+                        <input value={quickGenres} onChange={e => setQuickGenres(e.target.value)} placeholder="Géneros (coma)"
+                          style={{ minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 12, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={quickCreateDj}
+                          style={{ flex: 1, minHeight: 40, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Crear y usar</button>
+                        <button onClick={() => setQuickCreating(false)}
+                          style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-tertiary)', fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
+                      </div>
+                    </div>
+                  )}
+                  {matches.length === 0 && djQuery.trim().length < 2 && <p style={{ color: 'var(--text-tertiary)', fontSize: 11, margin: 0 }}>Escribe el nombre del DJ para buscarlo o crearlo.</p>}
                 </div>
               </>
             )}
