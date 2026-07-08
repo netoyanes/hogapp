@@ -130,9 +130,10 @@ export function Reservations({ userRole, userId }: Props) {
         .then(({ data }) => { const n = Number(data?.value); if (n > 0) setEventPaxThreshold(n) })
       const venueIds = (uv ?? [])?.map((r: { bu_id: string }) => r.bu_id) ?? []
       setMyVenues(venueIds.length > 0 ? venueIds : null)
-      const first = venueIds.length > 0
-        ? (buses ?? []).find(b => venueIds.includes(b.id))?.id
-        : (buses ?? [])[0]?.id
+      // Recordar el último venue usado (si sigue permitido); si no, el primero permitido
+      const remembered = localStorage.getItem('hog_res_last_bu')
+      const allowed = venueIds.length > 0 ? (buses ?? []).filter(b => venueIds.includes(b.id)) : (buses ?? [])
+      const first = (remembered && allowed.some(b => b.id === remembered)) ? remembered : allowed[0]?.id
       setBuId(prev => prev || first || '')
     }
     boot()
@@ -263,7 +264,7 @@ export function Reservations({ userRole, userId }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <select
             value={buId}
-            onChange={e => setBuId(e.target.value)}
+            onChange={e => { setBuId(e.target.value); localStorage.setItem('hog_res_last_bu', e.target.value) }}
             disabled={isTeam && allowedBuList.length === 1}
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '8px 10px', fontSize: 14, fontWeight: 600, minHeight: 44, outline: 'none', cursor: 'pointer' }}
           >
