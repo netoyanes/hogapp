@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { Bot, MessageCircle, Camera, Send, Power, X, Plus, Hand, Undo2, CheckCircle2, FlaskConical, TrendingUp, Inbox } from 'lucide-react'
+import { Bot, MessageCircle, Camera, Send, Power, X, Plus, Hand, Undo2, CheckCircle2, FlaskConical, TrendingUp, Inbox, Shell } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { BUChip, KPITile, SegmentedControl, FilterChips, Sheet, StatusBadgeV2, EmptyStateV2, showToast, type StatusTone } from '../components/v2'
+import { Reservations } from './Reservations'
+import { Guests } from './Guests'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type ConvStatus = 'bot' | 'needs_human' | 'human' | 'closed'
@@ -70,11 +72,14 @@ function timeAgo(iso: string) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Concierge — dashboard del bot de reservas (solo MASTER)
+// Concierge — la app de hospitalidad del holding: el cliente pide (Bot) →
+// se agenda (Reservas) → queda su historia (Clientes). Secciones por rol:
+// Team/Ops: Reservas · Bandeja · Clientes / Master: + Resumen · Configuración.
 // ═════════════════════════════════════════════════════════════════════════════
-export function Concierge({ userId }: { userId?: string }) {
+export function Concierge({ userId, userRole }: { userId?: string; userRole?: string }) {
   const isMobile = useIsMobile()
-  const [tab, setTab] = useState('inbox')
+  const isMaster = userRole === 'MASTER'
+  const [tab, setTab] = useState('reservas')
   const [buList, setBuList] = useState<BU[]>([])
 
   useEffect(() => {
@@ -82,32 +87,44 @@ export function Concierge({ userId }: { userId?: string }) {
       .then(({ data }) => setBuList((data ?? []) as BU[]))
   }, [])
 
+  const tabs = [
+    { id: 'reservas', label: 'Reservas' },
+    { id: 'inbox',    label: 'Bandeja' },
+    { id: 'clientes', label: 'Clientes' },
+    ...(isMaster ? [{ id: 'summary', label: 'Resumen' }, { id: 'config', label: 'Configuración' }] : []),
+  ]
+
+  // Reservas y Clientes son pantallas completas con su propio scroll; las demás
+  // secciones scrollean dentro del contenedor centrado.
+  const fullBleed = tab === 'reservas' || tab === 'clientes'
+
   return (
-    <div style={{ flex: 1, overflowY: 'auto' }}>
-    <div style={{ padding: isMobile ? 'var(--space-3)' : 'var(--space-5)', maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--space-4)' }}>
-        <Bot size={20} style={{ color: 'var(--accent)' }} />
-        <div>
-          <h1 style={{ color: 'var(--text-primary)', fontSize: 18, fontWeight: 700, margin: 0 }}>Concierge</h1>
-          <p style={{ color: 'var(--text-tertiary)', fontSize: 12, margin: 0 }}>Bot de reservas · captura en Instagram, confirma por WhatsApp</p>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ padding: isMobile ? '10px 12px 0' : '14px 20px 0', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <Shell size={18} style={{ color: 'var(--accent)' }} />
+          <h1 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>Concierge</h1>
+          <span style={{ color: 'var(--text-tertiary)', fontSize: 11, marginLeft: 4, display: isMobile ? 'none' : 'inline' }}>Reservas · Bot · Clientes</span>
+        </div>
+        <div style={{ maxWidth: isMaster ? 640 : 420, paddingBottom: 10 }}>
+          <SegmentedControl scrollable value={tab} onChange={setTab} options={tabs} />
         </div>
       </div>
 
-      <div style={{ marginBottom: 'var(--space-4)', maxWidth: 420 }}>
-        <SegmentedControl
-          value={tab} onChange={setTab}
-          options={[
-            { id: 'summary', label: 'Resumen' },
-            { id: 'inbox',   label: 'Bandeja' },
-            { id: 'config',  label: 'Configuración' },
-          ]}
-        />
-      </div>
-
-      {tab === 'summary' && <SummaryTab buList={buList} />}
-      {tab === 'inbox' && <InboxTab buList={buList} userId={userId} isMobile={isMobile} />}
-      {tab === 'config' && <ConfigTab buList={buList} />}
-    </div>
+      {fullBleed ? (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {tab === 'reservas' && <Reservations userRole={userRole} userId={userId} />}
+          {tab === 'clientes' && <Guests userRole={userRole} userId={userId} />}
+        </div>
+      ) : (
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div style={{ padding: isMobile ? 'var(--space-3)' : 'var(--space-5)', paddingTop: 4, maxWidth: 1100, margin: '0 auto' }}>
+            {tab === 'inbox' && <InboxTab buList={buList} userId={userId} isMobile={isMobile} isMaster={isMaster} />}
+            {isMaster && tab === 'summary' && <SummaryTab buList={buList} />}
+            {isMaster && tab === 'config' && <ConfigTab buList={buList} />}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -205,7 +222,7 @@ function SummaryTab({ buList }: { buList: BU[] }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // Bandeja — conversaciones en vivo + simulador
 // ═════════════════════════════════════════════════════════════════════════════
-function InboxTab({ buList, userId, isMobile }: { buList: BU[]; userId?: string; isMobile: boolean }) {
+function InboxTab({ buList, userId, isMobile, isMaster }: { buList: BU[]; userId?: string; isMobile: boolean; isMaster: boolean }) {
   const [convs, setConvs] = useState<Conversation[]>([])
   const [statusFilter, setStatusFilter] = useState('open')
   const [openConv, setOpenConv] = useState<Conversation | null>(null)
@@ -269,17 +286,19 @@ function InboxTab({ buList, userId, isMobile }: { buList: BU[]; userId?: string;
             { id: 'all', label: 'Todas' },
           ]}
         />
-        <button onClick={simulate}
-          style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 14px', borderRadius: 999, border: '1px dashed var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-          <FlaskConical size={13} /> Simular conversación
-        </button>
+        {isMaster && (
+          <button onClick={simulate}
+            style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 14px', borderRadius: 999, border: '1px dashed var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <FlaskConical size={13} /> Simular conversación
+          </button>
+        )}
       </div>
 
       <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
         {loading ? (
           <p style={{ padding: 14, color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>Cargando…</p>
         ) : filtered.length === 0 ? (
-          <EmptyStateV2 icon={<Inbox size={26} />} title="Sin conversaciones aquí. Cuando Meta esté conectado, los DMs de Instagram y WhatsApp caerán en esta bandeja." actionLabel="Simular una conversación" onAction={simulate} />
+          <EmptyStateV2 icon={<Inbox size={26} />} title="Sin conversaciones aquí. Los DMs de Instagram y WhatsApp de tus venues caen en esta bandeja." actionLabel={isMaster ? 'Simular una conversación' : undefined} onAction={isMaster ? simulate : undefined} />
         ) : (
           filtered.map(c => {
             const ChIcon = CHANNEL_ICON[c.channel]
