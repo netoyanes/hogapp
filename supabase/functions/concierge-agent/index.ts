@@ -51,7 +51,16 @@ async function notifySlackFromEdge(supabaseAdmin: any, text: string) {
 
 const ANTHROPIC_VERSION = '2023-06-01'
 const DEFAULT_SLOTS = ['19:00–20:30', '20:30–22:00', '22:00–23:30'] // debe reflejar Reservations.tsx
-const MAX_TOOL_ROUNDS = 4
+const MAX_TOOL_ROUNDS = 6
+
+// Los clientes mexicanos dan su teléfono como sea: "81 1225 6803", "8112256803",
+// "521811...". guests.phone exige E.164 — normalizamos aquí, no en el modelo.
+function normalizePhoneMX(raw: string): string {
+  let digits = String(raw).replace(/\D/g, '')
+  if (digits.startsWith('521') && digits.length === 13) digits = '52' + digits.slice(3) // WhatsApp MX viejo: 521 + 10
+  if (digits.length === 10) digits = '52' + digits
+  return '+' + digits
+}
 
 const TOOLS = [
   {
@@ -210,6 +219,8 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   lines.push('Eres el Concierge de HOG, un holding de venues de hospitalidad en México. Atiendes por ' + (ctx.conv.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram') + '.')
   lines.push('Regla dura, sin excepción: cada mensaje del cliente debe AVANZAR su reserva. Nunca le pidas un dato que ya dio. Nunca lo hagas cambiar de canal sin llevar su contexto. Sé breve, cálido, en español de México, sin emojis excesivos.')
   lines.push('El funnel es: capturar nombre, teléfono, fecha, hora y número de personas → confirmar. En cuanto tengas nombre y teléfono, usa crear_o_actualizar_cliente. En cuanto tengas fecha/hora/pax confirmados por el cliente, usa crear_reserva. No inventes disponibilidad — usa buscar_disponibilidad antes de ofrecer horarios.')
+  lines.push('REGLA DE ORO — no mientas nunca sobre el estado de la reserva: solo puedes decirle al cliente que su reserva quedó lista si crear_reserva devolvió ok:true EN ESTA conversación. Si una herramienta devuelve un error, corrige el dato y reintenta; si no lo puedes resolver, dile con honestidad que hubo un detalle y usa escalar_a_humano. Confirmar en falso destruye la confianza del cliente y del equipo.')
+  lines.push('Teléfonos: pásalos tal como los dé el cliente — el sistema los normaliza. Con 10 dígitos mexicanos basta. Horarios: al llamar crear_reserva usa el texto EXACTO del slot que devolvió buscar_disponibilidad (ej. "20:30–22:00"), no lo reescribas.')
   if (publicUrl) lines.push(`Cuando pidas el teléfono por primera vez, comparte una sola vez este enlace de aviso de privacidad: ${publicUrl}/?aviso=1 — así el cliente sabe cómo cuidamos su dato antes de dártelo. No lo repitas en cada mensaje.`)
 
   if (ctx.bu) {
@@ -270,7 +281,7 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       // silenciosamente al capturar el dato. El bot debe compartir el aviso de
       // privacidad en el mensaje donde pide el teléfono (ver system prompt).
       const { data: guest, error } = await supabaseAdmin.from('guests')
-        .upsert({ phone: input.telefono, full_name: input.nombre, origin_bu: ctx.conv.bu_id }, { onConflict: 'phone', ignoreDuplicates: false })
+        .upsert({ phone: normalizePhoneMX(input.telefono), full_name: input.nombre, origin_bu: ctx.conv.bu_id }, { onConflict: 'phone', ignoreDuplicates: false })
         .select('id, full_name').single()
       if (error) return { error: error.message }
       await supabaseAdmin.from('guest_channels').upsert({ guest_id: guest.id, channel: ctx.conv.channel, external_id: ctx.conv.external_id }, { onConflict: 'channel,external_id' })
