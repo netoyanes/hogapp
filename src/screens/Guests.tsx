@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { Plus, Search, AlertTriangle, ChevronRight, ChevronLeft, X } from 'lucide-react'
+import { Plus, Search, AlertTriangle, ChevronRight, ChevronLeft, X, MessageCircle, Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { normalizePhone, formatPhone } from '../lib/phone'
 import { logActivity } from '../hooks/useActivityLog'
@@ -32,18 +32,33 @@ export function Guests({ userRole, userId }: Props) {
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'visits'>('recent')
   const [creating, setCreating] = useState(false)
   const [openGuestId, setOpenGuestId] = useState<string | null>(null)
+  const [profileMap, setProfileMap] = useState<Record<string, string>>({})
+  const [channelMap, setChannelMap] = useState<Record<string, string[]>>({})
 
   const buMap = useMemo(() => Object.fromEntries(buList.map(b => [b.id, b.code])), [buList])
 
+  // Trazabilidad: quién guardó al cliente (equipo o Concierge HOG) y por qué
+  // canal llegó (WhatsApp / Instagram, según guest_channels)
+  const savedBy = useCallback((g: Guest) => {
+    if (g.created_by) return profileMap[g.created_by] ?? '—'
+    return (channelMap[g.id]?.length ?? 0) > 0 ? 'Concierge HOG' : '—'
+  }, [profileMap, channelMap])
+
   const load = useCallback(async () => {
-    const [{ data: g, error }, { data: st }, { data: buses }, { data: tags }] = await Promise.all([
+    const [{ data: g, error }, { data: st }, { data: buses }, { data: tags }, { data: profs }, { data: chans }] = await Promise.all([
       supabase.from('guests').select('*').neq('status', 'anonymized').order('created_at', { ascending: false }).limit(500),
       supabase.from('guest_stats').select('*'),
       supabase.from('business_units').select('id, code, name').order('code'),
       supabase.from('guest_tag_options').select('label').eq('active', true).order('label'),
+      supabase.from('profiles').select('id, full_name'),
+      supabase.from('guest_channels').select('guest_id, channel'),
     ])
     if (error) { setLoadError(true); setLoading(false); return }
     setGuests((g ?? []) as Guest[])
+    setProfileMap(Object.fromEntries((profs ?? []).map(p => [p.id, p.full_name ?? '—'])))
+    const cm: Record<string, string[]> = {}
+    for (const c of chans ?? []) (cm[c.guest_id] ??= []).push(c.channel)
+    setChannelMap(cm)
     const sm: Record<string, GuestStats> = {}
     for (const s of (st ?? []) as GuestStats[]) sm[s.guest_id] = s
     setStats(sm)
@@ -165,9 +180,12 @@ export function Guests({ userRole, userId }: Props) {
                     )}
                     {g.status === 'archived' && <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>ARCHIVADO</span>}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
                     <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{formatPhone(g.phone)}</span>
                     {g.origin_bu && buMap[g.origin_bu] && <BUChip code={buMap[g.origin_bu]} size="sm" />}
+                    {channelMap[g.id]?.includes('whatsapp') && <MessageCircle size={11} style={{ color: 'var(--status-healthy)' }} aria-label="Llegó por WhatsApp" />}
+                    {channelMap[g.id]?.includes('instagram') && <Camera size={11} style={{ color: '#D98C9F' }} aria-label="Llegó por Instagram" />}
+                    <span title={`Guardado por: ${savedBy(g)}`} style={{ fontSize: 10, color: savedBy(g) === 'Concierge HOG' ? 'var(--accent)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>· {savedBy(g)}</span>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>

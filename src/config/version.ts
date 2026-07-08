@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.21.0"
+export const APP_VERSION = "2.22.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.22.0",
+    date: "2026-07-08",
+    type: "MINOR",
+    changes: [
+      "Bot: cancela reservas sin fricción cuando el cliente lo pide (auditado + Slack)",
+      "Bot: al crear o modificar valida el cupo de la noche — nunca sobrevende; sobrecupo solo humano",
+      "Bot: captura de eventos — fecha, pax aproximado, tipo de ocasión y área antes de escalar al equipo",
+      "Clientes — cada ficha muestra quién la guardó (equipo o Concierge HOG) y por qué canal llegó (WhatsApp/Instagram)",
+    ]
+  },
   {
     version: "2.21.0",
     date: "2026-07-08",
