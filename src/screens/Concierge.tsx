@@ -72,6 +72,24 @@ const STATUS_META: Record<ConvStatus, { label: string; tone: StatusTone }> = {
 }
 const CHANNEL_ICON: Record<Channel, React.ElementType> = { instagram: Camera, whatsapp: MessageCircle }
 const CHANNEL_LABEL: Record<Channel, string> = { instagram: 'Instagram', whatsapp: 'WhatsApp' }
+
+interface ResPreview {
+  id: string
+  date: string
+  time_slot: string
+  party_size: number
+  status: string
+  notes: string | null
+  guests: { full_name: string } | null
+}
+const RES_STATUS: Record<string, { label: string; tone: StatusTone }> = {
+  requested: { label: 'Solicitada', tone: 'neutral' },
+  confirmed: { label: 'Confirmada', tone: 'accent' },
+  seated:    { label: 'Sentada',    tone: 'attention' },
+  completed: { label: 'Completada', tone: 'healthy' },
+  no_show:   { label: 'No-show',    tone: 'risk' },
+  cancelled: { label: 'Cancelada',  tone: 'neutral' },
+}
 const PENDING_LABEL: Record<string, string> = { name: 'nombre', phone: 'teléfono', date: 'fecha', time: 'hora', pax: 'pax' }
 
 function timeAgo(iso: string) {
@@ -360,12 +378,18 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
   const [reply, setReply] = useState('')
   const [guestReply, setGuestReply] = useState('')
   const [busy, setBusy] = useState(false)
+  const [resPreview, setResPreview] = useState<ResPreview | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const bu = buList.find(b => b.id === conv.bu_id)
 
   const loadMessages = useCallback(async () => {
-    const { data } = await supabase.from('bot_messages').select('*').eq('conversation_id', conv.id).order('created_at')
+    const [{ data }, { data: res }] = await Promise.all([
+      supabase.from('bot_messages').select('*').eq('conversation_id', conv.id).order('created_at'),
+      supabase.from('reservations').select('id, date, time_slot, party_size, status, notes, guests(full_name)')
+        .eq('bot_conversation_id', conv.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ])
     setMessages((data ?? []) as Message[])
+    setResPreview((res as unknown as ResPreview) ?? null)
   }, [conv.id])
 
   useEffect(() => {
@@ -392,6 +416,21 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
   const take = () => setStatus('human', { assigned_to: userId ?? null, taken_at: new Date().toISOString() })
   const giveBack = () => setStatus('bot', { assigned_to: null })
   const close = () => setStatus('closed', { closed_at: new Date().toISOString() })
+
+  // Confirmar la reserva solicitada directo desde el hilo — sin ir a buscarla al board
+  async function confirmRes() {
+    if (!resPreview) return
+    setBusy(true)
+    const { error } = await supabase.from('reservations').update({
+      status: 'confirmed', confirmed_at: new Date().toISOString(),
+      status_changed_by: userId ?? null, confirmed_via: conv.channel,
+    }).eq('id', resPreview.id)
+    setBusy(false)
+    if (error) { showToast(`No se pudo confirmar: ${error.message}`, 'error'); return }
+    logActivity('reservation_confirmed', 'reservation', resPreview.id, { via: 'concierge_inbox', guest: resPreview.guests?.full_name, bu: bu?.code })
+    showToast('Reserva confirmada — avísale al cliente aquí mismo 👇', 'success')
+    loadMessages()
+  }
 
   async function sendAs(role: 'agent' | 'guest', body: string, clear: () => void) {
     if (!body.trim()) return
@@ -472,6 +511,27 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
             )}
           </div>
         </div>
+
+        {/* Preview de la reserva solicitada: confirmable sin salir del hilo */}
+        {resPreview && (
+          <div style={{ margin: '10px var(--space-4) 0', background: 'var(--bg-elevated)', border: `1px solid ${resPreview.status === 'requested' ? 'var(--accent-border)' : 'var(--border-subtle)'}`, borderRadius: 'var(--radius-md)', padding: '10px 12px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Solicitud de reserva</span>
+              <StatusBadgeV2 tone={RES_STATUS[resPreview.status]?.tone ?? 'neutral'} label={RES_STATUS[resPreview.status]?.label ?? resPreview.status} />
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+              {resPreview.guests?.full_name ?? 'Cliente'}
+              <span className="num" style={{ fontWeight: 700 }}> · {new Date(resPreview.date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' })} · {resPreview.time_slot} · {resPreview.party_size} pax</span>
+            </div>
+            {resPreview.notes && <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{resPreview.notes}</div>}
+            {resPreview.status === 'requested' && (
+              <button onClick={confirmRes} disabled={busy}
+                style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 16px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: busy ? 'wait' : 'pointer' }}>
+                <CheckCircle2 size={13} /> Confirmar reserva
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Mensajes */}
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 8 }}>
