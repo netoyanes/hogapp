@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { Bot, MessageCircle, Camera, Send, Power, X, Plus, Hand, Undo2, CheckCircle2, FlaskConical, TrendingUp, Inbox, Shell } from 'lucide-react'
+import { Bot, MessageCircle, Camera, Send, Power, X, Plus, Hand, Undo2, CheckCircle2, FlaskConical, TrendingUp, Inbox, Shell, ChevronLeft, ChevronRight, Music, Search, Star } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
+import { notifySlack } from '../hooks/useSlack'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { BUChip, KPITile, SegmentedControl, FilterChips, Sheet, StatusBadgeV2, EmptyStateV2, showToast, type StatusTone } from '../components/v2'
 import { Reservations } from './Reservations'
@@ -110,6 +111,7 @@ function timeAgo(iso: string) {
 export function Concierge({ userId, userRole }: { userId?: string; userRole?: string }) {
   const isMobile = useIsMobile()
   const isMaster = userRole === 'MASTER'
+  const isOpsPlus = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '')
   const [tab, setTab] = useState('reservas')
   const [buList, setBuList] = useState<BU[]>([])
 
@@ -122,6 +124,7 @@ export function Concierge({ userId, userRole }: { userId?: string; userRole?: st
     { id: 'reservas', label: 'Reservas' },
     { id: 'inbox',    label: 'Bandeja' },
     { id: 'clientes', label: 'Clientes' },
+    ...(isOpsPlus ? [{ id: 'talento', label: 'Talento' }] : []),   // fees = dato sensible: Ops/Master
     ...(isMaster ? [{ id: 'summary', label: 'Resumen' }, { id: 'config', label: 'Config' }] : []),
   ]
 
@@ -154,6 +157,7 @@ export function Concierge({ userId, userRole }: { userId?: string; userRole?: st
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <div style={{ padding: isMobile ? 'var(--space-3)' : 'var(--space-5)', paddingTop: 4, maxWidth: 1100, margin: '0 auto' }}>
             {tab === 'inbox' && <InboxTab buList={buList} userId={userId} isMobile={isMobile} isMaster={isMaster} />}
+            {isOpsPlus && tab === 'talento' && <TalentoTab buList={buList} userId={userId} isMobile={isMobile} />}
             {isMaster && tab === 'summary' && <SummaryTab buList={buList} />}
             {isMaster && tab === 'config' && <ConfigTab buList={buList} />}
           </div>
@@ -939,5 +943,437 @@ function VenueConfigCard({ cfg, bu, onSaved }: { cfg: VenueConfig; bu?: BU; onSa
         </button>
       )}
     </div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Talento — booking interno de DJs por venue (Ops/Master).
+// Agenda semanal + directorio con fee registrado. El Concierge la usa para
+// vender la programación y para reclutar DJs que escriben por DM.
+// ═════════════════════════════════════════════════════════════════════════════
+interface DJ {
+  id: string
+  stage_name: string
+  real_name: string | null
+  phone: string | null
+  instagram: string | null
+  city: string | null
+  genres: string[]
+  base_fee: number | null
+  fee_notes: string | null
+  rider: string | null
+  links: string | null
+  rating: number | null
+  status: 'active' | 'vetoed'
+  source: 'manual' | 'concierge'
+}
+interface DJBooking {
+  id: string
+  dj_id: string
+  bu_id: string
+  date: string
+  start_time: string
+  end_time: string | null
+  fee: number
+  paid: boolean
+  special_requests: string | null
+  status: 'tentative' | 'confirmed' | 'played' | 'cancelled' | 'no_show'
+  notes: string | null
+}
+const BOOKING_META: Record<DJBooking['status'], { label: string; tone: StatusTone }> = {
+  tentative: { label: 'Tentativo', tone: 'neutral' },
+  confirmed: { label: 'Confirmado', tone: 'accent' },
+  played:    { label: 'Tocó',       tone: 'healthy' },
+  cancelled: { label: 'Cancelado',  tone: 'neutral' },
+  no_show:   { label: 'No llegó',   tone: 'risk' },
+}
+const DAYS_TAL = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const mxnTal = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })
+
+function isoTal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function addDaysTal(iso: string, n: number): string {
+  const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return isoTal(d)
+}
+
+function TalentoTab({ buList, userId, isMobile }: { buList: BU[]; userId?: string; isMobile: boolean }) {
+  const today = isoTal(new Date())
+  const [buId, setBuId] = useState(() => localStorage.getItem('hog_res_last_bu') ?? '')
+  const [weekStart, setWeekStart] = useState(() => addDaysTal(today, -new Date(today + 'T00:00:00').getDay()))
+  const [djs, setDjs] = useState<DJ[]>([])
+  const [bookings, setBookings] = useState<DJBooking[]>([])
+  const [monthSpend, setMonthSpend] = useState(0)
+  const [monthCount, setMonthCount] = useState(0)
+  const [search, setSearch] = useState('')
+  const [editingDj, setEditingDj] = useState<DJ | 'new' | null>(null)
+  const [bookingFor, setBookingFor] = useState<{ date: string; booking?: DJBooking } | null>(null)
+
+  useEffect(() => {
+    if (!buId && buList.length) setBuId(buList[0].id)
+  }, [buList, buId])
+
+  const load = useCallback(async () => {
+    if (!buId) return
+    const monthIni = new Date()
+    const mStart = `${monthIni.getFullYear()}-${String(monthIni.getMonth() + 1).padStart(2, '0')}-01`
+    const mEnd = isoTal(new Date(monthIni.getFullYear(), monthIni.getMonth() + 1, 0))
+    const [{ data: d }, { data: b }, { data: m }] = await Promise.all([
+      supabase.from('djs').select('*').order('stage_name'),
+      supabase.from('dj_bookings').select('*').eq('bu_id', buId).gte('date', weekStart).lte('date', addDaysTal(weekStart, 6)),
+      supabase.from('dj_bookings').select('fee, status').eq('bu_id', buId).gte('date', mStart).lte('date', mEnd).in('status', ['confirmed', 'played']),
+    ])
+    setDjs((d ?? []) as DJ[])
+    setBookings((b ?? []) as DJBooking[])
+    setMonthSpend((m ?? []).reduce((s, r) => s + Number(r.fee ?? 0), 0))
+    setMonthCount((m ?? []).length)
+  }, [buId, weekStart])
+
+  useEffect(() => { load() }, [load])
+
+  const djMap = useMemo(() => Object.fromEntries(djs.map(d => [d.id, d])), [djs])
+  const filteredDjs = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return djs
+    return djs.filter(d => d.stage_name.toLowerCase().includes(q) || d.genres.some(g => g.toLowerCase().includes(q)) || (d.city ?? '').toLowerCase().includes(q))
+  }, [djs, search])
+
+  const buCode = buList.find(b => b.id === buId)?.code ?? ''
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      {/* Venue + semana */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <select value={buId} onChange={e => setBuId(e.target.value)}
+          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '8px 10px', fontSize: 13, fontWeight: 600, minHeight: 44, outline: 'none', cursor: 'pointer' }}>
+          {buList.map(b => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
+        </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+          <button onClick={() => setWeekStart(addDaysTal(weekStart, -7))} aria-label="Semana anterior" style={talBtn}><ChevronLeft size={15} /></button>
+          <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '0 6px', whiteSpace: 'nowrap' }}>
+            {new Date(weekStart + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} – {new Date(addDaysTal(weekStart, 6) + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+          </span>
+          <button onClick={() => setWeekStart(addDaysTal(weekStart, 7))} aria-label="Semana siguiente" style={talBtn}><ChevronRight size={15} /></button>
+        </div>
+      </div>
+
+      {/* KPIs de gasto */}
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+        <KPITile label={`Gasto ${buCode} (mes)`} value={mxnTal.format(monthSpend)} color="var(--accent)" />
+        <KPITile label="Tocadas (mes)" value={String(monthCount)} />
+        <KPITile label="Fee promedio" value={monthCount ? mxnTal.format(monthSpend / monthCount) : '—'} />
+        <KPITile label="DJs en base" value={String(djs.length)} />
+      </div>
+
+      {/* Agenda semanal */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(7, 1fr)', gap: 8 }}>
+        {Array.from({ length: 7 }).map((_, i) => {
+          const d = addDaysTal(weekStart, i)
+          const rows = bookings.filter(b => b.date === d && b.status !== 'cancelled')
+          const isToday = d === today
+          return (
+            <div key={d} style={{ background: 'var(--bg-surface)', border: isToday ? '1px solid var(--accent-border)' : 'none', borderRadius: 'var(--radius-md)', padding: 10, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 96 }}>
+              <div className="num" style={{ fontSize: 11, color: isToday ? 'var(--accent)' : 'var(--text-tertiary)', fontWeight: 700 }}>
+                {DAYS_TAL[new Date(d + 'T00:00:00').getDay()]} {new Date(d + 'T00:00:00').getDate()}
+              </div>
+              {rows.map(b => (
+                <button key={b.id} onClick={() => setBookingFor({ date: d, booking: b })}
+                  style={{ textAlign: 'left', background: 'var(--bg-elevated)', border: `1px solid ${b.status === 'confirmed' ? 'var(--accent-border)' : 'var(--border-subtle)'}`, borderRadius: 'var(--radius-sm)', padding: '6px 8px', cursor: 'pointer', opacity: b.status === 'no_show' ? 0.6 : 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Music size={10} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{djMap[b.dj_id]?.stage_name ?? 'DJ'}</span>
+                  </div>
+                  <div className="num" style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                    {b.start_time} · {mxnTal.format(b.fee)}{b.paid ? ' ✓' : ''}
+                  </div>
+                </button>
+              ))}
+              <button onClick={() => setBookingFor({ date: d })}
+                style={{ marginTop: 'auto', minHeight: 32, borderRadius: 'var(--radius-sm)', border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-tertiary)', fontSize: 11, cursor: 'pointer' }}>
+                + DJ
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Directorio */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Directorio de DJs</span>
+        <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+        <button onClick={() => setEditingDj('new')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 40, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <Plus size={13} /> DJ
+        </button>
+      </div>
+      <div style={{ position: 'relative' }}>
+        <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, género o ciudad…"
+          style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 12px 0 32px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {filteredDjs.length === 0 ? (
+          <EmptyStateV2 icon={<Music size={26} />} title="Sin DJs aún. Da de alta al primero — o deja que el Concierge los recolecte de los DMs." actionLabel="+ Agregar DJ" onAction={() => setEditingDj('new')} />
+        ) : filteredDjs.map(d => (
+          <button key={d.id} onClick={() => setEditingDj(d)}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', background: 'var(--bg-surface)', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 12px', cursor: 'pointer', minHeight: 44, opacity: d.status === 'vetoed' ? 0.5 : 1 }}>
+            <Music size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{d.stage_name}</span>
+                {d.rating != null && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, color: 'var(--accent)' }}><Star size={10} /> {d.rating}</span>}
+                {d.source === 'concierge' && <StatusBadgeV2 tone="accent" label="vía Concierge" />}
+                {d.status === 'vetoed' && <StatusBadgeV2 tone="risk" label="Vetado" />}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {[d.genres.join(', '), d.city, d.instagram ? `@${d.instagram.replace(/^@/, '')}` : null].filter(Boolean).join(' · ')}
+              </div>
+            </div>
+            <span className="num" style={{ fontSize: 13, fontWeight: 700, color: d.base_fee ? 'var(--status-healthy)' : 'var(--text-tertiary)', flexShrink: 0 }}>
+              {d.base_fee ? mxnTal.format(d.base_fee) : 'sin fee'}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {editingDj && (
+        <DJSheet dj={editingDj === 'new' ? null : editingDj} userId={userId} isMobile={isMobile}
+          onClose={() => setEditingDj(null)} onSaved={() => { setEditingDj(null); load() }} />
+      )}
+      {bookingFor && buId && (
+        <BookingSheet date={bookingFor.date} booking={bookingFor.booking} buId={buId} buCode={buCode} djs={djs} userId={userId} isMobile={isMobile}
+          onClose={() => setBookingFor(null)} onSaved={() => { setBookingFor(null); load() }} />
+      )}
+    </div>
+  )
+}
+
+const talBtn: React.CSSProperties = {
+  width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)',
+  color: 'var(--text-secondary)', cursor: 'pointer',
+}
+
+// ─── Alta/edición de DJ — lo esencial en 20 segundos, lo demás opcional ──────
+function DJSheet({ dj, userId, isMobile, onClose, onSaved }: {
+  dj: DJ | null
+  userId?: string
+  isMobile: boolean
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [form, setForm] = useState({
+    stage_name: dj?.stage_name ?? '', real_name: dj?.real_name ?? '', phone: dj?.phone ?? '',
+    instagram: dj?.instagram ?? '', city: dj?.city ?? '', genres: dj?.genres.join(', ') ?? '',
+    base_fee: dj?.base_fee != null ? String(dj.base_fee) : '', fee_notes: dj?.fee_notes ?? '',
+    rider: dj?.rider ?? '', links: dj?.links ?? '', rating: dj?.rating ?? null as number | null,
+    status: dj?.status ?? 'active' as DJ['status'],
+  })
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!form.stage_name.trim()) { showToast('El nombre artístico es obligatorio.', 'error'); return }
+    setSaving(true)
+    const row = {
+      stage_name: form.stage_name.trim(), real_name: form.real_name.trim() || null,
+      phone: form.phone.trim() || null, instagram: form.instagram.trim().replace(/^@/, '') || null,
+      city: form.city.trim() || null,
+      genres: form.genres.split(',').map(g => g.trim()).filter(Boolean),
+      base_fee: form.base_fee ? Number(form.base_fee) : null, fee_notes: form.fee_notes.trim() || null,
+      rider: form.rider.trim() || null, links: form.links.trim() || null,
+      rating: form.rating, status: form.status,
+    }
+    const { error } = dj
+      ? await supabase.from('djs').update(row).eq('id', dj.id)
+      : await supabase.from('djs').insert({ ...row, created_by: userId ?? null })
+    setSaving(false)
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    logActivity(dj ? 'dj_updated' : 'dj_created', 'dj', dj?.id, { stage_name: row.stage_name, fee: row.base_fee })
+    showToast(dj ? 'DJ actualizado.' : 'DJ agregado a la base.', 'success')
+    onSaved()
+  }
+
+  const inp: React.CSSProperties = { width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }
+  const lb: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
+
+  return (
+    <Sheet open onClose={onClose} isMobile={isMobile} width={440}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-3) 0' }}>
+          <h2 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>{dj ? dj.stage_name : 'Nuevo DJ'}</h2>
+          <button onClick={onClose} aria-label="Cerrar" style={{ width: 36, height: 36, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><label style={lb}>Nombre artístico *</label><input value={form.stage_name} autoFocus={!dj} onChange={e => setForm(f => ({ ...f, stage_name: e.target.value }))} style={inp} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div><label style={lb}>Fee base (MXN)</label><input type="number" inputMode="numeric" value={form.base_fee} onChange={e => setForm(f => ({ ...f, base_fee: e.target.value }))} className="num" style={inp} /></div>
+            <div><label style={lb}>Teléfono</label><input value={form.phone} inputMode="tel" onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="num" style={inp} /></div>
+          </div>
+          <div><label style={lb}>Géneros (separados por coma)</label><input value={form.genres} placeholder="house, techno" onChange={e => setForm(f => ({ ...f, genres: e.target.value }))} style={inp} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div><label style={lb}>Instagram</label><input value={form.instagram} placeholder="@dj" onChange={e => setForm(f => ({ ...f, instagram: e.target.value }))} style={inp} /></div>
+            <div><label style={lb}>Ciudad</label><input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} style={inp} /></div>
+          </div>
+          <div><label style={lb}>Nombre real</label><input value={form.real_name} onChange={e => setForm(f => ({ ...f, real_name: e.target.value }))} style={inp} /></div>
+          <div><label style={lb}>Notas de fee</label><input value={form.fee_notes} placeholder='"negociable entre semana"' onChange={e => setForm(f => ({ ...f, fee_notes: e.target.value }))} style={inp} /></div>
+          <div><label style={lb}>Rider / peticiones típicas</label><textarea value={form.rider} rows={2} onChange={e => setForm(f => ({ ...f, rider: e.target.value }))} style={{ ...inp, minHeight: 52, padding: '8px 10px', resize: 'vertical' }} /></div>
+          <div><label style={lb}>Links (mixes, press kit)</label><input value={form.links} onChange={e => setForm(f => ({ ...f, links: e.target.value }))} style={inp} /></div>
+          <div>
+            <label style={lb}>Rating interno</label>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} onClick={() => setForm(f => ({ ...f, rating: f.rating === n ? null : n }))} aria-label={`${n} estrellas`}
+                  style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', border: 'none', background: 'none', cursor: 'pointer', color: form.rating != null && n <= form.rating ? 'var(--accent)' : 'var(--border-strong)' }}>
+                  <Star size={18} fill={form.rating != null && n <= form.rating ? 'currentColor' : 'none'} />
+                </button>
+              ))}
+            </div>
+          </div>
+          {dj && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minHeight: 40 }}>
+              <input type="checkbox" checked={form.status === 'vetoed'} onChange={e => setForm(f => ({ ...f, status: e.target.checked ? 'vetoed' : 'active' }))} style={{ accentColor: 'var(--status-risk)', width: 16, height: 16 }} />
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Vetado (no volver a bookear)</span>
+            </label>
+          )}
+          <button onClick={save} disabled={saving || !form.stage_name.trim()}
+            style={{ minHeight: 46, borderRadius: 999, border: 'none', background: form.stage_name.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: form.stage_name.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer' }}>
+            {saving ? 'Guardando…' : dj ? 'Guardar cambios' : 'Agregar DJ'}
+          </button>
+        </div>
+      </div>
+    </Sheet>
+  )
+}
+
+// ─── Booking de una tocada: DJ + fee (prellenado) + rider de la fecha ────────
+function BookingSheet({ date, booking, buId, buCode, djs, userId, isMobile, onClose, onSaved }: {
+  date: string
+  booking?: DJBooking
+  buId: string
+  buCode: string
+  djs: DJ[]
+  userId?: string
+  isMobile: boolean
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [djId, setDjId] = useState(booking?.dj_id ?? '')
+  const [djQuery, setDjQuery] = useState('')
+  const [startTime, setStartTime] = useState(booking?.start_time ?? '22:00')
+  const [fee, setFee] = useState(booking ? String(booking.fee) : '')
+  const [paid, setPaid] = useState(booking?.paid ?? false)
+  const [status, setStatus] = useState<DJBooking['status']>(booking?.status ?? 'confirmed')
+  const [requests, setRequests] = useState(booking?.special_requests ?? '')
+  const [saving, setSaving] = useState(false)
+
+  const dj = djs.find(d => d.id === djId)
+  const matches = useMemo(() => {
+    const q = djQuery.trim().toLowerCase()
+    if (!q) return djs.filter(d => d.status === 'active').slice(0, 6)
+    return djs.filter(d => d.status === 'active' && (d.stage_name.toLowerCase().includes(q) || d.genres.some(g => g.toLowerCase().includes(q)))).slice(0, 6)
+  }, [djs, djQuery])
+
+  // Al elegir DJ, el fee se prellena con su base (editable — cada fecha se negocia)
+  useEffect(() => {
+    if (!booking && dj?.base_fee != null && !fee) setFee(String(dj.base_fee))
+  }, [djId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function save() {
+    if (!djId) { showToast('Elige al DJ.', 'error'); return }
+    setSaving(true)
+    const row = {
+      dj_id: djId, bu_id: buId, date, start_time: startTime, fee: Number(fee || 0),
+      paid, status, special_requests: requests.trim() || null,
+    }
+    const { error } = booking
+      ? await supabase.from('dj_bookings').update(row).eq('id', booking.id)
+      : await supabase.from('dj_bookings').insert({ ...row, created_by: userId ?? null })
+    setSaving(false)
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    const djName = dj?.stage_name ?? 'DJ'
+    logActivity(booking ? 'dj_booking_updated' : 'dj_booking_created', 'dj_booking', booking?.id, { dj: djName, bu: buCode, date, fee: Number(fee || 0), status })
+    if (!booking && status === 'confirmed') {
+      notifySlack(`🎧 *DJ confirmado* — ${buCode}\n${djName} · ${new Date(date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })} · ${startTime} · ${mxnTal.format(Number(fee || 0))}${requests.trim() ? `\nPeticiones: ${requests.trim()}` : ''}`)
+    }
+    showToast(booking ? 'Tocada actualizada.' : 'Tocada agendada.', 'success')
+    onSaved()
+  }
+
+  const inp: React.CSSProperties = { width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }
+  const lb: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
+
+  return (
+    <Sheet open onClose={onClose} isMobile={isMobile} width={440}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-3) 0' }}>
+          <h2 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>
+            {booking ? 'Editar tocada' : 'Bookear DJ'} · {new Date(date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' })}
+          </h2>
+          <button onClick={onClose} aria-label="Cerrar" style={{ width: 36, height: 36, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* DJ */}
+          <div>
+            <label style={lb}>DJ *</label>
+            {dj ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '8px 12px' }}>
+                <Music size={14} style={{ color: 'var(--accent)' }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{dj.stage_name}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{dj.genres.join(', ')}{dj.base_fee != null ? ` · base ${mxnTal.format(dj.base_fee)}` : ''}</div>
+                </div>
+                {!booking && <button onClick={() => { setDjId(''); setFee('') }} style={{ border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', width: 32, height: 32 }}><X size={13} /></button>}
+              </div>
+            ) : (
+              <>
+                <input value={djQuery} onChange={e => setDjQuery(e.target.value)} autoFocus placeholder="Buscar DJ por nombre o género…" style={inp} />
+                <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {matches.map(d => (
+                    <button key={d.id} onClick={() => setDjId(d.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 42, padding: '0 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', textAlign: 'left' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{d.stage_name}</span>
+                      <span className="num" style={{ fontSize: 11, color: 'var(--status-healthy)' }}>{d.base_fee != null ? mxnTal.format(d.base_fee) : ''}</span>
+                    </button>
+                  ))}
+                  {matches.length === 0 && <p style={{ color: 'var(--text-tertiary)', fontSize: 11, margin: 0 }}>Sin resultados — dalo de alta primero en el directorio (abajo).</p>}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div><label style={lb}>Empieza</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="num" style={inp} /></div>
+            <div><label style={lb}>Fee de esta tocada (MXN)</label><input type="number" inputMode="numeric" value={fee} onChange={e => setFee(e.target.value)} className="num" style={inp} /></div>
+          </div>
+
+          <div>
+            <label style={lb}>Peticiones especiales de la fecha</label>
+            <textarea value={requests} rows={2} placeholder="CDJ-3000, hospedaje, botella, transporte…" onChange={e => setRequests(e.target.value)} style={{ ...inp, minHeight: 52, padding: '8px 10px', resize: 'vertical' }} />
+          </div>
+
+          <div>
+            <label style={lb}>Estado</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {(Object.keys(BOOKING_META) as DJBooking['status'][]).map(s => (
+                <button key={s} onClick={() => setStatus(s)}
+                  style={{ minHeight: 38, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 11, fontWeight: 700, background: status === s ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${status === s ? 'var(--accent)' : 'var(--border-default)'}`, color: status === s ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                  {BOOKING_META[s].label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minHeight: 40 }}>
+            <input type="checkbox" checked={paid} onChange={e => setPaid(e.target.checked)} style={{ accentColor: 'var(--status-healthy)', width: 16, height: 16 }} />
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fee pagado</span>
+          </label>
+
+          <button onClick={save} disabled={saving || !djId}
+            style={{ minHeight: 46, borderRadius: 999, border: 'none', background: djId ? 'var(--accent)' : 'var(--bg-elevated)', color: djId ? 'var(--on-accent)' : 'var(--text-tertiary)', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer' }}>
+            {saving ? 'Guardando…' : booking ? 'Guardar cambios' : 'Agendar tocada'}
+          </button>
+        </div>
+      </div>
+    </Sheet>
   )
 }
