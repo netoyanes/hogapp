@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.15.1"
+export const APP_VERSION = "2.16.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.16.0",
+    date: "2026-07-07",
+    type: "MINOR",
+    changes: [
+      "Concierge unificado — Reservas, Bandeja del bot y Clientes viven ahora en una sola app",
+      "Team/Ops ganan la Bandeja: pueden tomar conversaciones escaladas de sus venues",
+      "Resumen y Configuración del bot siguen siendo solo Master",
+      "Ícono nuevo (concha marina) — hospitalidad HOG y el mar; Marketing sin acceso a hospitalidad",
+      "Los links viejos a Reservas (Slack/Calendario) redirigen solos a Concierge",
+    ]
+  },
   {
     version: "2.15.1",
     date: "2026-07-07",

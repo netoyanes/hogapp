@@ -16,7 +16,6 @@ import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
 import { CRM } from './screens/CRM'
 import { Contacts } from './screens/Contacts'
-import { Reservations } from './screens/Reservations'
 import { Social } from './screens/Social'
 import { Objectives } from './screens/Objectives'
 import { Reports } from './screens/Reports'
@@ -70,8 +69,8 @@ export default function App() {
   useEffect(() => {
     if (landedRef.current || !role) return
     landedRef.current = true
-    // Team en tablet (host stand) aterriza en Reservas; en teléfono, en Social
-    const teamLanding = window.innerWidth >= 768 ? 'reservations' : 'social'
+    // Team en tablet (host stand) aterriza en Concierge (Reservas); en teléfono, en Social
+    const teamLanding = window.innerWidth >= 768 ? 'concierge' : 'social'
     setActiveView(role === 'MASTER' ? 'dashboard' : role === 'TEAM' ? teamLanding : 'tasks')
   }, [role])
   const [scoringBU, setScoringBU] = useState<string | null>(null)
@@ -91,7 +90,7 @@ export default function App() {
 
   // Cross-module hops: Calendario → Reservas (día) y "Convertir en deal" → overlay
   useEffect(() => {
-    const goRes = () => handleNavigate('reservations')
+    const goRes = () => handleNavigate('concierge')
     const openDeal = (e: Event) => { const id = (e as CustomEvent).detail; if (id) setOverlayDealId(id) }
     window.addEventListener('hog:open-reservations', goRes)
     window.addEventListener('hog:open-deal', openDeal)
@@ -139,7 +138,9 @@ export default function App() {
 
   const ALLOWED_VIEWS = role === 'MASTER'
     ? null // null = no restriction
-    : new Set(['tasks', 'crm', 'reservations', 'contacts', 'social', 'objectives', 'profile'])
+    : role === 'MARKETING'
+      ? new Set(['tasks', 'crm', 'contacts', 'social', 'objectives', 'profile']) // sin hospitalidad
+      : new Set(['tasks', 'crm', 'concierge', 'contacts', 'social', 'objectives', 'profile'])
 
   function handleNavigate(view: string) {
     if (ALLOWED_VIEWS && !ALLOWED_VIEWS.has(view)) return
@@ -165,8 +166,9 @@ export default function App() {
         return <CRM userRole={role} userId={profile?.id} />
       case 'contacts':
         return <Contacts userRole={role} userId={profile?.id} />
-      case 'reservations':
-        return <Reservations userRole={role} userId={profile?.id} />
+      case 'reservations': // alias legado (links viejos de Slack/Calendario)
+      case 'concierge':
+        return role === 'MARKETING' ? null : <Concierge userId={profile?.id} userRole={role} />
       case 'social':
         return <Social profile={profile} userId={profile?.id} />
       case 'objectives':
@@ -186,8 +188,6 @@ export default function App() {
         return <TaskTemplates userRole={role} />
       case 'reports':
         return <Reports userRole={role} />
-      case 'concierge':
-        return role === 'MASTER' ? <Concierge userId={profile?.id} /> : null
       case 'invite':
         return role === 'MASTER' ? <InviteUsers /> : null
       case 'profile':

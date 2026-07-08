@@ -1,4 +1,4 @@
-import { LayoutDashboard, CheckSquare, UserCircle, CalendarClock, Handshake, Contact2, Sparkles } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, Contact2, Sparkles } from 'lucide-react'
 import { STR } from '../../lib/strings'
 
 interface Props {
@@ -18,7 +18,7 @@ const MASTER_SLOTS = [
 ]
 
 const TEAM_SLOTS = [
-  { id: 'reservations', label: STR.nav.reservations, icon: CalendarClock },
+  { id: 'concierge', label: STR.nav.concierge, icon: Shell },
   { id: 'tasks',    label: STR.nav.tasks,     icon: CheckSquare },
   { id: 'social',   label: STR.nav.social,    icon: Sparkles },
   { id: 'contacts', label: STR.nav.directory, icon: Contact2 },
@@ -26,7 +26,10 @@ const TEAM_SLOTS = [
 ]
 
 export function BottomNav({ activeView, onNavigate, userRole }: Props) {
-  const items = userRole === 'MASTER' ? MASTER_SLOTS : TEAM_SLOTS
+  // Marketing no tiene acceso a Concierge (hospitalidad) — su slot se omite
+  const items = userRole === 'MASTER' ? MASTER_SLOTS
+    : userRole === 'MARKETING' ? TEAM_SLOTS.filter(s => s.id !== 'concierge')
+    : TEAM_SLOTS
 
   return (
     <nav
