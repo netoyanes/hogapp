@@ -3,7 +3,20 @@ import { BUCard } from '../components/ui/BUCard'
 import { BUSINESS_UNITS } from '../data/seed-business-units'
 import { supabase } from '../lib/supabase'
 import { calculateScores } from '../lib/scoring'
+import { BUChip } from '../components/v2'
 import type { BUOnboarding, BusinessUnit, ScoreResult } from '../types'
+
+// Pulso operativo por marca: reservas (bot vs manual), conversaciones del
+// Concierge y pipeline CRM activo — el indicador real para Master/C-Level.
+interface OpsPulse {
+  resTotal: number
+  resBot: number
+  convs: number
+  escalated: number
+  deals: number
+  pipeline: number
+}
+const mxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })
 
 interface Props {
   onScoreBU: (buCode: string) => void
@@ -18,20 +31,49 @@ export function Dashboard({ onScoreBU, onViewTasks, userRole }: Props) {
   const [buData, setBuData] = useState<BusinessUnit[]>([])
   const [onboardings, setOnboardings] = useState<BUOnboarding[]>([])
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({})
+  const [pulse, setPulse] = useState<Record<string, OpsPulse>>({})
+  const [social7d, setSocial7d] = useState({ posts: 0, reactions: 0 })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [{ data: buses }, { data: obs }, { data: tasks }] = await Promise.all([
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
+      const week = new Date(Date.now() - 7 * 86400000).toISOString()
+      const [{ data: buses }, { data: obs }, { data: tasks }, { data: res }, { data: convs }, { data: deals }, { count: posts }, { count: reactions }] = await Promise.all([
         supabase.from('business_units').select('*').order('name'),
         supabase.from('bu_onboarding').select('*'),
         supabase.from('tasks').select('bu_id').not('bu_id', 'is', null),
+        supabase.from('reservations').select('bu_id, bot_conversation_id, source, created_by').gte('created_at', monthStart),
+        supabase.from('bot_conversations').select('bu_id, status').eq('is_simulated', false).gte('created_at', monthStart),
+        supabase.from('crm_deals').select('bu_id, value').not('stage', 'in', '("WON","LOST")'),
+        supabase.from('social_posts').select('id', { count: 'exact', head: true }).gte('created_at', week),
+        supabase.from('social_reactions').select('id', { count: 'exact', head: true }).gte('created_at', week),
       ])
       setBuData(buses ?? [])
       setOnboardings(obs ?? [])
       const counts: Record<string, number> = {}
       tasks?.forEach((t) => { if (t.bu_id) counts[t.bu_id] = (counts[t.bu_id] ?? 0) + 1 })
       setTaskCounts(counts)
+
+      const p: Record<string, OpsPulse> = {}
+      const at = (id: string) => (p[id] ??= { resTotal: 0, resBot: 0, convs: 0, escalated: 0, deals: 0, pipeline: 0 })
+      for (const r of res ?? []) if (r.bu_id) {
+        const e = at(r.bu_id)
+        e.resTotal++
+        if (r.bot_conversation_id || (!r.created_by && (r.source === 'whatsapp' || r.source === 'instagram'))) e.resBot++
+      }
+      for (const c of convs ?? []) if (c.bu_id) {
+        const e = at(c.bu_id)
+        e.convs++
+        if (c.status === 'needs_human' || c.status === 'human') e.escalated++
+      }
+      for (const d of deals ?? []) if (d.bu_id) {
+        const e = at(d.bu_id)
+        e.deals++
+        e.pipeline += Number(d.value ?? 0)
+      }
+      setPulse(p)
+      setSocial7d({ posts: posts ?? 0, reactions: reactions ?? 0 })
       setLoading(false)
     }
     load()
@@ -95,6 +137,16 @@ export function Dashboard({ onScoreBU, onViewTasks, userRole }: Props) {
     )
   }
 
+  // Totales del pulso operativo (mes en curso)
+  const pulseTotals = Object.values(pulse).reduce(
+    (a, e) => ({ res: a.res + e.resTotal, bot: a.bot + e.resBot, pipeline: a.pipeline + e.pipeline }),
+    { res: 0, bot: 0, pipeline: 0 },
+  )
+  const pulseBUs = displayBUs
+    .map(bu => ({ bu, dbBU: buData.find(b => b.code === bu.code) }))
+    .filter((x): x is { bu: BUWithId; dbBU: BusinessUnit } => !!x.dbBU && !!pulse[x.dbBU.id])
+    .sort((a, b) => (pulse[b.dbBU.id].pipeline - pulse[a.dbBU.id].pipeline) || (pulse[b.dbBU.id].resTotal - pulse[a.dbBU.id].resTotal))
+
   // KPI stats
   const scored = onboardings.length
   const healthy = onboardings.filter((o) => {
@@ -127,7 +179,9 @@ export function Dashboard({ onScoreBU, onViewTasks, userRole }: Props) {
         <div className="flex gap-3" style={{ overflowX: 'auto', paddingBottom: '2px' }}>
           {[
             { label: 'Total BUs', value: filteredBUs.length, color: 'var(--text-primary)' },
-            { label: 'Scored', value: scored, color: 'var(--text-primary)' },
+            { label: 'Reservas (mes)', value: pulseTotals.res > 0 ? `${pulseTotals.res} · ${Math.round((pulseTotals.bot / pulseTotals.res) * 100)}% bot` : 0, color: 'var(--accent)' },
+            { label: 'Pipeline CRM', value: mxn.format(pulseTotals.pipeline), color: 'var(--status-healthy)' },
+            { label: 'Social (7d)', value: `${social7d.posts} · ${social7d.reactions} ♥`, color: 'var(--text-primary)' },
             { label: 'Healthy', value: healthy, color: 'var(--status-healthy)' },
             { label: 'At Risk', value: atRisk, color: 'var(--status-risk)' },
             { label: 'No Data', value: filteredBUs.length - scored, color: 'var(--text-tertiary)' },
@@ -160,6 +214,44 @@ export function Dashboard({ onScoreBU, onViewTasks, userRole }: Props) {
           </div>
         ) : (
           <div className="flex flex-col gap-8">
+            {/* Pulso operativo por marca — Concierge + CRM (mes en curso) */}
+            {pulseBUs.length > 0 && (
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '13px' }}>Pulso operativo · mes en curso</span>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+                </div>
+                <div style={{ background: 'var(--bg-surface)', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1.4fr) 1fr 1fr 1.2fr', gap: 8, padding: '8px 14px', borderBottom: '1px solid var(--border-subtle)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <span>Marca</span><span>Reservas</span><span>Concierge</span><span>Deals activos</span>
+                  </div>
+                  {pulseBUs.map(({ bu, dbBU }) => {
+                    const e = pulse[dbBU.id]
+                    return (
+                      <div key={dbBU.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1.4fr) 1fr 1fr 1.2fr', gap: 8, alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <BUChip code={dbBU.code} name={dbBU.name} size="sm" />
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bu.name}</span>
+                        </span>
+                        <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {e.resTotal}
+                          {e.resTotal > 0 && <span style={{ color: 'var(--accent)' }}> · {e.resBot} bot</span>}
+                          {e.resTotal - e.resBot > 0 && <span style={{ color: 'var(--text-tertiary)' }}> · {e.resTotal - e.resBot} man.</span>}
+                        </span>
+                        <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {e.convs} conv.
+                          {e.escalated > 0 && <span style={{ color: 'var(--status-attention)' }}> · {e.escalated} esc.</span>}
+                        </span>
+                        <span className="num" style={{ fontSize: 12, color: e.pipeline > 0 ? 'var(--status-healthy)' : 'var(--text-tertiary)', fontWeight: 700 }}>
+                          {e.deals > 0 ? `${e.deals} · ${mxn.format(e.pipeline)}` : '—'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Scored section */}
             {scoredBUs.length > 0 && (
               <div>
