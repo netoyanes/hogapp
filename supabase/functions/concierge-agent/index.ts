@@ -120,8 +120,19 @@ const TOOLS = [
     },
   },
   {
+    name: 'cancelar_reserva',
+    description: 'Cancela una reserva próxima del cliente. Úsala en cuanto el cliente pida cancelar — sin fricción ni interrogatorio. Si el cliente tiene varias reservas próximas y no especificó cuál, el sistema te las devuelve para que le preguntes.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fecha: { type: 'string', description: 'YYYY-MM-DD de la reserva a cancelar (omite si el cliente no la dijo y solo tiene una próxima)' },
+        motivo: { type: 'string', description: 'Motivo si el cliente lo mencionó espontáneamente (opcional, no lo interrogues)' },
+      },
+    },
+  },
+  {
     name: 'notificar_slack',
-    description: 'Manda un aviso corto al equipo del venue por Slack. Úsalo al confirmar una reserva o cuando algo requiera atención del equipo pero no ameite escalar toda la conversación.',
+    description: 'Manda un aviso corto al equipo del venue por Slack. Úsalo al confirmar una reserva o cuando algo requiera atención del equipo pero no amerite escalar toda la conversación.',
     input_schema: { type: 'object', properties: { mensaje: { type: 'string' } }, required: ['mensaje'] },
   },
   {
@@ -266,7 +277,9 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   lines.push('Teléfonos: valida a ojo — un celular mexicano son 10 dígitos (o internacional con +). Si lo que dio el cliente tiene menos/más dígitos o símbolos raros, NO lo registres: pídele que lo confirme, con buena onda. El sistema también lo valida por si acaso.')
   lines.push('Peticiones especiales (área privada, decoración, pastel, ocasiones): anótalas en las notas de la reserva y dile al cliente que el equipo lo revisa y le confirma — no prometas lo que no controlas, pero tampoco lo dejes sin registro.')
   if (ctx.conv.display_name) lines.push(`El perfil del cliente en este canal dice: "${ctx.conv.display_name}" — OJO: suele ser un apodo o nombre artístico, no su nombre real. Úsalo solo para saludar con calidez. Para la reserva SIEMPRE pide su nombre ("¿a nombre de quién pongo la reserva?") y a partir de que te lo dé, dirígete a la persona por ESE nombre.`)
-  lines.push('RESERVA EXISTENTE: cuando registres al cliente, el sistema te dirá si ya tiene reservas próximas. Si ya tiene una para el MISMO día que está pidiendo, NO crees otra: confírmasela con sus datos ("ya tienes tu mesa el sábado a las 20:30 para 6 👍"). Si pide cambios (hora/personas), usa crear_reserva con los datos nuevos — el sistema ACTUALIZA la existente en lugar de duplicar.')
+  lines.push('RESERVA EXISTENTE: cuando registres al cliente, el sistema te dirá si ya tiene reservas próximas. Si ya tiene una para el MISMO día que está pidiendo, NO crees otra: confírmasela con sus datos ("ya tienes tu mesa el sábado a las 20:30 para 6 👍"). Si pide cambios (hora/personas), usa crear_reserva con los datos nuevos — el sistema ACTUALIZA la existente en lugar de duplicar y valida que todavía haya cupo; si ya no cabe, ofrécele otra opción.')
+  lines.push('CANCELACIONES: si el cliente pide cancelar, cancela SIN fricción con cancelar_reserva — nada de "¿seguro?" repetidos ni interrogar el motivo (si lo cuenta espontáneamente, regístralo). Confírmale la cancelación con calidez e invítalo a volver ("cuando quieras, aquí tienes tu mesa"). Una cancelación bien atendida es un cliente que regresa.')
+  lines.push('EVENTOS: si el cliente quiere un evento (cumpleaños grande, despedida, corporativo, renta del lugar), NO lo despaches directo — captura primero esta información, una pregunta a la vez: (1) ¿qué fecha tienen en mente?, (2) ¿aproximadamente cuántas personas serían?, (3) ¿qué tipo de evento u ocasión es?, (4) ¿buscan un área reservada o el lugar completo?, y su nombre y teléfono si aún no los tienes. Ya con eso, usa escalar_a_humano con TODO el resumen en el motivo ("Evento: cumpleaños, ~40 pax, 26 de julio, área reservada — María, tel registrado") — así el equipo llega a cerrar la venta, no a re-preguntar.')
   if (publicUrl) lines.push(`Cuando pidas el teléfono por primera vez, comparte una sola vez este enlace de aviso de privacidad: ${publicUrl}/?aviso=1 — así el cliente sabe cómo cuidamos su dato antes de dártelo. No lo repitas en cada mensaje.`)
 
   if (ctx.bu) {
@@ -372,6 +385,27 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
         .eq('guest_id', ctx.conv.guest_id).eq('bu_id', ctx.conv.bu_id).eq('date', input.fecha)
         .in('status', ['requested', 'confirmed']).limit(1)
       const existente = existentes?.[0]
+
+      // Validación de cupo de la noche (crear Y modificar): el bot nunca
+      // sobrevende — el sobrecupo solo lo autoriza un humano desde la app.
+      const dow = new Date(input.fecha + 'T00:00:00').getDay()
+      const [{ data: capNoche }, { data: resNoche }] = await Promise.all([
+        supabaseAdmin.from('venue_capacity').select('max_reservations, max_pax').eq('bu_id', ctx.conv.bu_id).eq('day_of_week', dow).eq('active', true).maybeSingle(),
+        supabaseAdmin.from('reservations').select('id, party_size, status').eq('bu_id', ctx.conv.bu_id).eq('date', input.fecha),
+      ])
+      if (capNoche) {
+        let usadas = 0, paxUsadas = 0
+        for (const r of resNoche ?? []) {
+          if (!['requested', 'confirmed', 'seated', 'completed'].includes(r.status)) continue
+          if (existente && r.id === existente.id) continue // al modificar, su propia reserva no cuenta
+          usadas++; paxUsadas += r.party_size
+        }
+        const sinCupoReservas = !existente && usadas >= capNoche.max_reservations
+        const sinCupoPax = paxUsadas + input.pax > capNoche.max_pax
+        if (sinCupoReservas || sinCupoPax) {
+          return { error: `Esa noche ya no hay cupo (${usadas}/${capNoche.max_reservations} reservas, ${paxUsadas + input.pax}/${capNoche.max_pax} pax con esta reserva). NO confirmes: ofrécele al cliente otra fecha cercana con buena onda, y si insiste en esa noche usa escalar_a_humano — solo el equipo puede autorizar sobrecupo.` }
+        }
+      }
       if (existente) {
         const { error: upErr } = await supabaseAdmin.from('reservations').update({
           time_slot: hora, party_size: input.pax,
@@ -399,6 +433,34 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       })
       await notifySlackFromEdge(supabaseAdmin, `🤖 *Reserva vía Concierge* — ${ctx.bu?.name ?? ''}\n${input.fecha} · ${hora} · ${input.pax} pax`)
       return { ok: true, reservation_id: reserva.id }
+    }
+
+    case 'cancelar_reserva': {
+      if (!ctx.conv.guest_id) return { error: 'No tengo identificado al cliente en esta conversación — pídele su teléfono para ubicar su reserva, o usa escalar_a_humano.' }
+      let q = supabaseAdmin.from('reservations')
+        .select('id, date, time_slot, party_size')
+        .eq('guest_id', ctx.conv.guest_id)
+        .gte('date', new Date().toISOString().slice(0, 10))
+        .in('status', ['requested', 'confirmed'])
+        .order('date')
+      if (ctx.conv.bu_id) q = q.eq('bu_id', ctx.conv.bu_id)
+      if (input.fecha) q = q.eq('date', input.fecha)
+      const { data: candidatas } = await q.limit(5)
+      if (!candidatas?.length) return { error: 'No encontré ninguna reserva próxima a nombre del cliente' + (input.fecha ? ` para el ${input.fecha}` : '') + '. Confírmale la fecha o pregúntale si la hizo con otro teléfono.' }
+      if (candidatas.length > 1) {
+        return { varias: true, reservas: candidatas, instruccion: 'El cliente tiene varias reservas próximas — pregúntale cuál quiere cancelar y vuelve a llamar cancelar_reserva con la fecha.' }
+      }
+      const r = candidatas[0]
+      const { error: cErr } = await supabaseAdmin.from('reservations').update({
+        status: 'cancelled', cancel_reason: input.motivo?.trim() || 'Cancelada por el cliente vía Concierge',
+      }).eq('id', r.id)
+      if (cErr) return { error: cErr.message }
+      await supabaseAdmin.from('activity_log').insert({
+        user_id: null, action: 'reservation_status', entity_type: 'reservation', entity_id: r.id,
+        details: { actor: 'Concierge HOG', to: 'Cancelada', date: r.date, slot: r.time_slot, pax: r.party_size, channel: ctx.conv.channel },
+      })
+      await notifySlackFromEdge(supabaseAdmin, `🚫 *Cancelación vía Concierge* — ${ctx.bu?.name ?? ''}\n${r.date} · ${r.time_slot} · ${r.party_size} pax${input.motivo ? ` · Motivo: ${input.motivo}` : ''}`)
+      return { ok: true, cancelada: { fecha: r.date, hora: r.time_slot, pax: r.party_size }, instruccion: 'Confírmale la cancelación con amabilidad e invítalo a volver pronto — sin culpas ni presión.' }
     }
 
     case 'notificar_slack':
