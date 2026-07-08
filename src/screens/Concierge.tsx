@@ -612,24 +612,64 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Configuración — kill switch global + perillas por venue (sin deploy)
+// Configuración — kill switch global + UNA caja por venue con bullets.
+// Cada bullet (Canales, Voz, Ritmo, Info bancaria, FAQ) muestra de un vistazo
+// qué información YA tiene el Concierge (punto brass ●) y qué falta (○). Al
+// picarlo, la sección se expande — cero espacio muerto por secciones vacías.
 // ═════════════════════════════════════════════════════════════════════════════
+interface VenueBotInfo { bu_id: string; faq: string | null }
+interface ChanHealth { lastIn: string | null; lastOut: string | null }
+
+// Semáforo de conexión live por canal: se basa en tráfico REAL (webhook
+// recibiendo + bot/equipo respondiendo), no en configuración.
+function chanStatus(h: ChanHealth | undefined, enabled: boolean): { color: string; label: string } {
+  if (!enabled) return { color: 'var(--border-strong)', label: 'Canal apagado' }
+  if (!h?.lastIn) return { color: 'var(--status-attention)', label: 'Sin tráfico aún — manda un mensaje de prueba' }
+  const hrs = (Date.now() - new Date(h.lastIn).getTime()) / 3600000
+  const out = h.lastOut ? ` · últ. respuesta ${timeAgo(h.lastOut)}` : ' · sin respuestas aún'
+  return { color: hrs <= 72 ? 'var(--status-healthy)' : 'var(--status-attention)', label: `en vivo · últ. mensaje ${timeAgo(h.lastIn)}${out}` }
+}
+
 function ConfigTab({ buList }: { buList: BU[] }) {
   const [botEnabled, setBotEnabled] = useState(false)
   const [waNumber, setWaNumber] = useState('')
   const [configs, setConfigs] = useState<VenueConfig[]>([])
+  const [payments, setPayments] = useState<PaymentConfig[]>([])
+  const [infos, setInfos] = useState<VenueBotInfo[]>([])
+  const [faqTableMissing, setFaqTableMissing] = useState(false)
+  const [health, setHealth] = useState<Record<string, ChanHealth>>({})
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
-    const [{ data: settings }, { data: cfgs }] = await Promise.all([
+    const [{ data: settings }, { data: cfgs }, { data: pays }, infoRes, { data: convs }] = await Promise.all([
       supabase.from('app_settings').select('key, value').in('key', ['bot_enabled', 'bot_holding_wa_number']),
       supabase.from('bot_venue_config').select('*').order('channel'),
+      supabase.from('venue_payment_config').select('*'),
+      supabase.from('venue_bot_info').select('*'),
+      supabase.from('bot_conversations').select('bu_id, channel, last_message_at, last_sender, updated_at').eq('is_simulated', false).order('last_message_at', { ascending: false }).limit(300),
     ])
     for (const s of settings ?? []) {
       if (s.key === 'bot_enabled') setBotEnabled(s.value === 'true')
       if (s.key === 'bot_holding_wa_number') setWaNumber(s.value ?? '')
     }
     setConfigs((cfgs ?? []) as VenueConfig[])
+    setPayments((pays ?? []) as PaymentConfig[])
+    if (infoRes.error) setFaqTableMissing(true)
+    else setInfos((infoRes.data ?? []) as VenueBotInfo[])
+    // Salud por canal: última entrada y última respuesta, por venue y global
+    const h: Record<string, ChanHealth> = {}
+    const bump = (key: string, field: 'lastIn' | 'lastOut', val: string | null) => {
+      if (!val) return
+      const e = (h[key] ??= { lastIn: null, lastOut: null })
+      if (!e[field] || val > e[field]!) e[field] = val
+    }
+    for (const c of convs ?? []) {
+      for (const key of [`${c.bu_id ?? 'any'}:${c.channel}`, `any:${c.channel}`]) {
+        bump(key, 'lastIn', c.last_message_at)
+        if (c.last_sender === 'bot' || c.last_sender === 'agent') bump(key, 'lastOut', c.updated_at)
+      }
+    }
+    setHealth(h)
     setLoading(false)
   }, [])
 
@@ -650,27 +690,13 @@ function ConfigTab({ buList }: { buList: BU[] }) {
     showToast('Número de WhatsApp guardado.', 'success')
   }
 
-  async function addConfig(buId: string, channel: Channel) {
-    const { error } = await supabase.from('bot_venue_config').insert({ bu_id: buId, channel, enabled: false })
-    if (error) { showToast(`No se pudo crear: ${error.message}`, 'error'); return }
-    load()
-  }
-
-  // Venue+canal aún sin configurar
-  const missing = useMemo(() => {
-    const have = new Set(configs.map(c => `${c.bu_id}:${c.channel}`))
-    const out: { bu: BU; channel: Channel }[] = []
-    for (const bu of buList) for (const ch of ['instagram', 'whatsapp'] as Channel[]) {
-      if (!have.has(`${bu.id}:${ch}`)) out.push({ bu, channel: ch })
-    }
-    return out
-  }, [configs, buList])
-
   if (loading) return <p style={{ color: 'var(--text-tertiary)', fontSize: 13 }}>Cargando…</p>
+
+  const anyEnabled = (ch: Channel) => configs.some(c => c.channel === ch && c.enabled)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      {/* Global */}
+      {/* Global: kill switch + conexión live por canal */}
       <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Power size={16} style={{ color: botEnabled ? 'var(--status-healthy)' : 'var(--status-risk)' }} />
@@ -683,7 +709,24 @@ function ConfigTab({ buList }: { buList: BU[] }) {
             {botEnabled ? 'ENCENDIDO' : 'APAGADO'}
           </button>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+
+        {/* Conexión live: tráfico real por canal (webhook entrando + bot respondiendo) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+          {(['whatsapp', 'instagram'] as Channel[]).map(ch => {
+            const Icon = CHANNEL_ICON[ch]
+            const st = chanStatus(health[`any:${ch}`], botEnabled && anyEnabled(ch))
+            return (
+              <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: st.color, flexShrink: 0 }} />
+                <Icon size={13} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', width: 82 }}>{CHANNEL_LABEL[ch]}</span>
+                <span className="num" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{st.label}</span>
+              </div>
+            )
+          })}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 220 }}>
             <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>WhatsApp del holding</label>
             <input value={waNumber} onChange={e => setWaNumber(e.target.value)} placeholder="+52 669 …" inputMode="tel" className="num"
@@ -693,74 +736,277 @@ function ConfigTab({ buList }: { buList: BU[] }) {
         </div>
       </div>
 
-      {/* Por venue */}
-      {configs.map(cfg => (
-        <VenueConfigCard key={cfg.id} cfg={cfg} bu={buList.find(b => b.id === cfg.bu_id)} onSaved={load} />
+      {/* Una caja por venue */}
+      {buList.map(bu => (
+        <VenueBox key={bu.id} bu={bu}
+          cfgs={configs.filter(c => c.bu_id === bu.id)}
+          pay={payments.find(p => p.bu_id === bu.id) ?? null}
+          info={infos.find(i => i.bu_id === bu.id) ?? null}
+          health={health} botEnabled={botEnabled} faqTableMissing={faqTableMissing}
+          onReload={load} />
       ))}
+    </div>
+  )
+}
 
-      {/* Onboarding del venue: datos de depósito para apartados (puente manual
-          con CLABE en lo que se conecta Stripe). Piloto: Bruma MZT. */}
-      <PaymentSection buList={buList} />
+// ─── Caja de venue: header slim + bullets expandibles ────────────────────────
+function VenueBox({ bu, cfgs, pay, info, health, botEnabled, faqTableMissing, onReload }: {
+  bu: BU
+  cfgs: VenueConfig[]
+  pay: PaymentConfig | null
+  info: VenueBotInfo | null
+  health: Record<string, ChanHealth>
+  botEnabled: boolean
+  faqTableMissing: boolean
+  onReload: () => void
+}) {
+  const [open, setOpen] = useState<Set<string>>(new Set())
+  const first = cfgs[0]
+  const [voz, setVoz] = useState('')
+  const [ritmo, setRitmo] = useState({ delay: 45, followup: 5, escalate: 12, winStart: '11:00', winEnd: '23:00' })
+  const [faq, setFaq] = useState('')
+  const [saving, setSaving] = useState(false)
 
-      {missing.length > 0 && (
-        <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Habilitar canal en venue</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {missing.map(m => {
-              const Icon = CHANNEL_ICON[m.channel]
-              return (
-                <button key={`${m.bu.id}-${m.channel}`} onClick={() => addConfig(m.bu.id, m.channel)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 12px', borderRadius: 999, border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  <Plus size={12} /> {m.bu.code} · <Icon size={12} /> {CHANNEL_LABEL[m.channel]}
-                </button>
-              )
-            })}
+  useEffect(() => {
+    setVoz(cfgs.find(c => c.persona_note)?.persona_note ?? '')
+    if (first) setRitmo({
+      delay: first.first_reply_delay_seconds, followup: first.followup_after_minutes,
+      escalate: first.escalate_over_pax, winStart: first.followup_window_start.slice(0, 5), winEnd: first.followup_window_end.slice(0, 5),
+    })
+    setFaq(info?.faq ?? '')
+  }, [cfgs.length, first?.id, info?.bu_id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggle = (k: string) => setOpen(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n })
+
+  // Estado de cada bullet: ● = el Concierge YA tiene esta info · ○ = falta
+  const bullets: { key: string; label: string; filled: boolean }[] = [
+    { key: 'canales', label: 'Canales', filled: cfgs.some(c => c.enabled) },
+    { key: 'voz', label: 'Voz', filled: cfgs.some(c => (c.persona_note ?? '').trim().length > 0) },
+    { key: 'ritmo', label: 'Ritmo', filled: cfgs.length > 0 },
+    { key: 'apartados', label: 'Info bancaria', filled: !!pay?.clabe && !!pay?.active },
+    { key: 'faq', label: 'FAQ', filled: !!info?.faq?.trim() },
+  ]
+
+  // Semáforo del venue: verde si algún canal activo tiene tráfico reciente
+  const liveColors = (['instagram', 'whatsapp'] as Channel[]).map(ch => {
+    const cfg = cfgs.find(c => c.channel === ch)
+    return chanStatus(health[`${bu.id}:${ch}`] ?? (ch === 'whatsapp' ? health['any:whatsapp'] : undefined), botEnabled && !!cfg?.enabled).color
+  })
+  const venueDot = liveColors.includes('var(--status-healthy)') ? 'var(--status-healthy)'
+    : liveColors.includes('var(--status-attention)') ? 'var(--status-attention)' : 'var(--border-strong)'
+
+  const ids = cfgs.map(c => c.id)
+
+  async function toggleChannel(ch: Channel) {
+    const cfg = cfgs.find(c => c.channel === ch)
+    if (cfg) {
+      const { error } = await supabase.from('bot_venue_config').update({ enabled: !cfg.enabled }).eq('id', cfg.id)
+      if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+      logActivity('concierge_config_saved', 'bot_venue_config', cfg.id, { bu: bu.code, channel: ch, enabled: !cfg.enabled })
+    } else {
+      const { error } = await supabase.from('bot_venue_config').insert({ bu_id: bu.id, channel: ch, enabled: true })
+      if (error) { showToast(`No se pudo habilitar: ${error.message}`, 'error'); return }
+      logActivity('concierge_config_saved', 'bot_venue_config', undefined, { bu: bu.code, channel: ch, enabled: true })
+    }
+    onReload()
+  }
+
+  async function saveAccount(cfg: VenueConfig, value: string) {
+    const v = value.trim() || null
+    if (v === cfg.external_account) return
+    const { error } = await supabase.from('bot_venue_config').update({ external_account: v }).eq('id', cfg.id)
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    showToast('Cuenta conectada guardada.', 'success')
+    onReload()
+  }
+
+  // Voz y Ritmo se editan a nivel venue y se escriben en TODOS sus canales
+  async function saveVoz() {
+    if (!ids.length) { showToast('Primero habilita un canal en este venue.', 'error'); return }
+    setSaving(true)
+    const { error } = await supabase.from('bot_venue_config').update({ persona_note: voz.trim() || null }).in('id', ids)
+    setSaving(false)
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    logActivity('concierge_config_saved', 'bot_venue_config', first?.id, { bu: bu.code, campo: 'voz' })
+    showToast('Voz del venue guardada — el Concierge ya la usa.', 'success')
+    onReload()
+  }
+
+  async function saveRitmo() {
+    if (!ids.length) { showToast('Primero habilita un canal en este venue.', 'error'); return }
+    setSaving(true)
+    const { error } = await supabase.from('bot_venue_config').update({
+      first_reply_delay_seconds: ritmo.delay, followup_after_minutes: ritmo.followup,
+      escalate_over_pax: ritmo.escalate, followup_window_start: ritmo.winStart, followup_window_end: ritmo.winEnd,
+    }).in('id', ids)
+    setSaving(false)
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    logActivity('concierge_config_saved', 'bot_venue_config', first?.id, { bu: bu.code, campo: 'ritmo' })
+    showToast('Ritmo guardado — el Concierge ya lo usa.', 'success')
+    onReload()
+  }
+
+  async function saveFaq() {
+    const { error } = await supabase.from('venue_bot_info').upsert({ bu_id: bu.id, faq: faq.trim() || null }, { onConflict: 'bu_id' })
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    logActivity('venue_faq_saved', 'venue_bot_info', bu.id, { bu: bu.code })
+    showToast('FAQ guardado.', 'success')
+    onReload()
+  }
+
+  async function enablePayments() {
+    const { error } = await supabase.from('venue_payment_config').insert({ bu_id: bu.id })
+    if (error) { showToast(`No se pudo habilitar: ${error.message}`, 'error'); return }
+    onReload()
+  }
+
+  const inp: React.CSSProperties = { width: '100%', minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }
+  const lbl: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
+  const okLine = (txt: string) => (
+    <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--accent)', margin: '8px 0 0' }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} /> {txt}
+    </p>
+  )
+
+  return (
+    <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
+      {/* Header slim del venue */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span title="Conexión del venue" style={{ width: 9, height: 9, borderRadius: '50%', background: venueDot, flexShrink: 0 }} />
+        <BUChip code={bu.code} />
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{bu.name}</span>
+      </div>
+
+      {/* Bullets: ● info que el Concierge ya tiene · ○ pendiente — tap expande */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+        {bullets.map(b => {
+          const isOpen = open.has(b.key)
+          return (
+            <button key={b.key} onClick={() => toggle(b.key)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 38, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: isOpen ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${isOpen ? 'var(--accent)' : 'var(--border-default)'}`, color: isOpen ? 'var(--accent)' : b.filled ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: b.filled ? 'var(--accent)' : 'transparent', border: b.filled ? 'none' : '1px solid var(--border-strong)', flexShrink: 0 }} />
+              {b.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ── Canales: toggle por canal + conexión live + cuenta conectada ── */}
+      {open.has('canales') && (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+          {(['instagram', 'whatsapp'] as Channel[]).map(ch => {
+            const cfg = cfgs.find(c => c.channel === ch)
+            const Icon = CHANNEL_ICON[ch]
+            const st = chanStatus(health[`${bu.id}:${ch}`] ?? (ch === 'whatsapp' ? health['any:whatsapp'] : undefined), botEnabled && !!cfg?.enabled)
+            return (
+              <div key={ch} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon size={14} style={{ color: 'var(--text-tertiary)' }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{CHANNEL_LABEL[ch]}</span>
+                  <button onClick={() => toggleChannel(ch)}
+                    style={{ minHeight: 34, padding: '0 12px', borderRadius: 999, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer', background: cfg?.enabled ? 'color-mix(in srgb, var(--status-healthy) 15%, transparent)' : 'var(--bg-base)', color: cfg?.enabled ? 'var(--status-healthy)' : 'var(--text-tertiary)' }}>
+                    {cfg?.enabled ? 'ACTIVO' : cfg ? 'INACTIVO' : 'HABILITAR'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 22 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.color, flexShrink: 0 }} />
+                  <span className="num" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{st.label}</span>
+                </div>
+                {cfg && ch === 'instagram' && (
+                  <div style={{ paddingLeft: 22 }}>
+                    <label style={lbl}>Cuenta conectada (IG account id)</label>
+                    <input defaultValue={cfg.external_account ?? ''} placeholder="Se llena al conectar Meta" className="num"
+                      onBlur={e => saveAccount(cfg, e.target.value)} style={inp} />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── Voz del venue (aplica a todos sus canales) ── */}
+      {open.has('voz') && (
+        <div style={{ marginTop: 12, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+          <label style={lbl}>Voz del bot — personalidad de {bu.name}</label>
+          <textarea value={voz} onChange={e => setVoz(e.target.value)} rows={4}
+            placeholder="Tono, muletillas, qué ofrecer primero…"
+            style={{ ...inp, minHeight: 90, padding: '10px 12px', resize: 'vertical' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+            <button onClick={saveVoz} disabled={saving}
+              style={{ minHeight: 40, padding: '0 16px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Guardar</button>
+            {bullets[1].filled && okLine('El Concierge ya tiene esta información')}
           </div>
+        </div>
+      )}
+
+      {/* ── Ritmo (aplica a todos sus canales) ── */}
+      {open.has('ritmo') && (
+        <div style={{ marginTop: 12, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+            <div><label style={lbl}>1a respuesta (seg)</label>
+              <input type="number" min={0} value={ritmo.delay} onChange={e => setRitmo(r => ({ ...r, delay: Math.max(0, Number(e.target.value)) }))} className="num" style={inp} /></div>
+            <div><label style={lbl}>Seguimiento (min)</label>
+              <input type="number" min={0} value={ritmo.followup} onChange={e => setRitmo(r => ({ ...r, followup: Math.max(0, Number(e.target.value)) }))} className="num" style={inp} /></div>
+            <div><label style={lbl}>Escalar si pax &gt;</label>
+              <input type="number" min={1} value={ritmo.escalate} onChange={e => setRitmo(r => ({ ...r, escalate: Math.max(1, Number(e.target.value)) }))} className="num" style={inp} /></div>
+            <div><label style={lbl}>Ventana cortesía</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input type="time" value={ritmo.winStart} onChange={e => setRitmo(r => ({ ...r, winStart: e.target.value }))} className="num" style={{ ...inp, width: 'auto', flex: 1 }} />
+                <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>–</span>
+                <input type="time" value={ritmo.winEnd} onChange={e => setRitmo(r => ({ ...r, winEnd: e.target.value }))} className="num" style={{ ...inp, width: 'auto', flex: 1 }} />
+              </div></div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+            <button onClick={saveRitmo} disabled={saving}
+              style={{ minHeight: 40, padding: '0 16px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Guardar</button>
+            {cfgs.length > 0 && okLine('El Concierge ya tiene esta información')}
+          </div>
+        </div>
+      )}
+
+      {/* ── Info bancaria / Apartados ── */}
+      {open.has('apartados') && (
+        <div style={{ marginTop: 12 }}>
+          {pay ? (
+            <>
+              <PaymentCard row={pay} bu={bu} onSaved={onReload} />
+              {bullets[3].filled && okLine('El Concierge ya cobra apartados con estos datos')}
+            </>
+          ) : (
+            <button onClick={enablePayments}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 42, padding: '0 14px', borderRadius: 999, border: '1px dashed var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              <Plus size={13} /> Configurar info bancaria de {bu.code}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── FAQ del venue (el bot la usará a partir del próximo deploy) ── */}
+      {open.has('faq') && (
+        <div style={{ marginTop: 12, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+          {faqTableMissing ? (
+            <p style={{ fontSize: 12, color: 'var(--status-attention)', margin: 0 }}>Falta correr el SQL de venue_bot_info en Supabase para activar esta sección.</p>
+          ) : (
+            <>
+              <label style={lbl}>FAQ del venue — horarios, ubicación, estacionamiento, dress code, menores…</label>
+              <textarea value={faq} onChange={e => setFaq(e.target.value)} rows={5}
+                placeholder={'Ej.\nHorario: mié–sáb 6pm–2am\nUbicación: Av. del Mar 123, con estacionamiento\nDress code: casual elegante\nMenores: no después de las 8pm'}
+                style={{ ...inp, minHeight: 110, padding: '10px 12px', resize: 'vertical' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                <button onClick={saveFaq}
+                  style={{ minHeight: 40, padding: '0 16px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Guardar</button>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>El bot la usará a partir del próximo deploy (fase del viernes).</span>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
   )
 }
 
-// ─── Onboarding del venue: depósitos para apartados (CLABE → luego Stripe) ───
-function PaymentSection({ buList }: { buList: BU[] }) {
-  const [rows, setRows] = useState<PaymentConfig[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const load = useCallback(async () => {
-    const { data } = await supabase.from('venue_payment_config').select('*')
-    setRows((data ?? []) as PaymentConfig[])
-    setLoading(false)
-  }, [])
-  useEffect(() => { load() }, [load])
-
-  async function enable(buId: string) {
-    const { error } = await supabase.from('venue_payment_config').insert({ bu_id: buId })
-    if (error) { showToast(`No se pudo habilitar: ${error.message}`, 'error'); return }
-    load()
-  }
-
-  if (loading) return null
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 4 }}>
-        Onboarding del venue · Apartados (depósitos)
-      </div>
-      {rows.map(row => (
-        <PaymentCard key={row.bu_id} row={row} bu={buList.find(b => b.id === row.bu_id)} onSaved={load} />
-      ))}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {buList.filter(b => !rows.some(r => r.bu_id === b.id)).map(b => (
-          <button key={b.id} onClick={() => enable(b.id)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 12px', borderRadius: 999, border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-            <Plus size={12} /> Configurar depósitos · {b.code}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
+// ─── Apartados (embebido en la caja del venue) ───────────────────────────────
 function PaymentCard({ row, bu, onSaved }: { row: PaymentConfig; bu?: BU; onSaved: () => void }) {
   const [form, setForm] = useState(row)
   const [saving, setSaving] = useState(false)
@@ -788,20 +1034,16 @@ function PaymentCard({ row, bu, onSaved }: { row: PaymentConfig; bu?: BU; onSave
   const lbl: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
 
   return (
-    <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        {bu && <BUChip code={bu.code} />}
-        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{bu?.name ?? '—'} · Apartados</span>
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Apartados (depósitos)</span>
         <button onClick={() => setForm(f => ({ ...f, active: !f.active }))}
-          style={{ marginLeft: 'auto', minHeight: 36, padding: '0 14px', borderRadius: 999, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer', background: form.active ? 'color-mix(in srgb, var(--status-healthy) 15%, transparent)' : 'var(--bg-elevated)', color: form.active ? 'var(--status-healthy)' : 'var(--text-tertiary)' }}>
+          style={{ marginLeft: 'auto', minHeight: 34, padding: '0 12px', borderRadius: 999, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer', background: form.active ? 'color-mix(in srgb, var(--status-healthy) 15%, transparent)' : 'var(--bg-base)', color: form.active ? 'var(--status-healthy)' : 'var(--text-tertiary)' }}>
           {form.active ? 'ACTIVO' : 'INACTIVO'}
         </button>
       </div>
-      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
-        El bot ofrece asegurar reservas grandes con un depósito a esta cuenta. El equipo valida el comprobante — puente manual en lo que se conecta Stripe.
-      </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 10 }}>
         <div>
           <label style={lbl}>CLABE (18 dígitos)</label>
           <input value={form.clabe ?? ''} inputMode="numeric" maxLength={18} className="num"
@@ -817,7 +1059,7 @@ function PaymentCard({ row, bu, onSaved }: { row: PaymentConfig; bu?: BU; onSave
           <input value={form.beneficiary ?? ''} onChange={e => setForm(f => ({ ...f, beneficiary: e.target.value || null }))} style={inp} />
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 10 }}>
         <div>
           <label style={lbl}>Apartado desde (pax)</label>
           <input type="number" min={1} value={form.deposit_over_pax} className="num"
@@ -842,103 +1084,7 @@ function PaymentCard({ row, bu, onSaved }: { row: PaymentConfig; bu?: BU; onSave
 
       {dirty && (
         <button onClick={save} disabled={saving}
-          style={{ marginTop: 12, minHeight: 44, padding: '0 20px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer' }}>
-          {saving ? 'Guardando…' : 'Guardar cambios'}
-        </button>
-      )}
-    </div>
-  )
-}
-
-function VenueConfigCard({ cfg, bu, onSaved }: { cfg: VenueConfig; bu?: BU; onSaved: () => void }) {
-  const [form, setForm] = useState(cfg)
-  const [saving, setSaving] = useState(false)
-  const dirty = JSON.stringify(form) !== JSON.stringify(cfg)
-  const ChIcon = CHANNEL_ICON[cfg.channel]
-
-  useEffect(() => { setForm(cfg) }, [cfg])
-
-  async function save() {
-    setSaving(true)
-    const { error } = await supabase.from('bot_venue_config').update({
-      enabled: form.enabled,
-      persona_note: form.persona_note,
-      first_reply_delay_seconds: form.first_reply_delay_seconds,
-      followup_after_minutes: form.followup_after_minutes,
-      followup_window_start: form.followup_window_start,
-      followup_window_end: form.followup_window_end,
-      escalate_over_pax: form.escalate_over_pax,
-      external_account: form.external_account,
-    }).eq('id', cfg.id)
-    setSaving(false)
-    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
-    logActivity('concierge_config_saved', 'bot_venue_config', cfg.id, { bu: bu?.code, channel: cfg.channel, enabled: form.enabled })
-    showToast(`Config de ${bu?.code ?? ''} ${CHANNEL_LABEL[cfg.channel]} guardada.`, 'success')
-    onSaved()
-  }
-
-  const numIn = (value: number, onChange: (n: number) => void, suffix: string) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <input type="number" value={value} min={0} onChange={e => onChange(Math.max(0, Number(e.target.value)))} className="num"
-        style={{ width: 72, minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none' }} />
-      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{suffix}</span>
-    </div>
-  )
-  const lbl: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
-
-  return (
-    <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        {bu && <BUChip code={bu.code} />}
-        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{bu?.name ?? '—'}</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-tertiary)' }}><ChIcon size={13} /> {CHANNEL_LABEL[cfg.channel]}</span>
-        <button onClick={() => setForm(f => ({ ...f, enabled: !f.enabled }))}
-          style={{ marginLeft: 'auto', minHeight: 36, padding: '0 14px', borderRadius: 999, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer', background: form.enabled ? 'color-mix(in srgb, var(--status-healthy) 15%, transparent)' : 'var(--bg-elevated)', color: form.enabled ? 'var(--status-healthy)' : 'var(--text-tertiary)' }}>
-          {form.enabled ? 'ACTIVO' : 'INACTIVO'}
-        </button>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 12 }}>
-        <div>
-          <label style={lbl}>1a respuesta</label>
-          {numIn(form.first_reply_delay_seconds, n => setForm(f => ({ ...f, first_reply_delay_seconds: n })), 'seg')}
-        </div>
-        <div>
-          <label style={lbl}>Seguimiento</label>
-          {numIn(form.followup_after_minutes, n => setForm(f => ({ ...f, followup_after_minutes: n })), 'min')}
-        </div>
-        <div>
-          <label style={lbl}>Escalar si pax &gt;</label>
-          {numIn(form.escalate_over_pax, n => setForm(f => ({ ...f, escalate_over_pax: n })), 'pax')}
-        </div>
-        <div>
-          <label style={lbl}>Ventana cortesía</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input type="time" value={form.followup_window_start.slice(0, 5)} onChange={e => setForm(f => ({ ...f, followup_window_start: e.target.value }))} className="num"
-              style={{ minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 6px', fontSize: 12, color: 'var(--text-primary)', outline: 'none' }} />
-            <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>–</span>
-            <input type="time" value={form.followup_window_end.slice(0, 5)} onChange={e => setForm(f => ({ ...f, followup_window_end: e.target.value }))} className="num"
-              style={{ minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 6px', fontSize: 12, color: 'var(--text-primary)', outline: 'none' }} />
-          </div>
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <label style={lbl}>Cuenta conectada ({cfg.channel === 'instagram' ? 'IG account id' : 'número WA'})</label>
-        <input value={form.external_account ?? ''} onChange={e => setForm(f => ({ ...f, external_account: e.target.value || null }))} placeholder="Se llena al conectar Meta"
-          style={{ width: '100%', minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 12px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
-      </div>
-
-      <div>
-        <label style={lbl}>Voz del bot (persona)</label>
-        <textarea value={form.persona_note ?? ''} onChange={e => setForm(f => ({ ...f, persona_note: e.target.value || null }))} rows={2}
-          placeholder="Tono, muletillas, qué ofrecer primero…"
-          style={{ width: '100%', minHeight: 56, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
-      </div>
-
-      {dirty && (
-        <button onClick={save} disabled={saving}
-          style={{ marginTop: 12, minHeight: 44, padding: '0 20px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer' }}>
+          style={{ marginTop: 10, minHeight: 42, padding: '0 18px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: saving ? 'wait' : 'pointer' }}>
           {saving ? 'Guardando…' : 'Guardar cambios'}
         </button>
       )}

@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.24.1"
+export const APP_VERSION = "2.25.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.25.0",
+    date: "2026-07-08",
+    type: "MINOR",
+    changes: [
+      "Config del Concierge rediseñada — un apartado por venue con bullets expandibles (Canales, Voz, Ritmo, Info bancaria, FAQ); sin espacio muerto",
+      "Semáforo de conexión en vivo por canal, basado en tráfico real: verde = mensajes fluyendo, ámbar = encendido sin tráfico, gris = apagado",
+      "Indicador ● por sección: se rellena cuando el Concierge ya tiene esa información",
+      "Espacio para FAQ por venue listo — se guarda desde ya; el bot lo usará en la fase del viernes",
+    ]
+  },
   {
     version: "2.24.1",
     date: "2026-07-08",
