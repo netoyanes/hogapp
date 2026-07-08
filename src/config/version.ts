@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.23.0"
+export const APP_VERSION = "2.24.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.24.0",
+    date: "2026-07-08",
+    type: "MINOR",
+    changes: [
+      "Talento — booking interno de DJs (Ops/Master): agenda semanal por venue, directorio con fee registrado y rider",
+      "Gasto en fees del mes, tocadas y fee promedio de un vistazo; alta de DJ en 20 segundos",
+      "Cada tocada registra su fee negociado, peticiones especiales de la fecha, estado y pago",
+      "Bot (próximo deploy): vende la programación ('¿quién toca el sábado?') y recluta DJs que escriben por DM",
+    ]
+  },
   {
     version: "2.23.0",
     date: "2026-07-08",

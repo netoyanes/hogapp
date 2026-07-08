@@ -124,6 +124,31 @@ const TOOLS = [
     },
   },
   {
+    name: 'programacion_venue',
+    description: 'Consulta qué DJs tocan en el venue (hoy, una fecha, o los próximos 7 días). Úsala cuando pregunten "¿quién toca?", "¿qué hay el sábado?", "¿hay DJ hoy?" — y aprovecha la respuesta para ofrecer la reserva.',
+    input_schema: {
+      type: 'object',
+      properties: { fecha: { type: 'string', description: 'YYYY-MM-DD; omite para ver los próximos 7 días' } },
+    },
+  },
+  {
+    name: 'registrar_dj',
+    description: 'Registra a un DJ/artista interesado en tocar en el venue, en la base de talento. Úsala cuando quien escribe sea un DJ ofreciendo sus servicios y ya hayas capturado sus datos básicos.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        nombre_artistico: { type: 'string' },
+        generos: { type: 'string', description: 'Géneros separados por coma (ej. "house, techno")' },
+        ciudad: { type: 'string' },
+        fee_aproximado: { type: 'number', description: 'Fee aproximado en MXN si lo mencionó' },
+        telefono: { type: 'string' },
+        links: { type: 'string', description: 'IG, SoundCloud, mixes — lo que haya compartido' },
+        notas: { type: 'string', description: 'Disponibilidad u otros detalles que mencionó' },
+      },
+      required: ['nombre_artistico'],
+    },
+  },
+  {
     name: 'agregar_nota_reserva',
     description: 'Agrega una nota a la reserva próxima del cliente y avisa al equipo del venue. Úsala cuando el cliente avise que va en camino, que llega tarde, o cualquier detalle operativo de su reserva ya hecha (cambio de mesa, silla de bebé, etc.).',
     input_schema: {
@@ -299,6 +324,8 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   lines.push('CUMPLEAÑOS: si el cliente menciona su fecha de cumpleaños, pásala en crear_o_actualizar_cliente (campo cumpleanos) — el sistema la recuerda para consentirlo después. No la pidas de la nada; solo captúrala si sale en la conversación.')
   lines.push('QUEJAS: ante cualquier queja, primero una disculpa breve y humana (sin excusas), y de inmediato escalar_a_humano con el motivo empezando con "QUEJA:" y el resumen — eso alerta al equipo con prioridad y deja registro en la ficha del cliente. Nunca te pongas a la defensiva ni resuelvas compensaciones tú.')
   lines.push('LISTA DE ESPERA: si la noche que quiere está llena, ofrécele primero otra fecha u hora cercana. Si insiste en esa noche, dile que lo anotas en lista de espera, usa notificar_slack con "LISTA DE ESPERA: nombre, pax, fecha, teléfono" y explícale que el equipo le avisa si se libera lugar — sin prometerle que sí habrá.')
+  lines.push('PROGRAMACIÓN / DJs: si preguntan quién toca o qué hay tal noche, usa programacion_venue y VÉNDELO — menciona al DJ y sus géneros con entusiasmo y ofrece apartar mesa en el mismo mensaje. Si no hay programación registrada, NO inventes nombres: di que está por anunciarse y ofrece la reserva igual.')
+  lines.push('DJ QUE QUIERE TOCAR: si quien escribe es un DJ/artista ofreciendo sus servicios, cambia a modo reclutador amable — captura (una o dos preguntas por mensaje): nombre artístico, géneros, ciudad, fee aproximado, links de mixes/IG y teléfono. Con lo que tengas usa registrar_dj, dile que el booker escuchará su material y le responde por aquí, y cierra con escalar_a_humano ("DJ interesado: [nombre]"). NUNCA negocies fees, NUNCA prometas fechas — eso es del booker.')
   lines.push('IMÁGENES: si el historial muestra "[📎 El cliente envió una imagen]" en el contexto de un apartado, es casi seguro su comprobante de depósito: agradécele, dile que el equipo lo valida y confirma, y usa escalar_a_humano con motivo "Comprobante de apartado recibido — validar" si la conversación no está ya escalada.')
   lines.push('EVENTOS: si el cliente quiere un evento (cumpleaños grande, despedida, corporativo, renta del lugar), NO lo despaches directo — captura primero esta información, una pregunta a la vez: (1) ¿qué fecha tienen en mente?, (2) ¿aproximadamente cuántas personas serían?, (3) ¿qué tipo de evento u ocasión es?, (4) ¿buscan un área reservada o el lugar completo?, y su nombre y teléfono si aún no los tienes. Ya con eso, usa escalar_a_humano con TODO el resumen en el motivo ("Evento: cumpleaños, ~40 pax, 26 de julio, área reservada — María, tel registrado") — así el equipo llega a cerrar la venta, no a re-preguntar.')
   if (publicUrl) lines.push(`Cuando pidas el teléfono por primera vez, comparte una sola vez este enlace de aviso de privacidad: ${publicUrl}/?aviso=1 — así el cliente sabe cómo cuidamos su dato antes de dártelo. No lo repitas en cada mensaje.`)
@@ -471,6 +498,54 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       })
       await notifySlackFromEdge(supabaseAdmin, `🤖 *Reserva vía Concierge* — ${ctx.bu?.name ?? ''}\n${input.fecha} · ${hora} · ${input.pax} pax`)
       return { ok: true, reservation_id: reserva.id }
+    }
+
+    case 'programacion_venue': {
+      if (!ctx.conv.bu_id) return { error: 'Primero identifica el venue.' }
+      const hoy = new Date().toISOString().slice(0, 10)
+      const desde = input.fecha ?? hoy
+      const hasta = input.fecha ?? new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+      const { data: gigs } = await supabaseAdmin.from('dj_bookings')
+        .select('date, start_time, status, djs(stage_name, genres)')
+        .eq('bu_id', ctx.conv.bu_id).gte('date', desde).lte('date', hasta)
+        .in('status', ['confirmed', 'played'])
+        .order('date')
+      const programacion = (gigs ?? []).map((g: { date: string; start_time: string; djs: { stage_name: string; genres: string[] } | null }) => ({
+        fecha: g.date, hora: g.start_time, dj: g.djs?.stage_name ?? 'DJ', generos: g.djs?.genres ?? [],
+      }))
+      if (!programacion.length) return { sin_programacion: true, nota: 'No hay DJs anunciados para esas fechas — dile que la programación está por anunciarse (NO inventes nombres) y ofrece la reserva igual.' }
+      return { programacion, nota: 'Menciona al DJ con entusiasmo y aprovecha para ofrecer apartar mesa.' }
+    }
+
+    case 'registrar_dj': {
+      // El bot NUNCA negocia fees ni promete fechas: registra, avisa y escala.
+      const nombre = String(input.nombre_artistico).trim()
+      if (!nombre) return { error: 'Falta el nombre artístico.' }
+      const { data: existente } = await supabaseAdmin.from('djs').select('id, stage_name').ilike('stage_name', nombre).maybeSingle()
+      const row: Record<string, unknown> = {
+        stage_name: nombre,
+        genres: input.generos ? String(input.generos).split(',').map((g: string) => g.trim()).filter(Boolean) : [],
+        city: input.ciudad ?? null,
+        base_fee: input.fee_aproximado ?? null,
+        phone: input.telefono ? (normalizePhoneMX(input.telefono) ?? input.telefono) : null,
+        links: input.links ?? null,
+        fee_notes: input.notas ?? null,
+        source: 'concierge',
+      }
+      let djId = existente?.id
+      if (existente) {
+        await supabaseAdmin.from('djs').update(row).eq('id', existente.id)
+      } else {
+        const { data: nuevo, error: dErr } = await supabaseAdmin.from('djs').insert(row).select('id').single()
+        if (dErr) return { error: dErr.message }
+        djId = nuevo.id
+      }
+      await supabaseAdmin.from('activity_log').insert({
+        user_id: null, action: existente ? 'dj_updated' : 'dj_created', entity_type: 'dj', entity_id: djId,
+        details: { actor: 'Concierge HOG', stage_name: nombre, fee: input.fee_aproximado ?? null, channel: ctx.conv.channel },
+      })
+      await notifySlackFromEdge(supabaseAdmin, `🎧 *DJ interesado vía Concierge* — ${ctx.bu?.name ?? 'venue'}\n${nombre}${input.generos ? ` · ${input.generos}` : ''}${input.ciudad ? ` · ${input.ciudad}` : ''}${input.fee_aproximado ? ` · ~$${input.fee_aproximado} MXN` : ''}${input.links ? `\n${input.links}` : ''}`)
+      return { ok: true, dj_id: djId, ya_existia: !!existente, instruccion: 'Dile que el booker va a escuchar su material y le responde por este mismo canal. NO prometas fechas ni negocies fee — usa escalar_a_humano con motivo "DJ interesado: [nombre]" para cerrar tu parte.' }
     }
 
     case 'agregar_nota_reserva': {
