@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.22.0"
+export const APP_VERSION = "2.23.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.23.0",
+    date: "2026-07-08",
+    type: "MINOR",
+    changes: [
+      "Bandeja — las imágenes del cliente (comprobantes de depósito) se ven en el hilo; tap para abrir completa",
+      "Bot: recibe imágenes por WhatsApp e Instagram; reconoce comprobantes de apartado y escala para validar",
+      "Bot: notas operativas a la reserva ('voy en camino', 'llego tarde') con aviso instantáneo al equipo",
+      "Bot: captura cumpleaños si el cliente lo menciona; quejas escalan con prioridad y dejan etiqueta en la ficha",
+      "Bot: lista de espera manual cuando la noche está llena; si el grupo crece pide la diferencia del apartado",
+    ]
+  },
   {
     version: "2.22.0",
     date: "2026-07-08",

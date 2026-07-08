@@ -74,6 +74,30 @@ Deno.serve(async (req: Request) => {
   return new Response('EVENT_RECEIVED', { status: 200 })
 })
 
+// Descarga una imagen de WhatsApp (comprobantes de depósito, etc.) y la sube
+// al bucket público 'proofs' — devuelve la URL pública, o null si falla.
+// deno-lint-ignore no-explicit-any
+async function fetchWhatsAppImage(supabaseAdmin: any, mediaId: string, mime?: string): Promise<string | null> {
+  try {
+    const token = Deno.env.get('WHATSAPP_TOKEN')!
+    const metaRes = await fetch(`https://graph.facebook.com/v20.0/${mediaId}`, { headers: { Authorization: `Bearer ${token}` } })
+    if (!metaRes.ok) return null
+    const { url } = await metaRes.json()
+    const binRes = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!binRes.ok) return null
+    const bytes = new Uint8Array(await binRes.arrayBuffer())
+    const ext = (mime ?? 'image/jpeg').split('/')[1]?.split(';')[0] || 'jpg'
+    const path = `concierge/${mediaId}.${ext}`
+    const { error } = await supabaseAdmin.storage.from('proofs').upload(path, bytes, { contentType: mime ?? 'image/jpeg', upsert: true })
+    if (error) { console.error('[webhook] upload imagen falló', error.message); return null }
+    const { data } = supabaseAdmin.storage.from('proofs').getPublicUrl(path)
+    return data?.publicUrl ?? null
+  } catch (err) {
+    console.error('[webhook] fetchWhatsAppImage', String(err))
+    return null
+  }
+}
+
 // deno-lint-ignore no-explicit-any
 async function handleWhatsApp(supabaseAdmin: any, body: any) {
   for (const entry of body.entry ?? []) {
@@ -81,14 +105,24 @@ async function handleWhatsApp(supabaseAdmin: any, body: any) {
       const value = change.value
       const phoneNumberId = value?.metadata?.phone_number_id
       for (const msg of value?.messages ?? []) {
-        if (msg.type !== 'text') continue // Fase 2: solo texto; botones/media se agregan después
         const from = msg.from as string
-        const text = msg.text?.body as string
         const contactName = value.contacts?.[0]?.profile?.name ?? null
         const buId = await resolveVenueForChannel(supabaseAdmin, 'whatsapp', phoneNumberId, from)
-        await ingestMessage(supabaseAdmin, {
-          channel: 'whatsapp', externalId: from, buId, displayName: contactName, body: text,
-        })
+        if (msg.type === 'text') {
+          await ingestMessage(supabaseAdmin, {
+            channel: 'whatsapp', externalId: from, buId, displayName: contactName, body: msg.text?.body as string,
+          })
+        } else if (msg.type === 'image') {
+          // Comprobantes de depósito y fotos: se guardan en el hilo para que
+          // el equipo los valide desde la Bandeja.
+          const imageUrl = await fetchWhatsAppImage(supabaseAdmin, msg.image?.id, msg.image?.mime_type)
+          await ingestMessage(supabaseAdmin, {
+            channel: 'whatsapp', externalId: from, buId, displayName: contactName,
+            body: msg.image?.caption?.trim() || '[📎 El cliente envió una imagen]',
+            meta: imageUrl ? { image_url: imageUrl } : { image_failed: true },
+          })
+        }
+        // otros tipos (audio, sticker, ubicación) se ignoran por ahora
       }
     }
   }
@@ -117,12 +151,15 @@ async function handleInstagram(supabaseAdmin: any, body: any) {
   for (const entry of body.entry ?? []) {
     const igAccountId = entry.id as string // cuenta de IG que RECIBIÓ el mensaje → identifica el venue
     for (const event of entry.messaging ?? []) {
-      if (!event.message?.text || event.message?.is_echo) continue // ignora eco de mensajes propios
+      if (event.message?.is_echo) continue // ignora eco de mensajes propios
       const from = event.sender?.id as string
-      const text = event.message.text as string
       const buId = await resolveVenueForChannel(supabaseAdmin, 'instagram', igAccountId, from)
+      const imageUrl = (event.message?.attachments ?? []).find((a: { type: string }) => a.type === 'image')?.payload?.url ?? null
+      if (!event.message?.text && !imageUrl) continue
       await ingestMessage(supabaseAdmin, {
-        channel: 'instagram', externalId: from, buId, displayName: null, body: text,
+        channel: 'instagram', externalId: from, buId, displayName: null,
+        body: event.message?.text ?? '[📎 El cliente envió una imagen]',
+        meta: imageUrl ? { image_url: imageUrl } : undefined,
         fetchDisplayName: () => fetchIgProfile(from), // solo se llama si aún no lo tenemos
       })
     }
@@ -147,8 +184,8 @@ async function resolveVenueForChannel(supabaseAdmin: any, channel: 'whatsapp' | 
 }
 
 // deno-lint-ignore no-explicit-any
-async function ingestMessage(supabaseAdmin: any, opts: { channel: 'whatsapp' | 'instagram'; externalId: string; buId: string | null; displayName: string | null; body: string; fetchDisplayName?: () => Promise<string | null> }) {
-  const { channel, externalId, buId, body, fetchDisplayName } = opts
+async function ingestMessage(supabaseAdmin: any, opts: { channel: 'whatsapp' | 'instagram'; externalId: string; buId: string | null; displayName: string | null; body: string; meta?: Record<string, unknown>; fetchDisplayName?: () => Promise<string | null> }) {
+  const { channel, externalId, buId, body, meta, fetchDisplayName } = opts
   let { displayName } = opts
 
   const { data: conv } = await supabaseAdmin.from('bot_conversations')
@@ -170,7 +207,7 @@ async function ingestMessage(supabaseAdmin: any, opts: { channel: 'whatsapp' | '
     conversationId = created.id
   }
 
-  await supabaseAdmin.from('bot_messages').insert({ conversation_id: conversationId, role: 'guest', body })
+  await supabaseAdmin.from('bot_messages').insert({ conversation_id: conversationId, role: 'guest', body, meta: meta ?? null })
   console.log('[webhook] msg entrante', channel, 'conv', conversationId, '→', String(body).slice(0, 60))
 
   const current = conv ?? { status: 'bot', first_replied_at: null, next_bot_reply_at: null }
