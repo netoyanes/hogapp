@@ -45,8 +45,13 @@ Deno.serve(async (req: Request) => {
 
   const rawBody = await req.text()
   const signature = req.headers.get('x-hub-signature-256')
-  const appSecret = Deno.env.get('META_APP_SECRET')!
-  const validSig = await verifyMetaSignature(rawBody, signature, appSecret)
+  // Dos firmas posibles: WhatsApp firma con el App Secret general (META_APP_SECRET);
+  // Instagram Login firma con el "Instagram app secret" propio (IG_APP_SECRET).
+  const secrets = [Deno.env.get('META_APP_SECRET'), Deno.env.get('IG_APP_SECRET')].filter(Boolean) as string[]
+  let validSig = false
+  for (const s of secrets) {
+    if (await verifyMetaSignature(rawBody, signature, s)) { validSig = true; break }
+  }
   if (!validSig) {
     console.error('[concierge-webhook] firma inválida')
     return new Response('Invalid signature', { status: 401 })
