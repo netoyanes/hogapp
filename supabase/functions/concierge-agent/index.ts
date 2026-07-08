@@ -54,12 +54,19 @@ const DEFAULT_SLOTS = ['19:00–20:30', '20:30–22:00', '22:00–23:30'] // deb
 const MAX_TOOL_ROUNDS = 6
 
 // Los clientes mexicanos dan su teléfono como sea: "81 1225 6803", "8112256803",
-// "521811...". guests.phone exige E.164 — normalizamos aquí, no en el modelo.
-function normalizePhoneMX(raw: string): string {
-  let digits = String(raw).replace(/\D/g, '')
+// "521811...". guests.phone exige E.164 — normalizamos y VALIDAMOS aquí, no en
+// el modelo. Devuelve null si el número no cuadra (ej. 9 dígitos + símbolos):
+// mejor rebotar al cliente por el dato correcto que registrar basura.
+function normalizePhoneMX(raw: string): string | null {
+  const trimmed = String(raw).trim()
+  // Internacional explícito (turistas: +1..., +34...) — se respeta tal cual
+  if (trimmed.startsWith('+') && /^\+[1-9]\d{7,14}$/.test(trimmed.replace(/[\s-]/g, ''))) {
+    return trimmed.replace(/[\s-]/g, '')
+  }
+  let digits = trimmed.replace(/\D/g, '')
   if (digits.startsWith('521') && digits.length === 13) digits = '52' + digits.slice(3) // WhatsApp MX viejo: 521 + 10
   if (digits.length === 10) digits = '52' + digits
-  return '+' + digits
+  return /^52\d{10}$/.test(digits) ? '+' + digits : null
 }
 
 const TOOLS = [
@@ -236,7 +243,10 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   lines.push('Regla dura, sin excepción: cada mensaje del cliente debe AVANZAR su reserva. Nunca le pidas un dato que ya dio. Nunca lo hagas cambiar de canal sin llevar su contexto. Sé breve, cálido, en español de México, sin emojis excesivos.')
   lines.push('El funnel es: capturar nombre, teléfono, fecha, hora y número de personas → confirmar. En cuanto tengas nombre y teléfono, usa crear_o_actualizar_cliente. En cuanto tengas fecha/hora/pax confirmados por el cliente, usa crear_reserva. No inventes disponibilidad — usa buscar_disponibilidad antes de ofrecer horarios.')
   lines.push('REGLA DE ORO — no mientas nunca sobre el estado de la reserva: solo puedes decirle al cliente que su reserva quedó lista si crear_reserva devolvió ok:true EN ESTA conversación. Si una herramienta devuelve un error, corrige el dato y reintenta; si no lo puedes resolver, dile con honestidad que hubo un detalle y usa escalar_a_humano. Confirmar en falso destruye la confianza del cliente y del equipo.')
-  lines.push('Teléfonos: pásalos tal como los dé el cliente — el sistema los normaliza. Con 10 dígitos mexicanos basta. Horarios: al llamar crear_reserva usa el texto EXACTO del slot que devolvió buscar_disponibilidad (ej. "20:30–22:00"), no lo reescribas.')
+  lines.push('PRIORIZA LA VENTA: registra y usa TODO lo que el cliente ya dijo (si ya mencionó cuántas personas o la ocasión, no se lo vuelvas a preguntar — dalo por bueno y anótalo). Pide solo lo que falta, de preferencia una cosa a la vez, y avanza siempre hacia el cierre: datos → fecha → horario → reserva. Si un dato viene mal, corrige SOLO ese dato y en el mismo mensaje sigue con lo demás (ej. "oye, tu número parece incompleto, ¿me lo confirmas? y mientras, ¿qué fecha quieres?"). Nunca dejes la conversación en pausa esperando: siempre cierra tu mensaje con la siguiente pregunta concreta.')
+  lines.push('Teléfonos: valida a ojo — un celular mexicano son 10 dígitos (o internacional con +). Si lo que dio el cliente tiene menos/más dígitos o símbolos raros, NO lo registres: pídele que lo confirme, con buena onda. El sistema también lo valida por si acaso.')
+  lines.push('Peticiones especiales (área privada, decoración, pastel, ocasiones): anótalas en las notas de la reserva y dile al cliente que el equipo lo revisa y le confirma — no prometas lo que no controlas, pero tampoco lo dejes sin registro.')
+  lines.push('Horarios: al llamar crear_reserva usa el texto EXACTO del slot que devolvió buscar_disponibilidad (ej. "20:30–22:00"), no lo reescribas.')
   if (publicUrl) lines.push(`Cuando pidas el teléfono por primera vez, comparte una sola vez este enlace de aviso de privacidad: ${publicUrl}/?aviso=1 — así el cliente sabe cómo cuidamos su dato antes de dártelo. No lo repitas en cada mensaje.`)
 
   if (ctx.bu) {
@@ -305,8 +315,12 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       // sella con el tap del botón de confirmación por WhatsApp (Fase 3), no
       // silenciosamente al capturar el dato. El bot debe compartir el aviso de
       // privacidad en el mensaje donde pide el teléfono (ver system prompt).
+      const tel = normalizePhoneMX(input.telefono)
+      if (!tel) {
+        return { error: `El teléfono "${input.telefono}" no es válido (un celular mexicano son 10 dígitos). NO registres nada: dile al cliente con buena onda que su número parece incompleto y pídele confirmarlo — y en el MISMO mensaje sigue avanzando con lo que falte (fecha/horario).` }
+      }
       const { data: guest, error } = await supabaseAdmin.from('guests')
-        .upsert({ phone: normalizePhoneMX(input.telefono), full_name: input.nombre, origin_bu: ctx.conv.bu_id }, { onConflict: 'phone', ignoreDuplicates: false })
+        .upsert({ phone: tel, full_name: input.nombre, origin_bu: ctx.conv.bu_id }, { onConflict: 'phone', ignoreDuplicates: false })
         .select('id, full_name').single()
       if (error) return { error: error.message }
       await supabaseAdmin.from('guest_channels').upsert({ guest_id: guest.id, channel: ctx.conv.channel, external_id: ctx.conv.external_id }, { onConflict: 'channel,external_id' })
