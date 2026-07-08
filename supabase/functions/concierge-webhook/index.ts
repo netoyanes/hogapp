@@ -152,20 +152,26 @@ async function ingestMessage(supabaseAdmin: any, opts: { channel: 'whatsapp' | '
   // Respeta el handoff: si un humano tiene la conversación, no se agenda al bot.
   const effectiveStatus = patch.status ?? current.status
   if (effectiveStatus === 'bot') {
-    const alreadyPending = current.next_bot_reply_at && new Date(current.next_bot_reply_at) > new Date()
-    if (!alreadyPending) {
-      const delaySeconds = await getReplyDelay(supabaseAdmin, buId, channel, !current.first_replied_at)
-      patch.next_bot_reply_at = new Date(Date.now() + delaySeconds * 1000).toISOString()
+    let cfg: { enabled: boolean; first_reply_delay_seconds: number } | null = null
+    if (buId) {
+      const { data } = await supabaseAdmin.from('bot_venue_config').select('enabled, first_reply_delay_seconds').eq('bu_id', buId).eq('channel', channel).maybeSingle()
+      cfg = data
+    }
+    if (buId && !cfg?.enabled) {
+      // La config por canal manda: canal apagado (o sin configurar) → al equipo, sin bot.
+      patch.status = 'needs_human'
+      patch.escalation_reason = 'Canal del bot deshabilitado para este venue'
+      patch.next_bot_reply_at = null
+    } else {
+      const alreadyPending = current.next_bot_reply_at && new Date(current.next_bot_reply_at) > new Date()
+      if (!alreadyPending) {
+        // 1a respuesta espera el delay del venue (45s default); las siguientes,
+        // inmediatas — el cron las despacha en su próximo ciclo (≤60s).
+        const delaySeconds = current.first_replied_at ? 0 : (cfg?.first_reply_delay_seconds ?? 45)
+        patch.next_bot_reply_at = new Date(Date.now() + delaySeconds * 1000).toISOString()
+      }
     }
   }
 
   await supabaseAdmin.from('bot_conversations').update(patch).eq('id', conversationId)
-}
-
-// deno-lint-ignore no-explicit-any
-async function getReplyDelay(supabaseAdmin: any, buId: string | null, channel: string, isFirstReply: boolean): Promise<number> {
-  if (!isFirstReply) return 0 // "las siguientes inmediatamente" — el cron las despacha en su próximo ciclo (≤60s)
-  if (!buId) return 45
-  const { data: cfg } = await supabaseAdmin.from('bot_venue_config').select('first_reply_delay_seconds').eq('bu_id', buId).eq('channel', channel).maybeSingle()
-  return cfg?.first_reply_delay_seconds ?? 45
 }

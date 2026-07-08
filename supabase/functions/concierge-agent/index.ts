@@ -128,22 +128,37 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
   const { data: conv } = await supabaseAdmin.from('bot_conversations').select('*').eq('id', conversationId).single()
   if (!conv || conv.status !== 'bot' || conv.is_simulated) return // respeta handoff; el simulador no toca Meta
 
-  const [{ data: bu }, { data: cfg }, { data: history }, { data: venues }] = await Promise.all([
+  const [{ data: bu }, { data: cfg }, { data: history }, { data: venues }, { data: pay }] = await Promise.all([
     conv.bu_id ? supabaseAdmin.from('business_units').select('id, code, name').eq('id', conv.bu_id).maybeSingle() : { data: null },
     conv.bu_id ? supabaseAdmin.from('bot_venue_config').select('*').eq('bu_id', conv.bu_id).eq('channel', conv.channel).maybeSingle() : { data: null },
     supabaseAdmin.from('bot_messages').select('role, body').eq('conversation_id', conversationId).order('created_at').limit(30),
     supabaseAdmin.from('bot_venue_config').select('bu_id, external_account, business_units(code, name)').eq('channel', conv.channel).eq('enabled', true),
+    conv.bu_id ? supabaseAdmin.from('venue_payment_config').select('*').eq('bu_id', conv.bu_id).maybeSingle() : { data: null },
   ])
 
   const { data: settings } = await supabaseAdmin.from('app_settings').select('key, value').in('key', ['bot_model', 'bot_enabled', 'app_public_url'])
   const settingsMap = Object.fromEntries((settings ?? []).map((s: { key: string; value: string }) => [s.key, s.value]))
   if (settingsMap.bot_enabled !== 'true') return // kill switch global
 
+  // La config por canal manda: venue identificado con el canal apagado (o sin
+  // configurar) → el bot no atiende; pasa al equipo con aviso al cliente.
+  if (conv.bu_id && (!cfg || !cfg.enabled)) {
+    const nota = 'Te conecto con el equipo para atenderte, dame un momento 🙌'
+    await supabaseAdmin.from('bot_conversations').update({
+      status: 'needs_human', escalation_reason: 'Canal del bot deshabilitado para este venue',
+      next_bot_reply_at: null, next_followup_at: null,
+    }).eq('id', conversationId)
+    await supabaseAdmin.from('bot_messages').insert({ conversation_id: conversationId, role: 'bot', body: nota })
+    await sendChannelMessage(conv.channel, conv.external_id, nota)
+    await notifySlackFromEdge(supabaseAdmin, `🙋 *Cliente esperando atención humana* — ${bu?.name ?? 'venue'}: canal del bot deshabilitado`)
+    return
+  }
+
   const model = settingsMap.bot_model || 'claude-haiku-4-5-20251001'
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
 
   const ctx = { supabaseAdmin, conv: { ...conv }, bu, cfg }
-  const system = buildSystemPrompt(ctx, venues ?? [], isFollowup, settingsMap.app_public_url)
+  const system = buildSystemPrompt(ctx, venues ?? [], isFollowup, settingsMap.app_public_url, pay)
   // Mensajes consecutivos del mismo rol se fusionan: así el batching de 45s
   // (varios mensajes del cliente antes del turno) llega como un solo bloque,
   // y evita cualquier problema de alternancia estricta de roles con la API.
@@ -214,7 +229,7 @@ async function sendIfAny(ctx: any, text: string) {
 }
 
 // deno-lint-ignore no-explicit-any
-function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicUrl?: string): string {
+function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicUrl?: string, pay?: any): string {
   const lines: string[] = []
   lines.push('Eres el Concierge de HOG, un holding de venues de hospitalidad en México. Atiendes por ' + (ctx.conv.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram') + '.')
   lines.push('Regla dura, sin excepción: cada mensaje del cliente debe AVANZAR su reserva. Nunca le pidas un dato que ya dio. Nunca lo hagas cambiar de canal sin llevar su contexto. Sé breve, cálido, en español de México, sin emojis excesivos.')
@@ -228,6 +243,10 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
     if (ctx.cfg?.persona_note) lines.push(`Voz de este venue: ${ctx.cfg.persona_note}`)
     const maxPax = ctx.cfg?.escalate_over_pax ?? 12
     lines.push(`Si el grupo es mayor a ${maxPax} personas, usa escalar_a_humano — esos casos los atiende el equipo directamente.`)
+    if (pay?.active && pay?.clabe) {
+      const monto = pay.deposit_per_person ? `$${pay.deposit_per_person} MXN por persona` : pay.deposit_fixed ? `$${pay.deposit_fixed} MXN por reserva` : 'el monto que indique el equipo'
+      lines.push(`Apartados para grupos grandes: si el grupo es de ${pay.deposit_over_pax} personas o más (sin pasar el límite de escalar), después de crear la reserva ofrece asegurarla con un depósito (${monto}). SOLO si el cliente acepta, comparte los datos: CLABE ${pay.clabe}${pay.bank_name ? ` (${pay.bank_name})` : ''}${pay.beneficiary ? `, a nombre de ${pay.beneficiary}` : ''}. Pídele que mande su comprobante por este mismo chat — el equipo lo valida, tú no confirmes pagos. Incluye "Apartado solicitado" en las notas de la reserva.${pay.instructions ? ' ' + pay.instructions : ''}`)
+    }
   } else {
     const list = venues.map((v: { business_units: { code: string; name: string } }) => `${v.business_units?.name} (${v.business_units?.code})`).join(', ')
     lines.push(`Aún no sabemos a qué venue se refiere el cliente. Venues disponibles por este canal: ${list || 'ninguno configurado'}. Pregúntale a cuál se refiere y usa identificar_venue en cuanto lo confirme.`)
@@ -253,6 +272,9 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       ctx.bu = bu
       const { data: cfg } = await supabaseAdmin.from('bot_venue_config').select('*').eq('bu_id', bu.id).eq('channel', ctx.conv.channel).maybeSingle()
       ctx.cfg = cfg
+      if (!cfg || !cfg.enabled) {
+        return { ok: true, venue: bu.name, aviso: 'Este venue tiene el canal del bot DESHABILITADO — usa escalar_a_humano de inmediato para que el equipo lo atienda directamente.' }
+      }
       return { ok: true, venue: bu.name }
     }
 
@@ -300,6 +322,11 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       }).select('id').single()
       if (error) return { error: error.message }
       await supabaseAdmin.from('bot_conversations').update({ pending_fields: [] }).eq('id', ctx.conv.id)
+      // Auditoría: la reserva del bot queda en Actividad atribuida a "Concierge HOG"
+      await supabaseAdmin.from('activity_log').insert({
+        user_id: null, action: 'reservation_created', entity_type: 'reservation', entity_id: reserva.id,
+        details: { actor: 'Concierge HOG', bu: ctx.bu?.code, date: input.fecha, slot: input.horario, pax: input.pax, channel: ctx.conv.channel },
+      })
       await notifySlackFromEdge(supabaseAdmin, `🤖 *Reserva vía Concierge* — ${ctx.bu?.name ?? ''}\n${input.fecha} · ${input.horario} · ${input.pax} pax`)
       return { ok: true, reservation_id: reserva.id }
     }
