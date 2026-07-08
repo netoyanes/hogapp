@@ -51,6 +51,18 @@ interface VenueConfig {
   escalate_over_pax: number
 }
 interface BU { id: string; code: string; name: string }
+interface PaymentConfig {
+  bu_id: string
+  clabe: string | null
+  bank_name: string | null
+  beneficiary: string | null
+  deposit_over_pax: number
+  deposit_per_person: number | null
+  deposit_fixed: number | null
+  instructions: string | null
+  stripe_account_id: string | null
+  active: boolean
+}
 
 const STATUS_META: Record<ConvStatus, { label: string; tone: StatusTone }> = {
   bot:         { label: 'Bot',        tone: 'accent' },
@@ -384,6 +396,22 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
   async function sendAs(role: 'agent' | 'guest', body: string, clear: () => void) {
     if (!body.trim()) return
     setBusy(true)
+
+    // Respuesta humana a un cliente REAL → va por el servidor (concierge-send),
+    // que envía a WhatsApp/Instagram, guarda el mensaje y toma la conversación.
+    if (role === 'agent' && !conv.is_simulated) {
+      const { data, error } = await supabase.functions.invoke('concierge-send', {
+        body: { conversationId: conv.id, body: body.trim() },
+      })
+      setBusy(false)
+      if (error || data?.error) { showToast(`No se pudo enviar: ${error?.message ?? data?.error}`, 'error'); return }
+      clear()
+      loadMessages()
+      onChanged()
+      return
+    }
+
+    // Simuladas (y "responder como cliente"): solo tocan la base, nunca Meta
     const { error } = await supabase.from('bot_messages').insert({ conversation_id: conv.id, role, body: body.trim() })
     if (error) { setBusy(false); showToast(`No se pudo enviar: ${error.message}`, 'error'); return }
     const patch: Record<string, unknown> = { last_sender: role, last_message_at: new Date().toISOString() }
@@ -577,6 +605,10 @@ function ConfigTab({ buList }: { buList: BU[] }) {
         <VenueConfigCard key={cfg.id} cfg={cfg} bu={buList.find(b => b.id === cfg.bu_id)} onSaved={load} />
       ))}
 
+      {/* Onboarding del venue: datos de depósito para apartados (puente manual
+          con CLABE en lo que se conecta Stripe). Piloto: Bruma MZT. */}
+      <PaymentSection buList={buList} />
+
       {missing.length > 0 && (
         <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
           <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Habilitar canal en venue</div>
@@ -592,6 +624,134 @@ function ConfigTab({ buList }: { buList: BU[] }) {
             })}
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Onboarding del venue: depósitos para apartados (CLABE → luego Stripe) ───
+function PaymentSection({ buList }: { buList: BU[] }) {
+  const [rows, setRows] = useState<PaymentConfig[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('venue_payment_config').select('*')
+    setRows((data ?? []) as PaymentConfig[])
+    setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function enable(buId: string) {
+    const { error } = await supabase.from('venue_payment_config').insert({ bu_id: buId })
+    if (error) { showToast(`No se pudo habilitar: ${error.message}`, 'error'); return }
+    load()
+  }
+
+  if (loading) return null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 4 }}>
+        Onboarding del venue · Apartados (depósitos)
+      </div>
+      {rows.map(row => (
+        <PaymentCard key={row.bu_id} row={row} bu={buList.find(b => b.id === row.bu_id)} onSaved={load} />
+      ))}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {buList.filter(b => !rows.some(r => r.bu_id === b.id)).map(b => (
+          <button key={b.id} onClick={() => enable(b.id)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 12px', borderRadius: 999, border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            <Plus size={12} /> Configurar depósitos · {b.code}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PaymentCard({ row, bu, onSaved }: { row: PaymentConfig; bu?: BU; onSaved: () => void }) {
+  const [form, setForm] = useState(row)
+  const [saving, setSaving] = useState(false)
+  const dirty = JSON.stringify(form) !== JSON.stringify(row)
+  useEffect(() => { setForm(row) }, [row])
+
+  const clabeOk = !form.clabe || /^\d{18}$/.test(form.clabe)
+
+  async function save() {
+    if (!clabeOk) { showToast('La CLABE debe tener 18 dígitos.', 'error'); return }
+    setSaving(true)
+    const { error } = await supabase.from('venue_payment_config').update({
+      clabe: form.clabe || null, bank_name: form.bank_name || null, beneficiary: form.beneficiary || null,
+      deposit_over_pax: form.deposit_over_pax, deposit_per_person: form.deposit_per_person,
+      deposit_fixed: form.deposit_fixed, instructions: form.instructions || null, active: form.active,
+    }).eq('bu_id', row.bu_id)
+    setSaving(false)
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    logActivity('venue_payment_config_saved', 'venue_payment_config', row.bu_id, { bu: bu?.code, active: form.active })
+    showToast(`Depósitos de ${bu?.code ?? ''} guardados.`, 'success')
+    onSaved()
+  }
+
+  const inp: React.CSSProperties = { width: '100%', minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }
+  const lbl: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
+
+  return (
+    <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        {bu && <BUChip code={bu.code} name={bu.name} />}
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{bu?.name ?? '—'} · Apartados</span>
+        <button onClick={() => setForm(f => ({ ...f, active: !f.active }))}
+          style={{ marginLeft: 'auto', minHeight: 36, padding: '0 14px', borderRadius: 999, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer', background: form.active ? 'color-mix(in srgb, var(--status-healthy) 15%, transparent)' : 'var(--bg-elevated)', color: form.active ? 'var(--status-healthy)' : 'var(--text-tertiary)' }}>
+          {form.active ? 'ACTIVO' : 'INACTIVO'}
+        </button>
+      </div>
+      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
+        El bot ofrece asegurar reservas grandes con un depósito a esta cuenta. El equipo valida el comprobante — puente manual en lo que se conecta Stripe.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 12 }}>
+        <div>
+          <label style={lbl}>CLABE (18 dígitos)</label>
+          <input value={form.clabe ?? ''} inputMode="numeric" maxLength={18} className="num"
+            onChange={e => setForm(f => ({ ...f, clabe: e.target.value.replace(/\D/g, '') || null }))}
+            style={{ ...inp, borderColor: clabeOk ? 'var(--border-subtle)' : 'var(--status-risk)' }} />
+        </div>
+        <div>
+          <label style={lbl}>Banco</label>
+          <input value={form.bank_name ?? ''} onChange={e => setForm(f => ({ ...f, bank_name: e.target.value || null }))} style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>Beneficiario</label>
+          <input value={form.beneficiary ?? ''} onChange={e => setForm(f => ({ ...f, beneficiary: e.target.value || null }))} style={inp} />
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 12 }}>
+        <div>
+          <label style={lbl}>Apartado desde (pax)</label>
+          <input type="number" min={1} value={form.deposit_over_pax} className="num"
+            onChange={e => setForm(f => ({ ...f, deposit_over_pax: Math.max(1, Number(e.target.value)) }))} style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>$ MXN por persona</label>
+          <input type="number" min={0} value={form.deposit_per_person ?? ''} placeholder="—" className="num"
+            onChange={e => setForm(f => ({ ...f, deposit_per_person: e.target.value ? Number(e.target.value) : null }))} style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>$ MXN fijo por reserva</label>
+          <input type="number" min={0} value={form.deposit_fixed ?? ''} placeholder="—" className="num"
+            onChange={e => setForm(f => ({ ...f, deposit_fixed: e.target.value ? Number(e.target.value) : null }))} style={inp} />
+        </div>
+      </div>
+      <div>
+        <label style={lbl}>Instrucciones extra para el bot (opcional)</label>
+        <input value={form.instructions ?? ''} placeholder='Ej. "El apartado se descuenta de la cuenta"'
+          onChange={e => setForm(f => ({ ...f, instructions: e.target.value || null }))} style={inp} />
+      </div>
+
+      {dirty && (
+        <button onClick={save} disabled={saving}
+          style={{ marginTop: 12, minHeight: 44, padding: '0 20px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer' }}>
+          {saving ? 'Guardando…' : 'Guardar cambios'}
+        </button>
       )}
     </div>
   )
