@@ -248,6 +248,8 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   lines.push('PRIORIZA LA VENTA: registra y usa TODO lo que el cliente ya dijo (si ya mencionó cuántas personas o la ocasión, no se lo vuelvas a preguntar — dalo por bueno y anótalo). Pide solo lo que falta, de preferencia una cosa a la vez, y avanza siempre hacia el cierre: datos → fecha → horario → reserva. Si un dato viene mal, corrige SOLO ese dato y en el mismo mensaje sigue con lo demás (ej. "oye, tu número parece incompleto, ¿me lo confirmas? y mientras, ¿qué fecha quieres?"). Nunca dejes la conversación en pausa esperando: siempre cierra tu mensaje con la siguiente pregunta concreta.')
   lines.push('Teléfonos: valida a ojo — un celular mexicano son 10 dígitos (o internacional con +). Si lo que dio el cliente tiene menos/más dígitos o símbolos raros, NO lo registres: pídele que lo confirme, con buena onda. El sistema también lo valida por si acaso.')
   lines.push('Peticiones especiales (área privada, decoración, pastel, ocasiones): anótalas en las notas de la reserva y dile al cliente que el equipo lo revisa y le confirma — no prometas lo que no controlas, pero tampoco lo dejes sin registro.')
+  if (ctx.conv.display_name) lines.push(`El perfil del cliente en este canal dice: "${ctx.conv.display_name}". Úsalo como su nombre por default — salúdalo por su nombre y solo confírmalo de pasada al registrar ("¿la reserva va a tu nombre, X?"); NO le pidas su nombre desde cero.`)
+  lines.push('RESERVA EXISTENTE: cuando registres al cliente, el sistema te dirá si ya tiene reservas próximas. Si ya tiene una para el MISMO día que está pidiendo, NO crees otra: confírmasela con sus datos ("ya tienes tu mesa el sábado 20:30 para 6 👍"). Si pide cambios (hora/personas), usa crear_reserva con los datos nuevos — el sistema ACTUALIZA la existente en lugar de duplicar.')
   lines.push('Horarios: al llamar crear_reserva usa el texto EXACTO del slot que devolvió buscar_disponibilidad (ej. "20:30–22:00"), no lo reescribas.')
   if (publicUrl) lines.push(`Cuando pidas el teléfono por primera vez, comparte una sola vez este enlace de aviso de privacidad: ${publicUrl}/?aviso=1 — así el cliente sabe cómo cuidamos su dato antes de dártelo. No lo repitas en cada mensaje.`)
 
@@ -325,15 +327,45 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
         .upsert({ phone: tel, full_name: input.nombre, origin_bu: ctx.conv.bu_id }, { onConflict: 'phone', ignoreDuplicates: false })
         .select('id, full_name').single()
       if (error) return { error: error.message }
-      await supabaseAdmin.from('guest_channels').upsert({ guest_id: guest.id, channel: ctx.conv.channel, external_id: ctx.conv.external_id }, { onConflict: 'channel,external_id' })
+      // El handle de IG queda ligado al guest (mismo cliente en IG + WA sin duplicar)
+      const handle = ctx.conv.display_name?.match(/@([\w.]+)/)?.[1] ?? null
+      await supabaseAdmin.from('guest_channels').upsert({ guest_id: guest.id, channel: ctx.conv.channel, external_id: ctx.conv.external_id, handle }, { onConflict: 'channel,external_id' })
       await supabaseAdmin.from('bot_conversations').update({ guest_id: guest.id, pending_fields: (ctx.conv.pending_fields ?? []).filter((f: string) => f !== 'name' && f !== 'phone') }).eq('id', ctx.conv.id)
       ctx.conv.guest_id = guest.id
-      return { ok: true, guest_id: guest.id, nombre: guest.full_name }
+      // Reservas próximas del cliente en este venue: el modelo evita duplicar
+      // y puede confirmar la existente ("ya tienes tu mesa el sábado 👍").
+      const { data: proximas } = await supabaseAdmin.from('reservations')
+        .select('date, time_slot, party_size, status')
+        .eq('guest_id', guest.id).eq('bu_id', ctx.conv.bu_id ?? '00000000-0000-0000-0000-000000000000')
+        .gte('date', new Date().toISOString().slice(0, 10))
+        .in('status', ['requested', 'confirmed'])
+        .order('date').limit(3)
+      return { ok: true, guest_id: guest.id, nombre: guest.full_name, reservas_proximas: proximas ?? [] }
     }
 
     case 'crear_reserva': {
       if (!ctx.conv.bu_id) return { error: 'Falta identificar el venue.' }
       if (!ctx.conv.guest_id) return { error: 'Falta crear/encontrar al cliente primero (crear_o_actualizar_cliente).' }
+      // Anti-duplicados: si el cliente ya tiene reserva viva ese día en este
+      // venue, se ACTUALIZA esa en lugar de crear una segunda.
+      const { data: existentes } = await supabaseAdmin.from('reservations')
+        .select('id, time_slot, party_size, status')
+        .eq('guest_id', ctx.conv.guest_id).eq('bu_id', ctx.conv.bu_id).eq('date', input.fecha)
+        .in('status', ['requested', 'confirmed']).limit(1)
+      const existente = existentes?.[0]
+      if (existente) {
+        const { error: upErr } = await supabaseAdmin.from('reservations').update({
+          time_slot: input.horario, party_size: input.pax,
+          notes: input.notas ?? undefined, bot_conversation_id: ctx.conv.id,
+        }).eq('id', existente.id)
+        if (upErr) return { error: upErr.message }
+        await supabaseAdmin.from('activity_log').insert({
+          user_id: null, action: 'reservation_updated', entity_type: 'reservation', entity_id: existente.id,
+          details: { actor: 'Concierge HOG', bu: ctx.bu?.code, date: input.fecha, slot: input.horario, pax: input.pax, antes: `${existente.time_slot} · ${existente.party_size} pax` },
+        })
+        await notifySlackFromEdge(supabaseAdmin, `🤖 *Reserva actualizada vía Concierge* — ${ctx.bu?.name ?? ''}\n${input.fecha} · ${existente.time_slot}→${input.horario} · ${existente.party_size}→${input.pax} pax`)
+        return { ok: true, actualizada: true, reservation_id: existente.id, estado: existente.status, aviso: `El cliente YA tenía reserva ese día (${existente.time_slot}, ${existente.party_size} pax, ${existente.status}) — se actualizó con los datos nuevos en lugar de duplicar. Confírmale los datos finales.` }
+      }
       const { data: reserva, error } = await supabaseAdmin.from('reservations').insert({
         guest_id: ctx.conv.guest_id, bu_id: ctx.conv.bu_id, date: input.fecha, time_slot: input.horario,
         party_size: input.pax, notes: input.notas ?? null, status: 'requested',

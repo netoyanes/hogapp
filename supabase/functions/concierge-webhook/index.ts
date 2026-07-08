@@ -94,6 +94,24 @@ async function handleWhatsApp(supabaseAdmin: any, body: any) {
   }
 }
 
+// Perfil público del remitente en IG (nombre + handle) — para saludarlo por su
+// nombre y no pedirle un dato que su perfil ya nos da. Falla en silencio.
+async function fetchIgProfile(igsid: string): Promise<string | null> {
+  try {
+    const token = Deno.env.get('IG_PAGE_ACCESS_TOKEN')
+    if (!token) return null
+    const res = await fetch(`https://graph.instagram.com/v20.0/${igsid}?fields=name,username`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    const p = await res.json()
+    if (p.name && p.username) return `${p.name} (@${p.username})`
+    return p.name ?? (p.username ? `@${p.username}` : null)
+  } catch {
+    return null
+  }
+}
+
 // deno-lint-ignore no-explicit-any
 async function handleInstagram(supabaseAdmin: any, body: any) {
   for (const entry of body.entry ?? []) {
@@ -105,6 +123,7 @@ async function handleInstagram(supabaseAdmin: any, body: any) {
       const buId = await resolveVenueForChannel(supabaseAdmin, 'instagram', igAccountId, from)
       await ingestMessage(supabaseAdmin, {
         channel: 'instagram', externalId: from, buId, displayName: null, body: text,
+        fetchDisplayName: () => fetchIgProfile(from), // solo se llama si aún no lo tenemos
       })
     }
   }
@@ -128,11 +147,17 @@ async function resolveVenueForChannel(supabaseAdmin: any, channel: 'whatsapp' | 
 }
 
 // deno-lint-ignore no-explicit-any
-async function ingestMessage(supabaseAdmin: any, opts: { channel: 'whatsapp' | 'instagram'; externalId: string; buId: string | null; displayName: string | null; body: string }) {
-  const { channel, externalId, buId, displayName, body } = opts
+async function ingestMessage(supabaseAdmin: any, opts: { channel: 'whatsapp' | 'instagram'; externalId: string; buId: string | null; displayName: string | null; body: string; fetchDisplayName?: () => Promise<string | null> }) {
+  const { channel, externalId, buId, body, fetchDisplayName } = opts
+  let { displayName } = opts
 
   const { data: conv } = await supabaseAdmin.from('bot_conversations')
     .select('*').eq('channel', channel).eq('external_id', externalId).maybeSingle()
+
+  // Perfil del canal (nombre/handle de IG): una sola vez, cuando aún no lo tenemos
+  if (!displayName && !conv?.display_name && fetchDisplayName) {
+    displayName = await fetchDisplayName()
+  }
 
   let conversationId = conv?.id as string | undefined
 
