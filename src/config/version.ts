@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.20.0"
+export const APP_VERSION = "2.21.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.21.0",
+    date: "2026-07-08",
+    type: "MINOR",
+    changes: [
+      "Reservas — se eliminan los 3 horarios fijos: ahora es una hora de llegada libre, sin salida forzada",
+      "El board de Reservas es una agenda por hora de llegada en lugar de columnas por turno",
+      "Capacidad rediseñada: un cupo total por noche (reservas y pax) en vez de por horario — editor de Capacidad simplificado",
+      "Bot Concierge ya no ofrece horarios fijos: pregunta la hora que el cliente prefiera y solo avisa si la noche está por llenarse",
+    ]
+  },
   {
     version: "2.20.0",
     date: "2026-07-08",

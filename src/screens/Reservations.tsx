@@ -31,7 +31,7 @@ interface Reservation {
   bot_conversation_id: string | null
 }
 interface GuestLite { id: string; full_name: string; phone: string; tags: string[] }
-interface CapacityRow { id: string; day_of_week: number; time_slot: string; max_reservations: number; max_pax: number; active: boolean }
+interface CapacityRow { id: string; day_of_week: number; max_reservations: number; max_pax: number; active: boolean }
 
 const STATUS_META: Record<ResStatus, { label: string; tone: StatusTone; next?: ResStatus; nextLabel?: string }> = {
   requested: { label: 'Solicitada', tone: 'neutral',   next: 'confirmed', nextLabel: 'Confirmar' },
@@ -48,7 +48,6 @@ const SOURCE_LABEL: Record<ResSource, string> = {
   phone: 'Teléfono', whatsapp: 'WhatsApp', instagram: 'Instagram', walk_in: 'Walk-in', internal: 'Interno',
 }
 const ZONES = ['Terraza', 'Barra', 'Salón', 'VIP']
-const DEFAULT_SLOTS = ['19:00–20:30', '20:30–22:00', '22:00–23:30']
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
 function isoLocal(d: Date): string {
@@ -97,7 +96,7 @@ export function Reservations({ userRole, userId }: Props) {
     if (r.created_by) return profileMap[r.created_by] ?? '—'
     return (r.source === 'whatsapp' || r.source === 'instagram') ? 'Concierge HOG' : '—'
   }, [profileMap])
-  const [capacity, setCapacity] = useState<CapacityRow[]>([])
+  const [capacity, setCapacity] = useState<CapacityRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -146,12 +145,12 @@ export function Reservations({ userRole, userId }: Props) {
     const [{ data: res, error }, { data: wk }, { data: cap }] = await Promise.all([
       supabase.from('reservations').select('*').eq('bu_id', buId).eq('date', date).order('time_slot').order('created_at'),
       supabase.from('reservations').select('*').eq('bu_id', buId).gte('date', weekStart).lte('date', addDays(weekStart, 6)),
-      supabase.from('venue_capacity').select('*').eq('bu_id', buId).eq('day_of_week', dow).eq('active', true).order('time_slot'),
+      supabase.from('venue_capacity').select('*').eq('bu_id', buId).eq('day_of_week', dow).eq('active', true).maybeSingle(),
     ])
     if (error) { setLoadError(true); setLoading(false); return }
     setReservations((res ?? []) as Reservation[])
     setWeekRows((wk ?? []) as Reservation[])
-    setCapacity((cap ?? []) as CapacityRow[])
+    setCapacity((cap ?? null) as CapacityRow | null)
     // Guests involucrados + su historial de no-shows
     const ids = [...new Set([...(res ?? []), ...(wk ?? [])].map(r => r.guest_id))]
     if (ids.length) {
@@ -233,17 +232,10 @@ export function Reservations({ userRole, userId }: Props) {
     else showToast(`Reserva ${STATUS_META[status].label.toLowerCase()}.`, 'success')
   }
 
-  // ── Día: agrupar por slot (capacidad primero, luego slots ad-hoc) ──
-  const daySlots = useMemo(() => {
-    const active = reservations.filter(r => r.status !== 'cancelled')
-    const slotNames = [...new Set([...capacity.map(c => c.time_slot), ...active.map(r => r.time_slot)])].sort()
-    return slotNames.map(slot => {
-      const rows = reservations.filter(r => r.time_slot === slot)
-      const activeRows = rows.filter(r => ACTIVE_STATUSES.includes(r.status))
-      const cap = capacity.find(c => c.time_slot === slot)
-      return { slot, rows, count: activeRows.length, pax: activeRows.reduce((s, r) => s + r.party_size, 0), cap }
-    }).filter(s => s.rows.length > 0 || s.cap)
-  }, [reservations, capacity])
+  // ── Día: horarios libres — agenda ordenada por hora de llegada, sin turnos ──
+  const dayRows = useMemo(() => {
+    return [...reservations].sort((a, b) => a.time_slot.localeCompare(b.time_slot) || a.created_at.localeCompare(b.created_at))
+  }, [reservations])
 
   const kpis = useMemo(() => {
     const act = reservations.filter(r => ACTIVE_STATUSES.includes(r.status))
@@ -301,8 +293,10 @@ export function Reservations({ userRole, userId }: Props) {
 
         {view === 'day' && (
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
-            <KPITile label="Reservas" value={String(kpis.total)} />
-            <KPITile label="Pax" value={String(kpis.pax)} color="var(--accent)" />
+            <KPITile label="Reservas" value={capacity ? `${kpis.total}/${capacity.max_reservations}` : String(kpis.total)}
+              color={capacity && kpis.total > capacity.max_reservations ? 'var(--status-attention)' : undefined} />
+            <KPITile label="Pax" value={capacity ? `${kpis.pax}/${capacity.max_pax}` : String(kpis.pax)}
+              color={capacity && kpis.pax > capacity.max_pax ? 'var(--status-attention)' : 'var(--accent)'} />
             <KPITile label="Confirmadas" value={String(kpis.confirmed)} />
             <KPITile label="Sentadas" value={String(kpis.seated)} color="var(--status-attention)" />
           </div>
@@ -340,7 +334,7 @@ export function Reservations({ userRole, userId }: Props) {
               )
             })}
           </div>
-        ) : daySlots.length === 0 ? (
+        ) : dayRows.length === 0 ? (
           <div style={{ textAlign: 'center', paddingTop: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 26 }}>🍸</span>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, maxWidth: 300, margin: 0 }}>
@@ -351,71 +345,49 @@ export function Reservations({ userRole, userId }: Props) {
             )}
           </div>
         ) : (
-          /* ── Día: grupos por slot con indicador de capacidad ── */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {daySlots.map(({ slot, rows, count, pax, cap }) => {
-              const overRes = cap && count > cap.max_reservations
-              const overPax = cap && pax > cap.max_pax
+          /* ── Día: agenda por hora de llegada — sin turnos, sin salida forzada ── */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {dayRows.map(r => {
+              const g = guestMap[r.guest_id]
+              const meta = STATUS_META[r.status]
+              const SrcIcon = SOURCE_ICON[r.source]
+              const terminal = !meta.next
               return (
-                <div key={slot}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <span className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{slot}</span>
-                    {cap ? (
-                      <span className="num" style={{ fontSize: 11, color: (overRes || overPax) ? 'var(--status-attention)' : 'var(--text-tertiary)' }}>
-                        {count}/{cap.max_reservations} reservas · {pax}/{cap.max_pax} pax{(overRes || overPax) && ' · sobrecupo'}
-                      </span>
-                    ) : (
-                      <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{count} reservas · {pax} pax</span>
-                    )}
-                    <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {rows.length === 0 ? (
-                      <p style={{ color: 'var(--text-tertiary)', fontSize: 11, margin: 0, padding: '2px 0 2px 4px' }}>Slot libre.</p>
-                    ) : rows.map(r => {
-                      const g = guestMap[r.guest_id]
-                      const meta = STATUS_META[r.status]
-                      const SrcIcon = SOURCE_ICON[r.source]
-                      const terminal = !meta.next
-                      return (
-                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '10px 12px', flexShrink: 0, opacity: r.status === 'cancelled' || r.status === 'no_show' ? 0.6 : 1 }}>
-                          <button onClick={() => setOpenGuestId(r.guest_id)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0, flex: 1, minWidth: 0, textAlign: 'left', minHeight: 44 }}>
-                            <Avatar name={g?.full_name ?? '?'} size={34} />
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{g?.full_name ?? 'Cliente'}</span>
-                                {(noShowMap[r.guest_id] ?? 0) >= 2 && (
-                                  <span title={`${noShowMap[r.guest_id]} no-shows previos`} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 9, color: 'var(--status-attention)', fontFamily: 'var(--font-mono)' }}>
-                                    <AlertTriangle size={10} /> {noShowMap[r.guest_id]}
-                                  </span>
-                                )}
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                                <span className="num" style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700 }}>{r.party_size} pax</span>
-                                {r.zone && <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{r.zone}</span>}
-                                <SrcIcon size={11} style={{ color: 'var(--text-tertiary)' }} aria-label={SOURCE_LABEL[r.source]} />
-                                <span title={`Reservó: ${bookedBy(r)}`} style={{ fontSize: 10, color: bookedBy(r) === 'Concierge HOG' ? 'var(--accent)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>· {bookedBy(r)}</span>
-                                {r.notes && <span style={{ fontSize: 10, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>· {r.notes}</span>}
-                              </div>
-                            </div>
-                          </button>
-                          <StatusBadgeV2 tone={meta.tone} label={meta.label} />
-                          {canWrite && !terminal && meta.next && (
-                            <button onClick={() => setStatus(r, meta.next!)}
-                              style={{ minHeight: 44, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                              {meta.nextLabel}
-                            </button>
-                          )}
-                          {canWrite && !terminal && (
-                            <button onClick={() => { setMenuRes(r); setCancelReason('') }} aria-label="Más acciones"
-                              style={{ width: 44, height: 44, borderRadius: 'var(--radius-sm)', border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <MoreHorizontal size={16} />
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '10px 12px', flexShrink: 0, opacity: r.status === 'cancelled' || r.status === 'no_show' ? 0.6 : 1 }}>
+                  <span className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', width: 46, flexShrink: 0, textAlign: 'center' }}>{r.time_slot}</span>
+                  <button onClick={() => setOpenGuestId(r.guest_id)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0, flex: 1, minWidth: 0, textAlign: 'left', minHeight: 44 }}>
+                    <Avatar name={g?.full_name ?? '?'} size={34} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{g?.full_name ?? 'Cliente'}</span>
+                        {(noShowMap[r.guest_id] ?? 0) >= 2 && (
+                          <span title={`${noShowMap[r.guest_id]} no-shows previos`} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 9, color: 'var(--status-attention)', fontFamily: 'var(--font-mono)' }}>
+                            <AlertTriangle size={10} /> {noShowMap[r.guest_id]}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                        <span className="num" style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700 }}>{r.party_size} pax</span>
+                        {r.zone && <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{r.zone}</span>}
+                        <SrcIcon size={11} style={{ color: 'var(--text-tertiary)' }} aria-label={SOURCE_LABEL[r.source]} />
+                        <span title={`Reservó: ${bookedBy(r)}`} style={{ fontSize: 10, color: bookedBy(r) === 'Concierge HOG' ? 'var(--accent)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>· {bookedBy(r)}</span>
+                        {r.notes && <span style={{ fontSize: 10, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>· {r.notes}</span>}
+                      </div>
+                    </div>
+                  </button>
+                  <StatusBadgeV2 tone={meta.tone} label={meta.label} />
+                  {canWrite && !terminal && meta.next && (
+                    <button onClick={() => setStatus(r, meta.next!)}
+                      style={{ minHeight: 44, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {meta.nextLabel}
+                    </button>
+                  )}
+                  {canWrite && !terminal && (
+                    <button onClick={() => { setMenuRes(r); setCancelReason('') }} aria-label="Más acciones"
+                      style={{ width: 44, height: 44, borderRadius: 'var(--radius-sm)', border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <MoreHorizontal size={16} />
+                    </button>
+                  )}
                 </div>
               )
             })}
@@ -506,11 +478,9 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
   const [creatingGuest, setCreatingGuest] = useState(false)
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [date, setDate] = useState(defaultDate)
-  const [slots, setSlots] = useState<{ slot: string; used: number; max: number | null; paxUsed: number; maxPax: number | null; custom?: boolean }[]>([])
+  const [dayCap, setDayCap] = useState<{ used: number; max: number | null; paxUsed: number; maxPax: number | null }>({ used: 0, max: null, paxUsed: 0, maxPax: null })
   const [overrideCap, setOverrideCap] = useState(false)
-  const [slot, setSlot] = useState('')
-  const [showCustom, setShowCustom] = useState(false)
-  const [customSlot, setCustomSlot] = useState('')
+  const [time, setTime] = useState('21:00')
   const [pax, setPax] = useState(2)
   const [zone, setZone] = useState('')
   const [source, setSource] = useState<ResSource>('phone')
@@ -519,8 +489,8 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // La autorización de sobrecupo no sobrevive a un cambio de slot/fecha/venue/pax
-  useEffect(() => { setOverrideCap(false) }, [slot, date, venue, pax])
+  // La autorización de sobrecupo no sobrevive a un cambio de fecha/venue/pax
+  useEffect(() => { setOverrideCap(false) }, [date, venue, pax])
 
   useEffect(() => {
     supabase.from('guest_tag_options').select('label').eq('active', true).then(({ data }) => setTagOptions((data ?? []).map(t => t.label)))
@@ -539,54 +509,35 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
     return () => clearTimeout(t)
   }, [gQuery, guest])
 
-  // Slots activos con disponibilidad para venue+fecha
+  // Cupo de la noche para venue+fecha (capacidad total, sin horarios fijos)
   useEffect(() => {
-    async function loadSlots() {
+    async function loadDayCap() {
       const dow = new Date(date + 'T00:00:00').getDay()
       const [{ data: cap }, { data: res }] = await Promise.all([
-        supabase.from('venue_capacity').select('time_slot, max_reservations, max_pax').eq('bu_id', venue).eq('day_of_week', dow).eq('active', true).order('time_slot'),
-        supabase.from('reservations').select('time_slot, status, party_size').eq('bu_id', venue).eq('date', date),
+        supabase.from('venue_capacity').select('max_reservations, max_pax').eq('bu_id', venue).eq('day_of_week', dow).eq('active', true).maybeSingle(),
+        supabase.from('reservations').select('status, party_size').eq('bu_id', venue).eq('date', date),
       ])
-      const used: Record<string, number> = {}
-      const paxUsed: Record<string, number> = {}
+      let used = 0, paxUsed = 0
       for (const r of res ?? []) if (['requested', 'confirmed', 'seated', 'completed'].includes(r.status)) {
-        used[r.time_slot] = (used[r.time_slot] ?? 0) + 1
-        paxUsed[r.time_slot] = (paxUsed[r.time_slot] ?? 0) + (r.party_size ?? 0)
+        used++; paxUsed += r.party_size ?? 0
       }
-      const rows = (cap && cap.length > 0)
-        ? cap.map(c => ({ slot: c.time_slot, used: used[c.time_slot] ?? 0, max: c.max_reservations, paxUsed: paxUsed[c.time_slot] ?? 0, maxPax: c.max_pax }))
-        : DEFAULT_SLOTS.map(s => ({ slot: s, used: used[s] ?? 0, max: null, paxUsed: paxUsed[s] ?? 0, maxPax: null }))   // sin capacidad configurada → slots default
-      setSlots(rows)
-      setSlot(prev => rows.some(r => r.slot === prev) ? prev : (rows[0]?.slot ?? ''))
+      setDayCap({ used, max: cap?.max_reservations ?? null, paxUsed, maxPax: cap?.max_pax ?? null })
     }
-    loadSlots()
+    loadDayCap()
   }, [venue, date])
 
-  // Regla de sobrecupo: lleno por número de reservas o porque el pax no cabe
-  const selectedSlot = slots.find(s => s.slot === slot)
-  const slotFull = !!selectedSlot && (
-    (selectedSlot.max !== null && selectedSlot.used >= selectedSlot.max) ||
-    (selectedSlot.maxPax !== null && selectedSlot.paxUsed + pax > selectedSlot.maxPax)
-  )
-  const blockedByCapacity = slotFull && !(canOverride && overrideCap)
-  const valid = !!guest && !!venue && !!date && !!slot && pax > 0 && !blockedByCapacity
-
-  function applyCustomSlot() {
-    const v = customSlot.trim()
-    if (!v) return
-    setSlots(prev => prev.some(s => s.slot === v) ? prev : [...prev, { slot: v, used: 0, max: null, paxUsed: 0, maxPax: null, custom: true }])
-    setSlot(v)
-    setShowCustom(false)
-    setCustomSlot('')
-  }
+  // Regla de sobrecupo: lleno por número de reservas o porque el pax no cabe esa noche
+  const dayFull = (dayCap.max !== null && dayCap.used >= dayCap.max) || (dayCap.maxPax !== null && dayCap.paxUsed + pax > dayCap.maxPax)
+  const blockedByCapacity = dayFull && !(canOverride && overrideCap)
+  const valid = !!guest && !!venue && !!date && !!time && pax > 0 && !blockedByCapacity
 
   async function save() {
     if (!valid || !guest) return
     setSaving(true); setError(null)
     const status = confirmNow ? 'confirmed' : 'requested'
-    const overbooking = slotFull && canOverride && overrideCap
+    const overbooking = dayFull && canOverride && overrideCap
     const { data, error: err } = await supabase.from('reservations').insert({
-      guest_id: guest.id, bu_id: venue, date, time_slot: slot, party_size: pax,
+      guest_id: guest.id, bu_id: venue, date, time_slot: time, party_size: pax,
       zone: zone.trim() || null, status, source, notes: notes.trim() || null,
       created_by: userId ?? null, status_changed_by: userId ?? null,
       confirmed_at: confirmNow ? new Date().toISOString() : null,
@@ -595,9 +546,9 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
     setSaving(false)
     if (err) { setError(`No se pudo crear: ${err.message}`); return }
     const buCode = buList.find(b => b.id === venue)?.code
-    logActivity('reservation_created', 'reservation', data.id, { guest: guest.full_name, bu: buCode, date, slot, pax })
-    notifySlack(reservationCreatedMessage(guest.full_name, buCode ?? '', date, slot, pax))
-    if (overbooking) logActivity('reservation_overbooked', 'reservation', data.id, { guest: guest.full_name, bu: buCode, slot, pax })
+    logActivity('reservation_created', 'reservation', data.id, { guest: guest.full_name, bu: buCode, date, time, pax })
+    notifySlack(reservationCreatedMessage(guest.full_name, buCode ?? '', date, time, pax))
+    if (overbooking) logActivity('reservation_overbooked', 'reservation', data.id, { guest: guest.full_name, bu: buCode, time, pax })
     showToast(overbooking ? 'Reserva creada con sobrecupo autorizado.' : 'Reserva creada.', 'success')
     onCreated()
   }
@@ -670,44 +621,15 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
             </div>
           </div>
 
-          {/* 3. Slot con disponibilidad */}
+          {/* 3. Hora de llegada — libre, sin turnos ni salida forzada */}
           <div>
-            <label style={lbl}>Horario *</label>
-            {slots.length === 0 ? (
-              <p style={{ color: 'var(--text-tertiary)', fontSize: 12, margin: 0 }}>Cargando horarios…</p>
-            ) : (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {slots.map(s => {
-                  const full = s.max !== null && s.used >= s.max
-                  const on = slot === s.slot
-                  const custom = !!s.custom
-                  return (
-                    <button key={s.slot} onClick={() => setSlot(s.slot)}
-                      style={{ minHeight: 44, padding: '0 14px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-mono)', background: on ? 'var(--accent-bg)' : 'var(--bg-elevated)', border: `1px solid ${on ? 'var(--accent)' : custom ? 'color-mix(in srgb, var(--accent) 45%, transparent)' : full ? 'color-mix(in srgb, var(--status-attention) 40%, transparent)' : 'var(--border-default)'}`, color: on ? 'var(--accent)' : full ? 'var(--status-attention)' : 'var(--text-secondary)' }}>
-                      {s.slot}{s.max !== null && <span style={{ fontSize: 10, marginLeft: 6 }}>{s.used}/{s.max}</span>}
-                    </button>
-                  )
-                })}
-                {showCustom ? (
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexBasis: '100%' }}>
-                    <input value={customSlot} onChange={e => setCustomSlot(e.target.value)} autoFocus
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyCustomSlot() } }}
-                      placeholder="17:00–19:00" className="num"
-                      style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono)' }} />
-                    <button onClick={applyCustomSlot} disabled={!customSlot.trim()}
-                      style={{ minHeight: 44, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: customSlot.trim() ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 700, background: customSlot.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: customSlot.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)' }}>Usar</button>
-                    <button onClick={() => { setShowCustom(false); setCustomSlot('') }} aria-label="Cancelar"
-                      style={{ width: 44, height: 44, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><X size={14} /></button>
-                  </div>
-                ) : (
-                  <button onClick={() => setShowCustom(true)}
-                    style={{ minHeight: 44, padding: '0 14px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: 'transparent', border: '1px dashed var(--accent-border)', color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                    <Plus size={13} /> Otro horario
-                  </button>
-                )}
-              </div>
+            <label style={lbl}>Hora de llegada *</label>
+            <input type="time" value={time} onChange={e => setTime(e.target.value)} className="num" style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} />
+            {dayCap.max !== null && (
+              <p style={{ color: dayFull ? 'var(--status-attention)' : 'var(--text-tertiary)', fontSize: 11, margin: '6px 0 0' }}>
+                Cupo de la noche: {dayCap.used}/{dayCap.max} reservas · {dayCap.paxUsed}/{dayCap.maxPax} pax
+              </p>
             )}
-            {showCustom && <p style={{ color: 'var(--text-tertiary)', fontSize: 11, margin: '6px 0 0' }}>Para eventos especiales o apertura anticipada. Sin límite de cupo.</p>}
           </div>
 
           {/* 4. Pax + zona */}
@@ -746,12 +668,12 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
             </div>
           </div>
 
-          {slotFull && (
+          {dayFull && (
             <div style={{ background: 'color-mix(in srgb, var(--status-attention) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 35%, transparent)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
               <p style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--status-attention)', fontSize: 13, fontWeight: 700, margin: 0 }}>
-                <AlertTriangle size={14} /> Slot lleno
-                {selectedSlot?.max !== null && ` — ${selectedSlot?.used}/${selectedSlot?.max} reservas`}
-                {selectedSlot?.maxPax !== null && ` · ${selectedSlot ? selectedSlot.paxUsed + pax : 0}/${selectedSlot?.maxPax} pax con esta reserva`}
+                <AlertTriangle size={14} /> Cupo de la noche lleno
+                {dayCap.max !== null && ` — ${dayCap.used}/${dayCap.max} reservas`}
+                {dayCap.maxPax !== null && ` · ${dayCap.paxUsed + pax}/${dayCap.maxPax} pax con esta reserva`}
               </p>
               {canOverride ? (
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, cursor: 'pointer', minHeight: 36 }}>
@@ -759,7 +681,7 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Autorizar sobrecupo — queda registrado a tu nombre en Actividad.</span>
                 </label>
               ) : (
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '6px 0 0' }}>Solo un Ops Manager o Master puede autorizar sobrecupo. Elige otro slot.</p>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '6px 0 0' }}>Solo un Ops Manager o Master puede autorizar sobrecupo.</p>
               )}
             </div>
           )}
