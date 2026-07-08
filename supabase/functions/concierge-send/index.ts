@@ -22,10 +22,11 @@ async function sendChannelMessage(channel: 'whatsapp' | 'instagram', to: string,
     })
     return { ok: res.ok, data: await res.json() }
   }
-  const pageToken = Deno.env.get('IG_PAGE_ACCESS_TOKEN')!
-  const res = await fetch(`https://graph.facebook.com/${META_API_VERSION}/me/messages?access_token=${pageToken}`, {
+  // Instagram API with Instagram Login: graph.instagram.com + Bearer del token IG
+  const igToken = Deno.env.get('IG_PAGE_ACCESS_TOKEN')!
+  const res = await fetch(`https://graph.instagram.com/${META_API_VERSION}/me/messages`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${igToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ recipient: { id: to }, message: { text } }),
   })
   return { ok: res.ok, data: await res.json() }

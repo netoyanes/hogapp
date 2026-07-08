@@ -25,10 +25,12 @@ async function sendChannelMessage(channel: 'whatsapp' | 'instagram', to: string,
     if (!res.ok) console.error('[concierge] sendWhatsApp error', JSON.stringify(data))
     return data
   }
-  const pageToken = Deno.env.get('IG_PAGE_ACCESS_TOKEN')!
-  const res = await fetch(`https://graph.facebook.com/${META_API_VERSION}/me/messages?access_token=${pageToken}`, {
+  // Instagram API with Instagram Login: se envía por graph.instagram.com con
+  // el token de la cuenta IG (IGAA...), no por graph.facebook.com con Página.
+  const igToken = Deno.env.get('IG_PAGE_ACCESS_TOKEN')!
+  const res = await fetch(`https://graph.instagram.com/${META_API_VERSION}/me/messages`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${igToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ recipient: { id: to }, message: { text } }),
   })
   const data = await res.json()
