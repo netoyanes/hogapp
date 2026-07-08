@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.24.0"
+export const APP_VERSION = "2.24.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.24.1",
+    date: "2026-07-08",
+    type: "PATCH",
+    changes: [
+      "Talento — crea al DJ directo desde el booking (nombre + fee + género, sin salir del flujo)",
+      "Talento — log interno por DJ: cuántas veces tocó y cuánto cobró por cada fecha, con total y promedio",
+    ]
+  },
   {
     version: "2.24.0",
     date: "2026-07-08",
