@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.18.0"
+export const APP_VERSION = "2.19.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.19.0",
+    date: "2026-07-07",
+    type: "MINOR",
+    changes: [
+      "Dashboard — Pulso operativo por marca: reservas del mes (bot vs manual), conversaciones del Concierge con escalaciones, y deals activos con pipeline en MXN",
+      "KPIs nuevos arriba: Reservas del mes con % bot, Pipeline CRM total y actividad Social de la semana",
+      "El indicador real para Master y C-Level: marketing + operación + ventas en una vista",
+    ]
+  },
   {
     version: "2.18.0",
     date: "2026-07-07",
