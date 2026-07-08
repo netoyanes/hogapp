@@ -35,6 +35,7 @@ interface Message {
   conversation_id: string
   role: 'guest' | 'bot' | 'agent' | 'system'
   body: string | null
+  meta: { image_url?: string } | null
   created_at: string
 }
 interface VenueConfig {
@@ -562,6 +563,13 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
               <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)', marginBottom: 2 }}>
                 {m.role === 'guest' ? 'Cliente' : m.role === 'bot' ? 'Bot' : m.role === 'agent' ? 'Equipo' : 'Sistema'}
               </div>
+              {/* Imágenes (comprobantes de depósito, fotos): tap → abre completa */}
+              {m.meta?.image_url && (
+                <a href={m.meta.image_url} target="_blank" rel="noreferrer" style={{ display: 'block', marginBottom: m.body ? 6 : 0 }}>
+                  <img src={m.meta.image_url} alt="Imagen del cliente" loading="lazy"
+                    style={{ maxWidth: 220, maxHeight: 280, borderRadius: 'var(--radius-sm)', display: 'block' }} />
+                </a>
+              )}
               {m.body}
             </div>
           ))}

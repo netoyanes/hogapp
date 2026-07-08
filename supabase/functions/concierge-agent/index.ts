@@ -101,7 +101,11 @@ const TOOLS = [
     description: 'Da de alta o encuentra al cliente por su teléfono. Llama esto en cuanto tengas nombre Y teléfono, antes de crear la reserva.',
     input_schema: {
       type: 'object',
-      properties: { nombre: { type: 'string' }, telefono: { type: 'string', description: 'Formato E.164, ej. +526691234567' } },
+      properties: {
+        nombre: { type: 'string' },
+        telefono: { type: 'string', description: 'Formato E.164, ej. +526691234567' },
+        cumpleanos: { type: 'string', description: 'Solo si el cliente mencionó su cumpleaños: YYYY-MM-DD, o MM-DD si no dio el año' },
+      },
       required: ['nombre', 'telefono'],
     },
   },
@@ -117,6 +121,18 @@ const TOOLS = [
         notas: { type: 'string' },
       },
       required: ['fecha', 'horario', 'pax'],
+    },
+  },
+  {
+    name: 'agregar_nota_reserva',
+    description: 'Agrega una nota a la reserva próxima del cliente y avisa al equipo del venue. Úsala cuando el cliente avise que va en camino, que llega tarde, o cualquier detalle operativo de su reserva ya hecha (cambio de mesa, silla de bebé, etc.).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        nota: { type: 'string', description: 'La nota, corta y clara (ej. "Va en camino, llega ~30 min tarde")' },
+        fecha: { type: 'string', description: 'YYYY-MM-DD de la reserva (omite si solo tiene una próxima)' },
+      },
+      required: ['nota'],
     },
   },
   {
@@ -192,7 +208,7 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
   const model = settingsMap.bot_model || 'claude-haiku-4-5-20251001'
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
 
-  const ctx = { supabaseAdmin, conv: { ...conv }, bu, cfg }
+  const ctx = { supabaseAdmin, conv: { ...conv }, bu, cfg, pay }
   const system = buildSystemPrompt(ctx, venues ?? [], isFollowup, settingsMap.app_public_url, pay)
   // Mensajes consecutivos del mismo rol se fusionan: así el batching de 45s
   // (varios mensajes del cliente antes del turno) llega como un solo bloque,
@@ -279,6 +295,11 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   if (ctx.conv.display_name) lines.push(`El perfil del cliente en este canal dice: "${ctx.conv.display_name}" — OJO: suele ser un apodo o nombre artístico, no su nombre real. Úsalo solo para saludar con calidez. Para la reserva SIEMPRE pide su nombre ("¿a nombre de quién pongo la reserva?") y a partir de que te lo dé, dirígete a la persona por ESE nombre.`)
   lines.push('RESERVA EXISTENTE: cuando registres al cliente, el sistema te dirá si ya tiene reservas próximas. Si ya tiene una para el MISMO día que está pidiendo, NO crees otra: confírmasela con sus datos ("ya tienes tu mesa el sábado a las 20:30 para 6 👍"). Si pide cambios (hora/personas), usa crear_reserva con los datos nuevos — el sistema ACTUALIZA la existente en lugar de duplicar y valida que todavía haya cupo; si ya no cabe, ofrécele otra opción.')
   lines.push('CANCELACIONES: si el cliente pide cancelar, cancela SIN fricción con cancelar_reserva — nada de "¿seguro?" repetidos ni interrogar el motivo (si lo cuenta espontáneamente, regístralo). Confírmale la cancelación con calidez e invítalo a volver ("cuando quieras, aquí tienes tu mesa"). Una cancelación bien atendida es un cliente que regresa.')
+  lines.push('EN CAMINO / RETRASOS: si el cliente avisa que va en camino, que llega tarde, o pide un detalle operativo de su reserva ya hecha, usa agregar_nota_reserva — el equipo lo ve al instante. Confírmale tranquilo: "le aviso al equipo, tu mesa te espera".')
+  lines.push('CUMPLEAÑOS: si el cliente menciona su fecha de cumpleaños, pásala en crear_o_actualizar_cliente (campo cumpleanos) — el sistema la recuerda para consentirlo después. No la pidas de la nada; solo captúrala si sale en la conversación.')
+  lines.push('QUEJAS: ante cualquier queja, primero una disculpa breve y humana (sin excusas), y de inmediato escalar_a_humano con el motivo empezando con "QUEJA:" y el resumen — eso alerta al equipo con prioridad y deja registro en la ficha del cliente. Nunca te pongas a la defensiva ni resuelvas compensaciones tú.')
+  lines.push('LISTA DE ESPERA: si la noche que quiere está llena, ofrécele primero otra fecha u hora cercana. Si insiste en esa noche, dile que lo anotas en lista de espera, usa notificar_slack con "LISTA DE ESPERA: nombre, pax, fecha, teléfono" y explícale que el equipo le avisa si se libera lugar — sin prometerle que sí habrá.')
+  lines.push('IMÁGENES: si el historial muestra "[📎 El cliente envió una imagen]" en el contexto de un apartado, es casi seguro su comprobante de depósito: agradécele, dile que el equipo lo valida y confirma, y usa escalar_a_humano con motivo "Comprobante de apartado recibido — validar" si la conversación no está ya escalada.')
   lines.push('EVENTOS: si el cliente quiere un evento (cumpleaños grande, despedida, corporativo, renta del lugar), NO lo despaches directo — captura primero esta información, una pregunta a la vez: (1) ¿qué fecha tienen en mente?, (2) ¿aproximadamente cuántas personas serían?, (3) ¿qué tipo de evento u ocasión es?, (4) ¿buscan un área reservada o el lugar completo?, y su nombre y teléfono si aún no los tienes. Ya con eso, usa escalar_a_humano con TODO el resumen en el motivo ("Evento: cumpleaños, ~40 pax, 26 de julio, área reservada — María, tel registrado") — así el equipo llega a cerrar la venta, no a re-preguntar.')
   if (publicUrl) lines.push(`Cuando pidas el teléfono por primera vez, comparte una sola vez este enlace de aviso de privacidad: ${publicUrl}/?aviso=1 — así el cliente sabe cómo cuidamos su dato antes de dártelo. No lo repitas en cada mensaje.`)
 
@@ -353,8 +374,16 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       if (!tel) {
         return { error: `El teléfono "${input.telefono}" no es válido (un celular mexicano son 10 dígitos). NO registres nada: dile al cliente con buena onda que su número parece incompleto y pídele confirmarlo — y en el MISMO mensaje sigue avanzando con lo que falte (fecha/horario).` }
       }
+      // Cumpleaños si el cliente lo mencionó (MM-DD sin año → año 2000 + flag)
+      const guestRow: Record<string, unknown> = { phone: tel, full_name: input.nombre, origin_bu: ctx.conv.bu_id }
+      if (input.cumpleanos) {
+        const full = String(input.cumpleanos).match(/^(\d{4})-(\d{2})-(\d{2})$/)
+        const short = String(input.cumpleanos).match(/^(\d{2})-(\d{2})$/)
+        if (full) { guestRow.birthday = input.cumpleanos; guestRow.birthday_has_year = true }
+        else if (short) { guestRow.birthday = `2000-${short[1]}-${short[2]}`; guestRow.birthday_has_year = false }
+      }
       const { data: guest, error } = await supabaseAdmin.from('guests')
-        .upsert({ phone: tel, full_name: input.nombre, origin_bu: ctx.conv.bu_id }, { onConflict: 'phone', ignoreDuplicates: false })
+        .upsert(guestRow, { onConflict: 'phone', ignoreDuplicates: false })
         .select('id, full_name').single()
       if (error) return { error: error.message }
       // El handle de IG queda ligado al guest (mismo cliente en IG + WA sin duplicar)
@@ -417,7 +446,16 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
           details: { actor: 'Concierge HOG', bu: ctx.bu?.code, date: input.fecha, slot: hora, pax: input.pax, antes: `${existente.time_slot} · ${existente.party_size} pax` },
         })
         await notifySlackFromEdge(supabaseAdmin, `🤖 *Reserva actualizada vía Concierge* — ${ctx.bu?.name ?? ''}\n${input.fecha} · ${existente.time_slot}→${hora} · ${existente.party_size}→${input.pax} pax`)
-        return { ok: true, actualizada: true, reservation_id: existente.id, estado: existente.status, aviso: `El cliente YA tenía reserva ese día (${existente.time_slot}, ${existente.party_size} pax, ${existente.status}) — se actualizó con los datos nuevos en lugar de duplicar. Confírmale los datos finales.` }
+        // Si el grupo creció y cruzó el umbral de apartado, el bot debe cobrar la diferencia
+        let avisoApartado = ''
+        if (ctx.pay?.active && ctx.pay?.clabe && input.pax >= ctx.pay.deposit_over_pax) {
+          const total = ctx.pay.deposit_per_person ? input.pax * ctx.pay.deposit_per_person : (ctx.pay.deposit_fixed ?? 0)
+          const antes = existente.party_size >= ctx.pay.deposit_over_pax
+          avisoApartado = antes
+            ? ` OJO: el grupo cambió y el apartado total ahora es $${total} MXN — si ya depositó una parte, pide solo la diferencia y escala para validación.`
+            : ` OJO: con ${input.pax} personas la reserva AHORA requiere apartado de $${total} MXN — sigue el flujo de apartado (datos de depósito + comprobante + escalar).`
+        }
+        return { ok: true, actualizada: true, reservation_id: existente.id, estado: existente.status, aviso: `El cliente YA tenía reserva ese día (${existente.time_slot}, ${existente.party_size} pax, ${existente.status}) — se actualizó con los datos nuevos en lugar de duplicar. Confírmale los datos finales.${avisoApartado}` }
       }
       const { data: reserva, error } = await supabaseAdmin.from('reservations').insert({
         guest_id: ctx.conv.guest_id, bu_id: ctx.conv.bu_id, date: input.fecha, time_slot: hora,
@@ -433,6 +471,27 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       })
       await notifySlackFromEdge(supabaseAdmin, `🤖 *Reserva vía Concierge* — ${ctx.bu?.name ?? ''}\n${input.fecha} · ${hora} · ${input.pax} pax`)
       return { ok: true, reservation_id: reserva.id }
+    }
+
+    case 'agregar_nota_reserva': {
+      if (!ctx.conv.guest_id) return { error: 'No tengo identificado al cliente — pídele su teléfono para ubicar su reserva.' }
+      let nq = supabaseAdmin.from('reservations')
+        .select('id, date, time_slot, party_size, notes')
+        .eq('guest_id', ctx.conv.guest_id)
+        .gte('date', new Date().toISOString().slice(0, 10))
+        .in('status', ['requested', 'confirmed', 'seated'])
+        .order('date')
+      if (ctx.conv.bu_id) nq = nq.eq('bu_id', ctx.conv.bu_id)
+      if (input.fecha) nq = nq.eq('date', input.fecha)
+      const { data: notas } = await nq.limit(2)
+      if (!notas?.length) return { error: 'No encontré reserva próxima del cliente para anotar — confirma la fecha con él.' }
+      if (notas.length > 1) return { varias: true, reservas: notas.map((r: { date: string; time_slot: string }) => ({ fecha: r.date, hora: r.time_slot })), instruccion: 'Tiene varias reservas — pregúntale a cuál y vuelve a llamar con la fecha.' }
+      const r = notas[0]
+      const nuevaNota = r.notes ? `${r.notes} · ${input.nota.trim()}` : input.nota.trim()
+      const { error: nErr } = await supabaseAdmin.from('reservations').update({ notes: nuevaNota }).eq('id', r.id)
+      if (nErr) return { error: nErr.message }
+      await notifySlackFromEdge(supabaseAdmin, `🏃 *Aviso del cliente* — ${ctx.bu?.name ?? ''}\nReserva ${r.date} · ${r.time_slot} · ${r.party_size} pax → ${input.nota.trim()}`)
+      return { ok: true, instruccion: 'Nota registrada y equipo avisado — confírmale al cliente que su mesa lo espera.' }
     }
 
     case 'cancelar_reserva': {
@@ -472,7 +531,16 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
         status: 'needs_human', escalation_reason: input.motivo, next_bot_reply_at: null, next_followup_at: null,
       }).eq('id', ctx.conv.id)
       ctx.conv.status = 'needs_human'
-      await notifySlackFromEdge(supabaseAdmin, `🙋 *Necesita atención humana* — ${ctx.bu?.name ?? 'venue sin identificar'}\nMotivo: ${input.motivo}`)
+      // Las quejas dejan huella en la ficha del cliente (tag "Queja") para que
+      // el equipo lo trate con guante blanco en su siguiente visita.
+      if (/^queja/i.test(String(input.motivo ?? '')) && ctx.conv.guest_id) {
+        const { data: g } = await supabaseAdmin.from('guests').select('tags').eq('id', ctx.conv.guest_id).maybeSingle()
+        if (g && !((g.tags ?? []) as string[]).includes('Queja')) {
+          await supabaseAdmin.from('guests').update({ tags: [...(g.tags ?? []), 'Queja'] }).eq('id', ctx.conv.guest_id)
+        }
+      }
+      const esQueja = /^queja/i.test(String(input.motivo ?? ''))
+      await notifySlackFromEdge(supabaseAdmin, `${esQueja ? '🚨' : '🙋'} *${esQueja ? 'QUEJA — atención prioritaria' : 'Necesita atención humana'}* — ${ctx.bu?.name ?? 'venue sin identificar'}\nMotivo: ${input.motivo}`)
       return { ok: true, customerNote: 'Ahorita te conecto con alguien del equipo, dame un momento 🙌' }
     }
 
