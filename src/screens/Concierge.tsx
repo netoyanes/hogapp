@@ -760,7 +760,7 @@ function PaymentCard({ row, bu, onSaved }: { row: PaymentConfig; bu?: BU; onSave
   return (
     <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        {bu && <BUChip code={bu.code} name={bu.name} />}
+        {bu && <BUChip code={bu.code} />}
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{bu?.name ?? '—'} · Apartados</span>
         <button onClick={() => setForm(f => ({ ...f, active: !f.active }))}
           style={{ marginLeft: 'auto', minHeight: 36, padding: '0 14px', borderRadius: 999, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer', background: form.active ? 'color-mix(in srgb, var(--status-healthy) 15%, transparent)' : 'var(--bg-elevated)', color: form.active ? 'var(--status-healthy)' : 'var(--text-tertiary)' }}>
@@ -859,7 +859,7 @@ function VenueConfigCard({ cfg, bu, onSaved }: { cfg: VenueConfig; bu?: BU; onSa
   return (
     <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        {bu && <BUChip code={bu.code} name={bu.name} />}
+        {bu && <BUChip code={bu.code} />}
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{bu?.name ?? '—'}</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-tertiary)' }}><ChIcon size={13} /> {CHANNEL_LABEL[cfg.channel]}</span>
         <button onClick={() => setForm(f => ({ ...f, enabled: !f.enabled }))}
