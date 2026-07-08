@@ -4,6 +4,7 @@ import { BUSINESS_UNITS } from '../data/seed-business-units'
 import { supabase } from '../lib/supabase'
 import { calculateScores } from '../lib/scoring'
 import { BUChip } from '../components/v2'
+import { useIsMobile } from '../hooks/useIsMobile'
 import type { BUOnboarding, BusinessUnit, ScoreResult } from '../types'
 
 // Pulso operativo por marca: reservas (bot vs manual), conversaciones del
@@ -28,6 +29,7 @@ type SeedBU = { code: string; name: string; category?: string; location?: string
 type BUWithId = SeedBU & { id?: string }
 
 export function Dashboard({ onScoreBU, onViewTasks, userRole }: Props) {
+  const isMobile = useIsMobile()
   const [buData, setBuData] = useState<BusinessUnit[]>([])
   const [onboardings, setOnboardings] = useState<BUOnboarding[]>([])
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({})
@@ -168,33 +170,38 @@ export function Dashboard({ onScoreBU, onViewTasks, userRole }: Props) {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '18px' }}>Dashboard</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>HOG Marketing Intelligence · Week of May 25, 2026</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+              Marketing + operación + ventas · {new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
           </div>
           <div style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
             {filteredBUs.length} Business Units
           </div>
         </div>
 
-        {/* KPI strip */}
+        {/* KPI strip — valor grande + sub-dato chico, nada se parte en renglones */}
         <div className="flex gap-3" style={{ overflowX: 'auto', paddingBottom: '2px' }}>
           {[
-            { label: 'Total BUs', value: filteredBUs.length, color: 'var(--text-primary)' },
-            { label: 'Reservas (mes)', value: pulseTotals.res > 0 ? `${pulseTotals.res} · ${Math.round((pulseTotals.bot / pulseTotals.res) * 100)}% bot` : 0, color: 'var(--accent)' },
+            { label: 'Total BUs', value: String(filteredBUs.length), color: 'var(--text-primary)' },
+            { label: 'Reservas (mes)', value: String(pulseTotals.res), sub: pulseTotals.res > 0 ? `${Math.round((pulseTotals.bot / pulseTotals.res) * 100)}% bot` : undefined, color: 'var(--accent)' },
             { label: 'Pipeline CRM', value: mxn.format(pulseTotals.pipeline), color: 'var(--status-healthy)' },
-            { label: 'Social (7d)', value: `${social7d.posts} · ${social7d.reactions} ♥`, color: 'var(--text-primary)' },
-            { label: 'Healthy', value: healthy, color: 'var(--status-healthy)' },
-            { label: 'At Risk', value: atRisk, color: 'var(--status-risk)' },
-            { label: 'No Data', value: filteredBUs.length - scored, color: 'var(--text-tertiary)' },
+            { label: 'Social (7d)', value: String(social7d.posts), sub: `${social7d.reactions} reacciones`, color: 'var(--text-primary)' },
+            { label: 'Healthy', value: String(healthy), color: 'var(--status-healthy)' },
+            { label: 'At Risk', value: String(atRisk), color: 'var(--status-risk)' },
+            { label: 'No Data', value: String(filteredBUs.length - scored), color: 'var(--text-tertiary)' },
           ].map((kpi) => (
             <div
               key={kpi.label}
-              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '8px' }}
-              className="px-4 py-2 flex flex-col items-center min-w-[80px]"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '8px', flexShrink: 0 }}
+              className="px-4 py-2 flex flex-col items-center min-w-[88px]"
             >
-              <span style={{ color: kpi.color, fontFamily: 'var(--font-mono)', fontSize: '20px', fontWeight: 700, lineHeight: 1 }}>
+              <span style={{ color: kpi.color, fontFamily: 'var(--font-mono)', fontSize: '20px', fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>
                 {kpi.value}
               </span>
-              <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px' }}>{kpi.label}</span>
+              {'sub' in kpi && kpi.sub && (
+                <span style={{ color: kpi.color, fontSize: '10px', fontFamily: 'var(--font-mono)', marginTop: '2px', whiteSpace: 'nowrap', opacity: 0.85 }}>{kpi.sub}</span>
+              )}
+              <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginTop: '2px', whiteSpace: 'nowrap' }}>{kpi.label}</span>
             </div>
           ))}
         </div>
@@ -222,29 +229,58 @@ export function Dashboard({ onScoreBU, onViewTasks, userRole }: Props) {
                   <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
                 </div>
                 <div style={{ background: 'var(--bg-surface)', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1.4fr) 1fr 1fr 1.2fr', gap: 8, padding: '8px 14px', borderBottom: '1px solid var(--border-subtle)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    <span>Marca</span><span>Reservas</span><span>Concierge</span><span>Deals activos</span>
-                  </div>
+                  {!isMobile && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1.4fr) 1fr 1fr 1.2fr', gap: 8, padding: '8px 14px', borderBottom: '1px solid var(--border-subtle)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <span>Marca</span><span>Reservas</span><span>Concierge</span><span>Deals activos</span>
+                    </div>
+                  )}
                   {pulseBUs.map(({ bu, dbBU }) => {
                     const e = pulse[dbBU.id]
-                    return (
+                    const resTxt = (
+                      <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        {e.resTotal}
+                        {e.resTotal > 0 && <span style={{ color: 'var(--accent)' }}> · {e.resBot} bot</span>}
+                        {e.resTotal - e.resBot > 0 && <span style={{ color: 'var(--text-tertiary)' }}> · {e.resTotal - e.resBot} man.</span>}
+                      </span>
+                    )
+                    const convTxt = (
+                      <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        {e.convs} conv.
+                        {e.escalated > 0 && <span style={{ color: 'var(--status-attention)' }}> · {e.escalated} esc.</span>}
+                      </span>
+                    )
+                    const dealTxt = (
+                      <span className="num" style={{ fontSize: 12, color: e.pipeline > 0 ? 'var(--status-healthy)' : 'var(--text-tertiary)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {e.deals > 0 ? `${e.deals} · ${mxn.format(e.pipeline)}` : '—'}
+                      </span>
+                    )
+                    // Móvil: tarjeta apilada (marca arriba, métricas etiquetadas abajo) — las
+                    // 4 columnas no caben en 390px sin aplastarse.
+                    return isMobile ? (
+                      <div key={dbBU.id} style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <BUChip code={dbBU.code} size="sm" />
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bu.name}</span>
+                          <span style={{ marginLeft: 'auto' }}>{dealTxt}</span>
+                        </span>
+                        <span style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                          <span style={{ display: 'flex', gap: 5, alignItems: 'baseline' }}>
+                            <span style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Reservas</span>{resTxt}
+                          </span>
+                          <span style={{ display: 'flex', gap: 5, alignItems: 'baseline' }}>
+                            <span style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Concierge</span>{convTxt}
+                          </span>
+                        </span>
+                      </div>
+                    ) : (
                       <div key={dbBU.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1.4fr) 1fr 1fr 1.2fr', gap: 8, alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                          <BUChip code={dbBU.code} name={dbBU.name} size="sm" />
+                          <BUChip code={dbBU.code} size="sm" />
                           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bu.name}</span>
                         </span>
-                        <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          {e.resTotal}
-                          {e.resTotal > 0 && <span style={{ color: 'var(--accent)' }}> · {e.resBot} bot</span>}
-                          {e.resTotal - e.resBot > 0 && <span style={{ color: 'var(--text-tertiary)' }}> · {e.resTotal - e.resBot} man.</span>}
-                        </span>
-                        <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          {e.convs} conv.
-                          {e.escalated > 0 && <span style={{ color: 'var(--status-attention)' }}> · {e.escalated} esc.</span>}
-                        </span>
-                        <span className="num" style={{ fontSize: 12, color: e.pipeline > 0 ? 'var(--status-healthy)' : 'var(--text-tertiary)', fontWeight: 700 }}>
-                          {e.deals > 0 ? `${e.deals} · ${mxn.format(e.pipeline)}` : '—'}
-                        </span>
+                        {resTxt}
+                        {convTxt}
+                        {dealTxt}
                       </div>
                     )
                   })}

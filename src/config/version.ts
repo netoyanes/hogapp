@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.19.0"
+export const APP_VERSION = "2.19.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.19.1",
+    date: "2026-07-08",
+    type: "PATCH",
+    changes: [
+      "UX móvil — Dashboard: KPIs con sub-dato sin quebrarse, pulso operativo en tarjetas apiladas, fecha real en el subtítulo, nombre de marca sin duplicar",
+      "UX móvil — Concierge: encabezado compacto (el top bar ya dice Concierge), pestañas sin cortarse (Config)",
+      "Reservas recuerda tu último venue elegido en el dispositivo",
+    ]
+  },
   {
     version: "2.19.0",
     date: "2026-07-07",

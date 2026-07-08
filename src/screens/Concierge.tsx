@@ -121,7 +121,7 @@ export function Concierge({ userId, userRole }: { userId?: string; userRole?: st
     { id: 'reservas', label: 'Reservas' },
     { id: 'inbox',    label: 'Bandeja' },
     { id: 'clientes', label: 'Clientes' },
-    ...(isMaster ? [{ id: 'summary', label: 'Resumen' }, { id: 'config', label: 'Configuración' }] : []),
+    ...(isMaster ? [{ id: 'summary', label: 'Resumen' }, { id: 'config', label: 'Config' }] : []),
   ]
 
   // Reservas y Clientes son pantallas completas con su propio scroll; las demás
@@ -130,13 +130,16 @@ export function Concierge({ userId, userRole }: { userId?: string; userRole?: st
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-      <div style={{ padding: isMobile ? '10px 12px 0' : '14px 20px 0', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <Shell size={18} style={{ color: 'var(--accent)' }} />
-          <h1 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>Concierge</h1>
-          <span style={{ color: 'var(--text-tertiary)', fontSize: 11, marginLeft: 4, display: isMobile ? 'none' : 'inline' }}>Reservas · Bot · Clientes</span>
-        </div>
-        <div style={{ maxWidth: isMaster ? 640 : 420, paddingBottom: 10 }}>
+      <div style={{ padding: isMobile ? '8px 12px 0' : '14px 20px 0', flexShrink: 0 }}>
+        {/* En móvil el top bar ya dice "Concierge" — el título aquí solo roba pantalla */}
+        {!isMobile && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <Shell size={18} style={{ color: 'var(--accent)' }} />
+            <h1 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>Concierge</h1>
+            <span style={{ color: 'var(--text-tertiary)', fontSize: 11, marginLeft: 4 }}>Reservas · Bot · Clientes</span>
+          </div>
+        )}
+        <div style={{ maxWidth: isMobile ? undefined : (isMaster ? 640 : 420), paddingBottom: 8 }}>
           <SegmentedControl scrollable value={tab} onChange={setTab} options={tabs} />
         </div>
       </div>
