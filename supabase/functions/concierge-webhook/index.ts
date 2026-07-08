@@ -171,6 +171,7 @@ async function ingestMessage(supabaseAdmin: any, opts: { channel: 'whatsapp' | '
   }
 
   await supabaseAdmin.from('bot_messages').insert({ conversation_id: conversationId, role: 'guest', body })
+  console.log('[webhook] msg entrante', channel, 'conv', conversationId, '→', String(body).slice(0, 60))
 
   const current = conv ?? { status: 'bot', first_replied_at: null, next_bot_reply_at: null }
   const patch: Record<string, unknown> = {

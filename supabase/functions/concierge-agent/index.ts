@@ -135,7 +135,8 @@ Deno.serve(async (req: Request) => {
 // deno-lint-ignore no-explicit-any
 async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: boolean) {
   const { data: conv } = await supabaseAdmin.from('bot_conversations').select('*').eq('id', conversationId).single()
-  if (!conv || conv.status !== 'bot' || conv.is_simulated) return // respeta handoff; el simulador no toca Meta
+  console.log('[agent] turno', conversationId, 'canal', conv?.channel, 'status', conv?.status ?? 'no-encontrada', isFollowup ? '(seguimiento)' : '')
+  if (!conv || conv.status !== 'bot' || conv.is_simulated) { console.log('[agent] skip: status/simulada'); return } // respeta handoff; el simulador no toca Meta
 
   const [{ data: bu }, { data: cfg }, { data: history }, { data: venues }, { data: pay }] = await Promise.all([
     conv.bu_id ? supabaseAdmin.from('business_units').select('id, code, name').eq('id', conv.bu_id).maybeSingle() : { data: null },
@@ -147,7 +148,7 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
 
   const { data: settings } = await supabaseAdmin.from('app_settings').select('key, value').in('key', ['bot_model', 'bot_enabled', 'app_public_url'])
   const settingsMap = Object.fromEntries((settings ?? []).map((s: { key: string; value: string }) => [s.key, s.value]))
-  if (settingsMap.bot_enabled !== 'true') return // kill switch global
+  if (settingsMap.bot_enabled !== 'true') { console.log('[agent] skip: kill switch global apagado'); return }
 
   // La config por canal manda: venue identificado con el canal apagado (o sin
   // configurar) → el bot no atiende; pasa al equipo con aviso al cliente.
@@ -235,6 +236,7 @@ async function sendIfAny(ctx: any, text: string) {
   if (!text) return
   await ctx.supabaseAdmin.from('bot_messages').insert({ conversation_id: ctx.conv.id, role: 'bot', body: text })
   await sendChannelMessage(ctx.conv.channel, ctx.conv.external_id, text)
+  console.log('[agent] respuesta enviada por', ctx.conv.channel, '→', String(text).slice(0, 60))
 }
 
 // deno-lint-ignore no-explicit-any
