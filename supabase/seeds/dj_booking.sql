@@ -1,9 +1,12 @@
 -- ═════════════════════════════════════════════════════════════════════════════
 -- HOG APP · Talento — booking interno de DJs por venue
+-- ⚠ PARCIALMENTE SUPERSEDIDO: la tabla `djs` se unificó en crm_contacts
+--   (contact_type='DJ') — ver unify_dj_directory.sql. NO re-ejecutar este
+--   archivo después de la unificación (recrearía la tabla djs vacía).
+--   dj_bookings sigue vigente, con FK a crm_contacts.
 -- Base de DJs con fee registrado + agenda de tocadas. El Concierge la usa en
 -- dos direcciones: vende la programación a clientes y recluta DJs que
 -- escriben por DM (source='concierge').
--- Ejecutar en el SQL Editor de Supabase. Idempotente.
 -- ═════════════════════════════════════════════════════════════════════════════
 
 -- ─── Directorio de talento ───────────────────────────────────────────────────
