@@ -20,6 +20,7 @@ import { Social } from './screens/Social'
 import { Objectives } from './screens/Objectives'
 import { Reports } from './screens/Reports'
 import { Concierge } from './screens/Concierge'
+import { Casa } from './screens/Casa'
 import { SharedTask } from './screens/SharedTask'
 import { PrivacyNotice } from './screens/PrivacyNotice'
 import { AppLogoBadge } from './components/ui/AppLogo'
@@ -71,7 +72,7 @@ export default function App() {
     landedRef.current = true
     // Team en tablet (host stand) aterriza en Concierge (Reservas); en teléfono, en Social
     const teamLanding = window.innerWidth >= 768 ? 'concierge' : 'social'
-    setActiveView(role === 'MASTER' ? 'dashboard' : role === 'TEAM' ? teamLanding : 'tasks')
+    setActiveView(role === 'MASTER' ? 'dashboard' : role === 'HEART_OF_HOUSE' ? 'casa' : role === 'TEAM' ? teamLanding : 'tasks')
   }, [role])
   const [scoringBU, setScoringBU] = useState<string | null>(null)
   const [buFilter, setBuFilter] = useState('')
@@ -140,7 +141,11 @@ export default function App() {
     ? null // null = no restriction
     : role === 'MARKETING'
       ? new Set(['tasks', 'crm', 'contacts', 'social', 'objectives', 'profile']) // sin hospitalidad
-      : new Set(['tasks', 'crm', 'concierge', 'contacts', 'social', 'objectives', 'profile'])
+      : role === 'HEART_OF_HOUSE'
+        ? new Set(['casa', 'reportar', 'profile']) // piso: una sola herramienta
+        : role === 'TEAM'
+          ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'social', 'objectives', 'profile'])
+          : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives', 'profile'])
 
   function handleNavigate(view: string) {
     if (ALLOWED_VIEWS && !ALLOWED_VIEWS.has(view)) return
@@ -169,6 +174,10 @@ export default function App() {
       case 'reservations': // alias legado (links viejos de Slack/Calendario)
       case 'concierge':
         return role === 'MARKETING' ? null : <Concierge userId={profile?.id} userRole={role} />
+      case 'casa':
+        return <Casa userId={profile?.id} userRole={role} />
+      case 'reportar': // slot de bottom-nav del HoH: La Casa con el reporte abierto
+        return <Casa userId={profile?.id} userRole={role} initialReport />
       case 'social':
         return <Social profile={profile} userId={profile?.id} />
       case 'objectives':

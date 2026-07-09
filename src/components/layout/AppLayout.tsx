@@ -22,6 +22,7 @@ interface Props {
 // sheet shows everything else the role can access.
 const MASTER_BOTTOM = new Set(['dashboard', 'tasks', 'crm', 'social', 'profile'])
 const TEAM_BOTTOM = new Set(['concierge', 'tasks', 'social', 'contacts', 'profile'])
+const HOH_BOTTOM = new Set(['casa', 'reportar', 'profile'])
 
 export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenPalette, bell, userRole }: Props) {
   const isMobile = useIsMobile()
@@ -43,7 +44,7 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenP
   }, [onNavigate])
 
   if (isMobile) {
-    const inBottom = userRole === 'MASTER' ? MASTER_BOTTOM : TEAM_BOTTOM
+    const inBottom = userRole === 'MASTER' ? MASTER_BOTTOM : userRole === 'HEART_OF_HOUSE' ? HOH_BOTTOM : TEAM_BOTTOM
     const moreItems = navItemsForRole(userRole).filter(i => !inBottom.has(i.id))
 
     return (
