@@ -52,7 +52,22 @@ async function notifySlackFromEdge(supabaseAdmin: any, text: string) {
 }
 
 const ANTHROPIC_VERSION = '2023-06-01'
-const MAX_TOOL_ROUNDS = 6
+const MAX_TOOL_ROUNDS = 8
+
+// El modelo NO debe calcular fechas: recibe una tabla ya resuelta en hora de
+// México ("el sábado" → la fila marcada sábado). Un timestamp UTC pelón ya
+// produjo un "sábado 12" que en realidad era domingo.
+function fechaContexto(): string {
+  const tz = 'America/Mexico_City'
+  const largo = new Intl.DateTimeFormat('es-MX', { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const iso = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+  const filas: string[] = []
+  for (let i = 0; i < 8; i++) {
+    const d = new Date(Date.now() + i * 86400000)
+    filas.push(`${i === 0 ? 'HOY → ' : ''}${largo.format(d)} = ${iso.format(d)}`)
+  }
+  return filas.join(' | ')
+}
 
 // El venue no maneja turnos fijos: acepta "20:30", "8:30 pm", "8pm"… y lo
 // normaliza a HH:MM 24h (zero-padded, para que ordene bien como texto).
@@ -271,15 +286,27 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
     for (const block of data.content) {
       if (block.type !== 'tool_use') continue
       const result = await executeTool(ctx, block.name, block.input)
+      console.log('[agent] tool', block.name, JSON.stringify(block.input).slice(0, 180), '→', JSON.stringify(result).slice(0, 180))
       if (block.name === 'escalar_a_humano') { finalText = finalText || result.customerNote || ''; await sendIfAny(ctx, finalText); return }
       toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) })
     }
     messages.push({ role: 'user', content: toolResults })
   }
 
-  // Nunca dejar al cliente sin respuesta (regla del producto): si se agotaron
-  // los turnos de herramientas sin texto final, manda un acuse breve.
-  if (!finalText) finalText = 'Dame un segundo, ya estoy revisando eso 🙌'
+  // Nunca dejar al cliente sin respuesta (regla del producto). Si se agotaron
+  // las rondas de herramientas sin texto final, algo se atoró — un "dame un
+  // segundo" sin nadie detrás es perder la venta en silencio: se escala a
+  // humano para que el equipo lo cache en la Bandeja.
+  if (!finalText) {
+    finalText = 'Déjame lo checo con el equipo y te confirmo en un momento 🙌'
+    console.error('[agent] rondas agotadas sin respuesta — escalando', conversationId)
+    await supabaseAdmin.from('bot_conversations').update({
+      status: 'needs_human', escalation_reason: 'El agente agotó sus rondas de herramientas sin poder responder — revisar logs',
+      next_bot_reply_at: null, next_followup_at: null,
+    }).eq('id', conversationId)
+    ctx.conv.status = 'needs_human'
+    await notifySlackFromEdge(supabaseAdmin, `🙋 *Concierge atorado — atender en Bandeja* — ${bu?.name ?? 'venue sin identificar'}\nEl agente no logró completar la acción tras varias rondas de herramientas.`)
+  }
   await sendIfAny(ctx, finalText)
 
   if (ctx.conv.status === 'bot') {
@@ -311,6 +338,8 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   lines.push('Eres el Concierge de HOG, un holding de venues de hospitalidad en México. Atiendes por ' + (ctx.conv.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram') + '.')
   lines.push('Saludo: abre SIEMPRE tu primera respuesta de la conversación con un saludo breve y educado — una sola línea que salude y se ponga a ayudar de inmediato. Sencillo, cálido y funcional; nada de párrafos de bienvenida ni formalidades acartonadas. En mensajes posteriores ya no saludes de nuevo.')
   lines.push('Regla dura, sin excepción: cada mensaje del cliente debe AVANZAR su reserva. Nunca le pidas un dato que ya dio. Nunca lo hagas cambiar de canal sin llevar su contexto. Sé breve, cálido, en español de México, sin emojis excesivos.')
+  lines.push('FORMATO: escribes en un chat de WhatsApp/Instagram, NO en markdown. Prohibido usar **dobles asteriscos**, títulos, o listas con guiones — no se renderizan y se ven rotos. Si quieres resaltar algo en WhatsApp usa *asteriscos simples* en una palabra o frase corta, con moderación. Escribe SIEMPRE 100% en español: ni un "Wait", "Ok so" ni ningún anglicismo de relleno.')
+  lines.push('NO RE-CONFIRMES: propón los datos completos UNA sola vez ("te apunto el sábado 11 a las 20:30, 8 personas, ¿va?"). Si el cliente dice que sí, o repite el MISMO dato que tú propusiste (ej. tú dijiste 20:30 y él contesta "está bien 8:30"), eso ES la confirmación — usa crear_reserva de inmediato, no vuelvas a preguntar lo mismo. Volver a confirmar lo ya confirmado mata la venta. Solo aclara si el cliente dio dos datos CONTRADICTORIOS (ej. "8 personas" y luego "10"): pregunta cuál, una vez, dentro de tu misma propuesta.')
   lines.push('El funnel es: capturar nombre, teléfono, fecha, hora de llegada y número de personas → confirmar. En cuanto tengas nombre y teléfono, usa crear_o_actualizar_cliente. En cuanto tengas fecha/hora/pax confirmados por el cliente, usa crear_reserva.')
   lines.push('IMPORTANTE — el venue NO tiene horarios fijos ni turnos: la hora de llegada la decide el cliente libremente, y se queda el tiempo que quiera (sin salida forzada). Nunca le ofrezcas una lista de horarios para elegir — solo pregúntale a qué hora le gustaría llegar. Usa buscar_disponibilidad únicamente para saber si esa noche el venue está muy lleno y, si es el caso, avisarle con anticipación.')
   lines.push('REGLA DE ORO — no mientas nunca sobre el estado de la reserva: solo puedes decirle al cliente que su reserva quedó lista si crear_reserva devolvió ok:true EN ESTA conversación. Si una herramienta devuelve un error, corrige el dato y reintenta; si no lo puedes resolver, dile con honestidad que hubo un detalle y usa escalar_a_humano. Confirmar en falso destruye la confianza del cliente y del equipo.')
@@ -347,7 +376,7 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   }
 
   if (ctx.conv.pending_fields?.length) lines.push(`Datos que aún faltan por confirmar: ${ctx.conv.pending_fields.join(', ')}.`)
-  lines.push(`Fecha y hora actuales: ${new Date().toISOString()}.`)
+  lines.push(`FECHAS (hora de México, ya calculadas — úsalas EXACTAMENTE así y NUNCA calcules tú una fecha): ${fechaContexto()}. Si el cliente dice "el sábado", es la fila marcada como sábado en esta tabla; menciona siempre día Y número al confirmar ("el sábado 11").`)
   if (isFollowup) lines.push('Este turno es un ÚNICO mensaje de seguimiento porque el cliente no respondió — que sea breve, sin presionar, recordando amablemente qué falta para cerrar su reserva.')
   lines.push('Si algo se sale de reservas (quejas serias, pagos, proveedores, prensa) o el cliente pide hablar con una persona, usa escalar_a_humano de inmediato.')
 
