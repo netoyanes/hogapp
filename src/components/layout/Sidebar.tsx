@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Contact2, Sparkles, Target, Command, Shell, ClipboardCheck } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Sparkles, Target, Command, Shell, ClipboardCheck } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
 import { STR } from '../../lib/strings'
@@ -20,7 +20,6 @@ export const NAV_ITEMS = [
   { id: 'crm',        label: STR.nav.crm,        icon: Handshake,       shortcut: '3' },
   { id: 'concierge',  label: STR.nav.concierge,  icon: Shell },
   { id: 'casa',       label: STR.nav.casa,       icon: ClipboardCheck },
-  { id: 'contacts',   label: STR.nav.directory,  icon: Contact2,        shortcut: '4' },
   { id: 'social',     label: STR.nav.social,     icon: Sparkles,        shortcut: '5' },
   { id: 'objectives', label: STR.nav.objectives, icon: Target,          shortcut: '6' },
   { id: 'calendar',   label: STR.nav.calendar,   icon: CalendarDays,    shortcut: '7' },
@@ -35,7 +34,7 @@ export const NAV_ITEMS = [
 ]
 
 // Views every non-MASTER role can navigate to (mirrors ALLOWED_VIEWS in App)
-export const NON_MASTER_VIEWS = ['tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives', 'profile']
+export const NON_MASTER_VIEWS = ['tasks', 'crm', 'concierge', 'casa', 'social', 'objectives', 'profile']
 // La Casa (operación de piso): personal HoH la vive, Ops la administra,
 // C-Level/Master supervisan. Marketing y Team no la ven.
 const CASA_ROLES = new Set(['MASTER', 'C_LEVEL', 'OPS_MANAGER', 'HEART_OF_HOUSE'])
@@ -47,8 +46,6 @@ export function navItemsForRole(userRole?: string) {
   }
   return NAV_ITEMS.filter(item => {
     if (!TENANT.enabledViews.includes(item.id)) return false
-    // Hospitalidad (reservas/clientes/bot) sin acceso para Marketing
-    if (item.id === 'concierge' && userRole === 'MARKETING') return false
     if (item.id === 'casa' && !CASA_ROLES.has(userRole ?? '')) return false
     if (userRole === 'MASTER') return true
     return NON_MASTER_VIEWS.includes(item.id)

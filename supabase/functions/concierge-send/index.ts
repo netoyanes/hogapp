@@ -53,7 +53,7 @@ Deno.serve(async (req: Request) => {
 
     const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const { data: profile } = await supabaseAdmin.from('profiles').select('role, full_name').eq('id', user.id).single()
-    if (!profile || !['MASTER', 'OPS_MANAGER', 'TEAM'].includes(profile.role)) {
+    if (!profile || !['MASTER', 'OPS_MANAGER', 'TEAM', 'MARKETING'].includes(profile.role)) {
       return new Response(JSON.stringify({ error: 'Sin permiso para responder conversaciones' }), { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' } })
     }
 

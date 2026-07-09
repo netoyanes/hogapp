@@ -21,7 +21,7 @@ interface Props {
 // Views that already live in the mobile bottom nav (per role) — the "Más"
 // sheet shows everything else the role can access.
 const MASTER_BOTTOM = new Set(['dashboard', 'tasks', 'crm', 'social', 'profile'])
-const TEAM_BOTTOM = new Set(['concierge', 'tasks', 'social', 'contacts', 'profile'])
+const TEAM_BOTTOM = new Set(['concierge', 'tasks', 'social', 'crm', 'profile'])
 const HOH_BOTTOM = new Set(['casa', 'reportar', 'profile'])
 
 export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenPalette, bell, userRole }: Props) {
@@ -33,7 +33,7 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenP
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       const views: Record<string, string> = {
-        '1': 'dashboard', '2': 'tasks', '3': 'crm', '4': 'contacts',
+        '1': 'dashboard', '2': 'tasks', '3': 'crm', '4': 'crm',
         '5': 'social', '6': 'objectives', '7': 'calendar', '8': 'content',
         '9': 'revenue', '0': 'upload',
       }

@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { BusinessUnit } from '../types'
-import { Plus, DollarSign, TrendingUp, Target, Briefcase } from 'lucide-react'
+import { Plus, DollarSign, TrendingUp, Target, Briefcase, Music, AtSign, Phone, Link2, Star } from 'lucide-react'
 import { DealDetailPanel } from '../components/ui/DealDetailPanel'
-import { KPITile, SegmentedControl, BUChip } from '../components/v2'
+import { KPITile, SegmentedControl, BUChip, StatusBadgeV2, EmptyStateV2 } from '../components/v2'
+import { Contacts } from './Contacts'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { notifySlack, dealCreatedMessage, dealLink } from '../hooks/useSlack'
@@ -68,7 +69,31 @@ interface Props {
   userId?: string
 }
 
+// ── COMERCIAL — pipeline + directorio B2B + talento en un solo lugar.
+//    El directorio solo lo usa el equipo comercial; los clientes consumidores
+//    viven en Concierge → Clientes. Los DJs se administran en Concierge →
+//    Talento y aquí se consultan.
 export function CRM({ userRole, userId }: Props) {
+  const [section, setSection] = useState('pipeline')
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{ padding: '10px 16px 0', flexShrink: 0 }}>
+        <SegmentedControl scrollable value={section} onChange={setSection} options={[
+          { id: 'pipeline',   label: 'Pipeline' },
+          { id: 'directorio', label: 'Directorio' },
+          { id: 'djs',        label: 'DJs' },
+        ]} />
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {section === 'pipeline' && <Pipeline userRole={userRole} userId={userId} />}
+        {section === 'directorio' && <Contacts userRole={userRole} userId={userId} />}
+        {section === 'djs' && <DJDirectory userRole={userRole} />}
+      </div>
+    </div>
+  )
+}
+
+function Pipeline({ userRole, userId }: Props) {
   const isMobile = useIsMobile()
   const [mobileStage, setMobileStage] = useState<DealStage>('LEAD')
   const [deals, setDeals] = useState<CRMDeal[]>([])
@@ -484,4 +509,104 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: '0.05em',
   marginBottom: '4px',
   fontFamily: 'var(--font-ui)',
+}
+
+// ── DJs — consulta del talento registrado (se administra en Concierge → Talento).
+//    El fee es dato sensible: Marketing lo ve oculto.
+interface DJRow {
+  id: string; stage_name: string; real_name: string | null; genres: string[]
+  city: string | null; instagram: string | null; links: string | null; phone: string | null
+  base_fee: number | null; rating: number | null; status: string; source: string
+}
+
+function DJDirectory({ userRole }: { userRole?: string }) {
+  const isMobile = useIsMobile()
+  const [djs, setDjs] = useState<DJRow[]>([])
+  const [q, setQ] = useState('')
+  const showFee = userRole === 'MASTER' || userRole === 'OPS_MANAGER' || userRole === 'C_LEVEL'
+
+  useEffect(() => {
+    void supabase.from('djs')
+      .select('id, stage_name, real_name, genres, city, instagram, links, phone, base_fee, rating, status, source')
+      .order('stage_name')
+      .then(({ data }) => setDjs(data ?? []))
+  }, [])
+
+  const term = q.trim().toLowerCase()
+  const filtered = djs.filter(d =>
+    !term ||
+    d.stage_name.toLowerCase().includes(term) ||
+    (d.city ?? '').toLowerCase().includes(term) ||
+    d.genres.some(g => g.toLowerCase().includes(term)))
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nombre, género o ciudad…"
+          style={{
+            flex: 1, minWidth: '200px', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)', padding: '10px 12px', color: 'var(--text-primary)', fontSize: '14px', minHeight: '44px',
+          }}
+        />
+        <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+          {filtered.length} DJs · se administran en Concierge → Talento
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
+        {filtered.map(d => (
+          <div key={d.id} style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)',
+            padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px', opacity: d.status === 'vetoed' ? 0.55 : 1,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Music size={16} style={{ color: 'var(--accent)' }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{d.stage_name}</div>
+                {d.real_name && <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{d.real_name}</div>}
+              </div>
+              {d.rating != null && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
+                  <Star size={11} fill="currentColor" /> {d.rating}
+                </span>
+              )}
+              {d.status === 'vetoed' && <StatusBadgeV2 tone="risk" label="Vetado" />}
+              {d.source === 'concierge' && <StatusBadgeV2 tone="accent" label="Vía Concierge" />}
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {d.genres.length > 0 && <span>{d.genres.join(' · ')}</span>}
+              {d.city && <span style={{ color: 'var(--text-tertiary)' }}>{d.city}</span>}
+              {showFee && d.base_fee != null && (
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
+                  ${d.base_fee.toLocaleString('es-MX')} MXN
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {d.instagram && (
+                <a href={`https://instagram.com/${d.instagram.replace('@', '')}`} target="_blank" rel="noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-secondary)', textDecoration: 'none' }}>
+                  <AtSign size={12} /> {d.instagram}
+                </a>
+              )}
+              {d.phone && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Phone size={12} /> {d.phone}</span>
+              )}
+              {d.links && (
+                <a href={d.links.startsWith('http') ? d.links : `https://${d.links}`} target="_blank" rel="noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-secondary)', textDecoration: 'none' }}>
+                  <Link2 size={12} /> material
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {filtered.length === 0 && (
+        <EmptyStateV2 icon={<Music size={28} />} title={djs.length === 0 ? 'Aún no hay DJs registrados — se dan de alta en Concierge → Talento.' : 'Sin resultados con esa búsqueda.'} />
+      )}
+    </div>
+  )
 }
