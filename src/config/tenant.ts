@@ -17,7 +17,7 @@ export const TENANT: TenantConfig = {
   appSubtitle: 'Command Center',
   logo: { type: 'symbol' },
   enabledViews: [
-    'dashboard', 'tasks', 'crm', 'concierge', 'contacts', 'social', 'objectives', 'calendar', 'content',
+    'dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives', 'calendar', 'content',
     'revenue', 'reports', 'activity', 'upload', 'templates',
     'invite', 'profile',
   ],
@@ -34,6 +34,7 @@ export const TENANT: TenantConfig = {
     upload:    'Carga CSV',
     templates: 'Plantillas',
     concierge: 'Concierge',
+    casa:      'La Casa',
     invite:    'Usuarios',
     profile:   'Perfil',
     social:    'Social',

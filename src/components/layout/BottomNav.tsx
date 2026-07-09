@@ -1,4 +1,4 @@
-import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, Contact2, Sparkles } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, Contact2, Sparkles, ClipboardCheck, Camera } from 'lucide-react'
 import { STR } from '../../lib/strings'
 
 interface Props {
@@ -25,9 +25,18 @@ const TEAM_SLOTS = [
   { id: 'profile',  label: STR.nav.profile,   icon: UserCircle },
 ]
 
+// Heart of House (piso): una sola herramienta, imposible perderse —
+// Mi turno · Reportar · Perfil.
+const HOH_SLOTS = [
+  { id: 'casa',     label: 'Mi turno',  icon: ClipboardCheck },
+  { id: 'reportar', label: 'Reportar',  icon: Camera },
+  { id: 'profile',  label: STR.nav.profile, icon: UserCircle },
+]
+
 export function BottomNav({ activeView, onNavigate, userRole }: Props) {
   // Marketing no tiene acceso a Concierge (hospitalidad) — su slot se omite
   const items = userRole === 'MASTER' ? MASTER_SLOTS
+    : userRole === 'HEART_OF_HOUSE' ? HOH_SLOTS
     : userRole === 'MARKETING' ? TEAM_SLOTS.filter(s => s.id !== 'concierge')
     : TEAM_SLOTS
 

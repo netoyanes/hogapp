@@ -4,29 +4,32 @@ import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import { BUChip } from '../components/v2'
 import type { UserRole } from '../types'
-type InviteRole = 'C_LEVEL' | 'OPS_MANAGER' | 'MARKETING' | 'TEAM'
+type InviteRole = 'C_LEVEL' | 'OPS_MANAGER' | 'MARKETING' | 'TEAM' | 'HEART_OF_HOUSE'
 
 const INVITE_ROLE_OPTIONS: { value: InviteRole; label: string; description: string }[] = [
-  { value: 'C_LEVEL',     label: 'C-Level',      description: 'Full marketing dashboard + tasks' },
-  { value: 'OPS_MANAGER', label: 'Ops Manager',  description: 'Assigned BUs + task management' },
-  { value: 'MARKETING',   label: 'Marketing',    description: 'Content and campaign access' },
-  { value: 'TEAM',        label: 'Team',         description: 'Assigned tasks only' },
+  { value: 'C_LEVEL',        label: 'C-Level',        description: 'Full marketing dashboard + tasks' },
+  { value: 'OPS_MANAGER',    label: 'Ops Manager',    description: 'Assigned BUs + task management' },
+  { value: 'MARKETING',      label: 'Marketing',      description: 'Content and campaign access' },
+  { value: 'TEAM',           label: 'Team',           description: 'Assigned tasks only' },
+  { value: 'HEART_OF_HOUSE', label: 'Heart of House', description: 'Personal de piso: La Casa (checklists e incidencias) de sus venues' },
 ]
 
 const ALL_ROLES: { value: UserRole; label: string }[] = [
-  { value: 'MASTER',      label: 'Master' },
-  { value: 'C_LEVEL',     label: 'C-Level' },
-  { value: 'OPS_MANAGER', label: 'Ops Manager' },
-  { value: 'MARKETING',   label: 'Marketing' },
-  { value: 'TEAM',        label: 'Team' },
+  { value: 'MASTER',         label: 'Master' },
+  { value: 'C_LEVEL',        label: 'C-Level' },
+  { value: 'OPS_MANAGER',    label: 'Ops Manager' },
+  { value: 'MARKETING',      label: 'Marketing' },
+  { value: 'TEAM',           label: 'Team' },
+  { value: 'HEART_OF_HOUSE', label: 'Heart of House' },
 ]
 
 const ROLE_COLORS: Record<string, string> = {
-  MASTER:      '#FF6B35',
-  C_LEVEL:     '#22C55E',
-  OPS_MANAGER: '#EAB308',
-  MARKETING:   '#3B82F6',
-  TEAM:        '#888888',
+  MASTER:         '#FF6B35',
+  C_LEVEL:        '#22C55E',
+  OPS_MANAGER:    '#EAB308',
+  MARKETING:      '#3B82F6',
+  TEAM:           '#888888',
+  HEART_OF_HOUSE: '#A78BFA',
 }
 
 interface Invitation {

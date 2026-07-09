@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.25.0"
+export const APP_VERSION = "2.26.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.26.0",
+    date: "2026-07-09",
+    type: "MINOR",
+    changes: [
+      "LA CASA (Fase A) — la app operativa de piso, dentro de HOG APP",
+      "Rol nuevo Heart of House: el personal de piso ve solo Mi turno · Reportar · Perfil",
+      "Puestas a punto: checklists por venue con foto obligatoria por item, envío a revisión y aprobación del Ops Manager",
+      "Reportar problema con foto — cada incidencia llega a Ops y se convierte en tarea de mantenimiento con un tap",
+      "Inventario de mobiliario y hardware: ficha con foto, estado y costo; bitácora de cambios y traslados",
+      "Ops Manager administra plantillas, revisa turnos y maneja inventario; C-Level entra en modo lectura",
+    ]
+  },
   {
     version: "2.25.0",
     date: "2026-07-08",

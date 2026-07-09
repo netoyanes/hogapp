@@ -42,6 +42,7 @@ export const STR = {
     invite: 'Usuarios',
     reports: 'Reportes',
     concierge: 'Concierge',
+    casa: 'La Casa',
     profile: 'Perfil',
     more: 'Más',
   },
