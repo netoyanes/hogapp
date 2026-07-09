@@ -108,8 +108,16 @@ const TOOLS = [
   },
   {
     name: 'buscar_disponibilidad',
-    description: 'Consulta si el venue tiene cupo para una fecha (el venue NO maneja horarios fijos — el cliente llega a la hora que quiera y se queda el tiempo que guste). Úsala antes de confirmar una fecha muy solicitada, para avisar si está por llenarse.',
-    input_schema: { type: 'object', properties: { fecha: { type: 'string', description: 'YYYY-MM-DD' } }, required: ['fecha'] },
+    description: 'Consulta la disponibilidad del venue para una fecha. El sistema responde según el tipo de venue: cupo de la noche (restaurantes/clubs), horarios de cita disponibles (wellness), eventos con lugares (art house), o unidades libres en un rango (hospedaje — pasa también fecha_fin).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fecha: { type: 'string', description: 'YYYY-MM-DD (en hospedaje: check-in)' },
+        servicio: { type: 'string', description: 'Solo wellness: nombre del servicio si el cliente ya eligió uno' },
+        fecha_fin: { type: 'string', description: 'Solo hospedaje: YYYY-MM-DD del check-out' },
+      },
+      required: ['fecha'],
+    },
   },
   {
     name: 'crear_o_actualizar_cliente',
@@ -126,16 +134,42 @@ const TOOLS = [
   },
   {
     name: 'crear_reserva',
-    description: 'Crea la reservación. Requiere que ya exista el cliente (crear_o_actualizar_cliente) y el venue identificado. Úsala solo cuando tengas fecha, hora de llegada y número de personas confirmados por el cliente.',
+    description: 'Crea la reservación. Requiere que ya exista el cliente (crear_o_actualizar_cliente) y el venue identificado. Según el tipo de venue pasa además: servicio+horario de cita (wellness), evento (art house), o unidad+fecha_fin (hospedaje). Úsala solo con los datos confirmados por el cliente.',
     input_schema: {
       type: 'object',
       properties: {
-        fecha: { type: 'string', description: 'YYYY-MM-DD' },
-        horario: { type: 'string', description: 'Hora de llegada que acordaste con el cliente, en cualquier formato claro (ej. "20:30", "8:30 pm", "9pm") — el sistema la normaliza.' },
+        fecha: { type: 'string', description: 'YYYY-MM-DD (en hospedaje: check-in)' },
+        horario: { type: 'string', description: 'Hora de llegada o de la cita, en cualquier formato claro (ej. "20:30", "8:30 pm") — el sistema la normaliza. En eventos y hospedaje puedes omitirla.' },
         pax: { type: 'integer' },
         notas: { type: 'string' },
+        servicio: { type: 'string', description: 'Solo wellness: nombre del servicio que reserva' },
+        evento: { type: 'string', description: 'Solo art house: nombre del evento al que confirma lugares' },
+        unidad: { type: 'string', description: 'Solo hospedaje: nombre de la unidad elegida (ej. "Pod 1")' },
+        fecha_fin: { type: 'string', description: 'Solo hospedaje: YYYY-MM-DD del check-out' },
       },
-      required: ['fecha', 'horario', 'pax'],
+      required: ['fecha', 'pax'],
+    },
+  },
+  {
+    name: 'listar_servicios',
+    description: 'Lista los servicios del venue (wellness): nombre, duración, precio y días/horarios en que se ofrecen. Úsala cuando el cliente pregunte qué hay o no sepa qué reservar.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'listar_eventos',
+    description: 'Lista la cartelera de eventos anunciados del venue (art house), con fecha, hora y lugares disponibles. Omite fecha para ver los próximos.',
+    input_schema: { type: 'object', properties: { fecha: { type: 'string', description: 'YYYY-MM-DD; omite para ver próximos 30 días' } } },
+  },
+  {
+    name: 'listar_unidades',
+    description: 'Lista las unidades del venue (hospedaje) libres en un rango de fechas, con capacidad y tarifa por noche — y la cotización del rango. Requiere check-in y check-out.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fecha: { type: 'string', description: 'YYYY-MM-DD del check-in' },
+        fecha_fin: { type: 'string', description: 'YYYY-MM-DD del check-out' },
+      },
+      required: ['fecha', 'fecha_fin'],
     },
   },
   {
@@ -219,12 +253,13 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
   console.log('[agent] turno', conversationId, 'canal', conv?.channel, 'status', conv?.status ?? 'no-encontrada', isFollowup ? '(seguimiento)' : '')
   if (!conv || conv.status !== 'bot' || conv.is_simulated) { console.log('[agent] skip: status/simulada'); return } // respeta handoff; el simulador no toca Meta
 
-  const [{ data: bu }, { data: cfg }, { data: history }, { data: venues }, { data: pay }] = await Promise.all([
-    conv.bu_id ? supabaseAdmin.from('business_units').select('id, code, name').eq('id', conv.bu_id).maybeSingle() : { data: null },
+  const [{ data: bu }, { data: cfg }, { data: history }, { data: venues }, { data: pay }, { data: botInfo }] = await Promise.all([
+    conv.bu_id ? supabaseAdmin.from('business_units').select('id, code, name, venue_type, inventory_type, reservation_policy').eq('id', conv.bu_id).maybeSingle() : { data: null },
     conv.bu_id ? supabaseAdmin.from('bot_venue_config').select('*').eq('bu_id', conv.bu_id).eq('channel', conv.channel).maybeSingle() : { data: null },
     supabaseAdmin.from('bot_messages').select('role, body').eq('conversation_id', conversationId).order('created_at').limit(30),
     supabaseAdmin.from('bot_venue_config').select('bu_id, external_account, business_units(code, name)').eq('channel', conv.channel).eq('enabled', true),
     conv.bu_id ? supabaseAdmin.from('venue_payment_config').select('*').eq('bu_id', conv.bu_id).maybeSingle() : { data: null },
+    conv.bu_id ? supabaseAdmin.from('venue_bot_info').select('faq').eq('bu_id', conv.bu_id).maybeSingle() : { data: null },
   ])
 
   const { data: settings } = await supabaseAdmin.from('app_settings').select('key, value').in('key', ['bot_model', 'bot_enabled', 'app_public_url'])
@@ -248,7 +283,7 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
   const model = settingsMap.bot_model || 'claude-haiku-4-5-20251001'
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
 
-  const ctx = { supabaseAdmin, conv: { ...conv }, bu, cfg, pay }
+  const ctx = { supabaseAdmin, conv: { ...conv }, bu, cfg, pay, faq: botInfo?.faq ?? null }
   const system = buildSystemPrompt(ctx, venues ?? [], isFollowup, settingsMap.app_public_url, pay)
   // Mensajes consecutivos del mismo rol se fusionan: así el batching de 45s
   // (varios mensajes del cliente antes del turno) llega como un solo bloque,
@@ -287,7 +322,7 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
       if (block.type !== 'tool_use') continue
       const result = await executeTool(ctx, block.name, block.input)
       console.log('[agent] tool', block.name, JSON.stringify(block.input).slice(0, 180), '→', JSON.stringify(result).slice(0, 180))
-      if (block.name === 'escalar_a_humano') { finalText = finalText || result.customerNote || ''; await sendIfAny(ctx, finalText); return }
+      if (block.name === 'escalar_a_humano') { finalText = finalText || String(result.customerNote ?? ''); await sendIfAny(ctx, finalText); return }
       toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) })
     }
     messages.push({ role: 'user', content: toolResults })
@@ -340,8 +375,29 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   lines.push('Regla dura, sin excepción: cada mensaje del cliente debe AVANZAR su reserva. Nunca le pidas un dato que ya dio. Nunca lo hagas cambiar de canal sin llevar su contexto. Sé breve, cálido, en español de México, sin emojis excesivos.')
   lines.push('FORMATO: escribes en un chat de WhatsApp/Instagram, NO en markdown. Prohibido usar **dobles asteriscos**, títulos, o listas con guiones — no se renderizan y se ven rotos. Si quieres resaltar algo en WhatsApp usa *asteriscos simples* en una palabra o frase corta, con moderación. Escribe SIEMPRE 100% en español: ni un "Wait", "Ok so" ni ningún anglicismo de relleno.')
   lines.push('NO RE-CONFIRMES: propón los datos completos UNA sola vez ("te apunto el sábado 11 a las 20:30, 8 personas, ¿va?"). Si el cliente dice que sí, o repite el MISMO dato que tú propusiste (ej. tú dijiste 20:30 y él contesta "está bien 8:30"), eso ES la confirmación — usa crear_reserva de inmediato, no vuelvas a preguntar lo mismo. Volver a confirmar lo ya confirmado mata la venta. Solo aclara si el cliente dio dos datos CONTRADICTORIOS (ej. "8 personas" y luego "10"): pregunta cuál, una vez, dentro de tu misma propuesta.')
-  lines.push('El funnel es: capturar nombre, teléfono, fecha, hora de llegada y número de personas → confirmar. En cuanto tengas nombre y teléfono, usa crear_o_actualizar_cliente. En cuanto tengas fecha/hora/pax confirmados por el cliente, usa crear_reserva.')
-  lines.push('IMPORTANTE — el venue NO tiene horarios fijos ni turnos: la hora de llegada la decide el cliente libremente, y se queda el tiempo que quiera (sin salida forzada). Nunca le ofrezcas una lista de horarios para elegir — solo pregúntale a qué hora le gustaría llegar. Usa buscar_disponibilidad únicamente para saber si esa noche el venue está muy lleno y, si es el caso, avisarle con anticipación.')
+  // ── MÓDULO POR TIPO DE VENUE — el funnel y el modelo de inventario cambian
+  //    por tipo; las reglas duras de arriba y abajo aplican a todos.
+  const vt = ctx.bu?.venue_type ?? 'fnb'
+  const policy = ctx.bu?.reservation_policy ?? {}
+  if (vt === 'wellness') {
+    lines.push('El funnel es: servicio → fecha → horario disponible → número de personas → nombre y teléfono → confirmar. Usa listar_servicios si el cliente no sabe qué hay; usa buscar_disponibilidad para ver los horarios REALES de un día antes de ofrecer cualquiera. En cuanto tengas nombre y teléfono, usa crear_o_actualizar_cliente; con servicio/fecha/horario/pax confirmados, usa crear_reserva (pasa el servicio y el horario exactos).')
+    lines.push('IMPORTANTE — este venue trabaja por CITAS con horarios fijos: SIEMPRE ofrece horarios concretos que buscar_disponibilidad te devolvió ("tengo 9:00, 10:30 o 12:00"), NUNCA digas "llega cuando quieras" ni inventes horarios. Si el horario que pide está lleno, ofrece los que sí tienen lugar.')
+    if (policy.cancel_window_hours) lines.push(`CAMBIOS Y CANCELACIONES: se aceptan hasta ${policy.cancel_window_hours} horas antes de la cita. Dentro de esa ventana NO prometas el cambio ni la cancelación: explica la política con amabilidad y usa escalar_a_humano para que el equipo decida.`)
+  } else if (vt === 'art_house') {
+    lines.push('El funnel es: evento (o fecha → cartelera del día) → número de personas → nombre y teléfono → confirmar lugares. Usa listar_eventos para la cartelera; buscar_disponibilidad te dice los lugares libres. En cuanto tengas nombre y teléfono, usa crear_o_actualizar_cliente; con el evento y pax confirmados, usa crear_reserva (pasa el nombre del evento).')
+    lines.push('IMPORTANTE — este venue funciona por EVENTOS con cupo: solo ofrece eventos ANUNCIADOS que las herramientas te devuelvan. Si no hay cartelera para esa fecha, dilo con honestidad y ofrece avisarle cuando se anuncie — NO inventes eventos, artistas ni fechas.')
+    lines.push('EVENTO LLENO: si el evento está agotado o no caben todos, ofrece otro evento de la cartelera; si insiste en ese, anótalo en lista de espera con notificar_slack ("LISTA DE ESPERA EVENTO: nombre, pax, evento, teléfono") y explícale que el equipo le avisa si se libera lugar.')
+  } else if (vt === 'boutique_hospitality') {
+    lines.push('El funnel es: fecha de llegada (check-in) → fecha de salida (check-out) → número de personas → tipo de unidad → nombre y teléfono → reservar. Usa listar_unidades para ver qué unidades hay libres en ese rango y sus tarifas. En cuanto tengas nombre y teléfono, usa crear_o_actualizar_cliente; con unidad y fechas confirmadas, usa crear_reserva (pasa unidad, fecha y fecha_fin).')
+    lines.push('IMPORTANTE — este venue es HOSPEDAJE: COTIZA SIEMPRE antes de reservar — noches × tarifa de la unidad, y di el total claro en MXN. Comparte las políticas del lugar (horas de check-in/out, condiciones) cuando sean relevantes.')
+    lines.push('Para ASEGURAR la estancia se usa el flujo de apartado (datos de depósito + comprobante por este chat + validación del equipo) — nunca digas que la estancia está asegurada sin ese flujo.')
+  } else {
+    // fnb y dance_club — el modelo original de Bruma, sin cambios
+    lines.push('El funnel es: capturar nombre, teléfono, fecha, hora de llegada y número de personas → confirmar. En cuanto tengas nombre y teléfono, usa crear_o_actualizar_cliente. En cuanto tengas fecha/hora/pax confirmados por el cliente, usa crear_reserva.')
+    lines.push('IMPORTANTE — el venue NO tiene horarios fijos ni turnos: la hora de llegada la decide el cliente libremente, y se queda el tiempo que quiera (sin salida forzada). Nunca le ofrezcas una lista de horarios para elegir — solo pregúntale a qué hora le gustaría llegar. Usa buscar_disponibilidad únicamente para saber si esa noche el venue está muy lleno y, si es el caso, avisarle con anticipación.')
+    if (vt === 'dance_club') lines.push('Este venue es un CLUB: la programación de DJs es tu mejor argumento de venta — consúltala con programacion_venue y úsala para cerrar la reserva en el mismo mensaje.')
+  }
+  if (policy && Object.keys(policy).length && policy.notes) lines.push(`Notas de política del venue: ${policy.notes}`)
   lines.push('REGLA DE ORO — no mientas nunca sobre el estado de la reserva: solo puedes decirle al cliente que su reserva quedó lista si crear_reserva devolvió ok:true EN ESTA conversación. Si una herramienta devuelve un error, corrige el dato y reintenta; si no lo puedes resolver, dile con honestidad que hubo un detalle y usa escalar_a_humano. Confirmar en falso destruye la confianza del cliente y del equipo.')
   lines.push('PRIORIZA LA VENTA: registra y usa TODO lo que el cliente ya dijo (si ya mencionó cuántas personas o la ocasión, no se lo vuelvas a preguntar — dalo por bueno y anótalo). Pide solo lo que falta, de preferencia una cosa a la vez, y avanza siempre hacia el cierre: datos → fecha → horario → reserva. Si un dato viene mal, corrige SOLO ese dato y en el mismo mensaje sigue con lo demás (ej. "oye, tu número parece incompleto, ¿me lo confirmas? y mientras, ¿qué fecha quieres?"). Nunca dejes la conversación en pausa esperando: siempre cierra tu mensaje con la siguiente pregunta concreta.')
   lines.push('Teléfonos: valida a ojo — un celular mexicano son 10 dígitos (o internacional con +). Si lo que dio el cliente tiene menos/más dígitos o símbolos raros, NO lo registres: pídele que lo confirme, con buena onda. El sistema también lo valida por si acaso.')
@@ -352,9 +408,11 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   lines.push('EN CAMINO / RETRASOS: si el cliente avisa que va en camino, que llega tarde, o pide un detalle operativo de su reserva ya hecha, usa agregar_nota_reserva — el equipo lo ve al instante. Confírmale tranquilo: "le aviso al equipo, tu mesa te espera".')
   lines.push('CUMPLEAÑOS: si el cliente menciona su fecha de cumpleaños, pásala en crear_o_actualizar_cliente (campo cumpleanos) — el sistema la recuerda para consentirlo después. No la pidas de la nada; solo captúrala si sale en la conversación.')
   lines.push('QUEJAS: ante cualquier queja, primero una disculpa breve y humana (sin excusas), y de inmediato escalar_a_humano con el motivo empezando con "QUEJA:" y el resumen — eso alerta al equipo con prioridad y deja registro en la ficha del cliente. Nunca te pongas a la defensiva ni resuelvas compensaciones tú.')
-  lines.push('LISTA DE ESPERA: si la noche que quiere está llena, ofrécele primero otra fecha u hora cercana. Si insiste en esa noche, dile que lo anotas en lista de espera, usa notificar_slack con "LISTA DE ESPERA: nombre, pax, fecha, teléfono" y explícale que el equipo le avisa si se libera lugar — sin prometerle que sí habrá.')
-  lines.push('PROGRAMACIÓN / DJs: si preguntan quién toca o qué hay tal noche, usa programacion_venue y VÉNDELO — menciona al DJ y sus géneros con entusiasmo y ofrece apartar mesa en el mismo mensaje. Si no hay programación registrada, NO inventes nombres: di que está por anunciarse y ofrece la reserva igual.')
-  lines.push('DJ QUE QUIERE TOCAR: si quien escribe es un DJ/artista ofreciendo sus servicios, cambia a modo reclutador amable — captura (una o dos preguntas por mensaje): nombre artístico, géneros, ciudad, fee aproximado, links de mixes/IG y teléfono. Con lo que tengas usa registrar_dj, dile que el booker escuchará su material y le responde por aquí, y cierra con escalar_a_humano ("DJ interesado: [nombre]"). NUNCA negocies fees, NUNCA prometas fechas — eso es del booker.')
+  if (vt === 'fnb' || vt === 'dance_club') {
+    lines.push('LISTA DE ESPERA: si la noche que quiere está llena, ofrécele primero otra fecha u hora cercana. Si insiste en esa noche, dile que lo anotas en lista de espera, usa notificar_slack con "LISTA DE ESPERA: nombre, pax, fecha, teléfono" y explícale que el equipo le avisa si se libera lugar — sin prometerle que sí habrá.')
+    lines.push('PROGRAMACIÓN / DJs: si preguntan quién toca o qué hay tal noche, usa programacion_venue y VÉNDELO — menciona al DJ y sus géneros con entusiasmo y ofrece apartar mesa en el mismo mensaje. Si no hay programación registrada, NO inventes nombres: di que está por anunciarse y ofrece la reserva igual.')
+    lines.push('DJ QUE QUIERE TOCAR: si quien escribe es un DJ/artista ofreciendo sus servicios, cambia a modo reclutador amable — captura (una o dos preguntas por mensaje): nombre artístico, géneros, ciudad, fee aproximado, links de mixes/IG y teléfono. Con lo que tengas usa registrar_dj, dile que el booker escuchará su material y le responde por aquí, y cierra con escalar_a_humano ("DJ interesado: [nombre]"). NUNCA negocies fees, NUNCA prometas fechas — eso es del booker.')
+  }
   lines.push('IMÁGENES: si el historial muestra "[📎 El cliente envió una imagen]" en el contexto de un apartado, es casi seguro su comprobante de depósito: agradécele, dile que el equipo lo valida y confirma, y usa escalar_a_humano con motivo "Comprobante de apartado recibido — validar" si la conversación no está ya escalada.')
   lines.push('EVENTOS: si el cliente quiere un evento (cumpleaños grande, despedida, corporativo, renta del lugar), NO lo despaches directo — captura primero esta información, una pregunta a la vez: (1) ¿qué fecha tienen en mente?, (2) ¿aproximadamente cuántas personas serían?, (3) ¿qué tipo de evento u ocasión es?, (4) ¿buscan un área reservada o el lugar completo?, y su nombre y teléfono si aún no los tienes. Ya con eso, usa escalar_a_humano con TODO el resumen en el motivo ("Evento: cumpleaños, ~40 pax, 26 de julio, área reservada — María, tel registrado") — así el equipo llega a cerrar la venta, no a re-preguntar.')
   if (publicUrl) lines.push(`Cuando pidas el teléfono por primera vez, comparte una sola vez este enlace de aviso de privacidad: ${publicUrl}/?aviso=1 — así el cliente sabe cómo cuidamos su dato antes de dártelo. No lo repitas en cada mensaje.`)
@@ -375,6 +433,11 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
     lines.push(`Aún no sabemos a qué venue se refiere el cliente. Venues disponibles por este canal: ${list || 'ninguno configurado'}. Pregúntale a cuál se refiere y usa identificar_venue en cuanto lo confirme.`)
   }
 
+  // FAQ del venue (Config → FAQ): fuente oficial para preguntas frecuentes
+  if (ctx.faq && String(ctx.faq).trim()) {
+    lines.push(`FAQ DEL VENUE — responde preguntas frecuentes con esta información (es la fuente oficial; si la respuesta no está aquí y no la sabes con certeza, NO inventes: dilo con honestidad y ofrece escalar):\n${String(ctx.faq).trim()}`)
+  }
+
   if (ctx.conv.pending_fields?.length) lines.push(`Datos que aún faltan por confirmar: ${ctx.conv.pending_fields.join(', ')}.`)
   lines.push(`FECHAS (hora de México, ya calculadas — úsalas EXACTAMENTE así y NUNCA calcules tú una fecha): ${fechaContexto()}. Si el cliente dice "el sábado", es la fila marcada como sábado en esta tabla; menciona siempre día Y número al confirmar ("el sábado 11").`)
   if (isFollowup) lines.push('Este turno es un ÚNICO mensaje de seguimiento porque el cliente no respondió — que sea breve, sin presionar, recordando amablemente qué falta para cerrar su reserva.')
@@ -388,7 +451,7 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
   const { supabaseAdmin } = ctx
   switch (name) {
     case 'identificar_venue': {
-      const { data: bu } = await supabaseAdmin.from('business_units').select('id, code, name').eq('code', input.codigo_venue).maybeSingle()
+      const { data: bu } = await supabaseAdmin.from('business_units').select('id, code, name, venue_type, inventory_type, reservation_policy').eq('code', input.codigo_venue).maybeSingle()
       if (!bu) return { error: 'Código de venue no encontrado.' }
       await supabaseAdmin.from('bot_conversations').update({ bu_id: bu.id }).eq('id', ctx.conv.id)
       ctx.conv.bu_id = bu.id
@@ -403,6 +466,11 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
 
     case 'buscar_disponibilidad': {
       if (!ctx.conv.bu_id) return { error: 'Primero identifica el venue.' }
+      // Ruteo por modelo de inventario — nightly_capacity (Bruma) sigue abajo sin cambios
+      const invTipo = ctx.bu?.inventory_type ?? 'nightly_capacity'
+      if (invTipo === 'time_slots') return await disponibilidadSlots(ctx, input)
+      if (invTipo === 'event_rsvp') return await disponibilidadEventos(ctx, input)
+      if (invTipo === 'unit_stay') return await disponibilidadUnidades(ctx, input)
       const dow = new Date(input.fecha + 'T00:00:00').getDay()
       const [{ data: cap }, { data: res }] = await Promise.all([
         supabaseAdmin.from('venue_capacity').select('max_reservations, max_pax').eq('bu_id', ctx.conv.bu_id).eq('day_of_week', dow).eq('active', true).maybeSingle(),
@@ -461,6 +529,12 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
     case 'crear_reserva': {
       if (!ctx.conv.bu_id) return { error: 'Falta identificar el venue.' }
       if (!ctx.conv.guest_id) return { error: 'Falta crear/encontrar al cliente primero (crear_o_actualizar_cliente).' }
+      // Ruteo por modelo de inventario — nightly_capacity (Bruma) sigue abajo sin cambios
+      const invCrear = ctx.bu?.inventory_type ?? 'nightly_capacity'
+      if (invCrear === 'time_slots') return await crearReservaSlot(ctx, input)
+      if (invCrear === 'event_rsvp') return await crearReservaEvento(ctx, input)
+      if (invCrear === 'unit_stay') return await crearReservaEstancia(ctx, input)
+      if (!input.horario) return { error: 'Falta la hora de llegada — pregúntale al cliente a qué hora le gustaría llegar.' }
       const hora = normalizeTime(input.horario)
       if (!hora) return { error: `No entendí la hora "${input.horario}". Pídele al cliente que la confirme (ej. "9:30 pm" o "21:30").` }
       // Anti-duplicados: si el cliente ya tiene reserva viva ese día en este
@@ -629,6 +703,33 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       return { ok: true, cancelada: { fecha: r.date, hora: r.time_slot, pax: r.party_size }, instruccion: 'Confírmale la cancelación con amabilidad e invítalo a volver pronto — sin culpas ni presión.' }
     }
 
+    case 'listar_servicios': {
+      if (!ctx.conv.bu_id) return { error: 'Primero identifica el venue.' }
+      const { data: servicios } = await supabaseAdmin.from('venue_services')
+        .select('name, description, duration_minutes, capacity_per_slot, price, service_schedules(day_of_week, start_time, active)')
+        .eq('bu_id', ctx.conv.bu_id).eq('active', true).order('sort')
+      if (!servicios?.length) return { sin_servicios: true, nota: 'Este venue no tiene servicios configurados — dile con honestidad y usa escalar_a_humano si el cliente quiere reservar.' }
+      const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+      return {
+        servicios: servicios.map((s: { name: string; description: string | null; duration_minutes: number; capacity_per_slot: number; price: number | null; service_schedules: { day_of_week: number; start_time: string; active: boolean }[] }) => ({
+          servicio: s.name, descripcion: s.description, duracion_min: s.duration_minutes,
+          precio_mxn: s.price, cupo_por_horario: s.capacity_per_slot,
+          horarios: (s.service_schedules ?? []).filter(h => h.active).map(h => `${DIAS[h.day_of_week]} ${h.start_time}`),
+        })),
+        nota: 'Estos son los horarios del calendario semanal — para una FECHA concreta usa buscar_disponibilidad, que descuenta lo ya reservado.',
+      }
+    }
+
+    case 'listar_eventos': {
+      if (!ctx.conv.bu_id) return { error: 'Primero identifica el venue.' }
+      return await disponibilidadEventos(ctx, { fecha: input.fecha })
+    }
+
+    case 'listar_unidades': {
+      if (!ctx.conv.bu_id) return { error: 'Primero identifica el venue.' }
+      return await disponibilidadUnidades(ctx, { fecha: input.fecha, fecha_fin: input.fecha_fin })
+    }
+
     case 'notificar_slack':
       await notifySlackFromEdge(supabaseAdmin, `🤖 ${input.mensaje}`)
       return { ok: true }
@@ -654,4 +755,286 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
     default:
       return { error: `Herramienta desconocida: ${name}` }
   }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Modelos de inventario no-fnb (wellness / art house / hospedaje).
+// Los slots de wellness son get-or-create: se calculan desde service_schedules
+// y la fila en service_slots nace cuando alguien reserva ese horario.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const ESTADOS_VIVOS = ['requested', 'confirmed', 'seated']
+
+// ── WELLNESS: horarios disponibles de un día ─────────────────────────────────
+// deno-lint-ignore no-explicit-any
+async function disponibilidadSlots(ctx: any, input: any): Promise<Record<string, unknown>> {
+  const { supabaseAdmin } = ctx
+  if (!input.fecha) return { error: 'Falta la fecha.' }
+  const dow = new Date(input.fecha + 'T00:00:00').getDay()
+  let q = supabaseAdmin.from('venue_services')
+    .select('id, name, duration_minutes, capacity_per_slot, price, service_schedules(day_of_week, start_time, active)')
+    .eq('bu_id', ctx.conv.bu_id).eq('active', true)
+  if (input.servicio) q = q.ilike('name', `%${String(input.servicio).trim()}%`)
+  const { data: servicios } = await q
+  if (!servicios?.length) {
+    return input.servicio
+      ? { error: `No encontré el servicio "${input.servicio}" — usa listar_servicios para ver los nombres reales.` }
+      : { sin_servicios: true, nota: 'Este venue no tiene servicios configurados.' }
+  }
+  // Slots ya materializados de ese día (los que tienen reservas)
+  const { data: slots } = await supabaseAdmin.from('service_slots')
+    .select('id, service_id, start_time, capacity').eq('bu_id', ctx.conv.bu_id).eq('date', input.fecha)
+  const slotIds = (slots ?? []).map((s: { id: string }) => s.id)
+  const ocupacion: Record<string, number> = {}
+  if (slotIds.length) {
+    const { data: resv } = await supabaseAdmin.from('reservations')
+      .select('service_slot_id, party_size, status').in('service_slot_id', slotIds)
+    for (const r of resv ?? []) {
+      if (!ESTADOS_VIVOS.includes(r.status)) continue
+      ocupacion[r.service_slot_id] = (ocupacion[r.service_slot_id] ?? 0) + r.party_size
+    }
+  }
+  const horarios: { servicio: string; hora: string; lugares: number; precio_mxn: number | null }[] = []
+  for (const s of servicios) {
+    for (const h of (s.service_schedules ?? []).filter((h: { active: boolean; day_of_week: number }) => h.active && h.day_of_week === dow)) {
+      const slot = (slots ?? []).find((sl: { service_id: string; start_time: string }) => sl.service_id === s.id && sl.start_time === h.start_time)
+      const cap = slot?.capacity ?? s.capacity_per_slot
+      const libres = cap - (slot ? (ocupacion[slot.id] ?? 0) : 0)
+      if (libres > 0) horarios.push({ servicio: s.name, hora: h.start_time, lugares: libres, precio_mxn: s.price })
+    }
+  }
+  horarios.sort((a, b) => a.hora.localeCompare(b.hora))
+  if (!horarios.length) return { fecha: input.fecha, sin_horarios: true, nota: 'No hay horarios disponibles ese día (o el venue no abre) — ofrece otra fecha cercana.' }
+  return { fecha: input.fecha, horarios, nota: 'Ofrece SOLO estos horarios, tal cual. No inventes otros.' }
+}
+
+// ── WELLNESS: crear cita (get-or-create del slot + validación de cupo) ───────
+// deno-lint-ignore no-explicit-any
+async function crearReservaSlot(ctx: any, input: any): Promise<Record<string, unknown>> {
+  const { supabaseAdmin } = ctx
+  if (!input.servicio) return { error: 'Falta el servicio — pregúntale al cliente cuál quiere (usa listar_servicios si hace falta).' }
+  if (!input.horario) return { error: 'Falta el horario de la cita — ofrécele los de buscar_disponibilidad.' }
+  const hora = normalizeTime(input.horario)
+  if (!hora) return { error: `No entendí la hora "${input.horario}". Confírmala con el cliente (ej. "10:30").` }
+  const { data: servicio } = await supabaseAdmin.from('venue_services')
+    .select('id, name, capacity_per_slot, price, service_schedules(day_of_week, start_time, active)')
+    .eq('bu_id', ctx.conv.bu_id).eq('active', true).ilike('name', `%${String(input.servicio).trim()}%`).maybeSingle()
+  if (!servicio) return { error: `No encontré el servicio "${input.servicio}" — usa listar_servicios para ver los nombres reales.` }
+  const dow = new Date(input.fecha + 'T00:00:00').getDay()
+  const enCalendario = (servicio.service_schedules ?? []).some((h: { active: boolean; day_of_week: number; start_time: string }) => h.active && h.day_of_week === dow && h.start_time === hora)
+  if (!enCalendario) return { error: `${servicio.name} no se ofrece ese día a las ${hora}. Usa buscar_disponibilidad y ofrécele SOLO los horarios que devuelva.` }
+  // get-or-create del slot
+  let { data: slot } = await supabaseAdmin.from('service_slots')
+    .select('id, capacity').eq('service_id', servicio.id).eq('date', input.fecha).eq('start_time', hora).maybeSingle()
+  if (!slot) {
+    const { data: creado, error: sErr } = await supabaseAdmin.from('service_slots')
+      .insert({ service_id: servicio.id, bu_id: ctx.conv.bu_id, date: input.fecha, start_time: hora, capacity: servicio.capacity_per_slot })
+      .select('id, capacity').maybeSingle()
+    slot = creado ?? (await supabaseAdmin.from('service_slots')
+      .select('id, capacity').eq('service_id', servicio.id).eq('date', input.fecha).eq('start_time', hora).maybeSingle()).data
+    if (!slot && sErr) return { error: sErr.message }
+  }
+  // Anti-duplicados: mismo cliente + mismo slot → actualizar
+  const { data: propias } = await supabaseAdmin.from('reservations')
+    .select('id, party_size').eq('guest_id', ctx.conv.guest_id).eq('service_slot_id', slot.id)
+    .in('status', ESTADOS_VIVOS).limit(1)
+  const propia = propias?.[0]
+  // Cupo del slot (excluyendo la propia si es actualización)
+  const { data: resv } = await supabaseAdmin.from('reservations')
+    .select('id, party_size, status').eq('service_slot_id', slot.id)
+  let usados = 0
+  for (const r of resv ?? []) {
+    if (!ESTADOS_VIVOS.includes(r.status)) continue
+    if (propia && r.id === propia.id) continue
+    usados += r.party_size
+  }
+  if (usados + input.pax > slot.capacity) {
+    return { error: `Ese horario ya no tiene lugar (${usados}/${slot.capacity} ocupados). NO confirmes: usa buscar_disponibilidad y ofrécele los horarios que sí tienen espacio.` }
+  }
+  if (propia) {
+    const { error: upErr } = await supabaseAdmin.from('reservations')
+      .update({ party_size: input.pax, notes: input.notas ?? undefined, bot_conversation_id: ctx.conv.id }).eq('id', propia.id)
+    if (upErr) return { error: upErr.message }
+    await notifySlackFromEdge(supabaseAdmin, `🤖 *Cita actualizada vía Concierge* — ${ctx.bu?.name ?? ''}\n${servicio.name} · ${input.fecha} ${hora} · ${propia.party_size}→${input.pax} pax`)
+    return { ok: true, actualizada: true, reservation_id: propia.id, aviso: 'El cliente YA tenía cita en ese horario — se actualizó en lugar de duplicar.' }
+  }
+  const { data: reserva, error } = await supabaseAdmin.from('reservations').insert({
+    guest_id: ctx.conv.guest_id, bu_id: ctx.conv.bu_id, date: input.fecha, time_slot: hora,
+    party_size: input.pax, notes: input.notas ?? null, status: 'requested',
+    source: ctx.conv.channel, bot_conversation_id: ctx.conv.id, service_slot_id: slot.id,
+  }).select('id').single()
+  if (error) return { error: error.message }
+  await supabaseAdmin.from('bot_conversations').update({ pending_fields: [] }).eq('id', ctx.conv.id)
+  await supabaseAdmin.from('activity_log').insert({
+    user_id: null, action: 'reservation_created', entity_type: 'reservation', entity_id: reserva.id,
+    details: { actor: 'Concierge HOG', bu: ctx.bu?.code, date: input.fecha, slot: hora, pax: input.pax, servicio: servicio.name, channel: ctx.conv.channel },
+  })
+  await notifySlackFromEdge(supabaseAdmin, `🤖 *Cita vía Concierge* — ${ctx.bu?.name ?? ''}\n${servicio.name} · ${input.fecha} ${hora} · ${input.pax} pax`)
+  return { ok: true, reservation_id: reserva.id, servicio: servicio.name, precio_mxn: servicio.price }
+}
+
+// ── ART HOUSE: cartelera con lugares ─────────────────────────────────────────
+// deno-lint-ignore no-explicit-any
+async function disponibilidadEventos(ctx: any, input: any): Promise<Record<string, unknown>> {
+  const { supabaseAdmin } = ctx
+  const hoy = new Date().toISOString().slice(0, 10)
+  const desde = input.fecha ?? hoy
+  const hasta = input.fecha ?? new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+  const { data: eventos } = await supabaseAdmin.from('venue_events')
+    .select('id, name, date, start_time, capacity, description, status')
+    .eq('bu_id', ctx.conv.bu_id).gte('date', desde).lte('date', hasta)
+    .in('status', ['announced', 'sold_out']).order('date')
+  if (!eventos?.length) return { sin_cartelera: true, nota: 'No hay eventos anunciados para esas fechas — dilo con honestidad, ofrece avisarle cuando se anuncie (NO inventes eventos).' }
+  const ids = eventos.map((e: { id: string }) => e.id)
+  const { data: resv } = await supabaseAdmin.from('reservations')
+    .select('event_id, party_size, status').in('event_id', ids)
+  const usados: Record<string, number> = {}
+  for (const r of resv ?? []) {
+    if (!ESTADOS_VIVOS.includes(r.status)) continue
+    usados[r.event_id] = (usados[r.event_id] ?? 0) + r.party_size
+  }
+  return {
+    cartelera: eventos.map((e: { id: string; name: string; date: string; start_time: string; capacity: number; description: string | null; status: string }) => ({
+      evento: e.name, fecha: e.date, hora: e.start_time, descripcion: e.description,
+      lugares_disponibles: e.status === 'sold_out' ? 0 : Math.max(0, e.capacity - (usados[e.id] ?? 0)),
+      agotado: e.status === 'sold_out' || (usados[e.id] ?? 0) >= e.capacity,
+    })),
+    nota: 'Solo ofrece estos eventos. Si el que quiere está agotado, ofrece otro o lista de espera (notificar_slack).',
+  }
+}
+
+// ── ART HOUSE: RSVP a un evento ──────────────────────────────────────────────
+// deno-lint-ignore no-explicit-any
+async function crearReservaEvento(ctx: any, input: any): Promise<Record<string, unknown>> {
+  const { supabaseAdmin } = ctx
+  if (!input.evento) return { error: 'Falta el evento — pregúntale a cuál quiere ir (usa listar_eventos para la cartelera).' }
+  let q = supabaseAdmin.from('venue_events')
+    .select('id, name, date, start_time, capacity, status')
+    .eq('bu_id', ctx.conv.bu_id).ilike('name', `%${String(input.evento).trim()}%`)
+    .gte('date', new Date().toISOString().slice(0, 10)).order('date')
+  if (input.fecha) q = q.eq('date', input.fecha)
+  const { data: candidatos } = await q.limit(3)
+  const anunciados = (candidatos ?? []).filter((e: { status: string }) => e.status === 'announced' || e.status === 'sold_out')
+  if (!anunciados.length) return { error: `No encontré un evento anunciado que coincida con "${input.evento}" — usa listar_eventos y ofrece SOLO lo que devuelva.` }
+  if (anunciados.length > 1) return { varios: true, eventos: anunciados.map((e: { name: string; date: string }) => ({ evento: e.name, fecha: e.date })), instruccion: 'Hay varios eventos que coinciden — pregúntale a cuál y vuelve a llamar con la fecha.' }
+  const evento = anunciados[0]
+  // Anti-duplicados: mismo cliente + mismo evento → actualizar
+  const { data: propias } = await supabaseAdmin.from('reservations')
+    .select('id, party_size').eq('guest_id', ctx.conv.guest_id).eq('event_id', evento.id)
+    .in('status', ESTADOS_VIVOS).limit(1)
+  const propia = propias?.[0]
+  const { data: resv } = await supabaseAdmin.from('reservations')
+    .select('id, party_size, status').eq('event_id', evento.id)
+  let usados = 0
+  for (const r of resv ?? []) {
+    if (!ESTADOS_VIVOS.includes(r.status)) continue
+    if (propia && r.id === propia.id) continue
+    usados += r.party_size
+  }
+  if (evento.status === 'sold_out' || usados + input.pax > evento.capacity) {
+    return { error: `"${evento.name}" ya no tiene lugares suficientes (${usados}/${evento.capacity}). NO confirmes: ofrece otro evento de la cartelera o lista de espera con notificar_slack ("LISTA DE ESPERA EVENTO: nombre, pax, evento, teléfono").` }
+  }
+  if (propia) {
+    const { error: upErr } = await supabaseAdmin.from('reservations')
+      .update({ party_size: input.pax, notes: input.notas ?? undefined, bot_conversation_id: ctx.conv.id }).eq('id', propia.id)
+    if (upErr) return { error: upErr.message }
+    await notifySlackFromEdge(supabaseAdmin, `🤖 *RSVP actualizado vía Concierge* — ${ctx.bu?.name ?? ''}\n${evento.name} · ${evento.date} · ${propia.party_size}→${input.pax} pax`)
+    return { ok: true, actualizada: true, reservation_id: propia.id, aviso: 'El cliente YA tenía lugares en ese evento — se actualizó en lugar de duplicar.' }
+  }
+  const { data: reserva, error } = await supabaseAdmin.from('reservations').insert({
+    guest_id: ctx.conv.guest_id, bu_id: ctx.conv.bu_id, date: evento.date, time_slot: evento.start_time,
+    party_size: input.pax, notes: input.notas ?? null, status: 'requested',
+    source: ctx.conv.channel, bot_conversation_id: ctx.conv.id, event_id: evento.id,
+  }).select('id').single()
+  if (error) return { error: error.message }
+  await supabaseAdmin.from('bot_conversations').update({ pending_fields: [] }).eq('id', ctx.conv.id)
+  await supabaseAdmin.from('activity_log').insert({
+    user_id: null, action: 'reservation_created', entity_type: 'reservation', entity_id: reserva.id,
+    details: { actor: 'Concierge HOG', bu: ctx.bu?.code, date: evento.date, slot: evento.start_time, pax: input.pax, evento: evento.name, channel: ctx.conv.channel },
+  })
+  await notifySlackFromEdge(supabaseAdmin, `🤖 *RSVP vía Concierge* — ${ctx.bu?.name ?? ''}\n${evento.name} · ${evento.date} ${evento.start_time} · ${input.pax} pax`)
+  return { ok: true, reservation_id: reserva.id, evento: evento.name, fecha: evento.date, hora: evento.start_time }
+}
+
+// ── HOSPEDAJE: unidades libres en un rango + cotización ──────────────────────
+// deno-lint-ignore no-explicit-any
+async function disponibilidadUnidades(ctx: any, input: any): Promise<Record<string, unknown>> {
+  const { supabaseAdmin } = ctx
+  if (!input.fecha || !input.fecha_fin) return { error: 'Para hospedaje necesito check-in Y check-out — pregúntale al cliente sus fechas.' }
+  if (input.fecha_fin <= input.fecha) return { error: 'El check-out debe ser después del check-in — confirma las fechas con el cliente.' }
+  const noches = Math.round((new Date(input.fecha_fin + 'T00:00:00').getTime() - new Date(input.fecha + 'T00:00:00').getTime()) / 86400000)
+  const { data: unidades } = await supabaseAdmin.from('venue_units')
+    .select('id, name, unit_type, capacity, base_rate, description')
+    .eq('bu_id', ctx.conv.bu_id).eq('active', true).order('base_rate')
+  if (!unidades?.length) return { sin_unidades: true, nota: 'Este venue no tiene unidades configuradas — usa escalar_a_humano.' }
+  const ids = unidades.map((u: { id: string }) => u.id)
+  const { data: resv } = await supabaseAdmin.from('reservations')
+    .select('unit_id, check_in, check_out, status').in('unit_id', ids)
+  const ocupadas = new Set<string>()
+  for (const r of resv ?? []) {
+    if (!ESTADOS_VIVOS.includes(r.status)) continue
+    if (r.check_in < input.fecha_fin && r.check_out > input.fecha) ocupadas.add(r.unit_id)
+  }
+  const libres = unidades.filter((u: { id: string }) => !ocupadas.has(u.id))
+  if (!libres.length) return { fecha: input.fecha, fecha_fin: input.fecha_fin, sin_disponibilidad: true, nota: 'No hay unidades libres en ese rango — ofrece otras fechas cercanas.' }
+  return {
+    check_in: input.fecha, check_out: input.fecha_fin, noches,
+    unidades: libres.map((u: { name: string; unit_type: string | null; capacity: number; base_rate: number; description: string | null }) => ({
+      unidad: u.name, tipo: u.unit_type, capacidad_pax: u.capacity, tarifa_por_noche_mxn: u.base_rate,
+      total_estancia_mxn: noches * Number(u.base_rate), descripcion: u.description,
+    })),
+    nota: 'Cotiza claro: noches × tarifa = total. La estancia se asegura con el flujo de apartado.',
+  }
+}
+
+// ── HOSPEDAJE: reservar estancia ─────────────────────────────────────────────
+// deno-lint-ignore no-explicit-any
+async function crearReservaEstancia(ctx: any, input: any): Promise<Record<string, unknown>> {
+  const { supabaseAdmin } = ctx
+  if (!input.unidad) return { error: 'Falta la unidad — usa listar_unidades y pregúntale cuál prefiere.' }
+  if (!input.fecha || !input.fecha_fin) return { error: 'Faltan las fechas — necesito check-in (fecha) y check-out (fecha_fin).' }
+  if (input.fecha_fin <= input.fecha) return { error: 'El check-out debe ser después del check-in — confirma las fechas.' }
+  const { data: unidad } = await supabaseAdmin.from('venue_units')
+    .select('id, name, capacity, base_rate')
+    .eq('bu_id', ctx.conv.bu_id).eq('active', true).ilike('name', `%${String(input.unidad).trim()}%`).maybeSingle()
+  if (!unidad) return { error: `No encontré la unidad "${input.unidad}" — usa listar_unidades para ver los nombres reales.` }
+  if (input.pax > unidad.capacity) return { error: `${unidad.name} tiene capacidad para ${unidad.capacity} personas y el grupo es de ${input.pax} — ofrece una unidad más grande o dos unidades (escala si hace falta).` }
+  // Anti-duplicados: mismo cliente + rango que solapa en este venue → actualizar esa estancia
+  const { data: propias } = await supabaseAdmin.from('reservations')
+    .select('id, unit_id, check_in, check_out, party_size')
+    .eq('guest_id', ctx.conv.guest_id).eq('bu_id', ctx.conv.bu_id)
+    .in('status', ESTADOS_VIVOS).not('unit_id', 'is', null)
+  const propia = (propias ?? []).find((r: { check_in: string; check_out: string }) => r.check_in < input.fecha_fin && r.check_out > input.fecha)
+  // ¿La unidad está libre en el rango? (excluyendo la propia si es cambio)
+  const { data: resv } = await supabaseAdmin.from('reservations')
+    .select('id, check_in, check_out, status').eq('unit_id', unidad.id)
+  const ocupada = (resv ?? []).some((r: { id: string; check_in: string; check_out: string; status: string }) =>
+    ESTADOS_VIVOS.includes(r.status) && !(propia && r.id === propia.id) && r.check_in < input.fecha_fin && r.check_out > input.fecha)
+  if (ocupada) return { error: `${unidad.name} ya está ocupada en parte de ese rango. NO confirmes: usa listar_unidades para ofrecer otra unidad libre u otras fechas.` }
+  const noches = Math.round((new Date(input.fecha_fin + 'T00:00:00').getTime() - new Date(input.fecha + 'T00:00:00').getTime()) / 86400000)
+  const total = noches * Number(unidad.base_rate)
+  const horaCheckin = normalizeTime(String(ctx.bu?.reservation_policy?.check_in_time ?? '')) ?? '15:00'
+  if (propia) {
+    const { error: upErr } = await supabaseAdmin.from('reservations').update({
+      unit_id: unidad.id, date: input.fecha, check_in: input.fecha, check_out: input.fecha_fin,
+      time_slot: horaCheckin, party_size: input.pax, notes: input.notas ?? undefined, bot_conversation_id: ctx.conv.id,
+    }).eq('id', propia.id)
+    if (upErr) return { error: upErr.message }
+    await notifySlackFromEdge(supabaseAdmin, `🤖 *Estancia actualizada vía Concierge* — ${ctx.bu?.name ?? ''}\n${unidad.name} · ${input.fecha} → ${input.fecha_fin} · ${input.pax} pax · $${total} MXN`)
+    return { ok: true, actualizada: true, reservation_id: propia.id, noches, total_mxn: total, aviso: 'El cliente YA tenía una estancia que solapa esas fechas — se actualizó en lugar de duplicar. Confírmale los datos finales y recuerda el flujo de apartado si aplica.' }
+  }
+  const { data: reserva, error } = await supabaseAdmin.from('reservations').insert({
+    guest_id: ctx.conv.guest_id, bu_id: ctx.conv.bu_id, date: input.fecha, time_slot: horaCheckin,
+    party_size: input.pax, notes: input.notas ?? null, status: 'requested',
+    source: ctx.conv.channel, bot_conversation_id: ctx.conv.id,
+    unit_id: unidad.id, check_in: input.fecha, check_out: input.fecha_fin,
+  }).select('id').single()
+  if (error) return { error: error.message }
+  await supabaseAdmin.from('bot_conversations').update({ pending_fields: [] }).eq('id', ctx.conv.id)
+  await supabaseAdmin.from('activity_log').insert({
+    user_id: null, action: 'reservation_created', entity_type: 'reservation', entity_id: reserva.id,
+    details: { actor: 'Concierge HOG', bu: ctx.bu?.code, date: input.fecha, check_out: input.fecha_fin, pax: input.pax, unidad: unidad.name, total_mxn: total, channel: ctx.conv.channel },
+  })
+  await notifySlackFromEdge(supabaseAdmin, `🤖 *Estancia vía Concierge* — ${ctx.bu?.name ?? ''}\n${unidad.name} · ${input.fecha} → ${input.fecha_fin} (${noches} noches) · ${input.pax} pax · $${total} MXN`)
+  return { ok: true, reservation_id: reserva.id, unidad: unidad.name, noches, total_mxn: total, instruccion: 'Cotización clara al cliente (noches × tarifa = total). Si el venue tiene apartado configurado, sigue el flujo de apartado para asegurar la estancia.' }
 }
