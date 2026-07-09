@@ -1,4 +1,4 @@
-import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, Contact2, Sparkles, ClipboardCheck, Camera } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, Sparkles, ClipboardCheck, Camera } from 'lucide-react'
 import { STR } from '../../lib/strings'
 
 interface Props {
@@ -21,7 +21,7 @@ const TEAM_SLOTS = [
   { id: 'concierge', label: STR.nav.concierge, icon: Shell },
   { id: 'tasks',    label: STR.nav.tasks,     icon: CheckSquare },
   { id: 'social',   label: STR.nav.social,    icon: Sparkles },
-  { id: 'contacts', label: STR.nav.directory, icon: Contact2 },
+  { id: 'crm',      label: STR.nav.crm,       icon: Handshake },
   { id: 'profile',  label: STR.nav.profile,   icon: UserCircle },
 ]
 
@@ -34,10 +34,8 @@ const HOH_SLOTS = [
 ]
 
 export function BottomNav({ activeView, onNavigate, userRole }: Props) {
-  // Marketing no tiene acceso a Concierge (hospitalidad) — su slot se omite
   const items = userRole === 'MASTER' ? MASTER_SLOTS
     : userRole === 'HEART_OF_HOUSE' ? HOH_SLOTS
-    : userRole === 'MARKETING' ? TEAM_SLOTS.filter(s => s.id !== 'concierge')
     : TEAM_SLOTS
 
   return (

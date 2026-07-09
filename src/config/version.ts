@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.26.0"
+export const APP_VERSION = "2.27.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.27.0",
+    date: "2026-07-09",
+    type: "MINOR",
+    changes: [
+      "COMERCIAL — CRM y Directorio fusionados en una sola sección con tabs: Pipeline · Directorio · DJs",
+      "El directorio de DJs (Talento) ahora se consulta desde Comercial; se sigue administrando en Concierge → Talento",
+      "Marketing con acceso completo a Concierge: Bandeja (leer, tomar y responder), Reservas y Clientes",
+      "Clientes consumidores fuera del directorio comercial — viven solo en Concierge → Clientes",
+    ]
+  },
   {
     version: "2.26.0",
     date: "2026-07-09",

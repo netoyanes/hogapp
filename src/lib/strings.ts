@@ -28,7 +28,7 @@ export const STR = {
   nav: {
     dashboard: 'Dashboard',
     tasks: 'Tareas',
-    crm: 'CRM',
+    crm: 'Comercial',
     reservations: 'Reservas',
     directory: 'Directorio',
     social: 'Social',

@@ -15,7 +15,6 @@ import { CalendarHub } from './screens/CalendarHub'
 import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
 import { CRM } from './screens/CRM'
-import { Contacts } from './screens/Contacts'
 import { Social } from './screens/Social'
 import { Objectives } from './screens/Objectives'
 import { Reports } from './screens/Reports'
@@ -137,15 +136,14 @@ export default function App() {
     return <UserOnboarding profile={profile} onComplete={() => refetchProfile?.()} />
   }
 
+  // 'contacts' queda como alias legado (links viejos) — renderiza Comercial.
   const ALLOWED_VIEWS = role === 'MASTER'
     ? null // null = no restriction
-    : role === 'MARKETING'
-      ? new Set(['tasks', 'crm', 'contacts', 'social', 'objectives', 'profile']) // sin hospitalidad
-      : role === 'HEART_OF_HOUSE'
-        ? new Set(['casa', 'reportar', 'profile']) // piso: una sola herramienta
-        : role === 'TEAM'
-          ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'social', 'objectives', 'profile'])
-          : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives', 'profile'])
+    : role === 'HEART_OF_HOUSE'
+      ? new Set(['casa', 'reportar', 'profile']) // piso: una sola herramienta
+      : role === 'TEAM' || role === 'MARKETING'
+        ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'social', 'objectives', 'profile'])
+        : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives', 'profile'])
 
   function handleNavigate(view: string) {
     if (ALLOWED_VIEWS && !ALLOWED_VIEWS.has(view)) return
@@ -168,12 +166,11 @@ export default function App() {
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':
+      case 'contacts': // alias legado — el directorio ahora vive dentro de Comercial
         return <CRM userRole={role} userId={profile?.id} />
-      case 'contacts':
-        return <Contacts userRole={role} userId={profile?.id} />
       case 'reservations': // alias legado (links viejos de Slack/Calendario)
       case 'concierge':
-        return role === 'MARKETING' ? null : <Concierge userId={profile?.id} userRole={role} />
+        return <Concierge userId={profile?.id} userRole={role} />
       case 'casa':
         return <Casa userId={profile?.id} userRole={role} />
       case 'reportar': // slot de bottom-nav del HoH: La Casa con el reporte abierto
