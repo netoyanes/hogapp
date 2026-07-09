@@ -511,12 +511,13 @@ const labelStyle: React.CSSProperties = {
   fontFamily: 'var(--font-ui)',
 }
 
-// ── DJs — consulta del talento registrado (se administra en Concierge → Talento).
-//    El fee es dato sensible: Marketing lo ve oculto.
+// ── DJs — vista del directorio unificado: contactos con contact_type='DJ'.
+//    Se administran en Concierge → Talento. El fee es dato sensible: Marketing
+//    lo ve oculto.
 interface DJRow {
-  id: string; stage_name: string; real_name: string | null; genres: string[]
+  id: string; full_name: string; real_name: string | null; genres: string[]
   city: string | null; instagram: string | null; links: string | null; phone: string | null
-  base_fee: number | null; rating: number | null; status: string; source: string
+  base_fee: number | null; rating: number | null; vetoed: boolean; source: string
 }
 
 function DJDirectory({ userRole }: { userRole?: string }) {
@@ -526,18 +527,19 @@ function DJDirectory({ userRole }: { userRole?: string }) {
   const showFee = userRole === 'MASTER' || userRole === 'OPS_MANAGER' || userRole === 'C_LEVEL'
 
   useEffect(() => {
-    void supabase.from('djs')
-      .select('id, stage_name, real_name, genres, city, instagram, links, phone, base_fee, rating, status, source')
-      .order('stage_name')
-      .then(({ data }) => setDjs(data ?? []))
+    void supabase.from('crm_contacts')
+      .select('id, full_name, real_name, genres, city, instagram, links, phone, base_fee, rating, vetoed, source')
+      .eq('contact_type', 'DJ')
+      .order('full_name')
+      .then(({ data }) => setDjs((data ?? []) as DJRow[]))
   }, [])
 
   const term = q.trim().toLowerCase()
   const filtered = djs.filter(d =>
     !term ||
-    d.stage_name.toLowerCase().includes(term) ||
+    d.full_name.toLowerCase().includes(term) ||
     (d.city ?? '').toLowerCase().includes(term) ||
-    d.genres.some(g => g.toLowerCase().includes(term)))
+    (d.genres ?? []).some(g => g.toLowerCase().includes(term)))
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -557,14 +559,14 @@ function DJDirectory({ userRole }: { userRole?: string }) {
         {filtered.map(d => (
           <div key={d.id} style={{
             background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)',
-            padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px', opacity: d.status === 'vetoed' ? 0.55 : 1,
+            padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px', opacity: d.vetoed ? 0.55 : 1,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Music size={16} style={{ color: 'var(--accent)' }} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{d.stage_name}</div>
+                <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{d.full_name}</div>
                 {d.real_name && <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{d.real_name}</div>}
               </div>
               {d.rating != null && (
@@ -572,11 +574,11 @@ function DJDirectory({ userRole }: { userRole?: string }) {
                   <Star size={11} fill="currentColor" /> {d.rating}
                 </span>
               )}
-              {d.status === 'vetoed' && <StatusBadgeV2 tone="risk" label="Vetado" />}
+              {d.vetoed && <StatusBadgeV2 tone="risk" label="Vetado" />}
               {d.source === 'concierge' && <StatusBadgeV2 tone="accent" label="Vía Concierge" />}
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-              {d.genres.length > 0 && <span>{d.genres.join(' · ')}</span>}
+              {(d.genres ?? []).length > 0 && <span>{d.genres.join(' · ')}</span>}
               {d.city && <span style={{ color: 'var(--text-tertiary)' }}>{d.city}</span>}
               {showFee && d.base_fee != null && (
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>

@@ -77,7 +77,5 @@ create policy res_update on reservations for update to authenticated
   using (hog_role() in ('MASTER','OPS_MANAGER','TEAM','MARKETING') and hog_has_venue(bu_id))
   with check (hog_role() in ('MASTER','OPS_MANAGER','TEAM','MARKETING') and hog_has_venue(bu_id));
 
--- ─── DJs: lectura para el equipo comercial (Marketing incluido) ──────────────
-drop policy if exists djs_select on djs;
-create policy djs_select on djs for select to authenticated
-  using (hog_role() in ('MASTER','C_LEVEL','OPS_MANAGER','MARKETING'));
+-- (La policy de djs que vivía aquí quedó obsoleta: el talento se unificó en
+--  crm_contacts con contact_type='DJ' — ver unify_dj_directory.sql.)

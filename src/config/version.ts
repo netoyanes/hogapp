@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.27.0"
+export const APP_VERSION = "2.28.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.28.0",
+    date: "2026-07-09",
+    type: "MINOR",
+    changes: [
+      "Directorio unificado — los DJs ya no viven en una base aparte: son contactos del directorio general con clasificación DJ y sus campos de talento (géneros, fee, rider, rating)",
+      "Talento (Concierge) y el tab DJs de Comercial leen y escriben en el mismo directorio; las tocadas conservan todo su historial",
+      "El bot registra DJs interesados directo en el directorio unificado",
+    ]
+  },
   {
     version: "2.27.0",
     date: "2026-07-09",

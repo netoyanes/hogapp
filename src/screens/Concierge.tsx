@@ -1113,6 +1113,19 @@ interface DJ {
   status: 'active' | 'vetoed'
   source: 'manual' | 'concierge'
 }
+
+// Directorio unificado: un DJ es un crm_contact con contact_type='DJ'.
+// La UI de Talento conserva su lenguaje (stage_name, status) vía este adaptador.
+const DJ_SELECT = 'id, full_name, real_name, phone, instagram, city, genres, base_fee, fee_notes, rider, links, rating, vetoed, source'
+// deno-lint-ignore no-explicit-any
+function contactToDj(r: any): DJ {
+  return {
+    id: r.id, stage_name: r.full_name, real_name: r.real_name, phone: r.phone,
+    instagram: r.instagram, city: r.city, genres: r.genres ?? [], base_fee: r.base_fee,
+    fee_notes: r.fee_notes, rider: r.rider, links: r.links, rating: r.rating,
+    status: r.vetoed ? 'vetoed' : 'active', source: r.source ?? 'manual',
+  }
+}
 interface DJBooking {
   id: string
   dj_id: string
@@ -1165,11 +1178,11 @@ function TalentoTab({ buList, userId, isMobile }: { buList: BU[]; userId?: strin
     const mStart = `${monthIni.getFullYear()}-${String(monthIni.getMonth() + 1).padStart(2, '0')}-01`
     const mEnd = isoTal(new Date(monthIni.getFullYear(), monthIni.getMonth() + 1, 0))
     const [{ data: d }, { data: b }, { data: m }] = await Promise.all([
-      supabase.from('djs').select('*').order('stage_name'),
+      supabase.from('crm_contacts').select(DJ_SELECT).eq('contact_type', 'DJ').order('full_name'),
       supabase.from('dj_bookings').select('*').eq('bu_id', buId).gte('date', weekStart).lte('date', addDaysTal(weekStart, 6)),
       supabase.from('dj_bookings').select('fee, status').eq('bu_id', buId).gte('date', mStart).lte('date', mEnd).in('status', ['confirmed', 'played']),
     ])
-    setDjs((d ?? []) as DJ[])
+    setDjs((d ?? []).map(contactToDj))
     setBookings((b ?? []) as DJBooking[])
     setMonthSpend((m ?? []).reduce((s, r) => s + Number(r.fee ?? 0), 0))
     setMonthCount((m ?? []).length)
@@ -1334,20 +1347,20 @@ function DJSheet({ dj, buList, userId, isMobile, onClose, onSaved }: {
     if (!form.stage_name.trim()) { showToast('El nombre artístico es obligatorio.', 'error'); return }
     setSaving(true)
     const row = {
-      stage_name: form.stage_name.trim(), real_name: form.real_name.trim() || null,
+      full_name: form.stage_name.trim(), real_name: form.real_name.trim() || null,
       phone: form.phone.trim() || null, instagram: form.instagram.trim().replace(/^@/, '') || null,
       city: form.city.trim() || null,
       genres: form.genres.split(',').map(g => g.trim()).filter(Boolean),
       base_fee: form.base_fee ? Number(form.base_fee) : null, fee_notes: form.fee_notes.trim() || null,
       rider: form.rider.trim() || null, links: form.links.trim() || null,
-      rating: form.rating, status: form.status,
+      rating: form.rating, vetoed: form.status === 'vetoed', contact_type: 'DJ',
     }
     const { error } = dj
-      ? await supabase.from('djs').update(row).eq('id', dj.id)
-      : await supabase.from('djs').insert({ ...row, created_by: userId ?? null })
+      ? await supabase.from('crm_contacts').update(row).eq('id', dj.id)
+      : await supabase.from('crm_contacts').insert({ ...row, created_by: userId ?? null })
     setSaving(false)
     if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
-    logActivity(dj ? 'dj_updated' : 'dj_created', 'dj', dj?.id, { stage_name: row.stage_name, fee: row.base_fee })
+    logActivity(dj ? 'dj_updated' : 'dj_created', 'dj', dj?.id, { stage_name: row.full_name, fee: row.base_fee })
     showToast(dj ? 'DJ actualizado.' : 'DJ agregado a la base.', 'success')
     onSaved()
   }
@@ -1465,15 +1478,15 @@ function BookingSheet({ date, booking, buId, buCode, djs, userId, isMobile, onCl
   async function quickCreateDj() {
     const name = djQuery.trim()
     if (!name) return
-    const { data: nuevo, error } = await supabase.from('djs').insert({
-      stage_name: name,
+    const { data: nuevo, error } = await supabase.from('crm_contacts').insert({
+      full_name: name, contact_type: 'DJ',
       base_fee: quickFee ? Number(quickFee) : null,
       genres: quickGenres.split(',').map(g => g.trim()).filter(Boolean),
       created_by: userId ?? null,
-    }).select('*').single()
+    }).select(DJ_SELECT).single()
     if (error) { showToast(`No se pudo crear: ${error.message}`, 'error'); return }
     logActivity('dj_created', 'dj', nuevo.id, { stage_name: name, fee: quickFee ? Number(quickFee) : null, via: 'booking' })
-    setLocalDjs(prev => [...prev, nuevo as DJ])
+    setLocalDjs(prev => [...prev, contactToDj(nuevo)])
     setDjId(nuevo.id)
     if (quickFee && !fee) setFee(quickFee)
     setQuickCreating(false); setQuickFee(''); setQuickGenres('')

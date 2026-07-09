@@ -534,13 +534,14 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       const hoy = new Date().toISOString().slice(0, 10)
       const desde = input.fecha ?? hoy
       const hasta = input.fecha ?? new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+      // Directorio unificado: el talento vive en crm_contacts (contact_type='DJ')
       const { data: gigs } = await supabaseAdmin.from('dj_bookings')
-        .select('date, start_time, status, djs(stage_name, genres)')
+        .select('date, start_time, status, crm_contacts(full_name, genres)')
         .eq('bu_id', ctx.conv.bu_id).gte('date', desde).lte('date', hasta)
         .in('status', ['confirmed', 'played'])
         .order('date')
-      const programacion = (gigs ?? []).map((g: { date: string; start_time: string; djs: { stage_name: string; genres: string[] } | null }) => ({
-        fecha: g.date, hora: g.start_time, dj: g.djs?.stage_name ?? 'DJ', generos: g.djs?.genres ?? [],
+      const programacion = (gigs ?? []).map((g: { date: string; start_time: string; crm_contacts: { full_name: string; genres: string[] } | null }) => ({
+        fecha: g.date, hora: g.start_time, dj: g.crm_contacts?.full_name ?? 'DJ', generos: g.crm_contacts?.genres ?? [],
       }))
       if (!programacion.length) return { sin_programacion: true, nota: 'No hay DJs anunciados para esas fechas — dile que la programación está por anunciarse (NO inventes nombres) y ofrece la reserva igual.' }
       return { programacion, nota: 'Menciona al DJ con entusiasmo y aprovecha para ofrecer apartar mesa.' }
@@ -550,9 +551,11 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       // El bot NUNCA negocia fees ni promete fechas: registra, avisa y escala.
       const nombre = String(input.nombre_artistico).trim()
       if (!nombre) return { error: 'Falta el nombre artístico.' }
-      const { data: existente } = await supabaseAdmin.from('djs').select('id, stage_name').ilike('stage_name', nombre).maybeSingle()
+      // Directorio unificado: el DJ se registra como contacto (contact_type='DJ')
+      const { data: existente } = await supabaseAdmin.from('crm_contacts').select('id, full_name').eq('contact_type', 'DJ').ilike('full_name', nombre).maybeSingle()
       const row: Record<string, unknown> = {
-        stage_name: nombre,
+        full_name: nombre,
+        contact_type: 'DJ',
         genres: input.generos ? String(input.generos).split(',').map((g: string) => g.trim()).filter(Boolean) : [],
         city: input.ciudad ?? null,
         base_fee: input.fee_aproximado ?? null,
@@ -563,9 +566,9 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       }
       let djId = existente?.id
       if (existente) {
-        await supabaseAdmin.from('djs').update(row).eq('id', existente.id)
+        await supabaseAdmin.from('crm_contacts').update(row).eq('id', existente.id)
       } else {
-        const { data: nuevo, error: dErr } = await supabaseAdmin.from('djs').insert(row).select('id').single()
+        const { data: nuevo, error: dErr } = await supabaseAdmin.from('crm_contacts').insert(row).select('id').single()
         if (dErr) return { error: dErr.message }
         djId = nuevo.id
       }
