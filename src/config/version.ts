@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.28.0"
+export const APP_VERSION = "2.29.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.29.0",
+    date: "2026-07-10",
+    type: "MINOR",
+    changes: [
+      "Concierge → HOY: nueva primera pantalla de triage — todo accionable en 2 taps",
+      "Cola 'Atiende ahora' priorizada (quejas → comprobantes → escaladas) con semáforo de espera; tap abre el hilo",
+      "Reservas sin confirmar de hoy/mañana con botón Confirmar que avisa al cliente automáticamente",
+      "La noche de hoy por venue: barra de ocupación, próximas llegadas; tap lleva a la agenda del venue",
+      "Pulso de calidad del día: 1ª respuesta (mediana), esperando humano, % confirmadas, conversaciones",
+    ]
+  },
   {
     version: "2.28.0",
     date: "2026-07-09",
