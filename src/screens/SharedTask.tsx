@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabase'
 import { HtmlFrame } from '../components/ui/HtmlFrame'
 import { AppLogoBadge } from '../components/ui/AppLogo'
 import type { Session } from '@supabase/supabase-js'
+import type { TaskArea } from '../types'
+import { TASK_AREA_LABELS } from '../lib/taskAreas'
 
 interface TaskData {
   id: string
   title: string
   description: string | null
-  type: string
+  area: TaskArea | null
   status: string
   priority: string
   due_date: string | null
@@ -208,7 +210,7 @@ export function SharedTask({ taskId }: Props) {
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: sColor, flexShrink: 0 }} />
             {STATUS_LABELS[task.status] ?? task.status}
           </span>
-          <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '4px', padding: '2px 8px' }}>{task.type}</span>
+          <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '4px', padding: '2px 8px' }}>{task.area ? TASK_AREA_LABELS[task.area] : '—'}</span>
           <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: pColor, background: `${pColor}15`, border: `1px solid ${pColor}40`, borderRadius: '4px', padding: '2px 8px' }}>{task.priority}</span>
         </div>
 

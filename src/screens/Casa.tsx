@@ -1007,7 +1007,7 @@ function AdminIncidencias({ bus, userId, canWrite }: { bus: BU[]; userId?: strin
     const { data: task, error } = await supabase.from('tasks').insert({
       title: `Incidencia${inc.area ? ` · ${inc.area}` : ''}: ${inc.description.slice(0, 80)}`,
       description: `${inc.description}${inc.photo_url ? `\n\nFoto: ${inc.photo_url}` : ''}\n\nReportada desde La Casa${bu ? ` · ${bu.name}` : ''}.`,
-      type: 'MAINTENANCE', priority: 'HIGH', status: 'OPEN', bu_id: inc.bu_id,
+      area: 'mantenimiento', client_impact: 'internal', priority: 'HIGH', status: 'OPEN', bu_id: inc.bu_id,
       created_by: userId ?? null, proof_required: true, deadline_type: 'SOFT',
     }).select('id').single()
     if (error || !task) { setBusyId(null); showToast('No se pudo crear la tarea', 'error'); return }

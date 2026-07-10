@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Edit2, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import type { TaskType, TaskPriority, DeadlineType } from '../types'
+import type { TaskArea, ClientImpact, TaskPriority, DeadlineType } from '../types'
+import { TASK_AREA_LABELS, TASK_AREA_GROUPS, CLIENT_IMPACT_LABELS } from '../lib/taskAreas'
 
 interface Template {
   id: string
   name: string
   description: string | null
-  type: TaskType
+  area: TaskArea | null
+  client_impact: ClientImpact | null
   priority: TaskPriority
   deadline_type: DeadlineType
   proof_required: boolean
@@ -37,7 +39,8 @@ export function TaskTemplates({ userRole }: Props) {
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [type, setType] = useState<TaskType>('MAINTENANCE')
+  const [area, setArea] = useState<TaskArea>('mantenimiento')
+  const [clientImpact, setClientImpact] = useState<ClientImpact>('internal')
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
   const [deadlineType, setDeadlineType] = useState<DeadlineType>('SOFT')
   const [proofRequired, setProofRequired] = useState(false)
@@ -59,14 +62,14 @@ export function TaskTemplates({ userRole }: Props) {
 
   function openCreate() {
     setEditing(null)
-    setName(''); setDescription(''); setType('MAINTENANCE'); setPriority('MEDIUM')
+    setName(''); setDescription(''); setArea('mantenimiento'); setClientImpact('internal'); setPriority('MEDIUM')
     setDeadlineType('SOFT'); setProofRequired(false); setEstimatedHours(''); setBuId('')
     setShowForm(true)
   }
 
   function openEdit(t: Template) {
     setEditing(t)
-    setName(t.name); setDescription(t.description ?? ''); setType(t.type)
+    setName(t.name); setDescription(t.description ?? ''); setArea(t.area ?? 'mantenimiento'); setClientImpact(t.client_impact ?? 'internal')
     setPriority(t.priority); setDeadlineType(t.deadline_type); setProofRequired(t.proof_required)
     setEstimatedHours(t.estimated_hours ? String(t.estimated_hours) : ''); setBuId(t.bu_id ?? '')
     setShowForm(true)
@@ -78,7 +81,8 @@ export function TaskTemplates({ userRole }: Props) {
     const payload = {
       name: name.trim(),
       description: description || null,
-      type,
+      area,
+      client_impact: clientImpact,
       priority,
       deadline_type: deadlineType,
       proof_required: proofRequired,
@@ -198,8 +202,13 @@ export function TaskTemplates({ userRole }: Props) {
                       {t.priority}
                     </span>
                     <span style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: '4px', padding: '2px 7px', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
-                      {t.type}
+                      {t.area ? TASK_AREA_LABELS[t.area] : '—'}
                     </span>
+                    {t.client_impact === 'client_facing' && (
+                      <span style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--accent)', borderRadius: '4px', padding: '2px 7px', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
+                        {CLIENT_IMPACT_LABELS.client_facing}
+                      </span>
+                    )}
                     {bu && (
                       <span style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-tertiary)', borderRadius: '4px', padding: '2px 7px', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
                         {bu.code}
@@ -268,10 +277,12 @@ export function TaskTemplates({ userRole }: Props) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Type</label>
-                  <select value={type} onChange={e => setType(e.target.value as TaskType)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                    {['MAINTENANCE', 'HARDWARE', 'REPORT', 'CONTENT', 'PROJECT'].map(t => (
-                      <option key={t} value={t}>{t}</option>
+                  <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Área</label>
+                  <select value={area} onChange={e => setArea(e.target.value as TaskArea)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                    {TASK_AREA_GROUPS.map(g => (
+                      <optgroup key={g.group} label={g.group}>
+                        {g.items.map(a => <option key={a} value={a}>{TASK_AREA_LABELS[a]}</option>)}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -283,6 +294,13 @@ export function TaskTemplates({ userRole }: Props) {
                     <option value="LOW">🟢 LOW</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Impacto en cliente</label>
+                <select value={clientImpact} onChange={e => setClientImpact(e.target.value as ClientImpact)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                  {(Object.keys(CLIENT_IMPACT_LABELS) as ClientImpact[]).map(k => <option key={k} value={k}>{CLIENT_IMPACT_LABELS[k]}</option>)}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
