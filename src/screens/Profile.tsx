@@ -119,11 +119,12 @@ interface Props {
 }
 
 const PREVIEW_ROLES: { id: UserRole; label: string; color: string; desc: string }[] = [
-  { id: 'MASTER',      label: 'Master',      color: '#FF6B35', desc: 'Acceso total (tu vista real)' },
-  { id: 'C_LEVEL',     label: 'C-Level',     color: '#22C55E', desc: 'Dashboard + analítica, sin admin' },
-  { id: 'OPS_MANAGER', label: 'Ops Manager', color: '#EAB308', desc: 'Tareas, CRM, objetivos de equipo' },
-  { id: 'MARKETING',   label: 'Marketing',   color: '#3B82F6', desc: 'Contenido y campañas' },
-  { id: 'TEAM',        label: 'Team',        color: '#888888', desc: 'Solo sus tareas y venue clients' },
+  { id: 'MASTER',         label: 'Master',         color: '#FF6B35', desc: 'Acceso total (tu vista real)' },
+  { id: 'C_LEVEL',        label: 'C-Level',        color: '#22C55E', desc: 'Dashboard + analítica, sin admin' },
+  { id: 'OPS_MANAGER',    label: 'Ops Manager',    color: '#EAB308', desc: 'Tareas, CRM, objetivos de equipo' },
+  { id: 'MARKETING',      label: 'Marketing',      color: '#3B82F6', desc: 'Contenido, campañas y Concierge' },
+  { id: 'TEAM',           label: 'Team',           color: '#888888', desc: 'Solo sus tareas y venue clients' },
+  { id: 'HEART_OF_HOUSE', label: 'Heart of House', color: '#A78BFA', desc: 'Solo La Casa: mi turno y reportar' },
 ]
 
 // MASTER-only: preview the app as another role to test what each access level sees.
@@ -261,9 +262,11 @@ export function Profile({ profile, onUpdated }: Props) {
 
   const ROLE_COLORS: Record<string, string> = {
     MASTER: '#22C55E',
+    C_LEVEL: '#22C55E',
     OPS_MANAGER: '#EAB308',
     MARKETING: '#3B82F6',
     TEAM: '#888888',
+    HEART_OF_HOUSE: '#A78BFA',
   }
 
   const inputStyle = {

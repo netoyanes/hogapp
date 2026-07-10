@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.30.0"
+export const APP_VERSION = "2.30.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.30.1",
+    date: "2026-07-10",
+    type: "PATCH",
+    changes: [
+      "Perfil → Vista previa por rol: agregado Heart of House (faltaba desde que se creó el rol)",
+      "Colores de rol completos para C-Level y Heart of House en el badge de perfil",
+    ]
+  },
   {
     version: "2.30.0",
     date: "2026-07-10",
