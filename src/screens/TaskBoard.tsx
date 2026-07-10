@@ -9,7 +9,8 @@ import { SegmentedControl, Sheet } from '../components/v2'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { changeTaskStatus } from '../lib/taskActions'
-import type { Task, TaskStatus, TaskPriority, TaskType } from '../types'
+import type { Task, TaskStatus, TaskPriority, TaskArea } from '../types'
+import { TASK_AREA_LABELS, TASK_AREA_GROUPS } from '../lib/taskAreas'
 
 const COLUMNS: { id: TaskStatus; label: string }[] = [
   { id: 'OPEN', label: 'Abiertas' },
@@ -44,7 +45,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
   const [showCreate, setShowCreate] = useState(false)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [filterPriority, setFilterPriority] = useState<TaskPriority | ''>('')
-  const [filterType, setFilterType] = useState<TaskType | ''>('')
+  const [filterArea, setFilterArea] = useState<TaskArea | ''>('')
   const [filterBu, setFilterBu] = useState(defaultBuFilter ?? '')
   const [filterAssignee, setFilterAssignee] = useState(userId ?? '')
   const [showArchived, setShowArchived] = useState(false)
@@ -117,7 +118,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
 
   const filtered = tasks.filter((t) => {
     if (filterPriority && t.priority !== filterPriority) return false
-    if (filterType && t.type !== filterType) return false
+    if (filterArea && t.area !== filterArea) return false
     if (filterBu && t.bu_id !== filterBu) return false
     if (filterAssignee) {
       const related =
@@ -151,7 +152,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     minHeight: '32px',
   }
 
-  const hasFilters = !!(filterBu || filterPriority || filterType || filterAssignee)
+  const hasFilters = !!(filterBu || filterPriority || filterArea || filterAssignee)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -185,10 +186,12 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
             <option value="MEDIUM">Media</option>
             <option value="LOW">Baja</option>
           </select>
-          <select value={filterType} onChange={(e) => setFilterType(e.target.value as TaskType | '')} style={selectStyle}>
-            <option value="">Tipo</option>
-            {['MAINTENANCE', 'HARDWARE', 'REPORT', 'CONTENT', 'PROJECT'].map((t) => (
-              <option key={t} value={t}>{t}</option>
+          <select value={filterArea} onChange={(e) => setFilterArea(e.target.value as TaskArea | '')} style={selectStyle}>
+            <option value="">Área</option>
+            {TASK_AREA_GROUPS.map(g => (
+              <optgroup key={g.group} label={g.group}>
+                {g.items.map(a => <option key={a} value={a}>{TASK_AREA_LABELS[a]}</option>)}
+              </optgroup>
             ))}
           </select>
           <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} style={selectStyle}>
@@ -211,7 +214,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
             Archivadas {showArchived && `· ${tasks.length}`}
           </button>
           {hasFilters && (
-            <button onClick={() => { setFilterBu(''); setFilterPriority(''); setFilterType(''); setFilterAssignee('') }}
+            <button onClick={() => { setFilterBu(''); setFilterPriority(''); setFilterArea(''); setFilterAssignee('') }}
               style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: '11px', cursor: 'pointer', flexShrink: 0 }}>
               Limpiar
             </button>

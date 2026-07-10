@@ -5,7 +5,8 @@ import { notifySlack, taskCreatedMessage, taskAssignedMessage, notifyUserDM, tas
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { logActivity } from '../../hooks/useActivityLog'
 import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
-import type { TaskType, TaskPriority, DeadlineType } from '../../types'
+import type { TaskArea, ClientImpact, TaskPriority, DeadlineType } from '../../types'
+import { TASK_AREA_LABELS, TASK_AREA_GROUPS, CLIENT_IMPACT_LABELS } from '../../lib/taskAreas'
 
 interface Props {
   onClose: () => void
@@ -19,7 +20,8 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
   const isMobile = useIsMobile()
   const [title, setTitle] = useState('')
   const [buId, setBuId] = useState(defaultBuId ?? '')
-  const [type, setType] = useState<TaskType>('MAINTENANCE')
+  const [area, setArea] = useState<TaskArea>('mantenimiento')
+  const [clientImpact, setClientImpact] = useState<ClientImpact>('internal')
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
   const [assignedTo, setAssignedTo] = useState('')
   const [description, setDescription] = useState('')
@@ -29,7 +31,7 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
   const [estimatedHours, setEstimatedHours] = useState('')
   const [isPrivate, setIsPrivate] = useState(false)
   const [followers, setFollowers] = useState<string[]>([])
-  const [templates, setTemplates] = useState<{ id: string; name: string; description: string | null; type: string; priority: string; deadline_type: string; proof_required: boolean; estimated_hours: number | null; bu_id: string | null }[]>([])
+  const [templates, setTemplates] = useState<{ id: string; name: string; description: string | null; area: string | null; client_impact: string | null; priority: string; deadline_type: string; proof_required: boolean; estimated_hours: number | null; bu_id: string | null }[]>([])
   const [advanced, setAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -64,7 +66,8 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
     if (!t) return
     setTitle(t.name)
     setDescription(t.description ?? '')
-    setType(t.type as TaskType)
+    if (t.area) setArea(t.area as TaskArea)
+    if (t.client_impact) setClientImpact(t.client_impact as ClientImpact)
     setPriority(t.priority as TaskPriority)
     setDeadlineType(t.deadline_type as DeadlineType)
     setProofRequired(t.proof_required)
@@ -81,7 +84,8 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
     const { data: newTask, error } = await supabase.from('tasks').insert({
       title: title.trim(),
       description: description || null,
-      type,
+      area,
+      client_impact: clientImpact,
       bu_id: buId || null,
       priority,
       status: 'OPEN',
@@ -214,9 +218,9 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
             </span>
           </div>
 
-          {/* BU + Type */}
+          {/* BU + Área + Impacto */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div style={{ gridColumn: '1 / -1' }}>
               {label('Unidad de negocio')}
               <select value={buId} onChange={(e) => setBuId(e.target.value)} style={selectStyle}
                 onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
@@ -229,13 +233,26 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
               </select>
             </div>
             <div>
-              {label('Tipo')}
-              <select value={type} onChange={(e) => setType(e.target.value as TaskType)} style={selectStyle}
+              {label('Área')}
+              <select value={area} onChange={(e) => setArea(e.target.value as TaskArea)} style={selectStyle}
                 onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
                 onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
               >
-                {['MAINTENANCE', 'HARDWARE', 'REPORT', 'CONTENT', 'PROJECT'].map((t) => (
-                  <option key={t} value={t}>{t}</option>
+                {TASK_AREA_GROUPS.map(g => (
+                  <optgroup key={g.group} label={g.group}>
+                    {g.items.map(a => <option key={a} value={a}>{TASK_AREA_LABELS[a]}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <div>
+              {label('Impacto en cliente')}
+              <select value={clientImpact} onChange={(e) => setClientImpact(e.target.value as ClientImpact)} style={selectStyle}
+                onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+              >
+                {(Object.keys(CLIENT_IMPACT_LABELS) as ClientImpact[]).map(k => (
+                  <option key={k} value={k}>{CLIENT_IMPACT_LABELS[k]}</option>
                 ))}
               </select>
             </div>

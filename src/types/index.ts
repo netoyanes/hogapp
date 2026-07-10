@@ -6,7 +6,14 @@ export type RevenueTrend = "GROWING" | "STABLE" | "DECLINING" | "FREEFALL" | "NO
 
 export type EngagementLevel = "HIGH" | "MEDIUM" | "LOW" | "NO_DATA"
 
-export type TaskType = "MAINTENANCE" | "HARDWARE" | "REPORT" | "CONTENT" | "PROJECT"
+// Área del holding que la dueña (reemplaza el viejo `type` genérico) y si la
+// tarea la nota el cliente (F&B, huésped, wellness, pod…) o es puro backoffice.
+export type TaskArea =
+  | "piso" | "mantenimiento" | "concierge" | "talento"
+  | "marketing" | "comercial"
+  | "finanzas" | "rrhh" | "legal" | "direccion"
+  | "tecnologia"
+export type ClientImpact = "client_facing" | "internal"
 
 export type TaskStatus = "OPEN" | "IN_PROGRESS" | "PROOF_SUBMITTED" | "APPROVED" | "REVISION"
 
@@ -91,7 +98,8 @@ export interface Task {
   id: string
   title: string
   description: string | null
-  type: TaskType
+  area: TaskArea | null
+  client_impact: ClientImpact | null
   bu_id: string | null
   priority: TaskPriority
   status: TaskStatus

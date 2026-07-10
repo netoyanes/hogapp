@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.29.0"
+export const APP_VERSION = "2.30.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.30.0",
+    date: "2026-07-10",
+    type: "MINOR",
+    changes: [
+      "Tareas: 'Tipo' reemplazado por 'Área' — 11 funciones reales del holding agrupadas en Operación / Comercial y Marketing / Corporativo / Tecnología",
+      "Nuevo campo 'Impacto en cliente' (cara al cliente / interno) — el cliente puede ser consumidor F&B, huésped, cliente wellness o quien reserva un pod",
+      "Las incidencias de La Casa se clasifican automáticamente como Mantenimiento e infraestructura",
+      "Plantillas de tareas migradas al mismo esquema de área + impacto",
+    ]
+  },
   {
     version: "2.29.0",
     date: "2026-07-10",

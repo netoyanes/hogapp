@@ -10,7 +10,8 @@ import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
 import { HtmlFrame } from './HtmlFrame'
 import { Avatar } from './Avatar'
-import type { Task, TaskStatus, TaskPriority, TaskType, DeadlineType } from '../../types'
+import type { Task, TaskStatus, TaskPriority, TaskArea, ClientImpact, DeadlineType } from '../../types'
+import { TASK_AREA_LABELS, TASK_AREA_GROUPS, CLIENT_IMPACT_LABELS } from '../../lib/taskAreas'
 
 interface Props {
   taskId: string
@@ -104,7 +105,8 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
-  const [taskType, setTaskType] = useState<TaskType>('PROJECT')
+  const [taskArea, setTaskArea] = useState<TaskArea>('direccion')
+  const [clientImpact, setClientImpact] = useState<ClientImpact>('internal')
   const [buId, setBuId] = useState('')
   const [proofRequired, setProofRequired] = useState(false)
   const [estimatedHours, setEstimatedHours] = useState('')
@@ -147,7 +149,8 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
       setDescription(t.description ?? '')
       setDueDate(t.due_date ?? '')
       setPriority(t.priority)
-      setTaskType(t.type)
+      setTaskArea(t.area ?? 'direccion')
+      setClientImpact(t.client_impact ?? 'internal')
       setBuId(t.bu_id ?? '')
       setProofRequired(t.proof_required)
       setEstimatedHours(t.estimated_hours != null ? String(t.estimated_hours) : '')
@@ -273,7 +276,8 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
       description: description || null,
       due_date: dueDate || null,
       priority,
-      type: taskType,
+      area: taskArea,
+      client_impact: clientImpact,
       bu_id: buId || null,
       proof_required: proofRequired,
       estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null,
@@ -282,7 +286,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     }).eq('id', taskId)
     if (newBuName) setBuName(`${newBuName.code} · ${newBuName.name}`)
     else setBuName('')
-    setTask(prev => prev ? { ...prev, title, description: description || null, due_date: dueDate || null, priority, type: taskType, bu_id: buId || null, proof_required: proofRequired, estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null, deadline_type: deadlineType } : prev)
+    setTask(prev => prev ? { ...prev, title, description: description || null, due_date: dueDate || null, priority, area: taskArea, client_impact: clientImpact, bu_id: buId || null, proof_required: proofRequired, estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null, deadline_type: deadlineType } : prev)
     setSaving(false)
     setEditing(false)
     onUpdated()
@@ -438,7 +442,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
           {/* Status row */}
           <div className="flex items-center gap-2 mt-3 flex-wrap">
             <StatusBadge status={task.status} />
-            <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>{task.type}</span>
+            <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>{task.area ? TASK_AREA_LABELS[task.area] : '—'}</span>
+            {task.client_impact && (
+              <span style={{
+                color: task.client_impact === 'client_facing' ? 'var(--accent)' : 'var(--text-tertiary)',
+                fontSize: '11px', fontFamily: 'var(--font-mono)',
+                border: '1px solid var(--border-subtle)', borderRadius: '4px', padding: '1px 6px',
+              }}>{CLIENT_IMPACT_LABELS[task.client_impact]}</span>
+            )}
             {task.archived && (
               <span style={{ background: '#78350f20', color: '#d97706', border: '1px solid #d9770640', borderRadius: '4px', fontSize: '10px', fontWeight: 700, padding: '2px 7px', fontFamily: 'var(--font-mono)' }}>
                 ARCHIVED
@@ -512,8 +523,12 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
               <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{task.estimated_hours ? `${task.estimated_hours}h` : '—'}</div>
             </div>
             <div>
-              <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginBottom: '2px' }}>Type</div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{task.type}</div>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginBottom: '2px' }}>Área</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{task.area ? TASK_AREA_LABELS[task.area] : '—'}</div>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginBottom: '2px' }}>Impacto en cliente</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{task.client_impact ? CLIENT_IMPACT_LABELS[task.client_impact] : '—'}</div>
             </div>
             <div>
               <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginBottom: '2px' }}>Deadline</div>
@@ -570,9 +585,19 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label style={lbl}>Type</label>
-                  <select value={taskType} onChange={e => setTaskType(e.target.value as TaskType)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                    {(['MAINTENANCE','HARDWARE','REPORT','CONTENT','PROJECT'] as TaskType[]).map(t => <option key={t} value={t}>{t}</option>)}
+                  <label style={lbl}>Área</label>
+                  <select value={taskArea} onChange={e => setTaskArea(e.target.value as TaskArea)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                    {TASK_AREA_GROUPS.map(g => (
+                      <optgroup key={g.group} label={g.group}>
+                        {g.items.map(a => <option key={a} value={a}>{TASK_AREA_LABELS[a]}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>Impacto en cliente</label>
+                  <select value={clientImpact} onChange={e => setClientImpact(e.target.value as ClientImpact)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                    {(Object.keys(CLIENT_IMPACT_LABELS) as ClientImpact[]).map(k => <option key={k} value={k}>{CLIENT_IMPACT_LABELS[k]}</option>)}
                   </select>
                 </div>
                 <div>
