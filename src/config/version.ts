@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.30.1"
+export const APP_VERSION = "2.30.2"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.30.2",
+    date: "2026-07-10",
+    type: "PATCH",
+    changes: [
+      "Marketing con acceso funcional completo en Concierge: ya puede crear/editar reservas y crear/editar clientes, no solo verlos",
+      "Talento (DJs y fees) se mantiene solo para Ops/Master por ser dato de negociación",
+    ]
+  },
   {
     version: "2.30.1",
     date: "2026-07-10",
