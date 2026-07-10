@@ -105,7 +105,7 @@ export function Reservations({ userRole, userId }: Props) {
   const [capOpen, setCapOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
 
-  const canWrite = ['MASTER', 'OPS_MANAGER', 'TEAM'].includes(userRole ?? '')
+  const canWrite = ['MASTER', 'OPS_MANAGER', 'TEAM', 'MARKETING'].includes(userRole ?? '')
   const isTeam = userRole === 'TEAM'
   const canManageCapacity = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '')
   const buMap = useMemo(() => Object.fromEntries(buList.map(b => [b.id, b.code])), [buList])

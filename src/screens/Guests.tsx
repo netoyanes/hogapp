@@ -18,7 +18,7 @@ interface Props {
 
 export function Guests({ userRole, userId }: Props) {
   const isMobile = useIsMobile()
-  const canCreate = ['MASTER', 'OPS_MANAGER', 'TEAM'].includes(userRole ?? '')
+  const canCreate = ['MASTER', 'OPS_MANAGER', 'TEAM', 'MARKETING'].includes(userRole ?? '')
 
   const [guests, setGuests] = useState<Guest[]>([])
   const [stats, setStats] = useState<Record<string, GuestStats>>({})
