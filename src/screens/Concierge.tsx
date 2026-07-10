@@ -112,7 +112,9 @@ export function Concierge({ userId, userRole }: { userId?: string; userRole?: st
   const isMobile = useIsMobile()
   const isMaster = userRole === 'MASTER'
   const isOpsPlus = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '')
-  const [tab, setTab] = useState('reservas')
+  // Hoy es el landing para todos: la cabina de triage — qué necesita atención
+  // y cómo van las reservas, todo accionable en ≤2 taps.
+  const [tab, setTab] = useState('hoy')
   const [buList, setBuList] = useState<BU[]>([])
 
   useEffect(() => {
@@ -121,6 +123,7 @@ export function Concierge({ userId, userRole }: { userId?: string; userRole?: st
   }, [])
 
   const tabs = [
+    { id: 'hoy',      label: 'Hoy' },
     { id: 'reservas', label: 'Reservas' },
     { id: 'inbox',    label: 'Bandeja' },
     { id: 'clientes', label: 'Clientes' },
@@ -143,7 +146,7 @@ export function Concierge({ userId, userRole }: { userId?: string; userRole?: st
             <span style={{ color: 'var(--text-tertiary)', fontSize: 11, marginLeft: 4 }}>Reservas · Bot · Clientes</span>
           </div>
         )}
-        <div style={{ maxWidth: isMobile ? undefined : (isMaster ? 640 : 420), paddingBottom: 8 }}>
+        <div style={{ maxWidth: isMobile ? undefined : (isMaster ? 720 : 500), paddingBottom: 8 }}>
           <SegmentedControl scrollable value={tab} onChange={setTab} options={tabs} />
         </div>
       </div>
@@ -156,12 +159,245 @@ export function Concierge({ userId, userRole }: { userId?: string; userRole?: st
       ) : (
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <div style={{ padding: isMobile ? 'var(--space-3)' : 'var(--space-5)', paddingTop: 4, maxWidth: 1100, margin: '0 auto' }}>
+            {tab === 'hoy' && <HoyTab buList={buList} userId={userId} isMobile={isMobile} onGoReservas={() => setTab('reservas')} />}
             {tab === 'inbox' && <InboxTab buList={buList} userId={userId} isMobile={isMobile} isMaster={isMaster} />}
             {isOpsPlus && tab === 'talento' && <TalentoTab buList={buList} userId={userId} isMobile={isMobile} />}
             {isMaster && tab === 'summary' && <SummaryTab buList={buList} />}
             {isMaster && tab === 'config' && <ConfigTab buList={buList} />}
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// HOY — cabina de triage: la cola de lo que necesita atención (accionable en
+// ≤2 taps), la ocupación de la noche por venue, y el pulso de calidad del día.
+// Meta operativa del turno: cola en cero, nada en rojo.
+// ═════════════════════════════════════════════════════════════════════════════
+interface HoyRes {
+  id: string; bu_id: string; date: string; time_slot: string; party_size: number
+  status: string; bot_conversation_id: string | null
+  guests: { full_name: string } | null
+}
+
+// Semáforo de espera: verde <5 min · ámbar 5–15 · rojo >15
+function esperaColor(iso: string): string {
+  const mins = (Date.now() - new Date(iso).getTime()) / 60000
+  return mins > 15 ? 'var(--status-risk)' : mins > 5 ? 'var(--status-attention)' : 'var(--status-healthy)'
+}
+
+function HoyTab({ buList, userId, isMobile, onGoReservas }: {
+  buList: BU[]; userId?: string; isMobile: boolean; onGoReservas: () => void
+}) {
+  const [queue, setQueue] = useState<Conversation[]>([])
+  const [resDias, setResDias] = useState<HoyRes[]>([])
+  const [caps, setCaps] = useState<Record<string, { max_reservations: number; max_pax: number }>>({})
+  const [convsHoy, setConvsHoy] = useState<{ created_at: string; first_replied_at: string | null }[]>([])
+  const [openConv, setOpenConv] = useState<Conversation | null>(null)
+  const [busyRes, setBusyRes] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const hoy = new Date()
+  const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`
+  const man = new Date(hoy.getTime() + 86400000)
+  const manISO = `${man.getFullYear()}-${String(man.getMonth() + 1).padStart(2, '0')}-${String(man.getDate()).padStart(2, '0')}`
+
+  const load = useCallback(async () => {
+    const [{ data: q }, { data: rs }, { data: cp }, { data: ch }] = await Promise.all([
+      supabase.from('bot_conversations').select('*').eq('status', 'needs_human').eq('is_simulated', false).order('last_message_at'),
+      supabase.from('reservations').select('id, bu_id, date, time_slot, party_size, status, bot_conversation_id, guests(full_name)')
+        .gte('date', hoyISO).lte('date', manISO),
+      supabase.from('venue_capacity').select('bu_id, max_reservations, max_pax').eq('day_of_week', hoy.getDay()).eq('active', true),
+      supabase.from('bot_conversations').select('created_at, first_replied_at').eq('is_simulated', false).gte('last_message_at', hoyISO),
+    ])
+    setQueue((q ?? []) as Conversation[])
+    setResDias((rs ?? []) as unknown as HoyRes[])
+    setCaps(Object.fromEntries((cp ?? []).map(c => [c.bu_id, { max_reservations: c.max_reservations, max_pax: c.max_pax }])))
+    setConvsHoy(ch ?? [])
+    setLoading(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoyISO, manISO])
+
+  useEffect(() => { load() }, [load])
+
+  // La cola se prioriza: quejas 🚨 → comprobantes 🧾 → el resto por antigüedad
+  const esQueja = (c: Conversation) => /^queja/i.test(c.escalation_reason ?? '')
+  const esComprobante = (c: Conversation) => /(comprobante|apartado)/i.test(c.escalation_reason ?? '')
+  const cola = [...queue].sort((a, b) => {
+    const pa = esQueja(a) ? 0 : esComprobante(a) ? 1 : 2
+    const pb = esQueja(b) ? 0 : esComprobante(b) ? 1 : 2
+    return pa !== pb ? pa - pb : a.last_message_at.localeCompare(b.last_message_at)
+  })
+  const sinConfirmar = resDias.filter(r => r.status === 'requested')
+
+  // Confirmar directo desde la tarjeta: reserva confirmada + aviso automático
+  // al cliente por su canal (misma mecánica que el botón del hilo).
+  async function confirmar(r: HoyRes) {
+    setBusyRes(r.id)
+    const { error } = await supabase.from('reservations').update({
+      status: 'confirmed', confirmed_at: new Date().toISOString(), status_changed_by: userId ?? null,
+    }).eq('id', r.id)
+    if (error) { setBusyRes(null); showToast(`No se pudo confirmar: ${error.message}`, 'error'); return }
+    logActivity('reservation_confirmed', 'reservation', r.id, { via: 'concierge_hoy', guest: r.guests?.full_name })
+    if (r.bot_conversation_id) {
+      const { data: conv } = await supabase.from('bot_conversations').select('id, is_simulated').eq('id', r.bot_conversation_id).maybeSingle()
+      if (conv) {
+        const bu = buList.find(b => b.id === r.bu_id)
+        const fecha = new Date(r.date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
+        const aviso = `✅ ¡Reserva confirmada! Te esperamos el ${fecha}, ${r.time_slot}, ${r.party_size} ${r.party_size === 1 ? 'persona' : 'personas'}${bu ? ` en ${bu.name}` : ''}. Cualquier cambio, escríbenos por aquí.`
+        if (conv.is_simulated) await supabase.from('bot_messages').insert({ conversation_id: conv.id, role: 'agent', body: aviso })
+        else {
+          const { data, error: sendErr } = await supabase.functions.invoke('concierge-send', { body: { conversationId: conv.id, body: aviso } })
+          if (sendErr || data?.error) showToast('Confirmada, pero el aviso al cliente falló — mándaselo desde la Bandeja', 'error')
+        }
+      }
+    }
+    setBusyRes(null)
+    showToast('Reserva confirmada y cliente avisado ✅', 'success')
+    load()
+  }
+
+  // KPIs de calidad del día
+  const frMins = convsHoy.filter(c => c.first_replied_at)
+    .map(c => (new Date(c.first_replied_at!).getTime() - new Date(c.created_at).getTime()) / 60000)
+    .filter(m => m >= 0).sort((a, b) => a - b)
+  const frMediana = frMins.length ? frMins[Math.floor(frMins.length / 2)] : null
+  const resHoy = resDias.filter(r => r.date === hoyISO && r.status !== 'cancelled')
+  const confirmadasPct = resHoy.length
+    ? Math.round((resHoy.filter(r => ['confirmed', 'seated', 'completed'].includes(r.status)).length / resHoy.length) * 100)
+    : null
+
+  const nowHM = `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`
+  const cardStyle: React.CSSProperties = {
+    background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+    borderRadius: 'var(--radius-md)', padding: '12px 14px',
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      {/* ── Pulso de calidad ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
+        <KPITile label="1ª respuesta hoy" value={frMediana != null ? `${Math.round(frMediana)} min` : '—'}
+          color={frMediana != null && frMediana > 10 ? 'var(--status-attention)' : undefined} hint="Mediana del día" />
+        <KPITile label="Esperando humano" value={String(cola.length)}
+          color={cola.length ? 'var(--status-risk)' : 'var(--status-healthy)'} />
+        <KPITile label="Confirmadas hoy" value={confirmadasPct != null ? `${confirmadasPct}%` : '—'}
+          color={confirmadasPct != null && confirmadasPct < 60 ? 'var(--status-attention)' : undefined} />
+        <KPITile label="Conversaciones hoy" value={String(convsHoy.length)} />
+      </div>
+
+      {/* ── Atiende ahora ── */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+          Atiende ahora {cola.length + sinConfirmar.length > 0 && `· ${cola.length + sinConfirmar.length}`}
+        </div>
+        {loading ? null : cola.length === 0 && sinConfirmar.length === 0 ? (
+          <div style={{ ...cardStyle, textAlign: 'center', padding: '24px', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600 }}>
+            Todo atendido ✅ — cola en cero
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {cola.map(c => {
+              const bu = buList.find(b => b.id === c.bu_id)
+              return (
+                <button key={c.id} onClick={() => setOpenConv(c)}
+                  style={{ ...cardStyle, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>{esQueja(c) ? '🚨' : esComprobante(c) ? '🧾' : '🙋'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {c.display_name ?? c.external_id.slice(-6)}
+                      {bu && <BUChip code={bu.code} size="sm" />}
+                      <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-tertiary)' }}>{c.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram'}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                      {c.escalation_reason ?? 'Esperando atención humana'}
+                    </div>
+                  </div>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: esperaColor(c.last_message_at) }} />
+                    {timeAgo(c.last_message_at)}
+                  </span>
+                </button>
+              )
+            })}
+            {sinConfirmar.map(r => {
+              const bu = buList.find(b => b.id === r.bu_id)
+              return (
+                <div key={r.id} style={{ ...cardStyle, display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>📅</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {r.guests?.full_name ?? 'Cliente'}
+                      {bu && <BUChip code={bu.code} size="sm" />}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      Sin confirmar · {r.date === hoyISO ? 'HOY' : 'mañana'} {r.time_slot} · {r.party_size} pax
+                    </div>
+                  </div>
+                  <button onClick={() => confirmar(r)} disabled={busyRes === r.id}
+                    style={{
+                      background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 'var(--radius-sm)',
+                      padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', minHeight: 40, flexShrink: 0,
+                      display: 'inline-flex', alignItems: 'center', gap: 6, opacity: busyRes === r.id ? 0.6 : 1,
+                    }}>
+                    <CheckCircle2 size={13} /> Confirmar
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Reservas de hoy por venue ── */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+          La noche de hoy
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {buList.filter(bu => caps[bu.id] || resDias.some(r => r.bu_id === bu.id && r.date === hoyISO)).map(bu => {
+            const vivas = resDias.filter(r => r.bu_id === bu.id && r.date === hoyISO && ['requested', 'confirmed', 'seated', 'completed'].includes(r.status))
+            const pax = vivas.reduce((s, r) => s + r.party_size, 0)
+            const cap = caps[bu.id]
+            const pct = cap ? Math.max(vivas.length / cap.max_reservations, pax / cap.max_pax) : null
+            const barColor = pct == null ? 'var(--status-none)' : pct >= 1 ? 'var(--status-risk)' : pct >= 0.85 ? 'var(--status-attention)' : 'var(--status-healthy)'
+            const llegadas = vivas.filter(r => ['requested', 'confirmed'].includes(r.status) && r.time_slot >= nowHM)
+              .sort((a, b) => a.time_slot.localeCompare(b.time_slot)).slice(0, 3)
+            return (
+              <button key={bu.id}
+                onClick={() => { localStorage.setItem('hog_res_last_bu', bu.id); onGoReservas() }}
+                style={{ ...cardStyle, textAlign: 'left', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <BUChip code={bu.code} size="sm" />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{bu.name}</span>
+                  <span className="num" style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                    {cap ? `${vivas.length}/${cap.max_reservations} res · ${pax}/${cap.max_pax} pax` : `${vivas.length} res · ${pax} pax`}
+                  </span>
+                </div>
+                <div style={{ height: 5, background: 'var(--bg-elevated)', borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.min(100, Math.round((pct ?? 0) * 100))}%`, background: barColor, borderRadius: 3 }} />
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                  {llegadas.length
+                    ? `Próximas llegadas: ${llegadas.map(l => `${l.time_slot} ${(l.guests?.full_name ?? '').split(' ')[0]} ×${l.party_size}`).join(' · ')}`
+                    : vivas.length ? 'Sin llegadas pendientes en lo que resta de la noche' : 'Sin reservas para hoy — toca para agendar'}
+                </div>
+              </button>
+            )
+          })}
+          {buList.every(bu => !caps[bu.id] && !resDias.some(r => r.bu_id === bu.id && r.date === hoyISO)) && !loading && (
+            <div style={{ ...cardStyle, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+              Sin reservas ni capacidad configurada para hoy.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {openConv && (
+        <ThreadSheet conv={openConv} buList={buList} userId={userId} isMobile={isMobile}
+          onClose={() => { setOpenConv(null); load() }} onChanged={load} />
       )}
     </div>
   )
