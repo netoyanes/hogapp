@@ -19,7 +19,7 @@ interface Run {
   status: 'in_progress' | 'submitted' | 'approved' | 'returned'
   started_by: string | null; review_note: string | null
 }
-interface RunItem { id: string; run_id: string; item_id: string; status: 'pending' | 'done' | 'issue'; photo_url: string | null; note: string | null }
+interface RunItem { id: string; run_id: string; item_id: string; status: 'pending' | 'done' | 'issue'; photo_url: string | null; note: string | null; review_note: string | null }
 interface Asset {
   id: string; bu_id: string; folio: string | null; name: string; category: string; area: string | null
   brand: string | null; model: string | null; serial: string | null; cost: number | null
@@ -243,6 +243,7 @@ function RunSheet({ checklist, bu, userId, isMobile, reviewMode, onClose }: {
   const [issueFor, setIssueFor] = useState<ChecklistItem | null>(null)
   const [issueNote, setIssueNote] = useState('')
   const [issueFile, setIssueFile] = useState<File | null>(null)
+  const [feedbackFor, setFeedbackFor] = useState<ChecklistItem | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -340,7 +341,7 @@ function RunSheet({ checklist, bu, userId, isMobile, reviewMode, onClose }: {
 
   return (
     <Sheet open onClose={onClose} isMobile={isMobile} width={560}>
-      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <BUChip code={bu.code} size="sm" />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -374,10 +375,16 @@ function RunSheet({ checklist, bu, userId, isMobile, reviewMode, onClose }: {
                     {item.requires_photo && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Camera size={10} /> foto obligatoria</span>}
                     {st === 'issue' && ri?.note && <span style={{ color: 'var(--status-risk)' }}>⚠ {ri.note}</span>}
                   </div>
+                  {ri?.review_note && (
+                    <div style={{ fontSize: '12px', color: 'var(--status-attention)', marginTop: '4px' }}>💬 {ri.review_note}</div>
+                  )}
                 </div>
                 {ri?.photo_url && (
-                  <img src={ri.photo_url} alt="" onClick={() => window.open(ri.photo_url!, '_blank')}
-                    style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 'var(--radius-sm)', cursor: 'pointer', flexShrink: 0 }} />
+                  <img src={ri.photo_url} alt="" onClick={() => setFeedbackFor(item)}
+                    style={{
+                      width: 40, height: 40, objectFit: 'cover', borderRadius: 'var(--radius-sm)', cursor: 'pointer', flexShrink: 0,
+                      border: ri.review_note ? '2px solid var(--status-attention)' : 'none',
+                    }} />
                 )}
                 {editable && (
                   <>
@@ -428,6 +435,93 @@ function RunSheet({ checklist, bu, userId, isMobile, reviewMode, onClose }: {
           </div>
         )}
       </div>
+
+      {feedbackFor && (
+        <ItemFeedbackSheet
+          item={feedbackFor} runItem={runItems[feedbackFor.id]} canReview={reviewMode} isMobile={isMobile}
+          onClose={() => setFeedbackFor(null)}
+          onSaved={ri => setRunItems(prev => ({ ...prev, [ri.item_id]: ri }))}
+        />
+      )}
+    </Sheet>
+  )
+}
+
+// ═══ FEEDBACK POR FOTO — pantalla modular ═════════════════════════════════════
+// Se abre al tocar la foto de un item: la muestra en grande y, en modo
+// revisión (Ops/Master), permite dejar una observación puntual sobre ESE
+// punto — solo si es necesario. El HoH la ve marcada en el item (💬).
+function ItemFeedbackSheet({ item, runItem, canReview, isMobile, onClose, onSaved }: {
+  item: ChecklistItem; runItem?: RunItem; canReview: boolean; isMobile: boolean
+  onClose: () => void; onSaved: (ri: RunItem) => void
+}) {
+  const [note, setNote] = useState(runItem?.review_note ?? '')
+  const [busy, setBusy] = useState(false)
+
+  async function save() {
+    if (!runItem) return
+    setBusy(true)
+    const { data, error } = await supabase.from('checklist_run_items')
+      .update({ review_note: note.trim() || null }).eq('id', runItem.id).select('*').single()
+    setBusy(false)
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    if (data) onSaved(data as RunItem)
+    showToast(note.trim() ? 'Observación guardada 💬' : 'Observación quitada', 'success')
+    onClose()
+  }
+
+  return (
+    <Sheet open onClose={onClose} isMobile={isMobile} width={480}>
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-primary)' }}>{item.label}</div>
+            {item.area && <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{item.area}</div>}
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: '8px' }}><X size={18} /></button>
+        </div>
+
+        {runItem?.photo_url ? (
+          <img src={runItem.photo_url} alt={item.label}
+            onClick={() => window.open(runItem.photo_url!, '_blank')}
+            style={{ width: '100%', maxHeight: '48vh', objectFit: 'contain', background: '#000', borderRadius: 'var(--radius-md)', cursor: 'zoom-in' }} />
+        ) : (
+          <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '13px' }}>
+            Este punto no tiene foto.
+          </div>
+        )}
+
+        {runItem?.status === 'issue' && runItem.note && (
+          <div style={{ background: 'color-mix(in srgb, var(--status-risk) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--status-risk) 30%, transparent)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)' }}>
+            ⚠ Reportado por el equipo: {runItem.note}
+          </div>
+        )}
+
+        {canReview ? (
+          <>
+            <div>
+              <span style={labelStyle}>Observación sobre este punto</span>
+              <textarea value={note} onChange={e => setNote(e.target.value)} rows={3}
+                placeholder='Ej. "falta limpiar la esquina derecha de la barra" — el equipo la verá en este punto'
+                style={{ ...inputStyle, resize: 'vertical' }} />
+            </div>
+            <button onClick={() => void save()} disabled={busy || !runItem} style={{ ...btnPrimary, opacity: busy ? 0.6 : 1 }}>
+              {busy ? 'Guardando…' : 'Guardar observación'}
+            </button>
+            {runItem?.review_note && (
+              <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textAlign: 'center' }}>
+                Borra el texto y guarda para quitar la observación.
+              </span>
+            )}
+          </>
+        ) : runItem?.review_note ? (
+          <div style={{ background: 'color-mix(in srgb, var(--status-attention) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 30%, transparent)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)' }}>
+            💬 Observación del supervisor: {runItem.review_note}
+          </div>
+        ) : (
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'center' }}>Sin observaciones en este punto.</div>
+        )}
+      </div>
     </Sheet>
   )
 }
@@ -470,7 +564,7 @@ function ReportSheet({ open, onClose, bus, userId, isMobile }: {
 
   return (
     <Sheet open={open} onClose={onClose} isMobile={isMobile} width={480}>
-      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <div style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-primary)', flex: 1 }}>⚠ Reportar un problema</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: '8px' }}><X size={18} /></button>
@@ -719,7 +813,7 @@ function TemplateSheet({ checklist, bus, userId, isMobile, canWrite, onClose }: 
 
   return (
     <Sheet open onClose={onClose} isMobile={isMobile} width={560}>
-      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <div style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-primary)', flex: 1 }}>
             {checklist ? 'Editar puesta a punto' : 'Nueva puesta a punto'}
@@ -915,7 +1009,7 @@ function AssetSheet({ asset, bus, userId, isMobile, canWrite, onClose }: {
 
   return (
     <Sheet open onClose={onClose} isMobile={isMobile} width={520}>
-      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <div style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-primary)', flex: 1 }}>{asset ? 'Editar activo' : 'Agregar activo'}</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: '8px' }}><X size={18} /></button>

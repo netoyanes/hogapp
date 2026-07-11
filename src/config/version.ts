@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.30.2"
+export const APP_VERSION = "2.31.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.31.0",
+    date: "2026-07-10",
+    type: "MINOR",
+    changes: [
+      "La Casa — arreglado el scroll en todas las hojas (checklist, reportar, plantillas, inventario): con listas largas ya se ve todo y el botón de enviar/revisar",
+      "Feedback por foto: al tocar la foto de un punto se abre una pantalla con la imagen en grande donde el supervisor deja una observación puntual (solo si es necesario)",
+      "El equipo de piso ve la observación 💬 marcada en el punto exacto al que se refiere",
+    ]
+  },
   {
     version: "2.30.2",
     date: "2026-07-10",
