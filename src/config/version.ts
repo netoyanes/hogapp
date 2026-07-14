@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.33.0"
+export const APP_VERSION = "2.33.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.33.1",
+    date: "2026-07-10",
+    type: "PATCH",
+    changes: [
+      "Editar tarea ahora registra en Actividad exactamente qué cambió, campo por campo (título, venue, área, prioridad, fechas, horas…) con el valor anterior y el nuevo",
+      "Actividad muestra también las reasignaciones de tareas con quién → quién",
+    ]
+  },
   {
     version: "2.33.0",
     date: "2026-07-10",

@@ -18,6 +18,8 @@ type LogEntry = {
 
 const ACTION_CONFIG: Record<string, { color: string; icon: React.ElementType; label: (d: Record<string, unknown> | null) => string }> = {
   task_created:   { color: '#22C55E', icon: CheckSquare,   label: (d) => `created task "${d?.title}"` },
+  task_edited:    { color: '#7FA3C2', icon: CheckSquare,   label: (d) => `editó "${d?.title}" — ${d?.cambios}` },
+  assignee_changed: { color: '#A855F7', icon: UserPlus,    label: (d) => `reasignó "${d?.title}": ${d?.from ?? '—'} → ${d?.to ?? '—'}` },
   status_changed: { color: '#3B82F6', icon: ArrowRight,    label: (d) => `moved "${d?.title}" to ${d?.to}` },
   proof_uploaded: { color: '#EAB308', icon: Paperclip,     label: (d) => `uploaded proof for "${d?.title}"` },
   comment_posted: { color: '#6B7280', icon: MessageSquare, label: (d) => `commented on "${d?.title}"` },
