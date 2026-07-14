@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.36.0"
+export const APP_VERSION = "2.36.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.36.1",
+    date: "2026-07-11",
+    type: "PATCH",
+    changes: [
+      "Perfil de HoH simplificado: sin Mi productividad ni integración de Slack — solo foto, Mi PIN y datos personales",
+      "Login: el acceso de piso ahora se llama HoH",
+    ]
+  },
   {
     version: "2.36.0",
     date: "2026-07-11",
