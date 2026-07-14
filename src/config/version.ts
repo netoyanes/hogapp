@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.33.1"
+export const APP_VERSION = "2.34.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.34.0",
+    date: "2026-07-10",
+    type: "MINOR",
+    changes: [
+      "Tareas — nueva vista Lista: grupos colapsables por estatus (estilo tabla) con responsable, fecha límite, área y venue por fila",
+      "Conmutador Kanban ↔ Lista en el header; tu elección queda guardada como tu vista default",
+      "Alta rápida por grupo: escribe el título y Enter — la tarea nace en ese estatus y se completa después en el panel",
+      "Los vencidos se marcan en rojo; misma data y filtros que el kanban",
+    ]
+  },
   {
     version: "2.33.1",
     date: "2026-07-10",
