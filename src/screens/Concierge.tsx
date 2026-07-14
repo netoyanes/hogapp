@@ -108,10 +108,12 @@ function timeAgo(iso: string) {
 // se agenda (Reservas) → queda su historia (Clientes). Secciones por rol:
 // Team/Ops: Reservas · Bandeja · Clientes / Master: + Resumen · Configuración.
 // ═════════════════════════════════════════════════════════════════════════════
-export function Concierge({ userId, userRole }: { userId?: string; userRole?: string }) {
+export function Concierge({ userId, userRole, caps }: { userId?: string; userRole?: string; caps?: Set<string> }) {
   const isMobile = useIsMobile()
   const isMaster = userRole === 'MASTER'
-  const isOpsPlus = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '')
+  // Talento se libera por rol (Ops/Master) o por función 'talento' (ej. el
+  // booker que vive en Marketing)
+  const isOpsPlus = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '') || !!caps?.has('talento')
   // Hoy es el landing para todos: la cabina de triage — qué necesita atención
   // y cómo van las reservas, todo accionable en ≤2 taps.
   const [tab, setTab] = useState('hoy')

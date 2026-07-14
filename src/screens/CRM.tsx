@@ -67,13 +67,14 @@ function fmt(n: number | null) {
 interface Props {
   userRole?: string
   userId?: string
+  caps?: Set<string>
 }
 
 // ── COMERCIAL — pipeline + directorio B2B + talento en un solo lugar.
 //    El directorio solo lo usa el equipo comercial; los clientes consumidores
 //    viven en Concierge → Clientes. Los DJs se administran en Concierge →
 //    Talento y aquí se consultan.
-export function CRM({ userRole, userId }: Props) {
+export function CRM({ userRole, userId, caps }: Props) {
   const [section, setSection] = useState('pipeline')
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -87,7 +88,7 @@ export function CRM({ userRole, userId }: Props) {
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {section === 'pipeline' && <Pipeline userRole={userRole} userId={userId} />}
         {section === 'directorio' && <Contacts userRole={userRole} userId={userId} />}
-        {section === 'djs' && <DJDirectory userRole={userRole} />}
+        {section === 'djs' && <DJDirectory userRole={userRole} caps={caps} />}
       </div>
     </div>
   )
@@ -520,11 +521,12 @@ interface DJRow {
   base_fee: number | null; rating: number | null; vetoed: boolean; source: string
 }
 
-function DJDirectory({ userRole }: { userRole?: string }) {
+function DJDirectory({ userRole, caps }: { userRole?: string; caps?: Set<string> }) {
   const isMobile = useIsMobile()
   const [djs, setDjs] = useState<DJRow[]>([])
   const [q, setQ] = useState('')
-  const showFee = userRole === 'MASTER' || userRole === 'OPS_MANAGER' || userRole === 'C_LEVEL'
+  // El fee lo ven Ops/Master/C-Level y quien tenga la función 'talento' (booker)
+  const showFee = userRole === 'MASTER' || userRole === 'OPS_MANAGER' || userRole === 'C_LEVEL' || !!caps?.has('talento')
 
   useEffect(() => {
     void supabase.from('crm_contacts')
