@@ -1229,7 +1229,7 @@ function VenueBox({ bu, cfgs, pay, info, health, botEnabled, faqTableMissing, on
         </div>
       )}
 
-      {/* ── FAQ del venue (el bot la usará a partir del próximo deploy) ── */}
+      {/* ── FAQ del venue — el bot la usa como fuente oficial ── */}
       {open.has('faq') && (
         <div style={{ marginTop: 12, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
           {faqTableMissing ? (
@@ -1243,7 +1243,7 @@ function VenueBox({ bu, cfgs, pay, info, health, botEnabled, faqTableMissing, on
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
                 <button onClick={saveFaq}
                   style={{ minHeight: 40, padding: '0 16px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Guardar</button>
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>El bot la usará a partir del próximo deploy (fase del viernes).</span>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>El bot la usa al instante como fuente oficial — lo que no esté aquí, no lo inventa.</span>
               </div>
             </>
           )}
