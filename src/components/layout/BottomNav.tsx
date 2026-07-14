@@ -25,12 +25,12 @@ const TEAM_SLOTS = [
   { id: 'profile',  label: STR.nav.profile,   icon: UserCircle },
 ]
 
-// Heart of House (piso): una sola herramienta, imposible perderse —
-// Mi turno · Reportar · Perfil.
+// Heart of House (piso + tablet de host): Mi turno · Reportar · Reservas · Perfil.
 const HOH_SLOTS = [
-  { id: 'casa',     label: 'Mi turno',  icon: ClipboardCheck },
-  { id: 'reportar', label: 'Reportar',  icon: Camera },
-  { id: 'profile',  label: STR.nav.profile, icon: UserCircle },
+  { id: 'casa',      label: 'Mi turno',  icon: ClipboardCheck },
+  { id: 'reportar',  label: 'Reportar',  icon: Camera },
+  { id: 'concierge', label: 'Reservas',  icon: Shell },
+  { id: 'profile',   label: STR.nav.profile, icon: UserCircle },
 ]
 
 export function BottomNav({ activeView, onNavigate, userRole }: Props) {

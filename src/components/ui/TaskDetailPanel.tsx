@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check } from 'lucide-react'
+import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check, Link2, Plus, Trash2, ExternalLink } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, proofUploadedMessage, taskAssignedMessage, taskCommentMessage, notifyUserDM, taskLink } from '../../hooks/useSlack'
 import { changeTaskStatus } from '../../lib/taskActions'
@@ -91,6 +91,61 @@ function ProofCard({ proof: p, archived, onPreview, onArchive, onUnarchive }: Pr
   )
 }
 
+interface TaskLink { id: string; url: string; title: string | null; created_at: string; archived: boolean }
+
+// Preview de link sin servidor: deduce el tipo por el URL. YouTube → embed;
+// imagen directa → miniatura; el resto → tarjeta con favicon + dominio.
+function linkKind(url: string): { kind: 'youtube' | 'image' | 'video' | 'link'; embed?: string } {
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '')
+    const yt = host.includes('youtube.com') ? u.searchParams.get('v') : host === 'youtu.be' ? u.pathname.slice(1) : null
+    if (yt) return { kind: 'youtube', embed: `https://www.youtube.com/embed/${yt}` }
+    if (/\.(png|jpe?g|gif|webp|avif|svg)(\?|$)/i.test(u.pathname)) return { kind: 'image' }
+    if (/\.(mp4|webm|mov)(\?|$)/i.test(u.pathname)) return { kind: 'video' }
+    return { kind: 'link' }
+  } catch { return { kind: 'link' } }
+}
+function hostOf(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url }
+}
+
+function LinkCard({ link, onArchive }: { link: TaskLink; onArchive: () => void }) {
+  const meta = linkKind(link.url)
+  const host = hostOf(link.url)
+  const favicon = `https://www.google.com/s2/favicons?domain=${host}&sz=64`
+  return (
+    <div style={{ border: '1px solid var(--border-default)', borderRadius: '8px', overflow: 'hidden', background: 'var(--bg-elevated)' }}>
+      <div className="flex items-center gap-3 px-3 py-2">
+        <img src={favicon} alt="" width={16} height={16} style={{ flexShrink: 0, borderRadius: '3px' }} onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {link.title?.trim() || host}
+          </div>
+          <div style={{ color: 'var(--text-tertiary)', fontSize: '10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link.url}</div>
+        </div>
+        <a href={link.url} target="_blank" rel="noopener noreferrer" title="Abrir" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-default)', borderRadius: '5px', padding: '4px 7px', display: 'flex', alignItems: 'center' }}>
+          <ExternalLink size={12} />
+        </a>
+        <button onClick={onArchive} title="Quitar" style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-tertiary)', padding: '4px 7px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+          <Trash2 size={12} />
+        </button>
+      </div>
+      {meta.kind === 'youtube' && (
+        <iframe src={meta.embed} style={{ width: '100%', height: '180px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block' }} allowFullScreen title="YouTube preview" />
+      )}
+      {meta.kind === 'image' && (
+        <a href={link.url} target="_blank" rel="noopener noreferrer">
+          <img src={link.url} alt="" style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', display: 'block', borderTop: '1px solid var(--border-subtle)' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+        </a>
+      )}
+      {meta.kind === 'video' && (
+        <video src={link.url} controls style={{ width: '100%', maxHeight: '200px', display: 'block', borderTop: '1px solid var(--border-subtle)' }} />
+      )}
+    </div>
+  )
+}
+
 export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRole }: Props) {
   const isMobile = useIsMobile()
   const [task, setTask] = useState<Task | null>(null)
@@ -117,6 +172,10 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   const [postingComment, setPostingComment] = useState(false)
   const [proofs, setProofs] = useState<{ id: string; file_url: string; file_type: string; created_at: string; archived: boolean }[]>([])
   const [uploadingProof, setUploadingProof] = useState(false)
+  const [links, setLinks] = useState<TaskLink[]>([])
+  const [newLink, setNewLink] = useState('')
+  const [newLinkTitle, setNewLinkTitle] = useState('')
+  const [addingLink, setAddingLink] = useState(false)
 
   const [followers, setFollowers] = useState<{ userId: string; name: string }[]>([])
   const [dragOver, setDragOver] = useState(false)
@@ -207,6 +266,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
         .order('created_at')
       setProofs((pr ?? []).map(p => ({ ...p, archived: p.archived ?? false })))
 
+      // Load links (referencias externas: Drive, Figma, YouTube…)
+      const { data: lk } = await supabase
+        .from('task_links')
+        .select('id, url, title, created_at, archived')
+        .eq('task_id', taskId)
+        .order('created_at')
+      setLinks((lk ?? []) as TaskLink[])
+
       // Find when task was first approved
       const { data: approvalLog } = await supabase
         .from('activity_log')
@@ -266,6 +333,28 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     setDragOver(false)
     const files = Array.from(e.dataTransfer.files)
     if (files.length) uploadFiles(files)
+  }
+
+  async function addLink() {
+    let url = newLink.trim()
+    if (!url) return
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url  // tolera pegar sin http
+    try { new URL(url) } catch { return }
+    setAddingLink(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error } = await supabase.from('task_links')
+      .insert({ task_id: taskId, url, title: newLinkTitle.trim() || null, added_by: user?.id ?? null })
+      .select('id, url, title, created_at, archived').single()
+    setAddingLink(false)
+    if (error || !data) return
+    setLinks(prev => [...prev, data as TaskLink])
+    setNewLink(''); setNewLinkTitle('')
+    logActivity('link_added', 'task', taskId, { title: task?.title ?? '', url })
+  }
+
+  async function archiveLink(id: string) {
+    await supabase.from('task_links').update({ archived: true }).eq('id', id)
+    setLinks(prev => prev.filter(l => l.id !== id))
   }
 
   async function saveEdits() {
@@ -682,11 +771,11 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
           )}
         </div>
 
-        {/* Proofs */}
+        {/* Archivos adjuntos (evidencia en Storage) */}
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
           <div className="flex items-center gap-2 mb-3">
             <Paperclip size={12} style={{ color: 'var(--text-tertiary)' }} />
-            <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', margin: 0 }}>PROOF {proofs.filter(p => !p.archived).length > 0 && `· ${proofs.filter(p => !p.archived).length} active`}</p>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', margin: 0 }}>ARCHIVOS ADJUNTOS {proofs.filter(p => !p.archived).length > 0 && `· ${proofs.filter(p => !p.archived).length}`}</p>
           </div>
 
           {/* Active proofs */}
@@ -726,6 +815,42 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
             <input ref={fileRef} type="file" multiple accept="image/*,video/*,application/pdf,.html,.htm" style={{ display: 'none' }}
               onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) uploadFiles(files); e.target.value = '' }}
             />
+          </div>
+        </div>
+
+        {/* Links adjuntos (referencias externas con preview) */}
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Link2 size={12} style={{ color: 'var(--text-tertiary)' }} />
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', margin: 0 }}>LINKS ADJUNTOS {links.length > 0 && `· ${links.length}`}</p>
+          </div>
+
+          {links.length > 0 && (
+            <div className="flex flex-col gap-2 mb-3">
+              {links.map(l => <LinkCard key={l.id} link={l} onArchive={() => archiveLink(l.id)} />)}
+            </div>
+          )}
+
+          {/* Agregar link — pega el URL (y opcionalmente un nombre) + Enter */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <input
+              value={newLinkTitle} onChange={e => setNewLinkTitle(e.target.value)}
+              placeholder="Nombre (opcional) — ej. Carpeta de Drive"
+              style={{ ...inputStyle, fontSize: '12px' }}
+              onKeyDown={e => { if (e.key === 'Enter') void addLink() }}
+            />
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input
+                value={newLink} onChange={e => setNewLink(e.target.value)}
+                placeholder="Pega un link…"
+                style={{ ...inputStyle, fontSize: '12px', flex: 1 }}
+                onKeyDown={e => { if (e.key === 'Enter') void addLink() }}
+              />
+              <button onClick={() => void addLink()} disabled={!newLink.trim() || addingLink}
+                style={{ background: newLink.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: newLink.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', border: newLink.trim() ? 'none' : '1px solid var(--border-default)', borderRadius: '7px', padding: '0 14px', fontSize: '12px', fontWeight: 600, cursor: newLink.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <Plus size={13} /> {addingLink ? '…' : 'Agregar'}
+              </button>
+            </div>
           </div>
         </div>
 

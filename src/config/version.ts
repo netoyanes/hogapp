@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.34.0"
+export const APP_VERSION = "2.35.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.35.0",
+    date: "2026-07-10",
+    type: "MINOR",
+    changes: [
+      "Tareas — el espacio de evidencia se divide en dos: Archivos adjuntos (subir) y Links adjuntos (referencias externas)",
+      "Links adjuntos: pega varios links con nombre opcional; genera preview (YouTube embebido, imágenes/videos directos, favicon + dominio para el resto)",
+      "Heart of House ahora también ve y gestiona Reservas — pensado para la tablet de host que tienen siempre en el venue",
+    ]
+  },
   {
     version: "2.34.0",
     date: "2026-07-10",

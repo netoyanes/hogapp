@@ -40,9 +40,9 @@ export const NON_MASTER_VIEWS = ['tasks', 'crm', 'concierge', 'casa', 'social', 
 const CASA_ROLES = new Set(['MASTER', 'C_LEVEL', 'OPS_MANAGER', 'HEART_OF_HOUSE', 'DEV'])
 
 export function navItemsForRole(userRole?: string) {
-  // Heart of House (piso): la app entera se reduce a La Casa + Perfil
+  // Heart of House (piso + tablet de host): La Casa, Reservas (Concierge) y Perfil
   if (userRole === 'HEART_OF_HOUSE') {
-    return NAV_ITEMS.filter(item => item.id === 'casa' || item.id === 'profile')
+    return NAV_ITEMS.filter(item => ['casa', 'concierge', 'profile'].includes(item.id))
   }
   // DEV (auditoría): ve toda la plataforma menos administración (Usuarios/Carga)
   if (userRole === 'DEV') {

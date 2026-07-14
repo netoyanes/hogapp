@@ -25,6 +25,7 @@ const ACTION_CONFIG: Record<string, { color: string; icon: React.ElementType; la
   comment_posted: { color: '#6B7280', icon: MessageSquare, label: (d) => `commented on "${d?.title}"` },
   user_invited:   { color: '#A855F7', icon: UserPlus,      label: (d) => `invited ${d?.email} as ${d?.role}` },
   proof_archived: { color: '#EF4444', icon: Archive,       label: (d) => `archived a proof for "${d?.title}"` },
+  link_added:     { color: '#06B6D4', icon: Paperclip,     label: (d) => `agregó un link a "${d?.title}"` },
   guest_created:    { color: '#5FBF7A', icon: UserPlus, label: (d) => `registró al cliente "${d?.name}"${d?.bu ? ` en ${d.bu}` : ''}` },
   guest_updated:    { color: '#7FA3C2', icon: UserPlus, label: (d) => `editó al cliente "${d?.name}"` },
   guest_archived:   { color: '#EAB308', icon: Archive,  label: (d) => `archivó al cliente "${d?.name}"` },

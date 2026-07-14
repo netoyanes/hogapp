@@ -117,9 +117,12 @@ export function Concierge({ userId, userRole, caps }: { userId?: string; userRol
   const isOpsPlus = ['MASTER', 'OPS_MANAGER', 'DEV'].includes(userRole ?? '') || !!caps?.has('talento')
   // DEV audita el Resumen del bot; Config (toggles vivos) sigue solo Master
   const canSeeSummary = isMaster || userRole === 'DEV'
+  // Heart of House (tablet de host): SOLO Reservas — gestiona la agenda del
+  // venue, sin Bandeja/Clientes/Talento (mensajería y datos que no le tocan).
+  const isHoH = userRole === 'HEART_OF_HOUSE'
   // Hoy es el landing para todos: la cabina de triage — qué necesita atención
   // y cómo van las reservas, todo accionable en ≤2 taps.
-  const [tab, setTab] = useState('hoy')
+  const [tab, setTab] = useState(isHoH ? 'reservas' : 'hoy')
   const [buList, setBuList] = useState<BU[]>([])
 
   useEffect(() => {
@@ -127,15 +130,17 @@ export function Concierge({ userId, userRole, caps }: { userId?: string; userRol
       .then(({ data }) => setBuList((data ?? []) as BU[]))
   }, [])
 
-  const tabs = [
-    { id: 'hoy',      label: 'Hoy' },
-    { id: 'reservas', label: 'Reservas' },
-    { id: 'inbox',    label: 'Bandeja' },
-    { id: 'clientes', label: 'Clientes' },
-    ...(isOpsPlus ? [{ id: 'talento', label: 'Talento' }] : []),   // fees = dato sensible: Ops/Master
-    ...(canSeeSummary ? [{ id: 'summary', label: 'Resumen' }] : []),
-    ...(isMaster ? [{ id: 'config', label: 'Config' }] : []),
-  ]
+  const tabs = isHoH
+    ? [{ id: 'reservas', label: 'Reservas' }]
+    : [
+        { id: 'hoy',      label: 'Hoy' },
+        { id: 'reservas', label: 'Reservas' },
+        { id: 'inbox',    label: 'Bandeja' },
+        { id: 'clientes', label: 'Clientes' },
+        ...(isOpsPlus ? [{ id: 'talento', label: 'Talento' }] : []),   // fees = dato sensible: Ops/Master
+        ...(canSeeSummary ? [{ id: 'summary', label: 'Resumen' }] : []),
+        ...(isMaster ? [{ id: 'config', label: 'Config' }] : []),
+      ]
 
   // Reservas y Clientes son pantallas completas con su propio scroll; las demás
   // secciones scrollean dentro del contenedor centrado.
