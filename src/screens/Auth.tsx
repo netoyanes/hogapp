@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { APP_VERSION } from '../config/version'
 import { AppLogoBadge } from '../components/ui/AppLogo'
 import { TENANT } from '../config/tenant'
+import { usernameToEmail, pinToPassword, normalizeUsername, isValidUsername, isValidPin } from '../lib/hohAuth'
 
 interface Props {
   onSignIn: (email: string, password: string) => Promise<{ error: unknown }>
@@ -22,12 +23,28 @@ function GoogleIcon() {
 
 export function Auth({ onSignIn, accessDenied }: Props) {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [authKind, setAuthKind] = useState<'email' | 'piso'>('email')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('')
+  const [pin, setPin] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  // Login de piso (Heart of House): usuario + PIN → email sintético + password.
+  async function handlePisoSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null); setSuccess(null)
+    const u = normalizeUsername(username)
+    if (!isValidUsername(u)) { setError('El usuario debe tener al menos 8 letras o números.'); return }
+    if (!isValidPin(pin)) { setError('El PIN debe ser de 4 a 6 dígitos.'); return }
+    setLoading(true)
+    const { error } = await onSignIn(usernameToEmail(u), pinToPassword(pin))
+    if (error) setError('Usuario o PIN incorrectos. Verifica con tu supervisor.')
+    setLoading(false)
+  }
 
   async function handleGoogle() {
     setGoogleLoading(true)
@@ -105,13 +122,70 @@ export function Auth({ onSignIn, accessDenied }: Props) {
           </div>
         </div>
 
+        {/* Selector de tipo de acceso */}
+        <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '10px', padding: '4px', marginBottom: '18px' }}>
+          {([['email', 'Correo'], ['piso', 'Equipo de piso']] as const).map(([k, label]) => (
+            <button key={k} type="button" onClick={() => { setAuthKind(k); setError(null); setSuccess(null) }}
+              style={{
+                flex: 1, padding: '8px', borderRadius: '7px', border: 'none', cursor: 'pointer',
+                fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-ui)',
+                background: authKind === k ? 'var(--accent)' : 'transparent',
+                color: authKind === k ? '#000' : 'var(--text-secondary)',
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
         <h1 style={{ color: 'var(--text-primary)' }} className="text-xl font-semibold mb-1">
-          {mode === 'login' ? 'Sign in' : 'Create account'}
+          {authKind === 'piso' ? 'Entrar con tu usuario' : mode === 'login' ? 'Sign in' : 'Create account'}
         </h1>
         <p style={{ color: 'var(--text-secondary)' }} className="text-sm mb-6">
-          {mode === 'login' ? 'Use your HOG APP credentials.' : 'Set up your HOG APP account.'}
+          {authKind === 'piso' ? 'Tu usuario y tu PIN (te los da tu supervisor).' : mode === 'login' ? 'Use your HOG APP credentials.' : 'Set up your HOG APP account.'}
         </p>
 
+        {authKind === 'piso' && (
+          <form onSubmit={handlePisoSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Usuario</label>
+              <input
+                value={username}
+                onChange={(e) => setUsername(normalizeUsername(e.target.value))}
+                placeholder="tuusuario"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                required
+                style={inputStyle}
+                onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>PIN</label>
+              <input
+                type="password" inputMode="numeric" pattern="[0-9]*"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="••••"
+                required
+                style={{ ...inputStyle, letterSpacing: '0.3em', fontSize: '18px', textAlign: 'center' }}
+                onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+              />
+            </div>
+            {error && (
+              <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#EF4444' }} className="px-3 py-2.5 text-sm">
+                {error}
+              </div>
+            )}
+            <button type="submit" disabled={loading}
+              style={{ background: loading ? 'var(--accent-dim)' : 'var(--accent)', color: '#000', borderRadius: '8px', padding: '13px', fontSize: '15px', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', border: 'none', fontFamily: 'var(--font-ui)' }}>
+              {loading ? '…' : 'Entrar'}
+            </button>
+          </form>
+        )}
+
+        {authKind === 'email' && (
+        <>
         {accessDenied && (
           <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '12px 14px', marginBottom: '16px' }}>
             <p style={{ color: '#EF4444', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>Access denied</p>
@@ -198,6 +272,8 @@ export function Auth({ onSignIn, accessDenied }: Props) {
             <span style={{ color: 'var(--accent)' }}>{mode === 'login' ? 'Create one' : 'Sign in'}</span>
           </button>
         </form>
+        </>
+        )}
       </div>
 
       <p style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '11px', marginTop: '20px', textAlign: 'center' }}>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { UserPlus, Copy, Check, Trash2, Users, ShieldCheck, Save } from 'lucide-react'
+import { UserPlus, Copy, Check, Trash2, Users, ShieldCheck, Save, KeyRound } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import { BUChip } from '../components/v2'
+import { normalizeUsername, isValidUsername, isValidPin } from '../lib/hohAuth'
 import type { UserRole } from '../types'
 type InviteRole = 'C_LEVEL' | 'OPS_MANAGER' | 'MARKETING' | 'TEAM' | 'HEART_OF_HOUSE' | 'DEV'
 
@@ -11,7 +12,6 @@ const INVITE_ROLE_OPTIONS: { value: InviteRole; label: string; description: stri
   { value: 'OPS_MANAGER',    label: 'Ops Manager',    description: 'Assigned BUs + task management' },
   { value: 'MARKETING',      label: 'Marketing',      description: 'Content and campaign access' },
   { value: 'TEAM',           label: 'Team',           description: 'Assigned tasks only' },
-  { value: 'HEART_OF_HOUSE', label: 'Heart of House', description: 'Personal de piso: La Casa (checklists e incidencias) de sus venues' },
   { value: 'DEV',            label: 'Dev · Auditoría', description: 'Toda la plataforma en solo lectura; propone mejoras vía Tareas' },
 ]
 
@@ -54,6 +54,7 @@ interface Member {
   full_name: string | null
   last_name: string | null
   email: string | null
+  username: string | null
   role: UserRole | null
   slack_user_id: string | null
   created_at: string
@@ -86,6 +87,42 @@ export function InviteUsers() {
   // Funciones extra por usuario: liberan áreas puntuales sobre el rol base
   // (ej. 'talento' para el booker que vive en Marketing)
   const [userCaps, setUserCaps] = useState<Record<string, string[]>>({})
+  // Alta de accesos de piso (Heart of House): usuario + PIN, sin correo
+  const [hohName, setHohName] = useState('')
+  const [hohUser, setHohUser] = useState('')
+  const [hohPin, setHohPin] = useState('')
+  const [hohVenue, setHohVenue] = useState('')
+  const [hohSaving, setHohSaving] = useState(false)
+  const [hohMsg, setHohMsg] = useState<string | null>(null)
+  const [hohErr, setHohErr] = useState<string | null>(null)
+
+  async function createHoH(e: React.FormEvent) {
+    e.preventDefault()
+    setHohErr(null); setHohMsg(null)
+    const u = normalizeUsername(hohUser)
+    if (!hohName.trim()) { setHohErr('Falta el nombre de la persona.'); return }
+    if (!isValidUsername(u)) { setHohErr('El usuario debe tener al menos 8 letras o números.'); return }
+    if (!isValidPin(hohPin)) { setHohErr('El PIN debe ser de 4 a 6 dígitos.'); return }
+    setHohSaving(true)
+    const { data, error } = await supabase.functions.invoke('hoh-provision', {
+      body: { action: 'create', username: u, pin: hohPin, full_name: hohName.trim(), venues: hohVenue ? [hohVenue] : [] },
+    })
+    setHohSaving(false)
+    if (error || data?.error) { setHohErr(data?.error ?? 'No se pudo crear el acceso.'); return }
+    setHohMsg(`Acceso creado: usuario "${u}", PIN inicial ${hohPin}. Entrégaselo — puede cambiar su PIN al entrar.`)
+    setHohName(''); setHohUser(''); setHohPin(''); setHohVenue('')
+    loadAll()
+  }
+
+  async function resetHohPin(userId: string, username: string | null) {
+    const pin = window.prompt(`Nuevo PIN para "${username ?? 'usuario'}" (4 a 6 dígitos):`)
+    if (!pin) return
+    if (!isValidPin(pin)) { setMemberError('El PIN debe ser de 4 a 6 dígitos.'); return }
+    const { data, error } = await supabase.functions.invoke('hoh-provision', { body: { action: 'reset_pin', user_id: userId, pin } })
+    if (error || data?.error) { setMemberError(data?.error ?? 'No se pudo reiniciar el PIN.'); return }
+    setMemberSuccess(`PIN de "${username}" actualizado a ${pin}.`)
+    setTimeout(() => setMemberSuccess(null), 4000)
+  }
 
   useEffect(() => {
     loadAll()
@@ -95,7 +132,7 @@ export function InviteUsers() {
   async function loadAll() {
     const [{ data: inv }, { data: mem }, { data: buses }, { data: uv }, { data: uc }] = await Promise.all([
       supabase.from('invitations').select('*').order('created_at', { ascending: false }),
-      supabase.from('profiles').select('id, full_name, last_name, email, role, slack_user_id, created_at').order('created_at', { ascending: true }),
+      supabase.from('profiles').select('id, full_name, last_name, email, username, role, slack_user_id, created_at').order('created_at', { ascending: true }),
       supabase.from('business_units').select('id, code, name').order('code'),
       supabase.from('user_venues').select('user_id, bu_id'),
       supabase.from('user_capabilities').select('user_id, capability'),
@@ -380,8 +417,14 @@ export function InviteUsers() {
                             <ShieldCheck size={11} style={{ color: ROLE_COLORS.MASTER, flexShrink: 0 }} />
                           )}
                         </div>
-                        <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {m.email}
+                        <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {m.role === 'HEART_OF_HOUSE' && m.username
+                            ? <><span style={{ fontFamily: 'var(--font-mono)' }}>@{m.username}</span>
+                                <button onClick={() => resetHohPin(m.id, m.username)} title="Reiniciar PIN"
+                                  style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '4px', color: 'var(--text-tertiary)', fontSize: '10px', padding: '1px 6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                  <KeyRound size={9} /> PIN
+                                </button></>
+                            : m.email}
                         </div>
                         {(() => {
                           const current = slackIds[m.id] ?? ''
@@ -572,6 +615,49 @@ export function InviteUsers() {
                 })}
               </div>
             )}
+          </div>
+
+          {/* ── Acceso de piso (Heart of House): usuario + PIN, sin correo ── */}
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <KeyRound size={15} style={{ color: '#A78BFA' }} />
+              <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600 }}>Acceso de piso (Heart of House)</h3>
+            </div>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginBottom: '14px', lineHeight: 1.5 }}>
+              Entran con usuario + PIN, sin correo. Tú defines el usuario y un PIN inicial; ellos lo pueden cambiar al entrar.
+            </p>
+            <form onSubmit={createHoH} className="flex flex-col gap-3">
+              <div>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '5px' }}>Nombre de la persona</label>
+                <input value={hohName} onChange={e => setHohName(e.target.value)} placeholder="Ej. Juana López" style={inputStyle}
+                  onFocus={e => (e.target.style.borderColor = 'var(--accent)')} onBlur={e => (e.target.style.borderColor = 'var(--border-default)')} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '5px' }}>Usuario (mín. 8)</label>
+                  <input value={hohUser} onChange={e => setHohUser(normalizeUsername(e.target.value))} placeholder="juanalopez" autoCapitalize="none" spellCheck={false} style={inputStyle}
+                    onFocus={e => (e.target.style.borderColor = 'var(--accent)')} onBlur={e => (e.target.style.borderColor = 'var(--border-default)')} />
+                </div>
+                <div>
+                  <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '5px' }}>PIN inicial (4–6 díg.)</label>
+                  <input value={hohPin} onChange={e => setHohPin(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="1234" style={inputStyle}
+                    onFocus={e => (e.target.style.borderColor = 'var(--accent)')} onBlur={e => (e.target.style.borderColor = 'var(--border-default)')} />
+                </div>
+              </div>
+              <div>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '5px' }}>Venue</label>
+                <select value={hohVenue} onChange={e => setHohVenue(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                  <option value="">— Selecciona su venue —</option>
+                  {buList.map(b => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
+                </select>
+              </div>
+              {hohErr && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#EF4444', padding: '8px 12px', fontSize: '13px' }}>{hohErr}</div>}
+              {hohMsg && <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '8px', color: '#22C55E', padding: '8px 12px', fontSize: '13px' }}>{hohMsg}</div>}
+              <button type="submit" disabled={hohSaving}
+                style={{ background: '#A78BFA', color: '#000', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: 700, border: 'none', cursor: hohSaving ? 'not-allowed' : 'pointer' }}>
+                {hohSaving ? 'Creando…' : 'Crear acceso de piso'}
+              </button>
+            </form>
           </div>
 
           {/* ── Invite Form ── */}
