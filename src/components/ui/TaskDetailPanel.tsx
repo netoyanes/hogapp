@@ -269,9 +269,26 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   }
 
   async function saveEdits() {
+    if (!task) return
     setSaving(true)
     const newBuName = buList.find(b => b.id === buId)
-    await supabase.from('tasks').update({
+    const newHours = estimatedHours ? parseFloat(estimatedHours) : null
+
+    // Diff campo por campo, legible en español — es lo que queda en el log
+    const buLabel = (id: string | null) => id ? (buList.find(b => b.id === id)?.code ?? '?') : 'sin venue'
+    const cambios: string[] = []
+    if (title !== task.title) cambios.push(`título: "${task.title}" → "${title}"`)
+    if ((description || null) !== task.description) cambios.push('descripción editada')
+    if ((buId || null) !== task.bu_id) cambios.push(`venue: ${buLabel(task.bu_id)} → ${buLabel(buId || null)}`)
+    if (taskArea !== task.area) cambios.push(`área: ${task.area ? TASK_AREA_LABELS[task.area] : '—'} → ${TASK_AREA_LABELS[taskArea]}`)
+    if (clientImpact !== task.client_impact) cambios.push(`impacto: ${task.client_impact ? CLIENT_IMPACT_LABELS[task.client_impact] : '—'} → ${CLIENT_IMPACT_LABELS[clientImpact]}`)
+    if (priority !== task.priority) cambios.push(`prioridad: ${task.priority} → ${priority}`)
+    if ((dueDate || null) !== task.due_date) cambios.push(`fecha límite: ${task.due_date ?? '—'} → ${dueDate || '—'}`)
+    if (deadlineType !== task.deadline_type) cambios.push(`deadline: ${task.deadline_type} → ${deadlineType}`)
+    if (newHours !== task.estimated_hours) cambios.push(`horas: ${task.estimated_hours ?? '—'} → ${newHours ?? '—'}`)
+    if (proofRequired !== task.proof_required) cambios.push(proofRequired ? 'ahora exige evidencia' : 'ya no exige evidencia')
+
+    const { error } = await supabase.from('tasks').update({
       title,
       description: description || null,
       due_date: dueDate || null,
@@ -280,13 +297,16 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
       client_impact: clientImpact,
       bu_id: buId || null,
       proof_required: proofRequired,
-      estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null,
+      estimated_hours: newHours,
       deadline_type: deadlineType,
       updated_at: new Date().toISOString(),
     }).eq('id', taskId)
+    if (!error && cambios.length > 0) {
+      logActivity('task_edited', 'task', taskId, { title, cambios: cambios.join(' · ') })
+    }
     if (newBuName) setBuName(`${newBuName.code} · ${newBuName.name}`)
     else setBuName('')
-    setTask(prev => prev ? { ...prev, title, description: description || null, due_date: dueDate || null, priority, area: taskArea, client_impact: clientImpact, bu_id: buId || null, proof_required: proofRequired, estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null, deadline_type: deadlineType } : prev)
+    setTask(prev => prev ? { ...prev, title, description: description || null, due_date: dueDate || null, priority, area: taskArea, client_impact: clientImpact, bu_id: buId || null, proof_required: proofRequired, estimated_hours: newHours, deadline_type: deadlineType } : prev)
     setSaving(false)
     setEditing(false)
     onUpdated()
