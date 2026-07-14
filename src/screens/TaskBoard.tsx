@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Filter, ArrowRightLeft } from 'lucide-react'
+import { Filter, ArrowRightLeft, LayoutGrid, List, ChevronDown, ChevronRight, Paperclip } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { TaskCard } from '../components/ui/TaskCard'
 import { CreateTaskModal } from '../components/ui/CreateTaskModal'
@@ -9,6 +9,7 @@ import { SegmentedControl, Sheet } from '../components/v2'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { changeTaskStatus } from '../lib/taskActions'
+import { logActivity } from '../hooks/useActivityLog'
 import type { Task, TaskStatus, TaskPriority, TaskArea } from '../types'
 import { TASK_AREA_LABELS, TASK_AREA_GROUPS } from '../lib/taskAreas'
 
@@ -52,6 +53,10 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
   // Mobile: active status segment + swipe-to-change-status target
   const [mobileStatus, setMobileStatus] = useState<TaskStatus>('OPEN')
   const [statusSheetTask, setStatusSheetTask] = useState<Task | null>(null)
+  // Vista Kanban ↔ Lista agrupada — cada quien elige y queda como su default
+  const [view, setViewState] = useState<'kanban' | 'list'>(() =>
+    localStorage.getItem('hog_tasks_view') === 'list' ? 'list' : 'kanban')
+  const setView = (v: 'kanban' | 'list') => { setViewState(v); localStorage.setItem('hog_tasks_view', v) }
 
   useEffect(() => {
     if (defaultBuFilter !== undefined) setFilterBu(defaultBuFilter)
@@ -138,6 +143,18 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     load()
   }
 
+  // Alta rápida desde la vista Lista: solo título + estatus del grupo; el
+  // detalle (área, venue, horas) se completa después en el panel.
+  async function quickAdd(status: TaskStatus, title: string) {
+    const { data, error } = await supabase.from('tasks').insert({
+      title: title.trim(), status, priority: 'MEDIUM', deadline_type: 'SOFT', created_by: userId ?? null,
+    }).select('id').single()
+    if (error || !data) return false
+    logActivity('task_created', 'task', data.id, { title: title.trim(), via: 'quick_add' })
+    load()
+    return true
+  }
+
   const selectStyle = {
     background: 'var(--bg-elevated)',
     border: '1px solid var(--border-default)',
@@ -165,12 +182,25 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
               {filtered.length} tareas{!isMobile && <> · crea con <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>C</span></>}
             </p>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            style={{ background: 'var(--accent)', color: 'var(--on-accent)', borderRadius: 999, padding: '0 16px', minHeight: 'var(--touch-target)', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer' }}
-          >
-            + Crear tarea
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* Conmutador Kanban ↔ Lista (preferencia guardada por usuario) */}
+            <div style={{ display: 'flex', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+              <button onClick={() => setView('kanban')} title="Vista Kanban"
+                style={{ background: view === 'kanban' ? 'var(--accent-bg)' : 'transparent', color: view === 'kanban' ? 'var(--accent)' : 'var(--text-tertiary)', border: 'none', padding: '0 10px', minHeight: 'var(--touch-target)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <LayoutGrid size={15} />
+              </button>
+              <button onClick={() => setView('list')} title="Vista Lista"
+                style={{ background: view === 'list' ? 'var(--accent-bg)' : 'transparent', color: view === 'list' ? 'var(--accent)' : 'var(--text-tertiary)', border: 'none', padding: '0 10px', minHeight: 'var(--touch-target)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <List size={15} />
+              </button>
+            </div>
+            <button
+              onClick={() => setShowCreate(true)}
+              style={{ background: 'var(--accent)', color: 'var(--on-accent)', borderRadius: 999, padding: '0 16px', minHeight: 'var(--touch-target)', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+            >
+              + Crear tarea
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -223,7 +253,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
 
         {/* Mobile: status segments pinned under the header — scrollable bar
             with per-phase color so progression reads at a glance */}
-        {isMobile && (
+        {isMobile && view === 'kanban' && (
           <div style={{ marginTop: '10px' }}>
             <SegmentedControl
               scrollable
@@ -240,7 +270,13 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
       </div>
 
       {/* Body */}
-      {isMobile ? (
+      {view === 'list' ? (
+        <TaskListView
+          tasks={filtered} loading={loading} isMobile={isMobile}
+          buMap={buMap} profileMap={profileMap} proofCounts={proofCounts}
+          onOpen={id => setSelectedTaskId(id)} onQuickAdd={quickAdd}
+        />
+      ) : isMobile ? (
         /* ── Mobile: single-column list for the active status ── */
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {loading ? (
@@ -424,6 +460,165 @@ function SwipeableRow({ children, onSwipeRight, onSwipeLeft }: {
       >
         {children}
       </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vista LISTA — grupos colapsables por estatus (estilo tabla), ordenados por
+// fecha límite, con alta rápida por grupo. Misma data y filtros que el kanban.
+// ─────────────────────────────────────────────────────────────────────────────
+function TaskListView({ tasks, loading, isMobile, buMap, profileMap, proofCounts, onOpen, onQuickAdd }: {
+  tasks: Task[]
+  loading: boolean
+  isMobile: boolean
+  buMap: Record<string, string>
+  profileMap: Record<string, string>
+  proofCounts: Record<string, number>
+  onOpen: (id: string) => void
+  onQuickAdd: (status: TaskStatus, title: string) => Promise<boolean>
+}) {
+  const [collapsed, setCollapsed] = useState<Set<TaskStatus>>(new Set())
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [savingIn, setSavingIn] = useState<TaskStatus | null>(null)
+
+  const toggle = (id: TaskStatus) => setCollapsed(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+
+  async function submitDraft(status: TaskStatus) {
+    const title = (drafts[status] ?? '').trim()
+    if (!title || savingIn) return
+    setSavingIn(status)
+    const ok = await onQuickAdd(status, title)
+    setSavingIn(null)
+    if (ok) setDrafts(prev => ({ ...prev, [status]: '' }))
+  }
+
+  const fmtDue = (d: string | null) => {
+    if (!d) return null
+    const date = new Date(d + 'T00:00:00')
+    const overdue = date.getTime() < new Date(new Date().toDateString()).getTime()
+    return {
+      label: date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }),
+      overdue,
+    }
+  }
+  const byDue = (a: Task, b: Task) => {
+    if (!a.due_date && !b.due_date) return a.created_at.localeCompare(b.created_at)
+    if (!a.due_date) return 1
+    if (!b.due_date) return -1
+    return a.due_date.localeCompare(b.due_date)
+  }
+
+  if (loading) {
+    return (
+      <div style={{ flex: 1, padding: isMobile ? '12px 16px' : '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', height: '48px' }} className="animate-pulse-green" />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 12px 60px' : '16px 20px 60px' }}>
+      {COLUMNS.map(col => {
+        const rows = tasks.filter(t => t.status === col.id).sort(byDue)
+        const isCollapsed = collapsed.has(col.id)
+        const c = STATUS_COLORS[col.id]
+        return (
+          <div key={col.id} style={{ marginBottom: '18px' }}>
+            {/* Header del grupo — pill de color + contador + colapsar */}
+            <button onClick={() => toggle(col.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', width: '100%', textAlign: 'left' }}>
+              {isCollapsed ? <ChevronRight size={14} style={{ color: 'var(--text-tertiary)' }} /> : <ChevronDown size={14} style={{ color: 'var(--text-tertiary)' }} />}
+              <span style={{
+                background: `color-mix(in srgb, ${c} 16%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${c} 40%, transparent)`,
+                color: c, borderRadius: '6px', padding: '2px 10px',
+                fontSize: '12px', fontWeight: 700,
+              }}>{col.label}</span>
+              <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>{rows.length}</span>
+            </button>
+
+            {!isCollapsed && (
+              <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '4px' }}>
+                {rows.map(t => {
+                  const due = fmtDue(t.due_date)
+                  const assignee = t.assigned_to ? profileMap[t.assigned_to] : null
+                  return (
+                    <button key={t.id} onClick={() => onOpen(t.id)}
+                      style={{
+                        display: isMobile ? 'flex' : 'grid',
+                        gridTemplateColumns: isMobile ? undefined : 'minmax(0,1fr) 150px 90px 190px 110px',
+                        flexDirection: isMobile ? 'column' : undefined,
+                        alignItems: isMobile ? 'flex-start' : 'center',
+                        gap: isMobile ? '3px' : '10px',
+                        width: '100%', textAlign: 'left', cursor: 'pointer',
+                        background: 'none', border: 'none',
+                        borderBottom: '1px solid var(--border-subtle)',
+                        padding: isMobile ? '10px 4px' : '9px 4px',
+                        minHeight: '44px',
+                      }}
+                      className="hover:bg-[var(--bg-elevated)]"
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, width: isMobile ? '100%' : undefined }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: t.priority === 'HIGH' ? 'var(--status-risk)' : t.priority === 'MEDIUM' ? 'var(--status-attention)' : 'var(--status-none)' }} />
+                        <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                        {(proofCounts[t.id] ?? 0) > 0 && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', color: 'var(--text-tertiary)', fontSize: '10px', flexShrink: 0 }}>
+                            <Paperclip size={10} />{proofCounts[t.id]}
+                          </span>
+                        )}
+                      </span>
+                      {isMobile ? (
+                        <span style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', fontSize: '11px', color: 'var(--text-tertiary)', paddingLeft: '15px' }}>
+                          {assignee && <span>{assignee.split(' ')[0]}</span>}
+                          {due && <span style={{ color: due.overdue ? 'var(--status-risk)' : undefined, fontWeight: due.overdue ? 700 : undefined }}>{due.label}</span>}
+                          {t.area && <span>{TASK_AREA_LABELS[t.area]}</span>}
+                          {t.bu_id && buMap[t.bu_id] && <span style={{ fontFamily: 'var(--font-mono)' }}>{buMap[t.bu_id]}</span>}
+                        </span>
+                      ) : (
+                        <>
+                          <span style={{ color: 'var(--text-secondary)', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {assignee ?? <span style={{ color: 'var(--text-tertiary)' }}>—</span>}
+                          </span>
+                          <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: due?.overdue ? 'var(--status-risk)' : 'var(--text-secondary)', fontWeight: due?.overdue ? 700 : 400 }}>
+                            {due?.label ?? '—'}
+                          </span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {t.area ? TASK_AREA_LABELS[t.area] : '—'}
+                          </span>
+                          <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {t.bu_id && buMap[t.bu_id] ? buMap[t.bu_id] : '—'}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )
+                })}
+
+                {/* Alta rápida en el grupo — Enter crea con este estatus */}
+                <input
+                  value={drafts[col.id] ?? ''}
+                  onChange={e => setDrafts(prev => ({ ...prev, [col.id]: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') void submitDraft(col.id) }}
+                  placeholder={savingIn === col.id ? 'Creando…' : 'Agregar tarea…'}
+                  disabled={savingIn === col.id}
+                  style={{
+                    width: '100%', background: 'none', border: 'none', outline: 'none',
+                    color: 'var(--text-secondary)', fontSize: '13px', padding: '10px 4px 10px 19px',
+                    minHeight: '40px',
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
