@@ -35,10 +35,11 @@ export function useAuth() {
       .eq('id', userId)
       .single()
 
-    // MASTER always gets through.
-    // Everyone else must have an active invitation — checked on every login
-    // so revoking an invite immediately locks the account out.
-    if (profile && profile.role !== 'MASTER') {
+    // MASTER always gets through. Cuentas de piso (Heart of House) se crean por
+    // provisión directa de MASTER (usuario+PIN), no por invitación por correo.
+    // Los demás requieren invitación activa — verificada en cada login para que
+    // revocarla cierre el acceso de inmediato.
+    if (profile && profile.role !== 'MASTER' && profile.role !== 'HEART_OF_HOUSE') {
       const { data: invite } = await supabase
         .from('invitations')
         .select('id')

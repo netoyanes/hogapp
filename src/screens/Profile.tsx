@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Camera, Save, Clock, DollarSign, Trophy, Activity, Eye } from 'lucide-react'
+import { Camera, Save, Clock, DollarSign, Trophy, Activity, Eye, KeyRound } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { getViewAsRole, setViewAsRole } from '../lib/viewAs'
+import { pinToPassword, isValidPin } from '../lib/hohAuth'
 import type { Profile as ProfileType, UserRole } from '../types'
 
 const WEEKLY_GOAL = 40
@@ -185,6 +186,20 @@ export function Profile({ profile, onUpdated }: Props) {
   const [testingSlack, setTestingSlack] = useState(false)
   const [slackStatus, setSlackStatus] = useState<'idle' | 'ok' | 'error'>('idle')
   const fileRef = useRef<HTMLInputElement>(null)
+  // Cambio de PIN propio (Heart of House)
+  const [newPin, setNewPin] = useState('')
+  const [pinSaving, setPinSaving] = useState(false)
+  const [pinMsg, setPinMsg] = useState<string | null>(null)
+
+  async function changeMyPin() {
+    if (!isValidPin(newPin)) { setPinMsg('El PIN debe ser de 4 a 6 dígitos.'); return }
+    setPinSaving(true); setPinMsg(null)
+    const { error } = await supabase.auth.updateUser({ password: pinToPassword(newPin) })
+    setPinSaving(false)
+    if (error) { setPinMsg('No se pudo cambiar el PIN. Intenta de nuevo.'); return }
+    setNewPin(''); setPinMsg('¡PIN actualizado! Úsalo la próxima vez que entres.')
+    setTimeout(() => setPinMsg(null), 4000)
+  }
 
   async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -332,6 +347,32 @@ export function Profile({ profile, onUpdated }: Props) {
             {uploadingAvatar && <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '10px' }}>Uploading…</p>}
             {uploadError && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '10px' }}>Upload failed: {uploadError}</p>}
           </div>
+
+          {/* Mi PIN — solo cuentas de piso (Heart of House) */}
+          {profile.role === 'HEART_OF_HOUSE' && (
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '20px' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <KeyRound size={15} style={{ color: '#A78BFA' }} />
+                <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600 }}>Mi PIN</h3>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginBottom: '14px', lineHeight: 1.5 }}>
+                Cambia tu PIN por uno que solo tú sepas. Es con el que entras a la app.
+              </p>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '160px' }}>
+                  <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '5px' }}>Nuevo PIN (4–6 dígitos)</label>
+                  <input value={newPin} onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    type="password" inputMode="numeric" placeholder="••••"
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '8px', color: 'var(--text-primary)', padding: '10px 12px', fontSize: '16px', letterSpacing: '0.2em', textAlign: 'center', outline: 'none', width: '100%' }} />
+                </div>
+                <button onClick={() => void changeMyPin()} disabled={pinSaving || !isValidPin(newPin)}
+                  style={{ background: isValidPin(newPin) ? '#A78BFA' : 'var(--bg-elevated)', color: isValidPin(newPin) ? '#000' : 'var(--text-tertiary)', border: 'none', borderRadius: '8px', padding: '11px 18px', fontSize: '13px', fontWeight: 700, cursor: isValidPin(newPin) ? 'pointer' : 'not-allowed' }}>
+                  {pinSaving ? '…' : 'Cambiar PIN'}
+                </button>
+              </div>
+              {pinMsg && <p style={{ color: pinMsg.startsWith('¡') ? '#22C55E' : '#EF4444', fontSize: '12px', marginTop: '10px' }}>{pinMsg}</p>}
+            </div>
+          )}
 
           {/* Role preview — MASTER only, uses the real role so it stays visible while simulating */}
           {profile.role === 'MASTER' && <RolePreviewCard />}

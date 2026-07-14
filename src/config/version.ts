@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.35.0"
+export const APP_VERSION = "2.36.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.36.0",
+    date: "2026-07-11",
+    type: "MINOR",
+    changes: [
+      "Acceso de piso (Heart of House): login con usuario + PIN, sin correo — pensado para la tablet del venue",
+      "En Usuarios, Master crea el acceso (usuario ≥8 caracteres + PIN inicial + venue) y puede reiniciar el PIN",
+      "El personal cambia su propio PIN desde Perfil para hacerlo personal",
+      "Login: selector Correo / Equipo de piso en la pantalla de entrada",
+    ]
+  },
   {
     version: "2.35.0",
     date: "2026-07-10",
