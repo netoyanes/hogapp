@@ -377,8 +377,8 @@ export function Profile({ profile, onUpdated }: Props) {
           {/* Role preview — MASTER only, uses the real role so it stays visible while simulating */}
           {profile.role === 'MASTER' && <RolePreviewCard />}
 
-          {/* My Productivity */}
-          <MyProductivity userId={profile.id} />
+          {/* My Productivity — no aplica para HoH (su trabajo vive en La Casa, no en Tareas) */}
+          {profile.role !== 'HEART_OF_HOUSE' && <MyProductivity userId={profile.id} />}
 
           {/* Personal info */}
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '20px' }}>
@@ -419,7 +419,8 @@ export function Profile({ profile, onUpdated }: Props) {
             </div>
           </div>
 
-          {/* Slack */}
+          {/* Slack — no aplica para HoH (no usan Slack) */}
+          {profile.role !== 'HEART_OF_HOUSE' && (
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '20px' }}>
             <div className="flex items-center gap-2 mb-3">
               <span style={{ fontSize: '16px' }}>💬</span>
@@ -471,6 +472,7 @@ export function Profile({ profile, onUpdated }: Props) {
               </div>
             </div>
           </div>
+          )}
 
           {/* Save */}
           <button
