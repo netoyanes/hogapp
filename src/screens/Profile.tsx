@@ -125,6 +125,7 @@ const PREVIEW_ROLES: { id: UserRole; label: string; color: string; desc: string 
   { id: 'MARKETING',      label: 'Marketing',      color: '#3B82F6', desc: 'Contenido, campañas y Concierge' },
   { id: 'TEAM',           label: 'Team',           color: '#888888', desc: 'Solo sus tareas y venue clients' },
   { id: 'HEART_OF_HOUSE', label: 'Heart of House', color: '#A78BFA', desc: 'Solo La Casa: mi turno y reportar' },
+  { id: 'DEV',            label: 'Dev · Auditoría', color: '#06B6D4', desc: 'Todo en solo lectura + Tareas' },
 ]
 
 // MASTER-only: preview the app as another role to test what each access level sees.
@@ -267,6 +268,7 @@ export function Profile({ profile, onUpdated }: Props) {
     MARKETING: '#3B82F6',
     TEAM: '#888888',
     HEART_OF_HOUSE: '#A78BFA',
+    DEV: '#06B6D4',
   }
 
   const inputStyle = {

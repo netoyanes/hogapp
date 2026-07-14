@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import { BUChip } from '../components/v2'
 import type { UserRole } from '../types'
-type InviteRole = 'C_LEVEL' | 'OPS_MANAGER' | 'MARKETING' | 'TEAM' | 'HEART_OF_HOUSE'
+type InviteRole = 'C_LEVEL' | 'OPS_MANAGER' | 'MARKETING' | 'TEAM' | 'HEART_OF_HOUSE' | 'DEV'
 
 const INVITE_ROLE_OPTIONS: { value: InviteRole; label: string; description: string }[] = [
   { value: 'C_LEVEL',        label: 'C-Level',        description: 'Full marketing dashboard + tasks' },
@@ -12,6 +12,7 @@ const INVITE_ROLE_OPTIONS: { value: InviteRole; label: string; description: stri
   { value: 'MARKETING',      label: 'Marketing',      description: 'Content and campaign access' },
   { value: 'TEAM',           label: 'Team',           description: 'Assigned tasks only' },
   { value: 'HEART_OF_HOUSE', label: 'Heart of House', description: 'Personal de piso: La Casa (checklists e incidencias) de sus venues' },
+  { value: 'DEV',            label: 'Dev · Auditoría', description: 'Toda la plataforma en solo lectura; propone mejoras vía Tareas' },
 ]
 
 const ALL_ROLES: { value: UserRole; label: string }[] = [
@@ -21,6 +22,7 @@ const ALL_ROLES: { value: UserRole; label: string }[] = [
   { value: 'MARKETING',      label: 'Marketing' },
   { value: 'TEAM',           label: 'Team' },
   { value: 'HEART_OF_HOUSE', label: 'Heart of House' },
+  { value: 'DEV',            label: 'Dev · Auditoría' },
 ]
 
 const ROLE_COLORS: Record<string, string> = {
@@ -30,6 +32,7 @@ const ROLE_COLORS: Record<string, string> = {
   MARKETING:      '#3B82F6',
   TEAM:           '#888888',
   HEART_OF_HOUSE: '#A78BFA',
+  DEV:            '#06B6D4',
 }
 
 // Catálogo de funciones extra (capabilities): liberan áreas puntuales sobre
