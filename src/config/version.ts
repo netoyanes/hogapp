@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.31.0"
+export const APP_VERSION = "2.31.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.31.1",
+    date: "2026-07-10",
+    type: "PATCH",
+    changes: [
+      "Tareas: cualquier rol puede asignar tareas a cualquier persona al crearlas (antes solo Master/C-Level); para el equipo el campo arranca en 'yo' pero es editable",
+    ]
+  },
   {
     version: "2.31.0",
     date: "2026-07-10",
