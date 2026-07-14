@@ -111,9 +111,12 @@ function timeAgo(iso: string) {
 export function Concierge({ userId, userRole, caps }: { userId?: string; userRole?: string; caps?: Set<string> }) {
   const isMobile = useIsMobile()
   const isMaster = userRole === 'MASTER'
-  // Talento se libera por rol (Ops/Master) o por función 'talento' (ej. el
-  // booker que vive en Marketing)
-  const isOpsPlus = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '') || !!caps?.has('talento')
+  // Talento se libera por rol (Ops/Master), por función 'talento' (ej. el
+  // booker que vive en Marketing), o para DEV en modo auditoría (solo lectura
+  // — las policies bloquean sus escrituras)
+  const isOpsPlus = ['MASTER', 'OPS_MANAGER', 'DEV'].includes(userRole ?? '') || !!caps?.has('talento')
+  // DEV audita el Resumen del bot; Config (toggles vivos) sigue solo Master
+  const canSeeSummary = isMaster || userRole === 'DEV'
   // Hoy es el landing para todos: la cabina de triage — qué necesita atención
   // y cómo van las reservas, todo accionable en ≤2 taps.
   const [tab, setTab] = useState('hoy')
@@ -130,7 +133,8 @@ export function Concierge({ userId, userRole, caps }: { userId?: string; userRol
     { id: 'inbox',    label: 'Bandeja' },
     { id: 'clientes', label: 'Clientes' },
     ...(isOpsPlus ? [{ id: 'talento', label: 'Talento' }] : []),   // fees = dato sensible: Ops/Master
-    ...(isMaster ? [{ id: 'summary', label: 'Resumen' }, { id: 'config', label: 'Config' }] : []),
+    ...(canSeeSummary ? [{ id: 'summary', label: 'Resumen' }] : []),
+    ...(isMaster ? [{ id: 'config', label: 'Config' }] : []),
   ]
 
   // Reservas y Clientes son pantallas completas con su propio scroll; las demás
@@ -164,7 +168,7 @@ export function Concierge({ userId, userRole, caps }: { userId?: string; userRol
             {tab === 'hoy' && <HoyTab buList={buList} userId={userId} isMobile={isMobile} onGoReservas={() => setTab('reservas')} />}
             {tab === 'inbox' && <InboxTab buList={buList} userId={userId} isMobile={isMobile} isMaster={isMaster} />}
             {isOpsPlus && tab === 'talento' && <TalentoTab buList={buList} userId={userId} isMobile={isMobile} />}
-            {isMaster && tab === 'summary' && <SummaryTab buList={buList} />}
+            {canSeeSummary && tab === 'summary' && <SummaryTab buList={buList} />}
             {isMaster && tab === 'config' && <ConfigTab buList={buList} />}
           </div>
         </div>

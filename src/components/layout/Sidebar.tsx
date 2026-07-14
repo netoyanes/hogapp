@@ -37,12 +37,16 @@ export const NAV_ITEMS = [
 export const NON_MASTER_VIEWS = ['tasks', 'crm', 'concierge', 'casa', 'social', 'objectives', 'profile']
 // La Casa (operación de piso): personal HoH la vive, Ops la administra,
 // C-Level/Master supervisan. Marketing y Team no la ven.
-const CASA_ROLES = new Set(['MASTER', 'C_LEVEL', 'OPS_MANAGER', 'HEART_OF_HOUSE'])
+const CASA_ROLES = new Set(['MASTER', 'C_LEVEL', 'OPS_MANAGER', 'HEART_OF_HOUSE', 'DEV'])
 
 export function navItemsForRole(userRole?: string) {
   // Heart of House (piso): la app entera se reduce a La Casa + Perfil
   if (userRole === 'HEART_OF_HOUSE') {
     return NAV_ITEMS.filter(item => item.id === 'casa' || item.id === 'profile')
+  }
+  // DEV (auditoría): ve toda la plataforma menos administración (Usuarios/Carga)
+  if (userRole === 'DEV') {
+    return NAV_ITEMS.filter(item => TENANT.enabledViews.includes(item.id) && !item.masterOnly)
   }
   return NAV_ITEMS.filter(item => {
     if (!TENANT.enabledViews.includes(item.id)) return false

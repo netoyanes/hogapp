@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.32.0"
+export const APP_VERSION = "2.33.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.33.0",
+    date: "2026-07-10",
+    type: "MINOR",
+    changes: [
+      "Rol nuevo Dev · Auditoría: ve TODA la plataforma en solo lectura (dashboard, tareas, comercial, concierge con resumen y talento, La Casa, reportes, actividad)",
+      "Propone mejoras creando tareas — su única escritura; sin acceso a Usuarios, Carga CSV ni Config del Concierge",
+      "Disponible en Usuarios (invitar/cambiar rol) y en Vista previa por rol",
+    ]
+  },
   {
     version: "2.32.0",
     date: "2026-07-10",

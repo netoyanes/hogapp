@@ -34,7 +34,7 @@ import { getViewAsRole, setViewAsRole } from './lib/viewAs'
 import { useEffect, useRef } from 'react'
 
 export function canSeeDashboard(role?: string | null) {
-  return role === 'MASTER' || role === 'C_LEVEL'
+  return role === 'MASTER' || role === 'C_LEVEL' || role === 'DEV'
 }
 
 // Detect deep-link URLs before rendering anything else
@@ -82,7 +82,7 @@ export default function App() {
     landedRef.current = true
     // Team en tablet (host stand) aterriza en Concierge (Reservas); en teléfono, en Social
     const teamLanding = window.innerWidth >= 768 ? 'concierge' : 'social'
-    setActiveView(role === 'MASTER' ? 'dashboard' : role === 'HEART_OF_HOUSE' ? 'casa' : role === 'TEAM' ? teamLanding : 'tasks')
+    setActiveView(role === 'MASTER' || role === 'DEV' ? 'dashboard' : role === 'HEART_OF_HOUSE' ? 'casa' : role === 'TEAM' ? teamLanding : 'tasks')
   }, [role])
   const [scoringBU, setScoringBU] = useState<string | null>(null)
   const [buFilter, setBuFilter] = useState('')
@@ -150,11 +150,14 @@ export default function App() {
   // 'contacts' queda como alias legado (links viejos) — renderiza Comercial.
   const ALLOWED_VIEWS = role === 'MASTER'
     ? null // null = no restriction
-    : role === 'HEART_OF_HOUSE'
-      ? new Set(['casa', 'reportar', 'profile']) // piso: una sola herramienta
-      : role === 'TEAM' || role === 'MARKETING'
-        ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'social', 'objectives', 'profile'])
-        : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives', 'profile'])
+    : role === 'DEV'
+      ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives',
+                 'calendar', 'content', 'revenue', 'reports', 'activity', 'templates', 'profile']) // auditoría: todo menos admin (Usuarios/Carga)
+      : role === 'HEART_OF_HOUSE'
+        ? new Set(['casa', 'reportar', 'profile']) // piso: una sola herramienta
+        : role === 'TEAM' || role === 'MARKETING'
+          ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'social', 'objectives', 'profile'])
+          : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives', 'profile'])
 
   function handleNavigate(view: string) {
     if (ALLOWED_VIEWS && !ALLOWED_VIEWS.has(view)) return
