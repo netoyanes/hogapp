@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.31.1"
+export const APP_VERSION = "2.32.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.32.0",
+    date: "2026-07-10",
+    type: "MINOR",
+    changes: [
+      "Funciones por usuario: el rol define lo general y las funciones liberan áreas específicas por persona — se asignan desde Usuarios (Master)",
+      "Primera función: 'Talento' — abre el booking de DJs y sus fees a alguien fuera de Ops (ej. el booker que vive en Marketing), incluyendo el fee en Comercial → DJs",
+    ]
+  },
   {
     version: "2.31.1",
     date: "2026-07-10",

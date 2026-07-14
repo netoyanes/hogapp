@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from './hooks/useAuth'
+import { supabase } from './lib/supabase'
 import { Auth } from './screens/Auth'
 import { UserOnboarding } from './screens/UserOnboarding'
 import { Dashboard } from './screens/Dashboard'
@@ -61,6 +62,16 @@ export default function App() {
   const role = (viewAs ?? realRole) as string | undefined
 
   const [activeView, setActiveView] = useState('tasks')
+
+  // Funciones extra por usuario (capabilities): el rol define lo general y
+  // las funciones liberan áreas puntuales (ej. 'talento' para el booker que
+  // vive en Marketing). Se administran en Usuarios (Master).
+  const [caps, setCaps] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (!profile?.id) return
+    supabase.from('user_capabilities').select('capability').eq('user_id', profile.id)
+      .then(({ data }) => setCaps(new Set((data ?? []).map(c => c.capability))))
+  }, [profile?.id])
 
   // Role-based landing, applied once the profile (and any view-as override)
   // resolves: MASTER → dashboard · TEAM → social · managers → tasks.
@@ -167,10 +178,10 @@ export default function App() {
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':
       case 'contacts': // alias legado — el directorio ahora vive dentro de Comercial
-        return <CRM userRole={role} userId={profile?.id} />
+        return <CRM userRole={role} userId={profile?.id} caps={caps} />
       case 'reservations': // alias legado (links viejos de Slack/Calendario)
       case 'concierge':
-        return <Concierge userId={profile?.id} userRole={role} />
+        return <Concierge userId={profile?.id} userRole={role} caps={caps} />
       case 'casa':
         return <Casa userId={profile?.id} userRole={role} />
       case 'reportar': // slot de bottom-nav del HoH: La Casa con el reporte abierto

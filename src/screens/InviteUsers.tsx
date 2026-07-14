@@ -32,6 +32,12 @@ const ROLE_COLORS: Record<string, string> = {
   HEART_OF_HOUSE: '#A78BFA',
 }
 
+// Catálogo de funciones extra (capabilities): liberan áreas puntuales sobre
+// el rol base. Extensible — agregar aquí y en el CHECK de user_capabilities.
+const CAPABILITIES: { id: string; label: string; desc: string }[] = [
+  { id: 'talento', label: 'Talento', desc: 'Concierge → Talento: booking de DJs y fees' },
+]
+
 interface Invitation {
   id: string
   email: string
@@ -74,6 +80,9 @@ export function InviteUsers() {
   // Asignación de venues (controla el alcance de Reservas/visitas para Ops y Team)
   const [buList, setBuList] = useState<{ id: string; code: string; name: string }[]>([])
   const [userVenues, setUserVenues] = useState<Record<string, string[]>>({})
+  // Funciones extra por usuario: liberan áreas puntuales sobre el rol base
+  // (ej. 'talento' para el booker que vive en Marketing)
+  const [userCaps, setUserCaps] = useState<Record<string, string[]>>({})
 
   useEffect(() => {
     loadAll()
@@ -81,16 +90,20 @@ export function InviteUsers() {
   }, [])
 
   async function loadAll() {
-    const [{ data: inv }, { data: mem }, { data: buses }, { data: uv }] = await Promise.all([
+    const [{ data: inv }, { data: mem }, { data: buses }, { data: uv }, { data: uc }] = await Promise.all([
       supabase.from('invitations').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('id, full_name, last_name, email, role, slack_user_id, created_at').order('created_at', { ascending: true }),
       supabase.from('business_units').select('id, code, name').order('code'),
       supabase.from('user_venues').select('user_id, bu_id'),
+      supabase.from('user_capabilities').select('user_id, capability'),
     ])
     setBuList(buses ?? [])
     const vm: Record<string, string[]> = {}
     for (const r of uv ?? []) { (vm[r.user_id] = vm[r.user_id] ?? []).push(r.bu_id) }
     setUserVenues(vm)
+    const cm: Record<string, string[]> = {}
+    for (const r of uc ?? []) { (cm[r.user_id] = cm[r.user_id] ?? []).push(r.capability) }
+    setUserCaps(cm)
     setInvitations(inv ?? [])
     if (mem) {
       setMembers(mem)
@@ -129,6 +142,28 @@ export function InviteUsers() {
     }
     const code = buList.find(b => b.id === buId)?.code
     logActivity('venue_assigned', 'user', userId, { member: memberName, bu: code })
+  }
+
+  async function addCap(userId: string, cap: string, memberName: string) {
+    setUserCaps(prev => ({ ...prev, [userId]: [...(prev[userId] ?? []), cap] }))
+    const { error } = await supabase.from('user_capabilities').insert({ user_id: userId, capability: cap, granted_by: currentUserId })
+    if (error) {
+      setMemberError(`No se pudo asignar la función: ${error.message}`)
+      await loadAll()
+      return
+    }
+    logActivity('capability_granted', 'user', userId, { member: memberName, capability: cap })
+  }
+
+  async function removeCap(userId: string, cap: string, memberName: string) {
+    setUserCaps(prev => ({ ...prev, [userId]: (prev[userId] ?? []).filter(c => c !== cap) }))
+    const { error } = await supabase.from('user_capabilities').delete().eq('user_id', userId).eq('capability', cap)
+    if (error) {
+      setMemberError(`No se pudo quitar la función: ${error.message}`)
+      await loadAll()
+      return
+    }
+    logActivity('capability_revoked', 'user', userId, { member: memberName, capability: cap })
   }
 
   async function removeVenue(userId: string, buId: string, memberName: string) {
@@ -428,6 +463,44 @@ export function InviteUsers() {
                               .filter(b => !(userVenues[m.id] ?? []).includes(b.id))
                               .map(b => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
                           </select>
+                        </div>
+
+                        {/* Funciones extra — liberan áreas puntuales sobre el rol base
+                            (ej. 'Talento' al booker que vive en Marketing) */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '5px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>FUNCIONES</span>
+                          {(userCaps[m.id] ?? []).length === 0 && (
+                            <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontStyle: 'italic' }}>
+                              solo su rol
+                            </span>
+                          )}
+                          {(userCaps[m.id] ?? []).map(capId => {
+                            const cap = CAPABILITIES.find(c => c.id === capId)
+                            return (
+                              <span key={capId} title={cap?.desc} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', color: 'var(--accent)', borderRadius: '4px', padding: '1px 6px', fontSize: '9px', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                                {cap?.label ?? capId}
+                                <button
+                                  onClick={() => removeCap(m.id, capId, displayName(m))}
+                                  title={`Quitar ${cap?.label ?? capId}`}
+                                  style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '11px', padding: '0 2px', lineHeight: 1 }}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            )
+                          })}
+                          {CAPABILITIES.some(c => !(userCaps[m.id] ?? []).includes(c.id)) && (
+                            <select
+                              value=""
+                              onChange={e => { if (e.target.value) { addCap(m.id, e.target.value, displayName(m)); (e.target as HTMLSelectElement).value = '' } }}
+                              style={{ background: 'transparent', border: '1px dashed var(--border-default)', borderRadius: '4px', color: 'var(--text-tertiary)', fontSize: '9px', fontFamily: 'var(--font-mono)', padding: '1px 4px', outline: 'none', cursor: 'pointer', maxWidth: '100px' }}
+                            >
+                              <option value="">+ función</option>
+                              {CAPABILITIES
+                                .filter(c => !(userCaps[m.id] ?? []).includes(c.id))
+                                .map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                            </select>
+                          )}
                         </div>
                       </div>
 
