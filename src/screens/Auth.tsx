@@ -124,7 +124,7 @@ export function Auth({ onSignIn, accessDenied }: Props) {
 
         {/* Selector de tipo de acceso */}
         <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '10px', padding: '4px', marginBottom: '18px' }}>
-          {([['email', 'Correo'], ['piso', 'Equipo de piso']] as const).map(([k, label]) => (
+          {([['email', 'Correo'], ['piso', 'HoH']] as const).map(([k, label]) => (
             <button key={k} type="button" onClick={() => { setAuthKind(k); setError(null); setSuccess(null) }}
               style={{
                 flex: 1, padding: '8px', borderRadius: '7px', border: 'none', cursor: 'pointer',
