@@ -154,7 +154,7 @@ export default function App() {
       ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives',
                  'calendar', 'content', 'revenue', 'reports', 'activity', 'templates', 'profile']) // auditoría: todo menos admin (Usuarios/Carga)
       : role === 'HEART_OF_HOUSE'
-        ? new Set(['casa', 'reportar', 'profile']) // piso: una sola herramienta
+        ? new Set(['casa', 'reportar', 'concierge', 'profile']) // piso + tablet de host: La Casa y Reservas
         : role === 'TEAM' || role === 'MARKETING'
           ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'social', 'objectives', 'profile'])
           : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives', 'profile'])
