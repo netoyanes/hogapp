@@ -16,7 +16,9 @@ interface Props {
 }
 
 export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: Props) {
-  const canReassign = userRole === 'MASTER' || userRole === 'C_LEVEL'
+  // Cualquiera puede asignar tareas a cualquiera (decisión de producto).
+  // Para roles no-directivos el campo arranca en "yo" como default cómodo.
+  const defaultsToSelf = !(userRole === 'MASTER' || userRole === 'C_LEVEL')
   const isMobile = useIsMobile()
   const [title, setTitle] = useState('')
   const [buId, setBuId] = useState(defaultBuId ?? '')
@@ -56,10 +58,10 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
       setBuList(buses ?? [])
       setTemplates(tpls ?? [])
       if (!defaultBuId && buses && buses.length > 0) setBuId(buses[0].id)
-      if (!canReassign && user?.id) setAssignedTo(user.id)
+      if (defaultsToSelf && user?.id) setAssignedTo(user.id)
     }
     load()
-  }, [defaultBuId, canReassign])
+  }, [defaultBuId, defaultsToSelf])
 
   function applyTemplate(templateId: string) {
     const t = templates.find(t => t.id === templateId)
@@ -271,31 +273,18 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
                 <option value="LOW">Baja</option>
               </select>
             </div>
-            {canReassign ? (
-              <div>
-                <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>
-                  Asignar a <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '9px' }}>C-LEVEL</span>
-                </label>
-                <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={selectStyle}
-                  onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-                  onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
-                >
-                  <option value="">— Sin asignar —</option>
-                  {teamMembers.map((m) => (
-                    <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div>
-                <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Asignada a</label>
-                <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ color: 'var(--text-tertiary)' }}>👤</span>
-                  {teamMembers.find(m => m.id === assignedTo)?.full_name ?? teamMembers.find(m => m.id === assignedTo)?.email ?? 'You'}
-                  <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginLeft: 'auto' }}>auto</span>
-                </div>
-              </div>
-            )}
+            <div>
+              <label style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Asignar a</label>
+              <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={selectStyle}
+                onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+              >
+                <option value="">— Sin asignar —</option>
+                {teamMembers.map((m) => (
+                  <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Advanced toggle */}
