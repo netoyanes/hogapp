@@ -169,12 +169,19 @@ async function handleInstagram(supabaseAdmin: any, body: any) {
       // Click-to-message: si el DM viene de un anuncio, Meta manda `referral`
       // (ads_context_data trae el título del anuncio). El bot abre vendiendo ESO.
       const rawRef = event.referral ?? event.message?.referral ?? event.postback?.referral ?? null
+      // Respuesta a una HISTORIA (incluye historias promocionadas): llega como
+      // reply_to.story, SIN datos del anuncio — pero el contexto igual vale oro.
+      const storyRef = event.message?.reply_to?.story ?? null
       const referral = rawRef ? {
         source: 'instagram_ad',
         headline: rawRef.ads_context_data?.ad_title ?? null,
         ref: rawRef.ref ?? null,
         ad_id: rawRef.ad_id ?? null,
         photo_url: rawRef.ads_context_data?.photo_url ?? null,
+      } : storyRef ? {
+        source: 'instagram_story',
+        story_id: storyRef.id ?? null,
+        story_url: storyRef.url ?? null,
       } : undefined
       if (!event.message?.text && !imageUrl) continue
       await ingestMessage(supabaseAdmin, {

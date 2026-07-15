@@ -773,6 +773,11 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
                 📣 {conv.referral.headline ?? conv.referral.ref}
               </span>
             )}
+            {conv.referral?.source === 'instagram_story' && (
+              <span title="Respondió a una historia" style={{ fontSize: 11, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 32%, transparent)', borderRadius: 4, padding: '1px 7px' }}>
+                📖 Historia
+              </span>
+            )}
             {conv.escalation_reason && <span style={{ fontSize: 11, color: 'var(--status-attention)' }}>Motivo: {conv.escalation_reason}</span>}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>

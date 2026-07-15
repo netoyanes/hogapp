@@ -423,12 +423,15 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   lines.push('Teléfonos: valida a ojo — un celular mexicano son 10 dígitos (o internacional con +). Si lo que dio el cliente tiene menos/más dígitos o símbolos raros, NO lo registres: pídele que lo confirme, con buena onda. El sistema también lo valida por si acaso.')
   lines.push('Peticiones especiales (área privada, decoración, pastel, ocasiones): anótalas en las notas de la reserva y dile al cliente que el equipo lo revisa y le confirma — no prometas lo que no controlas, pero tampoco lo dejes sin registro.')
   if (ctx.conv.display_name) lines.push(`El perfil del cliente en este canal dice: "${ctx.conv.display_name}" — OJO: suele ser un apodo o nombre artístico, no su nombre real. Úsalo solo para saludar con calidez. Para la reserva SIEMPRE pide su nombre ("¿a nombre de quién pongo la reserva?") y a partir de que te lo dé, dirígete a la persona por ESE nombre.`)
-  // Atribución de campaña: si el cliente escribió desde un anuncio, el bot
-  // abre vendiendo ESE evento/promo — nunca el genérico "¿qué información necesitas?"
+  // Atribución de campaña: si el cliente escribió desde un anuncio o
+  // respondiendo a una historia, el bot abre vendiendo ESO — nunca el
+  // genérico "¿qué información necesitas?"
   const refCamp = ctx.conv.referral
   if (refCamp && (refCamp.headline || refCamp.body || refCamp.ref)) {
     const anuncio = [refCamp.headline, refCamp.body].filter(Boolean).join(' — ') || String(refCamp.ref ?? '')
     lines.push(`CAMPAÑA — este cliente llegó escribiendo DESDE UN ANUNCIO: "${anuncio}". Eso es exactamente lo que le interesa: tu primera respuesta habla de ESE evento/promoción con entusiasmo (consulta programacion_venue o listar_eventos si aplica, y el FAQ del venue) y llévalo directo a reservar. PROHIBIDO responderle con un genérico tipo "¿qué información necesitas?" — ya sabes a qué viene.`)
+  } else if (refCamp?.source === 'instagram_story') {
+    lines.push(`HISTORIA — este cliente escribió RESPONDIENDO A UNA HISTORIA del venue: algo que vio ahí le interesó. Si el FAQ trae una línea "EVENTO EN PROMOCIÓN", asume que pregunta por ESE evento y abre directo con él (nombre, fecha y precio en una línea + cierre corto). Si no hay evento en promoción declarado, pregunta en UNA línea corta si le interesa el evento o promoción de la historia. PROHIBIDO el genérico "¿qué información necesitas?".`)
   }
   lines.push('RESERVA EXISTENTE: cuando registres al cliente, el sistema te dirá si ya tiene reservas próximas. Si ya tiene una para el MISMO día que está pidiendo, NO crees otra: confírmasela con sus datos ("ya tienes tu mesa el sábado a las 20:30 para 6 👍"). Si pide cambios (hora/personas), usa crear_reserva con los datos nuevos — el sistema ACTUALIZA la existente en lugar de duplicar y valida que todavía haya cupo; si ya no cabe, ofrécele otra opción.')
   lines.push('CANCELACIONES: si el cliente pide cancelar, cancela SIN fricción con cancelar_reserva — nada de "¿seguro?" repetidos ni interrogar el motivo (si lo cuenta espontáneamente, regístralo). Confírmale la cancelación con calidez e invítalo a volver ("cuando quieras, aquí tienes tu mesa"). Una cancelación bien atendida es un cliente que regresa.')
