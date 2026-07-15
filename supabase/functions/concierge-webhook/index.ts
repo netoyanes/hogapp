@@ -108,9 +108,19 @@ async function handleWhatsApp(supabaseAdmin: any, body: any) {
         const from = msg.from as string
         const contactName = value.contacts?.[0]?.profile?.name ?? null
         const buId = await resolveVenueForChannel(supabaseAdmin, 'whatsapp', phoneNumberId, from)
+        // CTWA: si el mensaje llega desde un anuncio, Meta manda `referral`
+        // (headline/body del anuncio). El bot abre vendiendo ESO.
+        const referral = msg.referral ? {
+          source: 'whatsapp_ad',
+          headline: msg.referral.headline ?? null,
+          body: msg.referral.body ?? null,
+          source_url: msg.referral.source_url ?? null,
+          source_id: msg.referral.source_id ?? null,
+        } : undefined
         if (msg.type === 'text') {
           await ingestMessage(supabaseAdmin, {
             channel: 'whatsapp', externalId: from, buId, displayName: contactName, body: msg.text?.body as string,
+            referral,
           })
         } else if (msg.type === 'image') {
           // Comprobantes de depósito y fotos: se guardan en el hilo para que
@@ -120,6 +130,7 @@ async function handleWhatsApp(supabaseAdmin: any, body: any) {
             channel: 'whatsapp', externalId: from, buId, displayName: contactName,
             body: msg.image?.caption?.trim() || '[📎 El cliente envió una imagen]',
             meta: imageUrl ? { image_url: imageUrl } : { image_failed: true },
+            referral,
           })
         }
         // otros tipos (audio, sticker, ubicación) se ignoran por ahora
@@ -155,11 +166,22 @@ async function handleInstagram(supabaseAdmin: any, body: any) {
       const from = event.sender?.id as string
       const buId = await resolveVenueForChannel(supabaseAdmin, 'instagram', igAccountId, from)
       const imageUrl = (event.message?.attachments ?? []).find((a: { type: string }) => a.type === 'image')?.payload?.url ?? null
+      // Click-to-message: si el DM viene de un anuncio, Meta manda `referral`
+      // (ads_context_data trae el título del anuncio). El bot abre vendiendo ESO.
+      const rawRef = event.referral ?? event.message?.referral ?? event.postback?.referral ?? null
+      const referral = rawRef ? {
+        source: 'instagram_ad',
+        headline: rawRef.ads_context_data?.ad_title ?? null,
+        ref: rawRef.ref ?? null,
+        ad_id: rawRef.ad_id ?? null,
+        photo_url: rawRef.ads_context_data?.photo_url ?? null,
+      } : undefined
       if (!event.message?.text && !imageUrl) continue
       await ingestMessage(supabaseAdmin, {
         channel: 'instagram', externalId: from, buId, displayName: null,
         body: event.message?.text ?? '[📎 El cliente envió una imagen]',
         meta: imageUrl ? { image_url: imageUrl } : undefined,
+        referral,
         fetchDisplayName: () => fetchIgProfile(from), // solo se llama si aún no lo tenemos
       })
     }
@@ -184,8 +206,8 @@ async function resolveVenueForChannel(supabaseAdmin: any, channel: 'whatsapp' | 
 }
 
 // deno-lint-ignore no-explicit-any
-async function ingestMessage(supabaseAdmin: any, opts: { channel: 'whatsapp' | 'instagram'; externalId: string; buId: string | null; displayName: string | null; body: string; meta?: Record<string, unknown>; fetchDisplayName?: () => Promise<string | null> }) {
-  const { channel, externalId, buId, body, meta, fetchDisplayName } = opts
+async function ingestMessage(supabaseAdmin: any, opts: { channel: 'whatsapp' | 'instagram'; externalId: string; buId: string | null; displayName: string | null; body: string; meta?: Record<string, unknown>; referral?: Record<string, unknown>; fetchDisplayName?: () => Promise<string | null> }) {
+  const { channel, externalId, buId, body, meta, referral, fetchDisplayName } = opts
   let { displayName } = opts
 
   const { data: conv } = await supabaseAdmin.from('bot_conversations')
@@ -202,6 +224,7 @@ async function ingestMessage(supabaseAdmin: any, opts: { channel: 'whatsapp' | '
     const { data: created, error } = await supabaseAdmin.from('bot_conversations').insert({
       channel, external_id: externalId, bu_id: buId, display_name: displayName,
       status: 'bot', last_sender: 'guest', pending_fields: ['name', 'phone', 'date', 'time', 'pax'],
+      referral: referral ?? null,
     }).select('*').single()
     if (error) { console.error('[concierge-webhook] no se pudo crear conversación', error.message); return }
     conversationId = created.id
@@ -215,6 +238,9 @@ async function ingestMessage(supabaseAdmin: any, opts: { channel: 'whatsapp' | '
     last_sender: 'guest', last_message_at: new Date().toISOString(),
     display_name: displayName ?? conv?.display_name ?? null,
   }
+  // Campaña: si este mensaje llegó desde un anuncio, es lo que le interesa
+  // AHORA — se guarda/actualiza en la conversación para que el bot lo venda.
+  if (referral) patch.referral = referral
   if (conv?.status === 'closed') patch.status = 'bot' // el cliente reabre la conversación
 
   // Respeta el handoff: si un humano tiene la conversación, no se agenda al bot.
