@@ -25,6 +25,8 @@ const ACTION_CONFIG: Record<string, { color: string; icon: React.ElementType; la
   comment_posted: { color: '#6B7280', icon: MessageSquare, label: (d) => `commented on "${d?.title}"` },
   user_invited:   { color: '#A855F7', icon: UserPlus,      label: (d) => `invited ${d?.email} as ${d?.role}` },
   hoh_created:    { color: '#A78BFA', icon: UserPlus,      label: (d) => `creó acceso de piso "${d?.full_name}" (@${d?.username})` },
+  vendor_registered: { color: '#F97316', icon: UserPlus,   label: (d) => `registró al proveedor "${d?.empresa}"${d?.servicio ? ` (${d.servicio})` : ''}` },
+  vendor_updated:    { color: '#F97316', icon: UserPlus,   label: (d) => `actualizó al proveedor "${d?.empresa}"` },
   hoh_pin_reset:  { color: '#A78BFA', icon: UserPlus,      label: (d) => `reinició el PIN de @${d?.username}` },
   proof_archived: { color: '#EF4444', icon: Archive,       label: (d) => `archived a proof for "${d?.title}"` },
   link_added:     { color: '#06B6D4', icon: Paperclip,     label: (d) => `agregó un link a "${d?.title}"` },

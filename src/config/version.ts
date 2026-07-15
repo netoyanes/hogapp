@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.37.0"
+export const APP_VERSION = "2.37.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.37.1",
+    date: "2026-07-11",
+    type: "PATCH",
+    changes: [
+      "El bot registra proveedores que escriben ofreciendo servicios (empresa, contacto, servicio, teléfono, correo) directo al directorio Comercial como Proveedor, avisa a Slack y escala — sin re-preguntar datos que ya dieron",
+    ]
+  },
   {
     version: "2.37.0",
     date: "2026-07-11",
