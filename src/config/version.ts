@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.37.1"
+export const APP_VERSION = "2.37.2"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.37.2",
+    date: "2026-07-12",
+    type: "PATCH",
+    changes: [
+      "El bot también reconoce cuando el cliente responde a una HISTORIA de Instagram (incluidas historias promocionadas) y abre con el evento en promoción del FAQ",
+      "Bandeja: chip 📖 Historia en esas conversaciones",
+    ]
+  },
   {
     version: "2.37.1",
     date: "2026-07-11",
