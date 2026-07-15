@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.37.2"
+export const APP_VERSION = "2.38.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.38.0",
+    date: "2026-07-12",
+    type: "MINOR",
+    changes: [
+      "Reacciones con emoji en los comentarios de Tareas y en la actividad de CRM (👍 ❤️ 🎉 …) — toca el ícono para reaccionar, toca de nuevo para quitar",
+      "Se quitó el atajo de teclado 'C' para crear tarea (chocaba con copiar/pegar); la tarea se crea con el botón Crear tarea o desde la command palette",
+    ]
+  },
   {
     version: "2.37.2",
     date: "2026-07-12",

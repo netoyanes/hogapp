@@ -10,6 +10,7 @@ import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
 import { HtmlFrame } from './HtmlFrame'
 import { Avatar } from './Avatar'
+import { ReactionBar } from './ReactionBar'
 import type { Task, TaskStatus, TaskPriority, TaskArea, ClientImpact, DeadlineType } from '../../types'
 import { TASK_AREA_LABELS, TASK_AREA_GROUPS, CLIENT_IMPACT_LABELS } from '../../lib/taskAreas'
 
@@ -178,6 +179,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
   const [addingLink, setAddingLink] = useState(false)
 
   const [followers, setFollowers] = useState<{ userId: string; name: string }[]>([])
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined)
   const [dragOver, setDragOver] = useState(false)
   const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
   const [copied, setCopied] = useState(false)
@@ -198,6 +200,10 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id ?? undefined))
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -872,6 +878,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
                     </span>
                   </div>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', margin: 0 }}>{c.content}</p>
+                  <ReactionBar parentType="task_comment" parentId={c.id} userId={currentUserId} />
                 </div>
               </div>
             ))}

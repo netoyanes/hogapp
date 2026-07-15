@@ -95,19 +95,12 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     load()
   }, [load])
 
-  // Keyboard shortcut C + command-palette "Crear tarea" action
+  // "Crear tarea" desde la command-palette (el atajo de tecla C se quitó
+  // porque chocaba con copiar/pegar).
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return
-      if (e.key === 'c' || e.key === 'C') setShowCreate(true)
-    }
     const openCreate = () => setShowCreate(true)
-    window.addEventListener('keydown', handler)
     window.addEventListener('hog:create-task', openCreate)
-    return () => {
-      window.removeEventListener('keydown', handler)
-      window.removeEventListener('hog:create-task', openCreate)
-    }
+    return () => window.removeEventListener('hog:create-task', openCreate)
   }, [])
 
   // Real-time + auto-refresh fallback
@@ -179,7 +172,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
           <div>
             <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '17px' }}>Tareas</h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-              {filtered.length} tareas{!isMobile && <> · crea con <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>C</span></>}
+              {filtered.length} tareas
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -370,7 +363,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
           <EmptyState
             icon="🗂️"
             title="Aún no hay tareas"
-            description="Crea la primera con C o con el botón Crear tarea."
+            description="Crea la primera con el botón Crear tarea."
           />
         </div>
       )}

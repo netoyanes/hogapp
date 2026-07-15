@@ -5,6 +5,7 @@ import type { BusinessUnit } from '../../types'
 import type { CRMContact, CRMDeal } from '../../screens/CRM'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { Avatar } from './Avatar'
+import { ReactionBar } from './ReactionBar'
 import { notifySlack, dealStageChangedMessage, dealActivityMessage, dealCommentMessage, notifyUserDM, dealLink } from '../../hooks/useSlack'
 
 type DealStage = 'LEAD' | 'CONTACTED' | 'PROPOSAL' | 'NEGOTIATING' | 'WON' | 'LOST'
@@ -75,6 +76,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
   const [creatorName, setCreatorName] = useState<string | null>(null)
   const [closerName, setCloserName] = useState<string | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined)
   const [linkedTasks, setLinkedTasks] = useState<LinkedTask[]>([])
   const [availTasks, setAvailTasks] = useState<LinkedTask[]>([])
   const [editing, setEditing] = useState(false)
@@ -150,6 +152,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
     loadActivities()
     loadLinkedTasks()
     loadAvailTasks()
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id ?? undefined))
   }, [loadDeal, loadActivities, loadLinkedTasks, loadAvailTasks])
 
   useEffect(() => {
@@ -515,6 +518,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                         </span>
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{a.body}</div>
+                      {a.body && <ReactionBar parentType="deal_activity" parentId={a.id} userId={currentUserId} />}
                     </div>
                   </div>
                 )
