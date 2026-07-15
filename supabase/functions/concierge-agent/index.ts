@@ -198,6 +198,23 @@ const TOOLS = [
     },
   },
   {
+    name: 'registrar_proveedor',
+    description: 'Registra en el directorio comercial a una empresa o persona que escribe OFRECIENDO productos o servicios (uniformes, insumos, publicidad, software, etc.). Úsala cuando el mensaje sea claramente una oferta B2B, con los datos que ya haya compartido.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        empresa: { type: 'string', description: 'Nombre de la empresa' },
+        nombre_contacto: { type: 'string', description: 'Nombre de la persona que escribe' },
+        servicio: { type: 'string', description: 'Qué ofrece (ej. "personalización de playeras y bolsas para empresas")' },
+        telefono: { type: 'string' },
+        email: { type: 'string' },
+        ciudad: { type: 'string' },
+        notas: { type: 'string', description: 'Detalles extra que mencionó (materiales, condiciones, links)' },
+      },
+      required: ['empresa', 'servicio'],
+    },
+  },
+  {
     name: 'agregar_nota_reserva',
     description: 'Agrega una nota a la reserva próxima del cliente y avisa al equipo del venue. Úsala cuando el cliente avise que va en camino, que llega tarde, o cualquier detalle operativo de su reserva ya hecha (cambio de mesa, silla de bebé, etc.).',
     input_schema: {
@@ -421,6 +438,7 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
     lines.push('DJ QUE QUIERE TOCAR: si quien escribe es un DJ/artista ofreciendo sus servicios, cambia a modo reclutador amable — captura (una o dos preguntas por mensaje): nombre artístico, géneros, ciudad, fee aproximado, links de mixes/IG y teléfono. Con lo que tengas usa registrar_dj, dile que el booker escuchará su material y le responde por aquí, y cierra con escalar_a_humano ("DJ interesado: [nombre]"). NUNCA negocies fees, NUNCA prometas fechas — eso es del booker.')
   }
   lines.push('IMÁGENES: si el historial muestra "[📎 El cliente envió una imagen]" en el contexto de un apartado, es casi seguro su comprobante de depósito: agradécele, dile que el equipo lo valida y confirma, y usa escalar_a_humano con motivo "Comprobante de apartado recibido — validar" si la conversación no está ya escalada.')
+  lines.push('PROVEEDORES: si quien escribe es una empresa o persona OFRECIENDO productos o servicios (uniformes, insumos, publicidad, software, distribuidores…), NO lo despaches ni lo trates como cliente de reservas. Agradece su interés y captura sus datos — muchos mandan TODO en un solo mensaje (empresa, nombre, servicio, teléfono, correo, ciudad): tómalo de ahí, NO re-preguntes lo que ya dieron. Usa registrar_proveedor con esos datos, dile que el equipo de compras y alianzas revisa las propuestas y le responde por este mismo canal si hay interés, y cierra con escalar_a_humano ("Proveedor registrado: [empresa] — [servicio]"). NUNCA compres, agendes reuniones ni compartas correos del equipo.')
   lines.push('EVENTOS: si el cliente quiere un evento (cumpleaños grande, despedida, corporativo, renta del lugar), NO lo despaches directo — captura primero esta información, una pregunta a la vez: (1) ¿qué fecha tienen en mente?, (2) ¿aproximadamente cuántas personas serían?, (3) ¿qué tipo de evento u ocasión es?, (4) ¿buscan un área reservada o el lugar completo?, y su nombre y teléfono si aún no los tienes. Ya con eso, usa escalar_a_humano con TODO el resumen en el motivo ("Evento: cumpleaños, ~40 pax, 26 de julio, área reservada — María, tel registrado") — así el equipo llega a cerrar la venta, no a re-preguntar.')
   if (publicUrl) lines.push(`Cuando pidas el teléfono por primera vez, comparte una sola vez este enlace de aviso de privacidad: ${publicUrl}/?aviso=1 — así el cliente sabe cómo cuidamos su dato antes de dártelo. No lo repitas en cada mensaje.`)
 
@@ -448,7 +466,7 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   if (ctx.conv.pending_fields?.length) lines.push(`Datos que aún faltan por confirmar: ${ctx.conv.pending_fields.join(', ')}.`)
   lines.push(`FECHAS (hora de México, ya calculadas — úsalas EXACTAMENTE así y NUNCA calcules tú una fecha): ${fechaContexto()}. Si el cliente dice "el sábado", es la fila marcada como sábado en esta tabla; menciona siempre día Y número al confirmar ("el sábado 11").`)
   if (isFollowup) lines.push('Este turno es un ÚNICO mensaje de seguimiento porque el cliente no respondió — que sea breve, sin presionar, recordando amablemente qué falta para cerrar su reserva.')
-  lines.push('Si algo se sale de reservas (quejas serias, pagos, proveedores, prensa) o el cliente pide hablar con una persona, usa escalar_a_humano de inmediato.')
+  lines.push('Si algo se sale de reservas (quejas serias, pagos, prensa) o el cliente pide hablar con una persona, usa escalar_a_humano de inmediato. (Los proveedores primero se registran con registrar_proveedor y luego se escala.)')
 
   return lines.join('\n')
 }
@@ -659,6 +677,49 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       })
       await notifySlackFromEdge(supabaseAdmin, `🎧 *DJ interesado vía Concierge* — ${ctx.bu?.name ?? 'venue'}\n${nombre}${input.generos ? ` · ${input.generos}` : ''}${input.ciudad ? ` · ${input.ciudad}` : ''}${input.fee_aproximado ? ` · ~$${input.fee_aproximado} MXN` : ''}${input.links ? `\n${input.links}` : ''}`)
       return { ok: true, dj_id: djId, ya_existia: !!existente, instruccion: 'Dile que el booker va a escuchar su material y le responde por este mismo canal. NO prometas fechas ni negocies fee — usa escalar_a_humano con motivo "DJ interesado: [nombre]" para cerrar tu parte.' }
+    }
+
+    case 'registrar_proveedor': {
+      // Directorio unificado: el proveedor queda como contacto VENDOR en
+      // Comercial. El bot registra y escala — nunca compra ni agenda.
+      const empresa = String(input.empresa ?? '').trim()
+      if (!empresa) return { error: 'Falta el nombre de la empresa.' }
+      const email = input.email ? String(input.email).trim().toLowerCase() : null
+      // Dedupe: primero por email exacto, luego por empresa
+      let existenteProv = null
+      if (email) {
+        const { data } = await supabaseAdmin.from('crm_contacts').select('id, full_name').ilike('email', email).maybeSingle()
+        existenteProv = data
+      }
+      if (!existenteProv) {
+        const { data } = await supabaseAdmin.from('crm_contacts').select('id, full_name').eq('contact_type', 'VENDOR').ilike('company', empresa).maybeSingle()
+        existenteProv = data
+      }
+      const notasProv = [input.servicio ? `Ofrece: ${input.servicio}` : null, input.notas ?? null, `Llegó por ${ctx.conv.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram'} del Concierge`].filter(Boolean).join(' · ')
+      const rowProv: Record<string, unknown> = {
+        full_name: String(input.nombre_contacto ?? empresa).trim(),
+        company: empresa,
+        contact_type: 'VENDOR',
+        email,
+        phone: input.telefono ? (normalizePhoneMX(String(input.telefono)) ?? String(input.telefono)) : null,
+        city: input.ciudad ?? null,
+        notes: notasProv,
+        source: 'concierge',
+      }
+      let provId = existenteProv?.id
+      if (existenteProv) {
+        await supabaseAdmin.from('crm_contacts').update(rowProv).eq('id', existenteProv.id)
+      } else {
+        const { data: nuevoProv, error: vErr } = await supabaseAdmin.from('crm_contacts').insert(rowProv).select('id').single()
+        if (vErr) return { error: vErr.message }
+        provId = nuevoProv.id
+      }
+      await supabaseAdmin.from('activity_log').insert({
+        user_id: null, action: existenteProv ? 'vendor_updated' : 'vendor_registered', entity_type: 'contact', entity_id: provId,
+        details: { actor: 'Concierge HOG', empresa, servicio: input.servicio ?? null, channel: ctx.conv.channel },
+      })
+      await notifySlackFromEdge(supabaseAdmin, `📦 *Proveedor vía Concierge* — ${ctx.bu?.name ?? 'venue'}\n${empresa}${input.servicio ? ` · ${input.servicio}` : ''}${input.nombre_contacto ? `\nContacto: ${input.nombre_contacto}` : ''}${input.telefono ? ` · ${input.telefono}` : ''}${email ? ` · ${email}` : ''}`)
+      return { ok: true, contact_id: provId, ya_existia: !!existenteProv, instruccion: 'Agradécele, dile que el equipo de compras y alianzas revisa las propuestas y le responde por este mismo canal si hay interés, y usa escalar_a_humano con motivo "Proveedor registrado: [empresa] — [servicio]". NO prometas compra ni reunión.' }
     }
 
     case 'agregar_nota_reserva': {
