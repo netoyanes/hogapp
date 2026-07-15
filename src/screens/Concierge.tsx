@@ -29,6 +29,7 @@ interface Conversation {
   last_message_at: string
   first_replied_at: string | null
   followups_sent: number
+  referral: { source?: string; headline?: string | null; body?: string | null; ref?: string | null } | null
   created_at: string
 }
 interface Message {
@@ -767,6 +768,11 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
             <StatusBadgeV2 tone={STATUS_META[conv.status].tone} label={STATUS_META[conv.status].label} />
             {bu && <BUChip code={bu.code} name={bu.name} size="sm" />}
             <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{CHANNEL_LABEL[conv.channel]}</span>
+            {conv.referral && (conv.referral.headline || conv.referral.ref) && (
+              <span title="Llegó desde un anuncio" style={{ fontSize: 11, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 32%, transparent)', borderRadius: 4, padding: '1px 7px' }}>
+                📣 {conv.referral.headline ?? conv.referral.ref}
+              </span>
+            )}
             {conv.escalation_reason && <span style={{ fontSize: 11, color: 'var(--status-attention)' }}>Motivo: {conv.escalation_reason}</span>}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>

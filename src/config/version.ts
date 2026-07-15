@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.36.1"
+export const APP_VERSION = "2.37.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.37.0",
+    date: "2026-07-11",
+    type: "MINOR",
+    changes: [
+      "Concierge — atribución de campañas: cuando un cliente escribe desde un anuncio (IG click-to-message o WhatsApp CTWA), el bot lo sabe y abre vendiendo ESE evento/promoción en vez del genérico '¿qué información necesitas?'",
+      "La Bandeja muestra 📣 con el nombre del anuncio en las conversaciones que llegaron de campaña",
+      "El referral queda guardado en la conversación — base para medir reservas por campaña",
+    ]
+  },
   {
     version: "2.36.1",
     date: "2026-07-11",
