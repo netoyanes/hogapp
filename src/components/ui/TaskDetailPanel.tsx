@@ -222,7 +222,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
       setDeadlineType(t.deadline_type)
       setAssignedTo(t.assigned_to ?? '')
 
-      const { data: buses } = await supabase.from('business_units').select('id, code, name').order('code')
+      const { data: buses } = await supabase.from('business_units').select('id, code, name').order('name')
       setBuList(buses ?? [])
       const matchedBu = buses?.find(b => b.id === t.bu_id)
       if (matchedBu) setBuName(`${matchedBu.code} · ${matchedBu.name}`)

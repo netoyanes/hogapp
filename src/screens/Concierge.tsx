@@ -127,7 +127,7 @@ export function Concierge({ userId, userRole, caps }: { userId?: string; userRol
   const [buList, setBuList] = useState<BU[]>([])
 
   useEffect(() => {
-    supabase.from('business_units').select('id, code, name').order('code')
+    supabase.from('business_units').select('id, code, name').order('name')
       .then(({ data }) => setBuList((data ?? []) as BU[]))
   }, [])
 

@@ -48,7 +48,7 @@ export function Guests({ userRole, userId }: Props) {
     const [{ data: g, error }, { data: st }, { data: buses }, { data: tags }, { data: profs }, { data: chans }] = await Promise.all([
       supabase.from('guests').select('*').neq('status', 'anonymized').order('created_at', { ascending: false }).limit(500),
       supabase.from('guest_stats').select('*'),
-      supabase.from('business_units').select('id, code, name').order('code'),
+      supabase.from('business_units').select('id, code, name').order('name'),
       supabase.from('guest_tag_options').select('label').eq('active', true).order('label'),
       supabase.from('profiles').select('id, full_name'),
       supabase.from('guest_channels').select('guest_id, channel'),

@@ -48,7 +48,7 @@ export function Reports({ userRole: _userRole }: Props) {
   const load = useCallback(async () => {
     const [{ data: rpts }, { data: bus }, { data: profiles }] = await Promise.all([
       supabase.from('reports').select('*').order('created_at', { ascending: false }),
-      supabase.from('business_units').select('*').order('code'),
+      supabase.from('business_units').select('*').order('name'),
       supabase.from('profiles').select('id, full_name, email').not('full_name', 'is', null),
     ])
     setBuses(bus ?? [])

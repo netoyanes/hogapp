@@ -121,7 +121,7 @@ export function Reservations({ userRole, userId }: Props) {
   useEffect(() => {
     async function boot() {
       const [{ data: buses }, { data: uv }] = await Promise.all([
-        supabase.from('business_units').select('id, code, name').order('code'),
+        supabase.from('business_units').select('id, code, name').order('name'),
         userId ? supabase.from('user_venues').select('bu_id').eq('user_id', userId) : Promise.resolve({ data: null }),
       ])
       setBuList(buses ?? [])

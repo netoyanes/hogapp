@@ -133,7 +133,7 @@ export function InviteUsers() {
     const [{ data: inv }, { data: mem }, { data: buses }, { data: uv }, { data: uc }] = await Promise.all([
       supabase.from('invitations').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('id, full_name, last_name, email, username, role, slack_user_id, created_at').order('created_at', { ascending: true }),
-      supabase.from('business_units').select('id, code, name').order('code'),
+      supabase.from('business_units').select('id, code, name').order('name'),
       supabase.from('user_venues').select('user_id, bu_id'),
       supabase.from('user_capabilities').select('user_id, capability'),
     ])
