@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.38.0"
+export const APP_VERSION = "2.39.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.39.0",
+    date: "2026-07-12",
+    type: "MINOR",
+    changes: [
+      "Tareas — buscador por palabra clave: encuentra una tarea por cualquier parámetro (título, descripción, venue, persona, área, estatus, prioridad); soporta varias palabras",
+      "Las unidades de negocio ahora se listan en orden alfabético en toda la app (Tareas, Concierge, Reservas, CRM, Usuarios, etc.)",
+    ]
+  },
   {
     version: "2.38.0",
     date: "2026-07-12",

@@ -22,7 +22,7 @@ export function DealOverlay({ dealId, onClose, userRole }: Props) {
     async function load() {
       const [{ data: c }, { data: b }] = await Promise.all([
         supabase.from('crm_contacts').select('*').order('full_name'),
-        supabase.from('business_units').select('*').order('code'),
+        supabase.from('business_units').select('*').order('name'),
       ])
       if (cancelled) return
       setContacts(c ?? [])

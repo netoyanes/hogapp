@@ -127,7 +127,7 @@ function Pipeline({ userRole, userId }: Props) {
     const [{ data: d }, { data: c }, { data: b }] = await Promise.all([
       supabase.from('crm_deals').select('*').order('created_at', { ascending: false }),
       supabase.from('crm_contacts').select('*').order('full_name'),
-      supabase.from('business_units').select('*').order('code'),
+      supabase.from('business_units').select('*').order('name'),
     ])
     if (d) setDeals(d)
     if (c) setContacts(c)

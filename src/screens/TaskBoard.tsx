@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Filter, ArrowRightLeft, LayoutGrid, List, ChevronDown, ChevronRight, Paperclip } from 'lucide-react'
+import { Filter, ArrowRightLeft, LayoutGrid, List, ChevronDown, ChevronRight, Paperclip, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { TaskCard } from '../components/ui/TaskCard'
 import { CreateTaskModal } from '../components/ui/CreateTaskModal'
@@ -39,6 +39,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
   const isMobile = useIsMobile()
   const [tasks, setTasks] = useState<Task[]>([])
   const [buMap, setBuMap] = useState<Record<string, string>>({})
+  const [buNameMap, setBuNameMap] = useState<Record<string, string>>({})
   const [profileMap, setProfileMap] = useState<Record<string, string>>({})
   const [followerMap, setFollowerMap] = useState<Record<string, Set<string>>>({})
   const [proofCounts, setProofCounts] = useState<Record<string, number>>({})
@@ -49,6 +50,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
   const [filterArea, setFilterArea] = useState<TaskArea | ''>('')
   const [filterBu, setFilterBu] = useState(defaultBuFilter ?? '')
   const [filterAssignee, setFilterAssignee] = useState(userId ?? '')
+  const [search, setSearch] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   // Mobile: active status segment + swipe-to-change-status target
   const [mobileStatus, setMobileStatus] = useState<TaskStatus>('OPEN')
@@ -66,7 +68,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
   const load = useCallback(async () => {
     const [{ data: taskData }, { data: buses }, { data: profiles }, { data: followers }, { data: proofs }] = await Promise.all([
       supabase.from('tasks').select('*').eq('archived', showArchived).order('created_at', { ascending: false }),
-      supabase.from('business_units').select('id, code, name'),
+      supabase.from('business_units').select('id, code, name').order('name'),
       supabase.from('profiles').select('id, full_name, email').not('full_name', 'is', null),
       supabase.from('task_followers').select('task_id, user_id'),
       supabase.from('task_proofs').select('task_id, archived'),
@@ -76,6 +78,9 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     const bm: Record<string, string> = {}
     buses?.forEach((b) => { bm[b.id] = `${b.code}` })
     setBuMap(bm)
+    const bnm: Record<string, string> = {}
+    buses?.forEach((b) => { bnm[b.id] = `${b.code} ${b.name}` })
+    setBuNameMap(bnm)
     const pm: Record<string, string> = {}
     profiles?.forEach((p) => { pm[p.id] = p.full_name ?? p.email ?? 'Unknown' })
     setProfileMap(pm)
@@ -114,6 +119,25 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
   }, [load])
   useAutoRefresh(load)
 
+  // Búsqueda por palabra clave: matchea contra CUALQUIER parámetro de la
+  // tarea — título, descripción, área, venue (código y nombre), responsable,
+  // quién la creó, estatus y prioridad. Soporta varias palabras (todas deben
+  // aparecer en algún campo).
+  const PRIORITY_ES: Record<string, string> = { HIGH: 'alta high', MEDIUM: 'media medium', LOW: 'baja low' }
+  const STATUS_ES: Record<string, string> = { OPEN: 'abierta open', IN_PROGRESS: 'en curso progreso', PROOF_SUBMITTED: 'evidencia proof', APPROVED: 'aprobada approved', REVISION: 'revisión revision' }
+  function haystack(t: Task): string {
+    return [
+      t.title, t.description ?? '',
+      t.area ? TASK_AREA_LABELS[t.area] : '',
+      t.bu_id ? buNameMap[t.bu_id] ?? '' : '',
+      t.assigned_to ? profileMap[t.assigned_to] ?? '' : '',
+      t.created_by ? profileMap[t.created_by] ?? '' : '',
+      STATUS_ES[t.status] ?? '', PRIORITY_ES[t.priority] ?? '',
+      t.due_date ?? '',
+    ].join(' ').toLowerCase()
+  }
+  const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+
   const filtered = tasks.filter((t) => {
     if (filterPriority && t.priority !== filterPriority) return false
     if (filterArea && t.area !== filterArea) return false
@@ -124,6 +148,10 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
         t.created_by === filterAssignee ||
         (followerMap[filterAssignee]?.has(t.id) ?? false)
       if (!related) return false
+    }
+    if (terms.length) {
+      const h = haystack(t)
+      if (!terms.every(term => h.includes(term))) return false
     }
     return true
   })
@@ -162,7 +190,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     minHeight: '32px',
   }
 
-  const hasFilters = !!(filterBu || filterPriority || filterArea || filterAssignee)
+  const hasFilters = !!(filterBu || filterPriority || filterArea || filterAssignee || search)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -194,6 +222,27 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
               + Crear tarea
             </button>
           </div>
+        </div>
+
+        {/* Búsqueda por palabra clave — matchea cualquier parámetro de la tarea */}
+        <div style={{ position: 'relative', marginBottom: '8px' }}>
+          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar tareas — título, venue, persona, área, estatus…"
+            style={{
+              width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '8px 32px',
+              fontSize: '13px', outline: 'none', minHeight: '38px', boxSizing: 'border-box',
+            }}
+            onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+            onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+          />
+          {search && (
+            <button onClick={() => setSearch('')}
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: '4px' }}>×</button>
+          )}
         </div>
 
         {/* Filters */}
@@ -237,7 +286,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
             Archivadas {showArchived && `· ${tasks.length}`}
           </button>
           {hasFilters && (
-            <button onClick={() => { setFilterBu(''); setFilterPriority(''); setFilterArea(''); setFilterAssignee('') }}
+            <button onClick={() => { setFilterBu(''); setFilterPriority(''); setFilterArea(''); setFilterAssignee(''); setSearch('') }}
               style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: '11px', cursor: 'pointer', flexShrink: 0 }}>
               Limpiar
             </button>
