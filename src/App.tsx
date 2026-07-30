@@ -280,6 +280,7 @@ export default function App() {
           taskId={overlayTaskId}
           onClose={closeTaskOverlay}
           onUpdated={() => { /* overlay view — background screen refreshes on its own */ }}
+          onOpenTask={(id) => setOverlayTaskId(id)}
           userRole={role}
         />
       )}

@@ -458,6 +458,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
           userRole={userRole}
           onClose={() => setSelectedTaskId(null)}
           onUpdated={load}
+          onOpenTask={(id) => setSelectedTaskId(id)}
         />
       )}
     </div>

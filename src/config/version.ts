@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.39.0"
+export const APP_VERSION = "2.40.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.40.0",
+    date: "2026-07-12",
+    type: "MINOR",
+    changes: [
+      "Duplicar tarea — botón en el detalle que crea una copia con la misma configuración (área, venue, prioridad, horas, privacidad y links); arranca Abierta, sin fecha ni evidencia. Ideal para tareas recurrentes",
+    ]
+  },
   {
     version: "2.39.0",
     date: "2026-07-12",
