@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.43.0"
+export const APP_VERSION = "2.44.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.44.0",
+    date: "2026-07-30",
+    type: "MINOR",
+    changes: [
+      "Plataforma de reservas Fase 2 — Piso operativo: nueva vista 'Piso' en Reservas con el plano en vivo (libre / reservada / sentada / en cuenta)",
+      "Sentar desde el piso: toca una mesa libre y elige una reserva de hoy o registra un walk-in; barra con contador de asientos ocupados",
+      "Ciclo de mesa: En cuenta → Cerrar mesa (libera y completa la reserva); Deshacer sentada por si fue error",
+      "Horas reales de sentada, cuenta y salida quedan registradas por mesa — base de la calibración de duraciones (Fase 5)",
+      "El piso se actualiza solo en todas las tablets del venue (realtime)",
+    ]
+  },
   {
     version: "2.43.0",
     date: "2026-07-30",
