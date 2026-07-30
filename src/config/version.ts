@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.41.0"
+export const APP_VERSION = "2.42.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.42.0",
+    date: "2026-07-12",
+    type: "MINOR",
+    changes: [
+      "Configuración de venue: horario de operación (abre/cierra) y cupo total por día, editable desde Reservas → Capacidad y horario",
+      "Reservas — 'Espacios libres por hora': muestra hora por hora cuántos lugares quedan libres del cupo total, según las llegadas acumuladas (modelo de horarios libres)",
+    ]
+  },
   {
     version: "2.41.0",
     date: "2026-07-12",
