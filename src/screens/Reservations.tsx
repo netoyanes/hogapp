@@ -91,7 +91,9 @@ interface Props {
 export function Reservations({ userRole, userId }: Props) {
   const isMobile = useIsMobile()
   const today = isoLocal(new Date())
-  const [view, setView] = useState<'day' | 'week'>('day')
+  const [view, setView] = useState<'day' | 'week' | 'all'>('day')
+  const [allRows, setAllRows] = useState<Reservation[]>([])
+  const [allSearch, setAllSearch] = useState('')
   const [date, setDate] = useState(() => {
     // Salto desde el Calendario mensual (indicador de reservas)
     const goto = sessionStorage.getItem('hog_res_goto')
@@ -193,6 +195,24 @@ export function Reservations({ userRole, userId }: Props) {
   }, [buId, date])
 
   useEffect(() => { setLoading(true); load() }, [load])
+
+  // Vista "Todas": reservas del venue de los últimos 30 días en adelante,
+  // buscables por cliente. Los guests se cargan al mismo guestMap.
+  const loadAll = useCallback(async () => {
+    if (!buId) return
+    const desde = addDays(today, -30)
+    const { data } = await supabase.from('reservations').select('*')
+      .eq('bu_id', buId).gte('date', desde).order('date', { ascending: false }).order('time_slot')
+    const rows = (data ?? []) as Reservation[]
+    setAllRows(rows)
+    const ids = [...new Set(rows.map(r => r.guest_id))].filter(id => !guestMap[id])
+    if (ids.length) {
+      const { data: gs } = await supabase.from('guests').select('id, full_name, phone, tags').in('id', ids)
+      setGuestMap(prev => ({ ...prev, ...Object.fromEntries((gs ?? []).map(g => [g.id, g as GuestLite])) }))
+    }
+  }, [buId, today, guestMap])
+
+  useEffect(() => { if (view === 'all') loadAll() }, [view, buId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Realtime: la tablet del host y el teléfono del manager se sincronizan solos
   useEffect(() => {
@@ -323,7 +343,7 @@ export function Reservations({ userRole, userId }: Props) {
             {new Date(date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
           </span>
           <div style={{ marginLeft: 'auto', maxWidth: 200, flex: 1 }}>
-            <SegmentedControl options={[{ id: 'day', label: 'Día' }, { id: 'week', label: 'Semana' }]} value={view} onChange={id => setView(id as 'day' | 'week')} />
+            <SegmentedControl options={[{ id: 'day', label: 'Día' }, { id: 'week', label: 'Semana' }, { id: 'all', label: 'Todas' }]} value={view} onChange={id => setView(id as 'day' | 'week' | 'all')} />
           </div>
         </div>
 
@@ -350,6 +370,47 @@ export function Reservations({ userRole, userId }: Props) {
             <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No pudimos cargar las reservas. Revisa tu conexión.</p>
             <button onClick={() => { setLoading(true); load() }} style={{ marginTop: 10, minHeight: 44, padding: '0 16px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13 }}>Reintentar</button>
           </div>
+        ) : view === 'all' ? (
+          /* ── Todas: lista buscable del venue (últimos 30 días en adelante) ── */
+          (() => {
+            const q = allSearch.trim().toLowerCase()
+            const rows = allRows.filter(r => {
+              if (!q) return true
+              const g = guestMap[r.guest_id]
+              return (g?.full_name ?? '').toLowerCase().includes(q) || (g?.phone ?? '').includes(q) || r.date.includes(q)
+            })
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input value={allSearch} onChange={e => setAllSearch(e.target.value)}
+                  placeholder="Buscar por nombre, teléfono o fecha…"
+                  style={{ width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', padding: '10px 12px', fontSize: 13, outline: 'none', boxSizing: 'border-box', minHeight: 42 }} />
+                {rows.length === 0 ? (
+                  <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 24 }}>
+                    {allRows.length === 0 ? 'Sin reservas en este venue.' : 'Sin resultados.'}
+                  </p>
+                ) : rows.map(r => {
+                  const g = guestMap[r.guest_id]
+                  const meta = STATUS_META[r.status]
+                  return (
+                    <button key={r.id} onClick={() => { setDate(r.date); setView('day') }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '10px 12px', cursor: 'pointer', textAlign: 'left', minHeight: 56 }}>
+                      <div style={{ textAlign: 'center', flexShrink: 0, width: 52 }}>
+                        <div className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                          {new Date(r.date + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+                        </div>
+                        <div className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{r.time_slot}</div>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g?.full_name ?? 'Cliente'}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{r.party_size} pax · {SOURCE_LABEL[r.source]}</div>
+                      </div>
+                      <StatusBadgeV2 tone={meta.tone} label={meta.label} />
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })()
         ) : view === 'week' ? (
           /* ── Semana: 7 columnas con totales; tap → día ── */
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(7, 1fr)', gap: 8 }}>
