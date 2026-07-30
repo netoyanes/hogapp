@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Phone, MessageCircle, Camera, Footprints, Building2, AlertTriangle, MoreHorizontal, X, Search, Check, Settings2, Handshake } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Phone, MessageCircle, Camera, Footprints, Building2, AlertTriangle, MoreHorizontal, X, Search, Check, Settings2, Handshake, Share2, Copy } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatPhone } from '../lib/phone'
 import { logActivity } from '../hooks/useActivityLog'
@@ -13,7 +13,7 @@ import { KPITile, SegmentedControl, Sheet, StatusBadgeV2, showToast, type Status
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type ResStatus = 'requested' | 'confirmed' | 'seated' | 'completed' | 'no_show' | 'cancelled'
-type ResSource = 'phone' | 'whatsapp' | 'instagram' | 'walk_in' | 'internal'
+type ResSource = 'phone' | 'whatsapp' | 'instagram' | 'walk_in' | 'internal' | 'web'
 
 interface Reservation {
   id: string
@@ -42,10 +42,10 @@ const STATUS_META: Record<ResStatus, { label: string; tone: StatusTone; next?: R
   cancelled: { label: 'Cancelada',  tone: 'neutral' },
 }
 const SOURCE_ICON: Record<ResSource, React.ElementType> = {
-  phone: Phone, whatsapp: MessageCircle, instagram: Camera, walk_in: Footprints, internal: Building2,
+  phone: Phone, whatsapp: MessageCircle, instagram: Camera, walk_in: Footprints, internal: Building2, web: Share2,
 }
 const SOURCE_LABEL: Record<ResSource, string> = {
-  phone: 'Teléfono', whatsapp: 'WhatsApp', instagram: 'Instagram', walk_in: 'Walk-in', internal: 'Interno',
+  phone: 'Teléfono', whatsapp: 'WhatsApp', instagram: 'Instagram', walk_in: 'Walk-in', internal: 'Interno', web: 'Reserva web',
 }
 const ZONES = ['Terraza', 'Barra', 'Salón', 'VIP']
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -94,6 +94,7 @@ export function Reservations({ userRole, userId }: Props) {
   const bookedBy = useCallback((r: Reservation) => {
     if (r.bot_conversation_id) return 'Concierge HOG'
     if (r.created_by) return profileMap[r.created_by] ?? '—'
+    if (r.source === 'web') return 'Reserva web'
     return (r.source === 'whatsapp' || r.source === 'instagram') ? 'Concierge HOG' : '—'
   }, [profileMap])
   const [capacity, setCapacity] = useState<CapacityRow | null>(null)
@@ -103,6 +104,7 @@ export function Reservations({ userRole, userId }: Props) {
   const [openGuestId, setOpenGuestId] = useState<string | null>(null)
   const [menuRes, setMenuRes] = useState<Reservation | null>(null)
   const [capOpen, setCapOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
 
   const canWrite = ['MASTER', 'OPS_MANAGER', 'TEAM', 'MARKETING', 'HEART_OF_HOUSE'].includes(userRole ?? '')
@@ -270,6 +272,12 @@ export function Reservations({ userRole, userId }: Props) {
           </div>
 
           {canManageCapacity && (
+            <button onClick={() => setShareOpen(true)} title="Link público de reservas" aria-label="Link público de reservas"
+              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <Share2 size={17} />
+            </button>
+          )}
+          {canManageCapacity && (
             <button onClick={() => setCapOpen(true)} title="Configurar capacidad" aria-label="Configurar capacidad"
               style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
               <Settings2 size={17} />
@@ -432,6 +440,12 @@ export function Reservations({ userRole, userId }: Props) {
 
       {capOpen && buId && (
         <CapacityEditor buId={buId} buCode={buMap[buId] ?? ''} onClose={() => setCapOpen(false)} onSaved={load} />
+      )}
+
+      {shareOpen && buId && (
+        <ShareBookingSheet buId={buId} code={buMap[buId] ?? ''}
+          venueName={allowedBuList.find(b => b.id === buId)?.name ?? ''}
+          isMobile={isMobile} onClose={() => setShareOpen(false)} />
       )}
 
       {creating && buId && (
@@ -724,6 +738,82 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
           }}
         />
       )}
+    </Sheet>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compartir el link público de reservas de un venue. Master/Ops activa el link
+// y lo copia; el cliente reserva en ?reservar=<CÓDIGO> respetando las reglas
+// del venue (cupo, apartado) vía el Edge Function public-reservation.
+// ─────────────────────────────────────────────────────────────────────────────
+function ShareBookingSheet({ buId, code, venueName, isMobile, onClose }: {
+  buId: string; code: string; venueName: string; isMobile: boolean; onClose: () => void
+}) {
+  const [enabled, setEnabled] = useState<boolean | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const url = `${window.location.origin}/?reservar=${code}`
+
+  useEffect(() => {
+    supabase.from('business_units').select('public_booking_enabled').eq('id', buId).maybeSingle()
+      .then(({ data }) => setEnabled(!!data?.public_booking_enabled))
+  }, [buId])
+
+  async function toggle() {
+    if (enabled === null) return
+    setSaving(true)
+    const next = !enabled
+    const { error } = await supabase.from('business_units').update({ public_booking_enabled: next }).eq('id', buId)
+    setSaving(false)
+    if (error) { showToast('No se pudo cambiar. Intenta de nuevo.', 'error'); return }
+    setEnabled(next)
+    showToast(next ? 'Link público activado' : 'Link público desactivado', 'success')
+  }
+
+  function copy() {
+    navigator.clipboard.writeText(url)
+    setCopied(true); setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <Sheet open onClose={onClose} isMobile={isMobile} width={460}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-primary)', flex: 1 }}>Link público de reservas</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 8 }}><X size={18} /></button>
+        </div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.5, margin: 0 }}>
+          Comparte este link para que cualquiera reserve en <strong>{venueName}</strong> desde su teléfono. Las reservas entran como <em>Solicitadas</em> respetando el cupo de la noche y el umbral de apartado del venue.
+        </p>
+
+        {/* Toggle de activación */}
+        <button onClick={toggle} disabled={enabled === null || saving}
+          style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+          <div style={{ width: 42, height: 24, borderRadius: 999, background: enabled ? 'var(--accent)' : 'var(--border-strong)', position: 'relative', flexShrink: 0, transition: 'background .15s' }}>
+            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: enabled ? 21 : 3, transition: 'left .15s' }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{enabled ? 'Reservas en línea activadas' : 'Reservas en línea desactivadas'}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{enabled ? 'El link ya recibe reservas' : 'Actívalo para que el link funcione'}</div>
+          </div>
+        </button>
+
+        {/* Link + copiar */}
+        <div style={{ display: 'flex', gap: 8, opacity: enabled ? 1 : 0.5 }}>
+          <input readOnly value={url}
+            style={{ flex: 1, background: 'var(--bg-base)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)', padding: '10px 12px', fontSize: 12, fontFamily: 'var(--font-mono)', outline: 'none' }} />
+          <button onClick={copy} disabled={!enabled}
+            style={{ background: copied ? 'var(--status-healthy)' : 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 'var(--radius-md)', padding: '0 14px', fontSize: 12, fontWeight: 700, cursor: enabled ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {copied ? <><Check size={14} /> Copiado</> : <><Copy size={14} /> Copiar</>}
+          </button>
+        </div>
+        {enabled && (
+          <a href={url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)', textAlign: 'center', textDecoration: 'none' }}>
+            Ver cómo lo ve el cliente ↗
+          </a>
+        )}
+      </div>
     </Sheet>
   )
 }

@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.40.0"
+export const APP_VERSION = "2.41.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.41.0",
+    date: "2026-07-12",
+    type: "MINOR",
+    changes: [
+      "Reservas en línea: link público por venue (?reservar=CÓDIGO) para que cualquiera reserve desde su teléfono, respetando cupo de la noche y umbral de apartado",
+      "Reservas → botón Compartir: Master/Ops activa el link por venue y lo copia; las reservas entran como Solicitadas con fuente 'Reserva web' y aviso a Slack",
+    ]
+  },
   {
     version: "2.40.0",
     date: "2026-07-12",
