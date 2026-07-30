@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Phone, MessageCircle, Camera, Footprints, Building2, AlertTriangle, MoreHorizontal, X, Search, Check, Settings2, Handshake, Share2, Copy } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Phone, MessageCircle, Camera, Footprints, Building2, AlertTriangle, MoreHorizontal, X, Search, Check, Settings2, Handshake, Share2, Copy, LayoutGrid } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatPhone } from '../lib/phone'
 import { logActivity } from '../hooks/useActivityLog'
@@ -9,6 +9,7 @@ import { Avatar } from '../components/ui/Avatar'
 import { GuestProfile } from '../components/ui/GuestProfile'
 import { GuestCreateSheet } from './Guests'
 import { CapacityEditor } from '../components/ui/CapacityEditor'
+import { FloorEditor } from '../components/ui/FloorEditor'
 import { KPITile, SegmentedControl, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ export function Reservations({ userRole, userId }: Props) {
   const [menuRes, setMenuRes] = useState<Reservation | null>(null)
   const [capOpen, setCapOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [floorOpen, setFloorOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
 
   const canWrite = ['MASTER', 'OPS_MANAGER', 'TEAM', 'MARKETING', 'HEART_OF_HOUSE'].includes(userRole ?? '')
@@ -323,6 +325,12 @@ export function Reservations({ userRole, userId }: Props) {
             <button onClick={() => setShareOpen(true)} title="Link público de reservas" aria-label="Link público de reservas"
               style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
               <Share2 size={17} />
+            </button>
+          )}
+          {canManageCapacity && (
+            <button onClick={() => setFloorOpen(true)} title="Editor de piso (zonas y mesas)" aria-label="Editor de piso"
+              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <LayoutGrid size={17} />
             </button>
           )}
           {canManageCapacity && (
@@ -556,6 +564,10 @@ export function Reservations({ userRole, userId }: Props) {
 
       {capOpen && buId && (
         <CapacityEditor buId={buId} buCode={buMap[buId] ?? ''} onClose={() => setCapOpen(false)} onSaved={load} />
+      )}
+
+      {floorOpen && buId && (
+        <FloorEditor buId={buId} buCode={buMap[buId] ?? ''} onClose={() => setFloorOpen(false)} />
       )}
 
       {shareOpen && buId && (
