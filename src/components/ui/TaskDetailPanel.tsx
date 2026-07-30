@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check, Link2, Plus, Trash2, ExternalLink } from 'lucide-react'
+import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check, Link2, Plus, Trash2, ExternalLink, Copy } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, proofUploadedMessage, taskAssignedMessage, taskCommentMessage, notifyUserDM, taskLink } from '../../hooks/useSlack'
 import { changeTaskStatus } from '../../lib/taskActions'
@@ -18,6 +18,7 @@ interface Props {
   taskId: string
   onClose: () => void
   onUpdated: () => void
+  onOpenTask?: (id: string) => void
   userRole?: string
 }
 
@@ -147,7 +148,7 @@ function LinkCard({ link, onArchive }: { link: TaskLink; onArchive: () => void }
   )
 }
 
-export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRole }: Props) {
+export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRole: _userRole }: Props) {
   const isMobile = useIsMobile()
   const [task, setTask] = useState<Task | null>(null)
   const [buName, setBuName] = useState('')
@@ -433,6 +434,44 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
     }
     setNewComment('')
     setPostingComment(false)
+  }
+
+  const [duplicating, setDuplicating] = useState(false)
+  // Duplicar: ideal para tareas recurrentes. Copia la configuración (área,
+  // venue, prioridad, horas, privacidad, links de referencia) pero arranca
+  // limpia — estatus Abierta, sin fecha, sin evidencia ni comentarios.
+  async function duplicateTask() {
+    if (!task || duplicating) return
+    setDuplicating(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: copy, error } = await supabase.from('tasks').insert({
+      title: `${task.title} (copia)`,
+      description: task.description,
+      area: task.area,
+      client_impact: task.client_impact,
+      bu_id: task.bu_id,
+      priority: task.priority,
+      status: 'OPEN',
+      assigned_to: task.assigned_to,
+      created_by: user?.id ?? null,
+      due_date: null,
+      proof_required: task.proof_required,
+      deadline_type: task.deadline_type,
+      estimated_hours: task.estimated_hours,
+      is_private: task.is_private,
+    }).select('id').single()
+    if (error || !copy) { setDuplicating(false); return }
+    // Copia los links de referencia (útiles en recurrentes); NO copia
+    // evidencia ni comentarios (eso es del ciclo anterior).
+    if (links.length) {
+      await supabase.from('task_links').insert(
+        links.map(l => ({ task_id: copy.id, url: l.url, title: l.title, added_by: user?.id ?? null }))
+      )
+    }
+    logActivity('task_created', 'task', copy.id, { title: `${task.title} (copia)`, via: 'duplicate' })
+    setDuplicating(false)
+    onUpdated()
+    if (onOpenTask) onOpenTask(copy.id); else onClose()
   }
 
   async function archiveTask() {
@@ -947,6 +986,18 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, userRole: _userRol
               </div>
             )
           })()}
+
+          {/* Duplicar — para tareas recurrentes */}
+          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
+            <button
+              onClick={duplicateTask}
+              disabled={duplicating}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: '7px', padding: '8px 14px', fontSize: '12px', cursor: duplicating ? 'wait' : 'pointer', width: '100%', justifyContent: 'center' }}
+            >
+              <Copy size={13} />
+              {duplicating ? 'Duplicando…' : 'Duplicar tarea'}
+            </button>
+          </div>
 
           {/* Archive / restore */}
           <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
