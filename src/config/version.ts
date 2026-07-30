@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.42.0"
+export const APP_VERSION = "2.42.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.42.1",
+    date: "2026-07-12",
+    type: "PATCH",
+    changes: [
+      "Reservas: nueva vista 'Todas' — lista buscable de las reservas del venue (últimos 30 días en adelante) por nombre, teléfono o fecha; toca una para saltar a su día",
+    ]
+  },
   {
     version: "2.42.0",
     date: "2026-07-12",
