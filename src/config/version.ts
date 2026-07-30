@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.42.1"
+export const APP_VERSION = "2.43.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.43.0",
+    date: "2026-07-30",
+    type: "MINOR",
+    changes: [
+      "Plataforma de reservas Fase 1 — Zonas por venue: mesas o barra, reservable en línea, prioridad, horario propio y estado abierta/cerrada",
+      "Editor de piso drag-and-drop (Reservas → botón de piso): el gerente arrastra mesas en el lienzo, define capacidad mín–máx y forma de cada una",
+      "Combinaciones de mesas contiguas definidas por el gerente (ej. M3+M4) con capacidad combinada",
+      "Capacidad total del venue autocalculada del mobiliario activo — nunca se captura a mano",
+    ]
+  },
   {
     version: "2.42.1",
     date: "2026-07-12",
