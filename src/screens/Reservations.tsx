@@ -31,7 +31,32 @@ interface Reservation {
   bot_conversation_id: string | null
 }
 interface GuestLite { id: string; full_name: string; phone: string; tags: string[] }
-interface CapacityRow { id: string; day_of_week: number; max_reservations: number; max_pax: number; active: boolean }
+interface CapacityRow { id: string; day_of_week: number; max_reservations: number; max_pax: number; open_time: string | null; close_time: string | null; active: boolean }
+
+// Ocupación por hora (modelo de horarios libres): quien llega a la hora H
+// ocupa su lugar de H al cierre — la ocupación es ACUMULADA. Devuelve, por
+// cada hora de operación, cuántos lugares hay ocupados y libres.
+function hourlyOccupancy(cap: CapacityRow, reservas: { time_slot: string; party_size: number; status: string }[]) {
+  if (!cap.open_time || !cap.close_time || !cap.max_pax) return null
+  const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0) }
+  const openM = toMin(cap.open_time)
+  let closeM = toMin(cap.close_time)
+  if (closeM <= openM) closeM += 1440 // cruza medianoche
+  const live = reservas.filter(r => ['requested', 'confirmed', 'seated', 'completed'].includes(r.status))
+  const rows: { hour: string; taken: number; free: number }[] = []
+  for (let m = openM; m < closeM; m += 60) {
+    const hourAbs = m % 1440
+    const label = `${String(Math.floor(hourAbs / 60)).padStart(2, '0')}:00`
+    // acumulado: todos los que llegaron a esta hora o antes siguen ocupando
+    let taken = 0
+    for (const r of live) {
+      let am = toMin(r.time_slot); if (am < openM) am += 1440
+      if (am <= m + 59) taken += r.party_size
+    }
+    rows.push({ hour: label, taken, free: Math.max(0, cap.max_pax - taken) })
+  }
+  return { rows, total: cap.max_pax }
+}
 
 const STATUS_META: Record<ResStatus, { label: string; tone: StatusTone; next?: ResStatus; nextLabel?: string }> = {
   requested: { label: 'Solicitada', tone: 'neutral',   next: 'confirmed', nextLabel: 'Confirmar' },
@@ -239,6 +264,9 @@ export function Reservations({ userRole, userId }: Props) {
     return [...reservations].sort((a, b) => a.time_slot.localeCompare(b.time_slot) || a.created_at.localeCompare(b.created_at))
   }, [reservations])
 
+  // Espacios libres por hora — solo si el venue tiene cupo total + horario
+  const occ = useMemo(() => capacity ? hourlyOccupancy(capacity, reservations) : null, [capacity, reservations])
+
   const kpis = useMemo(() => {
     const act = reservations.filter(r => ACTIVE_STATUSES.includes(r.status))
     return {
@@ -342,7 +370,32 @@ export function Reservations({ userRole, userId }: Props) {
               )
             })}
           </div>
-        ) : dayRows.length === 0 ? (
+        ) : (
+        <>
+          {/* Espacios libres por hora (cupo total − llegadas acumuladas) */}
+          {occ && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
+                Espacios libres por hora · cupo {occ.total}
+              </div>
+              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+                {occ.rows.map(h => {
+                  const fill = occ.total ? h.taken / occ.total : 0
+                  const color = fill >= 1 ? 'var(--status-risk)' : fill >= 0.85 ? 'var(--status-attention)' : 'var(--status-healthy)'
+                  return (
+                    <div key={h.hour} style={{ flex: '0 0 auto', minWidth: 54, textAlign: 'center', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '6px 4px' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{h.hour}</div>
+                      <div className="num" style={{ fontSize: 17, fontWeight: 800, color }}>{h.free}</div>
+                      <div style={{ height: 3, borderRadius: 2, background: 'var(--bg-elevated)', marginTop: 3, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min(100, Math.round(fill * 100))}%`, background: color }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          {dayRows.length === 0 ? (
           <div style={{ textAlign: 'center', paddingTop: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 26 }}>🍸</span>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, maxWidth: 300, margin: 0 }}>
@@ -352,7 +405,7 @@ export function Reservations({ userRole, userId }: Props) {
               <button onClick={() => setCreating(true)} style={{ minHeight: 44, padding: '0 18px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>+ Nueva reserva</button>
             )}
           </div>
-        ) : (
+          ) : (
           /* ── Día: agenda por hora de llegada — sin turnos, sin salida forzada ── */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {dayRows.map(r => {
@@ -400,6 +453,8 @@ export function Reservations({ userRole, userId }: Props) {
               )
             })}
           </div>
+          )}
+        </>
         )}
       </div>
 
