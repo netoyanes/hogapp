@@ -10,6 +10,7 @@ import { GuestProfile } from '../components/ui/GuestProfile'
 import { GuestCreateSheet } from './Guests'
 import { CapacityEditor } from '../components/ui/CapacityEditor'
 import { FloorEditor } from '../components/ui/FloorEditor'
+import { FloorLive } from '../components/ui/FloorLive'
 import { KPITile, SegmentedControl, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -92,7 +93,7 @@ interface Props {
 export function Reservations({ userRole, userId }: Props) {
   const isMobile = useIsMobile()
   const today = isoLocal(new Date())
-  const [view, setView] = useState<'day' | 'week' | 'all'>('day')
+  const [view, setView] = useState<'day' | 'week' | 'all' | 'floor'>('day')
   const [allRows, setAllRows] = useState<Reservation[]>([])
   const [allSearch, setAllSearch] = useState('')
   const [date, setDate] = useState(() => {
@@ -350,8 +351,8 @@ export function Reservations({ userRole, userId }: Props) {
           <span className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', textTransform: 'capitalize' }}>
             {new Date(date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
           </span>
-          <div style={{ marginLeft: 'auto', maxWidth: 200, flex: 1 }}>
-            <SegmentedControl options={[{ id: 'day', label: 'Día' }, { id: 'week', label: 'Semana' }, { id: 'all', label: 'Todas' }]} value={view} onChange={id => setView(id as 'day' | 'week' | 'all')} />
+          <div style={{ marginLeft: 'auto', maxWidth: 280, flex: 1 }}>
+            <SegmentedControl options={[{ id: 'day', label: 'Día' }, { id: 'week', label: 'Semana' }, { id: 'all', label: 'Todas' }, { id: 'floor', label: 'Piso' }]} value={view} onChange={id => setView(id as 'day' | 'week' | 'all' | 'floor')} />
           </div>
         </div>
 
@@ -369,7 +370,10 @@ export function Reservations({ userRole, userId }: Props) {
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
-        {loading ? (
+        {view === 'floor' ? (
+          /* ── Piso: plano operativo en vivo (siempre HOY) ── */
+          buId ? <FloorLive buId={buId} canWrite={canWrite} userId={userId} /> : null
+        ) : loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {Array.from({ length: 4 }).map((_, i) => <div key={i} className="animate-pulse-green" style={{ height: 76, background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', flexShrink: 0 }} />)}
           </div>
