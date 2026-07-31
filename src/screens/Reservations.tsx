@@ -634,6 +634,29 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
   const [confirmNow, setConfirmNow] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Motor por mesas (Fase 3): slots del motor + mesa auto-asignada al guardar
+  const [tableEngine, setTableEngine] = useState(false)
+  const [slots, setSlots] = useState<{ slot: string; libres: number }[]>([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
+  const [manualTime, setManualTime] = useState(false)
+
+  useEffect(() => {
+    supabase.from('venue_reservation_settings').select('engine').eq('bu_id', venue).maybeSingle()
+      .then(({ data }) => setTableEngine(data?.engine === 'tables'))
+  }, [venue])
+
+  useEffect(() => {
+    if (!tableEngine || !date || !(pax > 0)) { setSlots([]); return }
+    setSlotsLoading(true)
+    supabase.rpc('fn_available_slots', { p_bu: venue, p_date: date, p_pax: pax, p_online: false })
+      .then(({ data }) => {
+        const rows = (data ?? []) as { slot: string; libres: number }[]
+        setSlots(rows)
+        setSlotsLoading(false)
+        // Si la hora elegida ya no está disponible, brinca a la primera libre
+        if (!manualTime && rows.length && !rows.some(s => s.slot === time)) setTime(rows[0].slot)
+      })
+  }, [tableEngine, venue, date, pax]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // La autorización de sobrecupo no sobrevive a un cambio de fecha/venue/pax
   useEffect(() => { setOverrideCap(false) }, [date, venue, pax])
@@ -682,20 +705,36 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
     setSaving(true); setError(null)
     const status = confirmNow ? 'confirmed' : 'requested'
     const overbooking = dayFull && canOverride && overrideCap
+
+    // Motor por mesas: pedirle al motor la mejor mesa/combinación para el slot.
+    // Sin mesa disponible solo se crea con autorización de sobrecupo (Ops+).
+    type Assigned = { table_id: string | null; combo_id: string | null; zone_id: string | null; nombre: string | null }
+    let assigned: Assigned | null = null
+    if (tableEngine) {
+      const { data: asg } = await supabase.rpc('fn_assign_table', { p_bu: venue, p_date: date, p_slot: time, p_pax: pax, p_online: false })
+      assigned = (asg as Assigned[] | null)?.[0] ?? null
+      if (!assigned && !(canOverride && overrideCap)) {
+        setSaving(false)
+        setError('Ese horario ya no tiene mesa para este grupo. Elige otro horario, o autoriza sobrecupo (Ops/Master).')
+        return
+      }
+    }
+
     const { data, error: err } = await supabase.from('reservations').insert({
       guest_id: guest.id, bu_id: venue, date, time_slot: time, party_size: pax,
       zone: zone.trim() || null, status, source, notes: notes.trim() || null,
+      zone_id: assigned?.zone_id ?? null, table_id: assigned?.table_id ?? null, combo_id: assigned?.combo_id ?? null,
       created_by: userId ?? null, status_changed_by: userId ?? null,
       confirmed_at: confirmNow ? new Date().toISOString() : null,
-      overbooked_by: overbooking ? (userId ?? null) : null,
+      overbooked_by: overbooking || (tableEngine && !assigned) ? (userId ?? null) : null,
     }).select('id').single()
     setSaving(false)
     if (err) { setError(`No se pudo crear: ${err.message}`); return }
     const buCode = buList.find(b => b.id === venue)?.code
-    logActivity('reservation_created', 'reservation', data.id, { guest: guest.full_name, bu: buCode, date, time, pax })
+    logActivity('reservation_created', 'reservation', data.id, { guest: guest.full_name, bu: buCode, date, time, pax, mesa: assigned?.nombre ?? undefined })
     notifySlack(reservationCreatedMessage(guest.full_name, buCode ?? '', date, time, pax))
     if (overbooking) logActivity('reservation_overbooked', 'reservation', data.id, { guest: guest.full_name, bu: buCode, time, pax })
-    showToast(overbooking ? 'Reserva creada con sobrecupo autorizado.' : 'Reserva creada.', 'success')
+    showToast(assigned ? `Reserva creada · ${assigned.nombre}.` : overbooking || (tableEngine && !assigned) ? 'Reserva creada con sobrecupo autorizado.' : 'Reserva creada.', 'success')
     onCreated()
   }
 
@@ -767,10 +806,42 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
             </div>
           </div>
 
-          {/* 3. Hora de llegada — libre, sin turnos ni salida forzada */}
+          {/* 3. Hora de llegada — motor por mesas: slots; si no: hora libre */}
           <div>
             <label style={lbl}>Hora de llegada *</label>
-            <input type="time" value={time} onChange={e => setTime(e.target.value)} className="num" style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} />
+            {tableEngine && !manualTime ? (
+              slotsLoading ? (
+                <p style={{ color: 'var(--text-tertiary)', fontSize: 12, margin: 0 }}>Buscando horarios…</p>
+              ) : slots.length === 0 ? (
+                <div>
+                  <p style={{ color: 'var(--status-attention)', fontSize: 13, margin: 0 }}>Sin horarios disponibles para {pax} pax ese día.</p>
+                  {canOverride && (
+                    <button onClick={() => setManualTime(true)} style={{ marginTop: 6, minHeight: 36, padding: '0 12px', borderRadius: 999, border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-tertiary)', fontSize: 11, cursor: 'pointer' }}>
+                      Capturar hora manual (sobrecupo)
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {slots.map(s => (
+                    <button key={s.slot} onClick={() => setTime(s.slot)}
+                      style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', background: time === s.slot ? 'var(--accent)' : 'var(--bg-elevated)', border: `1px solid ${time === s.slot ? 'var(--accent)' : 'var(--border-default)'}`, color: time === s.slot ? 'var(--on-accent)' : 'var(--text-secondary)' }}>
+                      {s.slot}
+                    </button>
+                  ))}
+                </div>
+              )
+            ) : (
+              <input type="time" value={time} onChange={e => setTime(e.target.value)} className="num" style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} />
+            )}
+            {tableEngine && manualTime && (
+              <button onClick={() => setManualTime(false)} style={{ marginTop: 6, minHeight: 32, padding: '0 10px', borderRadius: 999, border: 'none', background: 'none', color: 'var(--accent)', fontSize: 11, cursor: 'pointer' }}>
+                ← Volver a horarios del motor
+              </button>
+            )}
+            {tableEngine && !manualTime && slots.length > 0 && (
+              <p style={{ color: 'var(--text-tertiary)', fontSize: 11, margin: '6px 0 0' }}>La mesa se asigna sola al crear (mejor zona y capacidad).</p>
+            )}
             {dayCap.max !== null && (
               <p style={{ color: dayFull ? 'var(--status-attention)' : 'var(--text-tertiary)', fontSize: 11, margin: '6px 0 0' }}>
                 Cupo de la noche: {dayCap.used}/{dayCap.max} reservas · {dayCap.paxUsed}/{dayCap.maxPax} pax
@@ -788,13 +859,20 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
                 <button onClick={() => setPax(p => p + 1)} style={navBtn}>+</button>
               </div>
             </div>
-            <div>
-              <label style={lbl}>Zona</label>
-              <select value={zone} onChange={e => setZone(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                <option value="">Sin zona</option>
-                {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
-              </select>
-            </div>
+            {tableEngine ? (
+              <div>
+                <label style={lbl}>Mesa</label>
+                <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0, paddingTop: 12 }}>Auto-asignada por el motor</p>
+              </div>
+            ) : (
+              <div>
+                <label style={lbl}>Zona</label>
+                <select value={zone} onChange={e => setZone(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                  <option value="">Sin zona</option>
+                  {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* 5. Fuente */}

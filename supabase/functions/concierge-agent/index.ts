@@ -108,11 +108,12 @@ const TOOLS = [
   },
   {
     name: 'buscar_disponibilidad',
-    description: 'Consulta la disponibilidad del venue para una fecha. El sistema responde según el tipo de venue: cupo de la noche (restaurantes/clubs), horarios de cita disponibles (wellness), eventos con lugares (art house), o unidades libres en un rango (hospedaje — pasa también fecha_fin).',
+    description: 'Consulta la disponibilidad del venue para una fecha. El sistema responde según el tipo de venue: cupo de la noche o horarios con mesa (restaurantes/clubs — pasa pax si ya lo sabes), horarios de cita disponibles (wellness), eventos con lugares (art house), o unidades libres en un rango (hospedaje — pasa también fecha_fin).',
     input_schema: {
       type: 'object',
       properties: {
         fecha: { type: 'string', description: 'YYYY-MM-DD (en hospedaje: check-in)' },
+        pax: { type: 'number', description: 'Número de personas, si el cliente ya lo dijo (afecta qué mesas/horarios hay)' },
         servicio: { type: 'string', description: 'Solo wellness: nombre del servicio si el cliente ya eligió uno' },
         fecha_fin: { type: 'string', description: 'Solo hospedaje: YYYY-MM-DD del check-out' },
       },
@@ -300,7 +301,13 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
   const model = settingsMap.bot_model || 'claude-haiku-4-5-20251001'
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
 
-  const ctx = { supabaseAdmin, conv: { ...conv }, bu, cfg, pay, faq: botInfo?.faq ?? null }
+  // Motor por mesas (Fase 3): si el venue lo activó, la disponibilidad y la
+  // reserva pasan por el motor (mismo cálculo que app y link público).
+  const { data: resEngine } = conv.bu_id
+    ? await supabaseAdmin.from('venue_reservation_settings').select('engine, online_max_pax').eq('bu_id', conv.bu_id).maybeSingle()
+    : { data: null }
+
+  const ctx = { supabaseAdmin, conv: { ...conv }, bu, cfg, pay, faq: botInfo?.faq ?? null, engine: resEngine }
   const system = buildSystemPrompt(ctx, venues ?? [], isFollowup, settingsMap.app_public_url, pay)
   // Mensajes consecutivos del mismo rol se fusionan: así el batching de 45s
   // (varios mensajes del cliente antes del turno) llega como un solo bloque,
@@ -412,9 +419,15 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
     lines.push('IMPORTANTE — este venue es HOSPEDAJE: COTIZA SIEMPRE antes de reservar — noches × tarifa de la unidad, y di el total claro en MXN. Comparte las políticas del lugar (horas de check-in/out, condiciones) cuando sean relevantes.')
     lines.push('Para ASEGURAR la estancia se usa el flujo de apartado (datos de depósito + comprobante por este chat + validación del equipo) — nunca digas que la estancia está asegurada sin ese flujo.')
   } else {
-    // fnb y dance_club — el modelo original de Bruma, sin cambios
+    // fnb y dance_club — funnel de mesa. Con motor por mesas activo el venue
+    // trabaja con HORARIOS del motor; sin motor, hora de llegada libre.
     lines.push('El funnel es: capturar nombre, teléfono, fecha, hora de llegada y número de personas → confirmar. En cuanto tengas nombre y teléfono, usa crear_o_actualizar_cliente. En cuanto tengas fecha/hora/pax confirmados por el cliente, usa crear_reserva.')
-    lines.push('IMPORTANTE — el venue NO tiene horarios fijos ni turnos: la hora de llegada la decide el cliente libremente, y se queda el tiempo que quiera (sin salida forzada). Nunca le ofrezcas una lista de horarios para elegir — solo pregúntale a qué hora le gustaría llegar. Usa buscar_disponibilidad únicamente para saber si esa noche el venue está muy lleno y, si es el caso, avisarle con anticipación.')
+    if (ctx.engine?.engine === 'tables') {
+      lines.push('IMPORTANTE — este venue asigna MESA con horarios definidos: con la fecha y el número de personas usa buscar_disponibilidad y ofrece SOLO los horarios que te devuelva ("tengo mesa a las 8:00, 8:30 o 9:00"). NUNCA inventes horarios ni digas "llega cuando quieras". Si el horario que pide el cliente no está en la lista, ofrécele los 2-3 más cercanos. La mesa exacta la asigna el sistema solo — tú no prometas una mesa o zona específica.')
+      if (ctx.engine?.online_max_pax) lines.push(`GRUPOS GRANDES: por este canal puedes reservar grupos de hasta ${ctx.engine.online_max_pax} personas. Para grupos más grandes NO uses crear_reserva: usa escalar_a_humano para que el equipo arme la mesa (díselo al cliente con buena onda, es un buen problema).`)
+    } else {
+      lines.push('IMPORTANTE — el venue NO tiene horarios fijos ni turnos: la hora de llegada la decide el cliente libremente, y se queda el tiempo que quiera (sin salida forzada). Nunca le ofrezcas una lista de horarios para elegir — solo pregúntale a qué hora le gustaría llegar. Usa buscar_disponibilidad únicamente para saber si esa noche el venue está muy lleno y, si es el caso, avisarle con anticipación.')
+    }
     if (vt === 'dance_club') lines.push('Este venue es un CLUB: la programación de DJs es tu mejor argumento de venta — consúltala con programacion_venue y úsala para cerrar la reserva en el mismo mensaje.')
   }
   if (policy && Object.keys(policy).length && policy.notes) lines.push(`Notas de política del venue: ${policy.notes}`)
@@ -487,6 +500,9 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       await supabaseAdmin.from('bot_conversations').update({ bu_id: bu.id }).eq('id', ctx.conv.id)
       ctx.conv.bu_id = bu.id
       ctx.bu = bu
+      // Motor por mesas: cargar la config del venue recién identificado
+      const { data: engRow } = await supabaseAdmin.from('venue_reservation_settings').select('engine, online_max_pax').eq('bu_id', bu.id).maybeSingle()
+      ctx.engine = engRow
       const { data: cfg } = await supabaseAdmin.from('bot_venue_config').select('*').eq('bu_id', bu.id).eq('channel', ctx.conv.channel).maybeSingle()
       ctx.cfg = cfg
       if (!cfg || !cfg.enabled) {
@@ -502,6 +518,8 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       if (invTipo === 'time_slots') return await disponibilidadSlots(ctx, input)
       if (invTipo === 'event_rsvp') return await disponibilidadEventos(ctx, input)
       if (invTipo === 'unit_stay') return await disponibilidadUnidades(ctx, input)
+      // Motor por mesas (Fase 3): horarios reales calculados por el motor
+      if (ctx.engine?.engine === 'tables') return await disponibilidadMesas(ctx, input)
       const dow = new Date(input.fecha + 'T00:00:00').getDay()
       const [{ data: cap }, { data: res }] = await Promise.all([
         supabaseAdmin.from('venue_capacity').select('max_reservations, max_pax').eq('bu_id', ctx.conv.bu_id).eq('day_of_week', dow).eq('active', true).maybeSingle(),
@@ -565,6 +583,8 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       if (invCrear === 'time_slots') return await crearReservaSlot(ctx, input)
       if (invCrear === 'event_rsvp') return await crearReservaEvento(ctx, input)
       if (invCrear === 'unit_stay') return await crearReservaEstancia(ctx, input)
+      // Motor por mesas (Fase 3): el motor valida horario y asigna mesa
+      if (ctx.engine?.engine === 'tables') return await crearReservaMesa(ctx, input)
       if (!input.horario) return { error: 'Falta la hora de llegada — pregúntale al cliente a qué hora le gustaría llegar.' }
       const hora = normalizeTime(input.horario)
       if (!hora) return { error: `No entendí la hora "${input.horario}". Pídele al cliente que la confirme (ej. "9:30 pm" o "21:30").` }
@@ -840,6 +860,81 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
 const ESTADOS_VIVOS = ['requested', 'confirmed', 'seated']
 
 // ── WELLNESS: horarios disponibles de un día ─────────────────────────────────
+// ── Motor por mesas (Fase 3) — fn_available_slots / fn_assign_table viven en
+//    la base de datos: el bot, el app y el link público usan el MISMO cálculo.
+// deno-lint-ignore no-explicit-any
+async function disponibilidadMesas(ctx: any, input: any): Promise<Record<string, unknown>> {
+  const pax = input.pax ?? 2
+  if (ctx.engine?.online_max_pax && pax > ctx.engine.online_max_pax) {
+    return { grupo_grande: true, nota: `Grupos de más de ${ctx.engine.online_max_pax} no se reservan por el bot: dile al cliente con buena onda que el equipo le arma la mesa y usa escalar_a_humano.` }
+  }
+  const { data: slots, error } = await ctx.supabaseAdmin.rpc('fn_available_slots', {
+    p_bu: ctx.conv.bu_id, p_date: input.fecha, p_pax: pax, p_online: true,
+  })
+  if (error) return { error: error.message }
+  const horarios = (slots ?? []).map((s: { slot: string }) => s.slot)
+  if (!horarios.length) {
+    return { fecha: input.fecha, pax, sin_disponibilidad: true, nota: 'No hay mesa para ese grupo esa fecha. Ofrécele otra fecha cercana con buena onda; si insiste, usa escalar_a_humano (el equipo puede autorizar sobrecupo).' }
+  }
+  return { fecha: input.fecha, pax, horarios_disponibles: horarios, nota: 'Ofrece SOLO estos horarios (2-3 opciones cercanas a lo que pidió el cliente, no la lista completa). La mesa la asigna el sistema al reservar.' }
+}
+
+// deno-lint-ignore no-explicit-any
+async function crearReservaMesa(ctx: any, input: any): Promise<Record<string, unknown>> {
+  if (!input.horario) return { error: 'Falta el horario — usa buscar_disponibilidad y ofrécele al cliente los horarios que devuelva.' }
+  const hora = normalizeTime(input.horario)
+  if (!hora) return { error: `No entendí la hora "${input.horario}". Pídele al cliente que la confirme (ej. "8:30 pm" o "20:30").` }
+  const pax = input.pax ?? 2
+  if (ctx.engine?.online_max_pax && pax > ctx.engine.online_max_pax) {
+    return { error: `Grupos de más de ${ctx.engine.online_max_pax} no se reservan por el bot. NO confirmes: usa escalar_a_humano para que el equipo arme la mesa.` }
+  }
+  // Anti-duplicados: reserva viva del cliente ese día → se actualiza
+  const { data: existentes } = await ctx.supabaseAdmin.from('reservations')
+    .select('id, time_slot, party_size, status')
+    .eq('guest_id', ctx.conv.guest_id).eq('bu_id', ctx.conv.bu_id).eq('date', input.fecha)
+    .in('status', ['requested', 'confirmed']).limit(1)
+  const existente = existentes?.[0]
+
+  const { data: asg, error: asgErr } = await ctx.supabaseAdmin.rpc('fn_assign_table', {
+    p_bu: ctx.conv.bu_id, p_date: input.fecha, p_slot: hora, p_pax: pax, p_online: true,
+  })
+  if (asgErr) return { error: asgErr.message }
+  const mesa = asg?.[0]
+  if (!mesa) {
+    return { error: `A las ${hora} ya no hay mesa para ${pax} personas. NO confirmes: usa buscar_disponibilidad y ofrécele los horarios que sí tienen lugar.` }
+  }
+
+  if (existente) {
+    const { error: upErr } = await ctx.supabaseAdmin.from('reservations').update({
+      time_slot: hora, party_size: pax, notes: input.notas ?? undefined,
+      zone_id: mesa.zone_id, table_id: mesa.table_id, combo_id: mesa.combo_id,
+      bot_conversation_id: ctx.conv.id,
+    }).eq('id', existente.id)
+    if (upErr) return { error: upErr.message }
+    await ctx.supabaseAdmin.from('activity_log').insert({
+      user_id: null, action: 'reservation_updated', entity_type: 'reservation', entity_id: existente.id,
+      details: { actor: 'Concierge HOG', bu: ctx.bu?.code, date: input.fecha, slot: hora, pax, mesa: mesa.nombre },
+    })
+    await notifySlackFromEdge(ctx.supabaseAdmin, `🤖 *Reserva actualizada vía Concierge* — ${ctx.bu?.name ?? ''}\n${input.fecha} · ${existente.time_slot}→${hora} · ${existente.party_size}→${pax} pax · ${mesa.nombre}`)
+    return { ok: true, actualizada: true, reservation_id: existente.id, aviso: `El cliente YA tenía reserva ese día — se actualizó (${hora}, ${pax} pax, mesa reasignada). Confírmale los datos finales.` }
+  }
+
+  const { data: reserva, error } = await ctx.supabaseAdmin.from('reservations').insert({
+    guest_id: ctx.conv.guest_id, bu_id: ctx.conv.bu_id, date: input.fecha, time_slot: hora,
+    party_size: pax, notes: input.notas ?? null, status: 'requested',
+    source: ctx.conv.channel, bot_conversation_id: ctx.conv.id,
+    zone_id: mesa.zone_id, table_id: mesa.table_id, combo_id: mesa.combo_id,
+  }).select('id').single()
+  if (error) return { error: error.message }
+  await ctx.supabaseAdmin.from('bot_conversations').update({ pending_fields: [] }).eq('id', ctx.conv.id)
+  await ctx.supabaseAdmin.from('activity_log').insert({
+    user_id: null, action: 'reservation_created', entity_type: 'reservation', entity_id: reserva.id,
+    details: { actor: 'Concierge HOG', bu: ctx.bu?.code, date: input.fecha, slot: hora, pax, mesa: mesa.nombre, channel: ctx.conv.channel },
+  })
+  await notifySlackFromEdge(ctx.supabaseAdmin, `🤖 *Reserva vía Concierge* — ${ctx.bu?.name ?? ''}\n${input.fecha} · ${hora} · ${pax} pax · ${mesa.nombre}`)
+  return { ok: true, reservation_id: reserva.id, nota: 'Reserva creada con mesa asignada por el motor. NO le digas al cliente el número de mesa — solo confirma fecha, hora y personas.' }
+}
+
 // deno-lint-ignore no-explicit-any
 async function disponibilidadSlots(ctx: any, input: any): Promise<Record<string, unknown>> {
   const { supabaseAdmin } = ctx

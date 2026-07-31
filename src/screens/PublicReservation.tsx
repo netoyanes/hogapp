@@ -8,6 +8,8 @@ import { AppLogoBadge } from '../components/ui/AppLogo'
 interface Info {
   venue: string
   supported: boolean
+  engine?: 'night' | 'tables'
+  online_max_pax?: number | null
   deposit: { over_pax: number; per_person: number | null; fixed: number | null } | null
 }
 interface Done {
@@ -36,6 +38,25 @@ export function PublicReservation({ code }: { code: string }) {
   const [sending, setSending] = useState(false)
   const [formErr, setFormErr] = useState<string | null>(null)
   const [done, setDone] = useState<Done | null>(null)
+  // Motor por mesas: horarios reales del venue para la fecha y tamaño de grupo
+  const [slots, setSlots] = useState<string[] | null>(null)
+  const [slotsLoading, setSlotsLoading] = useState(false)
+
+  const tableEngine = info?.engine === 'tables'
+  useEffect(() => {
+    if (!tableEngine || !fecha || !(parseInt(pax, 10) > 0)) { setSlots(null); return }
+    setSlotsLoading(true)
+    const t = setTimeout(() => {
+      supabase.functions.invoke('public-reservation', { body: { action: 'slots', code, fecha, pax } })
+        .then(({ data }) => {
+          const list = (data?.slots ?? []) as string[]
+          setSlots(list)
+          setSlotsLoading(false)
+          setHorario(h => list.includes(h) ? h : (list[0] ?? ''))
+        })
+    }, 250)
+    return () => clearTimeout(t)
+  }, [tableEngine, code, fecha, pax])
 
   useEffect(() => {
     supabase.functions.invoke('public-reservation', { body: { action: 'info', code } })
@@ -50,6 +71,9 @@ export function PublicReservation({ code }: { code: string }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (tableEngine && (!horario || !(slots ?? []).includes(horario))) {
+      setFormErr('Elige uno de los horarios disponibles.'); return
+    }
     setFormErr(null); setSending(true)
     const { data, error } = await supabase.functions.invoke('public-reservation', {
       body: { action: 'book', code, nombre, telefono, fecha, horario, pax, notas },
@@ -114,11 +138,39 @@ export function PublicReservation({ code }: { code: string }) {
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}><span style={lbl}>Fecha</span>
               <input type="date" value={fecha} min={hoyISO} onChange={e => setFecha(e.target.value)} style={inp} required /></div>
-            <div style={{ flex: 1 }}><span style={lbl}>Hora de llegada</span>
-              <input type="time" value={horario} onChange={e => setHorario(e.target.value)} style={inp} required /></div>
+            {!tableEngine && (
+              <div style={{ flex: 1 }}><span style={lbl}>Hora de llegada</span>
+                <input type="time" value={horario} onChange={e => setHorario(e.target.value)} style={inp} required /></div>
+            )}
           </div>
           <div><span style={lbl}>Personas</span>
-            <input type="number" min={1} max={40} value={pax} onChange={e => setPax(e.target.value)} style={inp} required /></div>
+            <input type="number" min={1} max={tableEngine ? (info?.online_max_pax ?? 40) : 40} value={pax} onChange={e => setPax(e.target.value)} style={inp} required />
+            {tableEngine && info?.online_max_pax && parseInt(pax, 10) > info.online_max_pax && (
+              <p style={{ color: 'var(--status-attention)', fontSize: 12, margin: '6px 0 0' }}>
+                Para grupos de más de {info.online_max_pax} escríbenos por WhatsApp y el equipo te arma la mesa.
+              </p>
+            )}
+          </div>
+          {tableEngine && (
+            <div><span style={lbl}>Hora de llegada</span>
+              {!fecha ? (
+                <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>Elige primero la fecha.</p>
+              ) : slotsLoading ? (
+                <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>Buscando horarios…</p>
+              ) : (slots ?? []).length === 0 ? (
+                <p style={{ color: 'var(--status-attention)', fontSize: 13, margin: 0 }}>No hay horarios disponibles esa fecha para {pax} personas. Prueba otra fecha 🙏</p>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {(slots ?? []).map(s => (
+                    <button type="button" key={s} onClick={() => setHorario(s)}
+                      style={{ minHeight: 44, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontSize: 15, fontWeight: 700, background: horario === s ? 'var(--accent)' : 'var(--bg-elevated)', border: `1px solid ${horario === s ? 'var(--accent)' : 'var(--border-default)'}`, color: horario === s ? 'var(--on-accent)' : 'var(--text-secondary)' }}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <div><span style={lbl}>Nota (opcional)</span>
             <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={2} placeholder="Cumpleaños, terraza, silla de bebé…" style={{ ...inp, minHeight: 60, resize: 'vertical' }} /></div>
 
