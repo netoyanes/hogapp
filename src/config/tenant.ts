@@ -17,7 +17,7 @@ export const TENANT: TenantConfig = {
   appSubtitle: 'Command Center',
   logo: { type: 'symbol' },
   enabledViews: [
-    'dashboard', 'tasks', 'crm', 'concierge', 'casa', 'social', 'objectives', 'calendar', 'content',
+    'dashboard', 'tasks', 'crm', 'concierge', 'casa', 'events', 'objectives', 'content',
     'revenue', 'reports', 'activity', 'upload', 'templates',
     'invite', 'profile',
   ],
@@ -26,7 +26,7 @@ export const TENANT: TenantConfig = {
     tasks:     'Tareas',
     crm:       'Comercial',
     contacts:  'Comercial',
-    calendar:  'Calendario',
+    events:    'Eventos',
     content:   'Contenido',
     revenue:   'Ingresos',
     reports:   'Reportes',

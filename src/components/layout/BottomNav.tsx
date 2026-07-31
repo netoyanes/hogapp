@@ -1,10 +1,11 @@
-import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, Sparkles, ClipboardCheck, Camera } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, CalendarDays, ClipboardCheck, Camera } from 'lucide-react'
 import { STR } from '../../lib/strings'
 
 interface Props {
   activeView: string
   onNavigate: (view: string) => void
   userRole?: string
+  userApps?: Set<string> | null
 }
 
 // v2 mobile nav — max 5 slots per role. Anything beyond lives in the "Más"
@@ -13,14 +14,14 @@ const MASTER_SLOTS = [
   { id: 'dashboard', label: STR.nav.dashboard, icon: LayoutDashboard },
   { id: 'tasks',     label: STR.nav.tasks,     icon: CheckSquare },
   { id: 'crm',       label: STR.nav.crm,       icon: Handshake },
-  { id: 'social',    label: STR.nav.social,    icon: Sparkles },
+  { id: 'events',    label: STR.nav.events,    icon: CalendarDays },
   { id: 'profile',   label: STR.nav.profile,   icon: UserCircle },
 ]
 
 const TEAM_SLOTS = [
   { id: 'concierge', label: STR.nav.concierge, icon: Shell },
   { id: 'tasks',    label: STR.nav.tasks,     icon: CheckSquare },
-  { id: 'social',   label: STR.nav.social,    icon: Sparkles },
+  { id: 'events',   label: STR.nav.events,    icon: CalendarDays },
   { id: 'crm',      label: STR.nav.crm,       icon: Handshake },
   { id: 'profile',  label: STR.nav.profile,   icon: UserCircle },
 ]
@@ -33,10 +34,14 @@ const HOH_SLOTS = [
   { id: 'profile',   label: STR.nav.profile, icon: UserCircle },
 ]
 
-export function BottomNav({ activeView, onNavigate, userRole }: Props) {
-  const items = userRole === 'MASTER' ? MASTER_SLOTS
+export function BottomNav({ activeView, onNavigate, userRole, userApps }: Props) {
+  let items = userRole === 'MASTER' ? MASTER_SLOTS
     : userRole === 'HEART_OF_HOUSE' ? HOH_SLOTS
     : TEAM_SLOTS
+  // Apps por usuario: el bottom nav solo muestra lo que el usuario tiene asignado
+  if (userRole !== 'MASTER' && userApps && userApps.size > 0) {
+    items = items.filter(i => i.id === 'profile' || userApps.has(i.id) || (i.id === 'reportar' && userApps.has('casa')))
+  }
 
   return (
     <nav

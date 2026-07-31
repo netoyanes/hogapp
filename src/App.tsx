@@ -16,7 +16,7 @@ import { CalendarHub } from './screens/CalendarHub'
 import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
 import { CRM } from './screens/CRM'
-import { Social } from './screens/Social'
+import { Events } from './screens/Events'
 import { Objectives } from './screens/Objectives'
 import { Reports } from './screens/Reports'
 import { Concierge } from './screens/Concierge'
@@ -77,6 +77,15 @@ export default function App() {
       .then(({ data }) => setCaps(new Set((data ?? []).map(c => c.capability))))
   }, [profile?.id])
 
+  // Apps por usuario: el Master asigna qué apps ve cada quien (user_apps).
+  // Sin filas asignadas, aplican los defaults del rol (compatibilidad).
+  const [userApps, setUserApps] = useState<Set<string> | null>(null)
+  useEffect(() => {
+    if (!profile?.id) return
+    supabase.from('user_apps').select('app').eq('user_id', profile.id)
+      .then(({ data }) => setUserApps(data && data.length ? new Set(data.map(a => a.app)) : null))
+  }, [profile?.id])
+
   // Role-based landing, applied once the profile (and any view-as override)
   // resolves: MASTER → dashboard · TEAM → social · managers → tasks.
   // The old initializer ran before the profile loaded, so it never fired.
@@ -84,8 +93,8 @@ export default function App() {
   useEffect(() => {
     if (landedRef.current || !role) return
     landedRef.current = true
-    // Team en tablet (host stand) aterriza en Concierge (Reservas); en teléfono, en Social
-    const teamLanding = window.innerWidth >= 768 ? 'concierge' : 'social'
+    // Team en tablet (host stand) aterriza en Concierge (Reservas); en teléfono, en Tareas
+    const teamLanding = window.innerWidth >= 768 ? 'concierge' : 'tasks'
     setActiveView(role === 'MASTER' || role === 'DEV' ? 'dashboard' : role === 'HEART_OF_HOUSE' ? 'casa' : role === 'TEAM' ? teamLanding : 'tasks')
   }, [role])
   const [scoringBU, setScoringBU] = useState<string | null>(null)
@@ -152,16 +161,28 @@ export default function App() {
   }
 
   // 'contacts' queda como alias legado (links viejos) — renderiza Comercial.
-  const ALLOWED_VIEWS = role === 'MASTER'
-    ? null // null = no restriction
-    : role === 'DEV'
-      ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives',
-                 'calendar', 'content', 'revenue', 'reports', 'activity', 'templates', 'profile']) // auditoría: todo menos admin (Usuarios/Carga)
+  // Apps por usuario: con asignación explícita (user_apps), el usuario ve SOLO
+  // esas apps + Perfil (los alias legados se expanden). Sin asignación, rol.
+  const APP_ALIASES: Record<string, string[]> = {
+    crm: ['contacts'], concierge: ['reservations'], casa: ['reportar'], revenue: ['upload'],
+  }
+  let ALLOWED_VIEWS: Set<string> | null
+  if (role === 'MASTER') {
+    ALLOWED_VIEWS = null // null = no restriction
+  } else if (userApps && userApps.size > 0) {
+    const s = new Set<string>(['profile'])
+    userApps.forEach(a => { s.add(a); (APP_ALIASES[a] ?? []).forEach(x => s.add(x)) })
+    ALLOWED_VIEWS = s
+  } else {
+    ALLOWED_VIEWS = role === 'DEV'
+      ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'events', 'objectives',
+                 'content', 'revenue', 'reports', 'activity', 'templates', 'profile']) // auditoría: todo menos admin (Usuarios/Carga)
       : role === 'HEART_OF_HOUSE'
         ? new Set(['casa', 'reportar', 'concierge', 'profile']) // piso + tablet de host: La Casa y Reservas
         : role === 'TEAM' || role === 'MARKETING'
-          ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'social', 'objectives', 'profile'])
-          : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'social', 'objectives', 'profile'])
+          ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'events', 'objectives', 'profile'])
+          : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'events', 'objectives', 'profile'])
+  }
 
   function handleNavigate(view: string) {
     if (ALLOWED_VIEWS && !ALLOWED_VIEWS.has(view)) return
@@ -171,7 +192,7 @@ export default function App() {
   function renderView() {
     switch (activeView) {
       case 'dashboard':
-        if (!canSeeDashboard(role)) {
+        if (!canSeeDashboard(role) && !userApps?.has('dashboard')) {
           return (
             <EmptyState
               icon="🔒"
@@ -193,19 +214,17 @@ export default function App() {
         return <Casa userId={profile?.id} userRole={role} />
       case 'reportar': // slot de bottom-nav del HoH: La Casa con el reporte abierto
         return <Casa userId={profile?.id} userRole={role} initialReport />
-      case 'social':
-        return <Social profile={profile} userId={profile?.id} />
+      case 'events':
+        return <Events userRole={role} userId={profile?.id} onOpenTask={openTaskOverlay} />
       case 'objectives':
         return <Objectives profile={profile} userId={profile?.id} userRole={role} />
-      case 'calendar':
-        return <CalendarHub initialTab="ops" userRole={role} defaultBuFilter={buFilter} />
       case 'content':
         return <CalendarHub initialTab="content" userRole={role} />
       case 'revenue':
       case 'upload':
         return <RevenueUpload />
       case 'activity':
-        return canSeeDashboard(role) ? <ActivityLog /> : (
+        return canSeeDashboard(role) || userApps?.has('activity') ? <ActivityLog /> : (
           <EmptyState icon="🔒" title="Access restricted" description="Activity Log is only available to C-Level and Master users." />
         )
       case 'templates':
@@ -232,6 +251,7 @@ export default function App() {
         onOpenPalette={() => setPaletteOpen(true)}
         bell={profile ? <NotificationBell userId={profile.id} onOpenTask={openTaskOverlay} /> : undefined}
         userRole={role}
+        userApps={userApps}
       >
         {renderView()}
 
@@ -248,7 +268,7 @@ export default function App() {
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        navItems={navItemsForRole(role).map(i => ({ id: i.id, label: i.label }))}
+        navItems={navItemsForRole(role, userApps).map(i => ({ id: i.id, label: i.label }))}
         onNavigate={handleNavigate}
         onOpenTask={openTaskOverlay}
         onOpenDeal={(id) => setOverlayDealId(id)}
