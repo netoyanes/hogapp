@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.45.0"
+export const APP_VERSION = "2.46.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.46.0",
+    date: "2026-07-31",
+    type: "MINOR",
+    changes: [
+      "Nuevo app Eventos: planeación de eventos multi-venue estilo Asana — lista agrupada por mes con descripción, fecha, tipo, cover y precio, presupuesto de costos, responsable y estado",
+      "Eventos ↔ Tareas: cada evento liga tareas de ejecución (se crean desde el evento con venue y fecha límite ya puestos)",
+      "Apps por usuario: en Usuarios ahora asignas qué apps ve cada quien (fila APPS); con asignación explícita el usuario ve SOLO esas apps + Perfil, sin asignación aplican los defaults de su rol",
+      "Se retiraron Social y el Calendario mensual (sus atajos ahora abren Eventos)",
+    ]
+  },
   {
     version: "2.45.0",
     date: "2026-07-31",

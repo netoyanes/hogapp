@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Sparkles, Target, Command, Shell, ClipboardCheck } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, Megaphone, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
 import { STR } from '../../lib/strings'
@@ -12,6 +12,7 @@ interface Props {
   onOpenPalette?: () => void
   bell?: ReactNode
   userRole?: string
+  userApps?: Set<string> | null
 }
 
 export const NAV_ITEMS = [
@@ -20,9 +21,8 @@ export const NAV_ITEMS = [
   { id: 'crm',        label: STR.nav.crm,        icon: Handshake,       shortcut: '3' },
   { id: 'concierge',  label: STR.nav.concierge,  icon: Shell },
   { id: 'casa',       label: STR.nav.casa,       icon: ClipboardCheck },
-  { id: 'social',     label: STR.nav.social,     icon: Sparkles,        shortcut: '5' },
+  { id: 'events',     label: STR.nav.events,     icon: CalendarDays,    shortcut: '5' },
   { id: 'objectives', label: STR.nav.objectives, icon: Target,          shortcut: '6' },
-  { id: 'calendar',   label: STR.nav.calendar,   icon: CalendarDays,    shortcut: '7' },
   { id: 'content',    label: STR.nav.content,    icon: Megaphone,       shortcut: '8' },
   { id: 'revenue',    label: STR.nav.revenue,    icon: BarChart3,       shortcut: '9' },
   { id: 'activity',   label: STR.nav.activity,   icon: Activity,                     cLevelOnly: true },
@@ -34,12 +34,18 @@ export const NAV_ITEMS = [
 ]
 
 // Views every non-MASTER role can navigate to (mirrors ALLOWED_VIEWS in App)
-export const NON_MASTER_VIEWS = ['tasks', 'crm', 'concierge', 'casa', 'social', 'objectives', 'profile']
+export const NON_MASTER_VIEWS = ['tasks', 'crm', 'concierge', 'casa', 'events', 'objectives', 'profile']
 // La Casa (operación de piso): personal HoH la vive, Ops la administra,
 // C-Level/Master supervisan. Marketing y Team no la ven.
 const CASA_ROLES = new Set(['MASTER', 'C_LEVEL', 'OPS_MANAGER', 'HEART_OF_HOUSE', 'DEV'])
 
-export function navItemsForRole(userRole?: string) {
+// apps: asignación por usuario (user_apps). Con filas, el usuario ve SOLO esas
+// apps (+ Perfil siempre); sin filas, aplican los defaults de su rol.
+export function navItemsForRole(userRole?: string, apps?: Set<string> | null) {
+  if (userRole !== 'MASTER' && apps && apps.size > 0) {
+    return NAV_ITEMS.filter(item => TENANT.enabledViews.includes(item.id) && !item.masterOnly
+      && (item.id === 'profile' || apps.has(item.id)))
+  }
   // Heart of House (piso + tablet de host): La Casa, Reservas (Concierge) y Perfil
   if (userRole === 'HEART_OF_HOUSE') {
     return NAV_ITEMS.filter(item => ['casa', 'concierge', 'profile'].includes(item.id))
@@ -56,9 +62,9 @@ export function navItemsForRole(userRole?: string) {
   })
 }
 
-export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, onOpenPalette, bell, userRole }: Props) {
+export function Sidebar({ activeView, onNavigate, onSignOut, onHomeClick, onOpenPalette, bell, userRole, userApps }: Props) {
   const [expanded, setExpanded] = useState(false)
-  const items = navItemsForRole(userRole)
+  const items = navItemsForRole(userRole, userApps)
 
   return (
     <aside

@@ -33,6 +33,7 @@ export const STR = {
     directory: 'Directorio',
     social: 'Social',
     objectives: 'Objetivos',
+    events: 'Eventos',
     calendar: 'Calendario',
     content: 'Contenido',
     revenue: 'Ingresos',

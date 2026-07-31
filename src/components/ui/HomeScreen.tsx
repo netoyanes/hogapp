@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import {
   LayoutDashboard, CheckSquare, Handshake, CalendarDays, Megaphone,
   BarChart3, Activity, LayoutTemplate, Upload, UserPlus, UserCircle, FileText,
-  Contact2, Sparkles, Target, Shell,
+  Contact2, Target, Shell,
 } from 'lucide-react'
 import { AppLogoBadge } from './AppLogo'
 import { TENANT } from '../../config/tenant'
@@ -20,9 +20,8 @@ const APPS: App[] = [
   { id: 'crm',        label: 'CRM',         icon: Handshake,       color: '#D98C9F' },
   { id: 'concierge',  label: 'Concierge',   icon: Shell,           color: '#5E9FB8' },
   { id: 'contacts',   label: 'Directorio',  icon: Contact2,        color: '#6FA8A0' },
-  { id: 'social',     label: 'Social',      icon: Sparkles,        color: '#B08BC9' },
+  { id: 'events',     label: 'Eventos',     icon: CalendarDays,    color: '#B08BC9' },
   { id: 'objectives', label: 'Objetivos',   icon: Target,          color: '#5FBF7A' },
-  { id: 'calendar',   label: 'Calendario',  icon: CalendarDays,    color: '#A79BC8' },
   { id: 'content',    label: 'Contenido',   icon: Megaphone,       color: '#DB9A6A' },
   { id: 'revenue',    label: 'Ingresos',    icon: BarChart3,       color: '#8FBF9F' },
   { id: 'activity',   label: 'Actividad',   icon: Activity,        color: '#C9A76B' },
@@ -37,9 +36,10 @@ interface Props {
   onNavigate: (view: string) => void
   onClose: () => void
   userRole?: string
+  userApps?: Set<string> | null
 }
 
-export function HomeScreen({ onNavigate, onClose, userRole }: Props) {
+export function HomeScreen({ onNavigate, onClose, userRole, userApps }: Props) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -50,9 +50,13 @@ export function HomeScreen({ onNavigate, onClose, userRole }: Props) {
 
   const visible = APPS.filter(app => {
     if (!TENANT.enabledViews.includes(app.id)) return false
+    // Apps por usuario: con asignación explícita, solo esas (+ Perfil)
+    if (userRole !== 'MASTER' && userApps && userApps.size > 0) {
+      return app.id === 'profile' || userApps.has(app.id) || (app.id === 'contacts' && userApps.has('crm'))
+    }
     if (app.id === 'concierge' && userRole === 'MARKETING') return false // hospitalidad sin Marketing
     if (userRole === 'MASTER') return true
-    return ['tasks', 'crm', 'concierge', 'contacts', 'social', 'objectives', 'profile'].includes(app.id)
+    return ['tasks', 'crm', 'concierge', 'contacts', 'events', 'objectives', 'profile'].includes(app.id)
   })
 
   function go(id: string) {

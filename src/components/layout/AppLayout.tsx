@@ -16,15 +16,16 @@ interface Props {
   onOpenPalette?: () => void
   bell?: ReactNode
   userRole?: string
+  userApps?: Set<string> | null
 }
 
 // Views that already live in the mobile bottom nav (per role) — the "Más"
 // sheet shows everything else the role can access.
-const MASTER_BOTTOM = new Set(['dashboard', 'tasks', 'crm', 'social', 'profile'])
-const TEAM_BOTTOM = new Set(['concierge', 'tasks', 'social', 'crm', 'profile'])
+const MASTER_BOTTOM = new Set(['dashboard', 'tasks', 'crm', 'events', 'profile'])
+const TEAM_BOTTOM = new Set(['concierge', 'tasks', 'events', 'crm', 'profile'])
 const HOH_BOTTOM = new Set(['casa', 'reportar', 'concierge', 'profile'])
 
-export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenPalette, bell, userRole }: Props) {
+export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenPalette, bell, userRole, userApps }: Props) {
   const isMobile = useIsMobile()
   const [showHome, setShowHome] = useState(false)
   const [showMore, setShowMore] = useState(false)
@@ -34,7 +35,7 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenP
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       const views: Record<string, string> = {
         '1': 'dashboard', '2': 'tasks', '3': 'crm', '4': 'crm',
-        '5': 'social', '6': 'objectives', '7': 'calendar', '8': 'content',
+        '5': 'events', '6': 'objectives', '8': 'content',
         '9': 'revenue', '0': 'upload',
       }
       if (views[e.key]) onNavigate(views[e.key])
@@ -45,7 +46,7 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenP
 
   if (isMobile) {
     const inBottom = userRole === 'MASTER' ? MASTER_BOTTOM : userRole === 'HEART_OF_HOUSE' ? HOH_BOTTOM : TEAM_BOTTOM
-    const moreItems = navItemsForRole(userRole).filter(i => !inBottom.has(i.id))
+    const moreItems = navItemsForRole(userRole, userApps).filter(i => !inBottom.has(i.id))
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-base)', overflow: 'hidden' }}>
@@ -78,7 +79,7 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenP
         <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', paddingBottom: '60px' }}>
           {children}
         </main>
-        <BottomNav activeView={activeView} onNavigate={onNavigate} userRole={userRole} />
+        <BottomNav activeView={activeView} onNavigate={onNavigate} userRole={userRole} userApps={userApps} />
 
         {/* "Más" — remaining views for this role */}
         <Sheet open={showMore} onClose={() => setShowMore(false)} isMobile>
@@ -114,6 +115,7 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenP
             onNavigate={onNavigate}
             onClose={() => setShowHome(false)}
             userRole={userRole}
+            userApps={userApps}
           />
         )}
       </div>
@@ -130,6 +132,7 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenP
         onOpenPalette={onOpenPalette}
         bell={bell}
         userRole={userRole}
+        userApps={userApps}
       />
       <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {children}
@@ -140,6 +143,7 @@ export function AppLayout({ children, activeView, onNavigate, onSignOut, onOpenP
           onNavigate={onNavigate}
           onClose={() => setShowHome(false)}
           userRole={userRole}
+          userApps={userApps}
         />
       )}
     </div>

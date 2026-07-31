@@ -41,6 +41,23 @@ const CAPABILITIES: { id: string; label: string; desc: string }[] = [
   { id: 'talento', label: 'Talento', desc: 'Concierge → Talento: booking de DJs y fees' },
 ]
 
+// Catálogo de apps asignables por usuario (user_apps). Con asignación explícita
+// el usuario ve SOLO esas apps (+ Perfil); sin asignación, los defaults del rol.
+const APP_CATALOG: { id: string; label: string }[] = [
+  { id: 'dashboard',  label: 'Dashboard' },
+  { id: 'tasks',      label: 'Tareas' },
+  { id: 'crm',        label: 'Comercial' },
+  { id: 'concierge',  label: 'Concierge' },
+  { id: 'casa',       label: 'La Casa' },
+  { id: 'events',     label: 'Eventos' },
+  { id: 'objectives', label: 'Objetivos' },
+  { id: 'content',    label: 'Contenido' },
+  { id: 'revenue',    label: 'Ingresos' },
+  { id: 'reports',    label: 'Reportes' },
+  { id: 'activity',   label: 'Actividad' },
+  { id: 'templates',  label: 'Plantillas' },
+]
+
 interface Invitation {
   id: string
   email: string
@@ -87,6 +104,8 @@ export function InviteUsers() {
   // Funciones extra por usuario: liberan áreas puntuales sobre el rol base
   // (ej. 'talento' para el booker que vive en Marketing)
   const [userCaps, setUserCaps] = useState<Record<string, string[]>>({})
+  // Apps asignadas por usuario (user_apps): con filas, ve SOLO esas apps
+  const [userAppsMap, setUserAppsMap] = useState<Record<string, string[]>>({})
   // Alta de accesos de piso (Heart of House): usuario + PIN, sin correo
   const [hohName, setHohName] = useState('')
   const [hohUser, setHohUser] = useState('')
@@ -130,12 +149,13 @@ export function InviteUsers() {
   }, [])
 
   async function loadAll() {
-    const [{ data: inv }, { data: mem }, { data: buses }, { data: uv }, { data: uc }] = await Promise.all([
+    const [{ data: inv }, { data: mem }, { data: buses }, { data: uv }, { data: uc }, { data: ua }] = await Promise.all([
       supabase.from('invitations').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('id, full_name, last_name, email, username, role, slack_user_id, created_at').order('created_at', { ascending: true }),
       supabase.from('business_units').select('id, code, name').order('name'),
       supabase.from('user_venues').select('user_id, bu_id'),
       supabase.from('user_capabilities').select('user_id, capability'),
+      supabase.from('user_apps').select('user_id, app'),
     ])
     setBuList(buses ?? [])
     const vm: Record<string, string[]> = {}
@@ -144,6 +164,9 @@ export function InviteUsers() {
     const cm: Record<string, string[]> = {}
     for (const r of uc ?? []) { (cm[r.user_id] = cm[r.user_id] ?? []).push(r.capability) }
     setUserCaps(cm)
+    const am: Record<string, string[]> = {}
+    for (const r of ua ?? []) { (am[r.user_id] = am[r.user_id] ?? []).push(r.app) }
+    setUserAppsMap(am)
     setInvitations(inv ?? [])
     if (mem) {
       setMembers(mem)
@@ -204,6 +227,28 @@ export function InviteUsers() {
       return
     }
     logActivity('capability_revoked', 'user', userId, { member: memberName, capability: cap })
+  }
+
+  async function addApp(userId: string, app: string, memberName: string) {
+    setUserAppsMap(prev => ({ ...prev, [userId]: [...(prev[userId] ?? []), app] }))
+    const { error } = await supabase.from('user_apps').insert({ user_id: userId, app, granted_by: currentUserId })
+    if (error) {
+      setMemberError(`No se pudo asignar el app: ${error.message}`)
+      await loadAll()
+      return
+    }
+    logActivity('app_granted', 'user', userId, { member: memberName, app })
+  }
+
+  async function removeApp(userId: string, app: string, memberName: string) {
+    setUserAppsMap(prev => ({ ...prev, [userId]: (prev[userId] ?? []).filter(a => a !== app) }))
+    const { error } = await supabase.from('user_apps').delete().eq('user_id', userId).eq('app', app)
+    if (error) {
+      setMemberError(`No se pudo quitar el app: ${error.message}`)
+      await loadAll()
+      return
+    }
+    logActivity('app_revoked', 'user', userId, { member: memberName, app })
   }
 
   async function removeVenue(userId: string, buId: string, memberName: string) {
@@ -509,6 +554,44 @@ export function InviteUsers() {
                               .filter(b => !(userVenues[m.id] ?? []).includes(b.id))
                               .map(b => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
                           </select>
+                        </div>
+
+                        {/* Apps asignadas — con asignación explícita el usuario ve SOLO
+                            esas apps (+ Perfil); sin asignación, defaults del rol */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '5px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>APPS</span>
+                          {(userAppsMap[m.id] ?? []).length === 0 && (
+                            <span title="Sin asignación específica: este usuario ve las apps default de su rol" style={{ fontSize: '9px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontStyle: 'italic' }}>
+                              default del rol
+                            </span>
+                          )}
+                          {(userAppsMap[m.id] ?? []).map(appId => {
+                            const app = APP_CATALOG.find(a => a.id === appId)
+                            return (
+                              <span key={appId} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', background: 'color-mix(in srgb, #7FA3C2 14%, transparent)', border: '1px solid color-mix(in srgb, #7FA3C2 40%, transparent)', color: '#7FA3C2', borderRadius: '4px', padding: '1px 6px', fontSize: '9px', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                                {app?.label ?? appId}
+                                <button
+                                  onClick={() => removeApp(m.id, appId, displayName(m))}
+                                  title={`Quitar ${app?.label ?? appId}`}
+                                  style={{ background: 'none', border: 'none', color: '#7FA3C2', cursor: 'pointer', fontSize: '11px', padding: '0 2px', lineHeight: 1 }}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            )
+                          })}
+                          {APP_CATALOG.some(a => !(userAppsMap[m.id] ?? []).includes(a.id)) && (
+                            <select
+                              value=""
+                              onChange={e => { if (e.target.value) { addApp(m.id, e.target.value, displayName(m)); (e.target as HTMLSelectElement).value = '' } }}
+                              style={{ background: 'transparent', border: '1px dashed var(--border-default)', borderRadius: '4px', color: 'var(--text-tertiary)', fontSize: '9px', fontFamily: 'var(--font-mono)', padding: '1px 4px', outline: 'none', cursor: 'pointer', maxWidth: '90px' }}
+                            >
+                              <option value="">+ app</option>
+                              {APP_CATALOG
+                                .filter(a => !(userAppsMap[m.id] ?? []).includes(a.id))
+                                .map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                            </select>
+                          )}
                         </div>
 
                         {/* Funciones extra — liberan áreas puntuales sobre el rol base
