@@ -66,13 +66,12 @@ export function Auth({ onSignIn, accessDenied }: Props) {
     setSuccess(null)
 
     if (mode === 'signup') {
-      // Verify invitation before creating account
-      const { data: invite } = await supabase
-        .from('invitations')
-        .select('id')
-        .ilike('email', email.trim())
-        .maybeSingle()
-      if (!invite) {
+      // Verificar invitación ANTES de crear la cuenta. Corre como anon (aún no
+      // hay sesión), así que no puede leer `invitations` directo por RLS — usa
+      // el RPC security definer has_invitation.
+      const { data: invited, error: rpcError } = await supabase
+        .rpc('has_invitation', { p_email: email.trim() })
+      if (rpcError || !invited) {
         setError('You need an invitation to create an account. Contact your administrator.')
         setLoading(false)
         return

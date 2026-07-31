@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.44.0"
+export const APP_VERSION = "2.44.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.44.1",
+    date: "2026-07-31",
+    type: "PATCH",
+    changes: [
+      "Registro con correo: la verificación de invitación fallaba para usuarios no-Google aunque la invitación existiera (RLS bloqueaba la consulta anónima) — ahora verifica vía función segura has_invitation",
+    ]
+  },
   {
     version: "2.44.0",
     date: "2026-07-30",
