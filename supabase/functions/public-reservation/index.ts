@@ -62,6 +62,11 @@ Deno.serve(async (req: Request) => {
     if (!bu.public_booking_enabled) return json({ error: 'Este venue no tiene reservas en línea por ahora.', disabled: true }, 403)
 
     const { data: pay } = await admin.from('venue_payment_config').select('*').eq('bu_id', bu.id).maybeSingle()
+    // Motor por mesas (Fase 3): si el venue lo activó, el formulario ofrece
+    // slots del motor en vez de hora libre — mismo cálculo que app y bot.
+    const { data: engineCfg } = await admin.from('venue_reservation_settings')
+      .select('engine, online_max_pax').eq('bu_id', bu.id).maybeSingle()
+    const tableEngine = engineCfg?.engine === 'tables'
 
     // ── INFO: datos para pintar el formulario ──────────────────────────────
     if ((body.action ?? 'info') === 'info') {
@@ -71,12 +76,24 @@ Deno.serve(async (req: Request) => {
         // Solo el modelo por-noche (F&B/club) se soporta en el formulario web;
         // los demás tipos reservan por otros medios.
         supported: (bu.inventory_type ?? 'nightly_capacity') === 'nightly_capacity',
+        engine: tableEngine ? 'tables' : 'night',
+        online_max_pax: tableEngine ? (engineCfg?.online_max_pax ?? 8) : null,
         deposit: (pay?.active && pay?.clabe) ? {
           over_pax: pay.deposit_over_pax,
           per_person: pay.deposit_per_person ?? null,
           fixed: pay.deposit_fixed ?? null,
         } : null,
       })
+    }
+
+    // ── SLOTS: horarios disponibles del motor por mesas ────────────────────
+    if (body.action === 'slots') {
+      if (!tableEngine) return json({ ok: true, engine: 'night', slots: [] })
+      const fecha = String(body.fecha ?? '').trim()
+      const pax = parseInt(String(body.pax ?? ''), 10)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !(pax > 0)) return json({ ok: true, slots: [] })
+      const { data: slots } = await admin.rpc('fn_available_slots', { p_bu: bu.id, p_date: fecha, p_pax: pax, p_online: true })
+      return json({ ok: true, engine: 'tables', slots: (slots ?? []).map((s: { slot: string }) => s.slot) })
     }
 
     // ── BOOK: crear la reserva ─────────────────────────────────────────────
@@ -96,7 +113,21 @@ Deno.serve(async (req: Request) => {
       if (!hora) return json({ error: 'Elige tu hora de llegada.' }, 400)
       if (!(pax > 0 && pax <= 40)) return json({ error: 'Número de personas inválido.' }, 400)
 
-      // Cupo de la noche (misma regla que el bot): nunca sobrevende.
+      // Motor por mesas: el motor asigna mesa o rechaza — nunca sobrevende.
+      // deno-lint-ignore no-explicit-any
+      let asignada: any = null
+      if (tableEngine) {
+        if (engineCfg?.online_max_pax && pax > engineCfg.online_max_pax) {
+          return json({ error: `Para grupos de más de ${engineCfg.online_max_pax} escríbenos por WhatsApp y el equipo te arma la mesa 🙏` }, 400)
+        }
+        const { data: asg } = await admin.rpc('fn_assign_table', { p_bu: bu.id, p_date: fecha, p_slot: hora, p_pax: pax, p_online: true })
+        asignada = asg?.[0] ?? null
+        if (!asignada) {
+          return json({ error: 'Ese horario se acaba de llenar. Elige otro horario disponible 🙏', full: true }, 409)
+        }
+      }
+
+      // Cupo de la noche (tope general — aplica en ambos motores): nunca sobrevende.
       const dow = new Date(fecha + 'T00:00:00').getDay()
       const [{ data: cap }, { data: resNoche }] = await Promise.all([
         admin.from('venue_capacity').select('max_reservations, max_pax').eq('bu_id', bu.id).eq('day_of_week', dow).eq('active', true).maybeSingle(),
@@ -135,12 +166,16 @@ Deno.serve(async (req: Request) => {
 
       let reservaId: string
       if (existentes?.[0]) {
-        await admin.from('reservations').update({ time_slot: hora, party_size: pax, notes: notas }).eq('id', existentes[0].id)
+        await admin.from('reservations').update({
+          time_slot: hora, party_size: pax, notes: notas,
+          zone_id: asignada?.zone_id ?? undefined, table_id: asignada?.table_id ?? undefined, combo_id: asignada?.combo_id ?? undefined,
+        }).eq('id', existentes[0].id)
         reservaId = existentes[0].id
       } else {
         const { data: reserva, error: rErr } = await admin.from('reservations').insert({
           guest_id: guest.id, bu_id: bu.id, date: fecha, time_slot: hora, party_size: pax,
           notes: notas, status: 'requested', source: 'web',
+          zone_id: asignada?.zone_id ?? null, table_id: asignada?.table_id ?? null, combo_id: asignada?.combo_id ?? null,
         }).select('id').single()
         if (rErr) return json({ error: 'No se pudo crear la reserva. Intenta de nuevo.' }, 500)
         reservaId = reserva.id

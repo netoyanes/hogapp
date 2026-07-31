@@ -14,6 +14,29 @@ interface CapRow {
   active: boolean
 }
 
+// Parámetros de reserva del venue (Fase 3): motor por mesas, slots, duraciones,
+// buffer, pacing y reglas de reserva en línea. Regla de oro: todo número que el
+// motor usa vive aquí, nunca en el código.
+interface ResSettings {
+  bu_id: string
+  engine: 'night' | 'tables'
+  slot_minutes: 15 | 30 | 60
+  durations: { max_pax: number; minutes: number }[]
+  buffer_minutes: number
+  pacing_max_pax: number
+  online_pct: number
+  online_max_pax: number
+  no_show_hold_minutes: number
+}
+const DEFAULT_SETTINGS: Omit<ResSettings, 'bu_id'> = {
+  engine: 'night', slot_minutes: 30,
+  durations: [
+    { max_pax: 2, minutes: 90 }, { max_pax: 4, minutes: 120 },
+    { max_pax: 6, minutes: 150 }, { max_pax: 99, minutes: 180 },
+  ],
+  buffer_minutes: 15, pacing_max_pax: 0, online_pct: 100, online_max_pax: 8, no_show_hold_minutes: 15,
+}
+
 const DAYS_ES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
 // Editor de capacidad por venue (Ops Manager+): un cupo TOTAL por noche
@@ -28,12 +51,27 @@ export function CapacityEditor({ buId, buCode, onClose, onSaved }: {
   const isMobile = useIsMobile()
   const [rows, setRows] = useState<CapRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [settings, setSettings] = useState<ResSettings | null>(null)
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('venue_capacity').select('*').eq('bu_id', buId).order('day_of_week')
+    const [{ data }, { data: st }] = await Promise.all([
+      supabase.from('venue_capacity').select('*').eq('bu_id', buId).order('day_of_week'),
+      supabase.from('venue_reservation_settings').select('*').eq('bu_id', buId).maybeSingle(),
+    ])
     setRows((data ?? []) as CapRow[])
+    setSettings(st ? (st as ResSettings) : { bu_id: buId, ...DEFAULT_SETTINGS })
     setLoading(false)
   }, [buId])
+
+  // Guardado inmediato de parámetros (upsert — la fila puede no existir aún)
+  async function patchSettings(patch: Partial<ResSettings>) {
+    if (!settings) return
+    const next = { ...settings, ...patch }
+    setSettings(next)
+    const { error } = await supabase.from('venue_reservation_settings').upsert(next, { onConflict: 'bu_id' })
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); load(); return }
+    onSaved()
+  }
 
   useEffect(() => { load() }, [load])
 
@@ -145,6 +183,86 @@ export function CapacityEditor({ buId, buCode, onClose, onSaved }: {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* ── Motor por mesas (Fase 3): parámetros de reserva del venue ── */}
+        {!loading && settings && (
+          <div style={{ marginTop: 16, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Motor por mesas</div>
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Horarios en slots y mesa auto-asignada. Requiere el piso configurado en el Editor de piso.</div>
+              </div>
+              <button onClick={() => patchSettings({ engine: settings.engine === 'tables' ? 'night' : 'tables' })} role="switch" aria-checked={settings.engine === 'tables'}
+                style={{ width: 44, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', background: settings.engine === 'tables' ? 'var(--accent)' : 'var(--bg-base)', position: 'relative', flexShrink: 0 }}>
+                <span style={{ position: 'absolute', top: 3, left: settings.engine === 'tables' ? 22 : 3, width: 20, height: 20, borderRadius: '50%', background: settings.engine === 'tables' ? 'var(--on-accent)' : 'var(--border-strong)', transition: 'left 0.15s' }} />
+              </button>
+            </div>
+
+            {settings.engine === 'tables' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  <label style={fieldWrap}><span style={fieldLbl}>Slot (min)</span>
+                    <select value={settings.slot_minutes} onChange={e => patchSettings({ slot_minutes: Number(e.target.value) as 15 | 30 | 60 })} style={{ ...numStyle, cursor: 'pointer' }}>
+                      <option value={15}>15</option><option value={30}>30</option><option value={60}>60</option>
+                    </select></label>
+                  <label style={fieldWrap}><span style={fieldLbl}>Buffer (min)</span>
+                    <input type="number" inputMode="numeric" defaultValue={settings.buffer_minutes} className="num" style={numStyle}
+                      onBlur={e => { const v = Math.max(0, Number(e.target.value)); if (v !== settings.buffer_minutes) patchSettings({ buffer_minutes: v }) }} /></label>
+                  <label style={fieldWrap} title="Pax nuevos máximos por slot (ritmo de cocina). 0 = sin límite"><span style={fieldLbl}>Pacing pax</span>
+                    <input type="number" inputMode="numeric" defaultValue={settings.pacing_max_pax} className="num" style={numStyle}
+                      onBlur={e => { const v = Math.max(0, Number(e.target.value)); if (v !== settings.pacing_max_pax) patchSettings({ pacing_max_pax: v }) }} /></label>
+                  <label style={fieldWrap} title="% de la capacidad del piso reservable en línea (web y bot)"><span style={fieldLbl}>% en línea</span>
+                    <input type="number" inputMode="numeric" min={0} max={100} defaultValue={settings.online_pct} className="num" style={numStyle}
+                      onBlur={e => { const v = Math.min(100, Math.max(0, Number(e.target.value))); if (v !== settings.online_pct) patchSettings({ online_pct: v }) }} /></label>
+                  <label style={fieldWrap} title="Grupo máximo que puede reservar en línea; mayores los atiende el equipo"><span style={fieldLbl}>Grupo máx online</span>
+                    <input type="number" inputMode="numeric" min={1} defaultValue={settings.online_max_pax} className="num" style={numStyle}
+                      onBlur={e => { const v = Math.max(1, Number(e.target.value)); if (v !== settings.online_max_pax) patchSettings({ online_max_pax: v }) }} /></label>
+                  <label style={fieldWrap} title="Minutos de tolerancia antes de liberar la mesa por no-show (Fase 4)"><span style={fieldLbl}>Tolerancia (min)</span>
+                    <input type="number" inputMode="numeric" min={0} defaultValue={settings.no_show_hold_minutes} className="num" style={numStyle}
+                      onBlur={e => { const v = Math.max(0, Number(e.target.value)); if (v !== settings.no_show_hold_minutes) patchSettings({ no_show_hold_minutes: v }) }} /></label>
+                </div>
+
+                {/* Duraciones por tamaño de grupo */}
+                <div>
+                  <span style={{ ...fieldLbl, textAlign: 'left', display: 'block', marginBottom: 6 }}>Duración de la mesa por tamaño de grupo</span>
+                  {settings.durations.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>hasta</span>
+                      <input type="number" inputMode="numeric" min={1} value={d.max_pax} className="num" style={{ ...numStyle, width: 56 }}
+                        onChange={e => {
+                          const ds = settings.durations.map((x, j) => j === i ? { ...x, max_pax: Math.max(1, Number(e.target.value)) } : x)
+                          setSettings({ ...settings, durations: ds })
+                        }}
+                        onBlur={() => patchSettings({ durations: [...settings.durations].sort((a, b) => a.max_pax - b.max_pax) })} />
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>pax →</span>
+                      <input type="number" inputMode="numeric" min={15} step={15} value={d.minutes} className="num" style={{ ...numStyle, width: 64 }}
+                        onChange={e => {
+                          const ds = settings.durations.map((x, j) => j === i ? { ...x, minutes: Math.max(15, Number(e.target.value)) } : x)
+                          setSettings({ ...settings, durations: ds })
+                        }}
+                        onBlur={() => patchSettings({ durations: settings.durations })} />
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flex: 1 }}>min</span>
+                      {settings.durations.length > 1 && (
+                        <button onClick={() => patchSettings({ durations: settings.durations.filter((_, j) => j !== i) })} aria-label="Quitar duración"
+                          style={{ width: 30, height: 30, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Trash2 size={12} /></button>
+                      )}
+                    </div>
+                  ))}
+                  <button onClick={() => {
+                    const last = settings.durations[settings.durations.length - 1]
+                    patchSettings({ durations: [...settings.durations, { max_pax: (last?.max_pax ?? 4) + 2, minutes: (last?.minutes ?? 120) + 30 }] })
+                  }}
+                    style={{ minHeight: 34, padding: '0 12px', borderRadius: 999, border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-tertiary)', fontSize: 11, cursor: 'pointer' }}>
+                    + Rango
+                  </button>
+                </div>
+                <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: 0 }}>
+                  Con el motor activo, las horas se ofrecen en slots y cada reserva recibe mesa automáticamente (app, link público y bot usan el mismo cálculo). El cupo por día de arriba sigue siendo un tope general.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

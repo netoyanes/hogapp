@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.44.1"
+export const APP_VERSION = "2.45.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.45.0",
+    date: "2026-07-31",
+    type: "MINOR",
+    changes: [
+      "Plataforma de reservas Fase 3 — Motor por mesas: disponibilidad calculada mesa por mesa (duraciones por grupo, buffer, pacing de cocina, combinaciones) con una sola implementación para app, link público y bot",
+      "Parámetros por venue en Capacidad y horario: slot 15/30/60 min, duraciones por tamaño de grupo, buffer, pacing, % reservable en línea, grupo máx online y tolerancia de no-show — la regla de oro: todo número es configurable",
+      "Nueva reserva: con motor activo se eligen horarios reales y la mesa se auto-asigna (mejor zona y capacidad); sobrecupo manual solo Ops/Master",
+      "Link público: selector de horarios disponibles por fecha y grupo; grupos grandes se canalizan a WhatsApp",
+      "Se activa por venue (switch 'Motor por mesas'); los venues sin motor siguen con cupo por noche",
+    ]
+  },
   {
     version: "2.44.1",
     date: "2026-07-31",
