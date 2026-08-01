@@ -149,19 +149,22 @@ export function Concierge({ userId, userRole, caps }: { userId?: string; userRol
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-      <div style={{ padding: isMobile ? '8px 12px 0' : '14px 20px 0', flexShrink: 0 }}>
-        {/* En móvil el top bar ya dice "Concierge" — el título aquí solo roba pantalla */}
-        {!isMobile && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <Shell size={18} style={{ color: 'var(--accent)' }} />
-            <h1 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>Concierge</h1>
-            <span style={{ color: 'var(--text-tertiary)', fontSize: 11, marginLeft: 4 }}>Reservas · Bot · Clientes</span>
+      {/* Con una sola pestaña (HoH) la fila de tabs solo roba pantalla */}
+      {tabs.length > 1 && (
+        <div style={{ padding: isMobile ? '8px 12px 0' : '14px 20px 0', flexShrink: 0 }}>
+          {/* En móvil el top bar ya dice "Concierge" — el título aquí solo roba pantalla */}
+          {!isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Shell size={18} style={{ color: 'var(--accent)' }} />
+              <h1 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>Concierge</h1>
+              <span style={{ color: 'var(--text-tertiary)', fontSize: 11, marginLeft: 4 }}>Reservas · Bot · Clientes</span>
+            </div>
+          )}
+          <div style={{ maxWidth: isMobile ? undefined : (isMaster ? 720 : 500), paddingBottom: 8 }}>
+            <SegmentedControl scrollable value={tab} onChange={setTab} options={tabs} />
           </div>
-        )}
-        <div style={{ maxWidth: isMobile ? undefined : (isMaster ? 720 : 500), paddingBottom: 8 }}>
-          <SegmentedControl scrollable value={tab} onChange={setTab} options={tabs} />
         </div>
-      </div>
+      )}
 
       {fullBleed ? (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
