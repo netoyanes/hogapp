@@ -12,7 +12,7 @@ import { CapacityEditor } from '../components/ui/CapacityEditor'
 import { FloorEditor } from '../components/ui/FloorEditor'
 import { FloorLive } from '../components/ui/FloorLive'
 import { OccupancyCurve } from '../components/ui/OccupancyCurve'
-import { KPITile, SegmentedControl, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
+import { SegmentedControl, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type ResStatus = 'requested' | 'confirmed' | 'seated' | 'completed' | 'no_show' | 'cancelled'
@@ -28,6 +28,7 @@ interface Reservation {
   zone: string | null
   zone_id?: string | null
   table_id?: string | null
+  combo_id?: string | null
   duration_min?: number | null
   proposed_time?: string | null
   status: ResStatus
@@ -118,6 +119,27 @@ export function Reservations({ userRole, userId }: Props) {
   const [capOpen, setCapOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [floorOpen, setFloorOpen] = useState(false)
+  // Vista operativa (HoH): filtro de excepciones + reloj + config del venue
+  const [exFilter, setExFilter] = useState<'all' | 'unconfirmed' | 'no_table' | 'deposit' | 'proposal'>('all')
+  const [opsCfg, setOpsCfg] = useState<{ hasTables: boolean; holdMin: number; durations: { max_pax: number; minutes: number }[] }>({ hasTables: false, holdMin: 15, durations: [] })
+  const [nowTick, setNowTick] = useState(Date.now())
+
+  useEffect(() => {
+    const iv = setInterval(() => setNowTick(Date.now()), 60_000)
+    return () => clearInterval(iv)
+  }, [])
+  useEffect(() => { setExFilter('all') }, [buId, date])
+  useEffect(() => {
+    if (!buId) return
+    Promise.all([
+      supabase.from('venue_tables').select('id', { count: 'exact', head: true }).eq('bu_id', buId).eq('active', true),
+      supabase.from('venue_reservation_settings').select('no_show_hold_minutes, durations').eq('bu_id', buId).maybeSingle(),
+    ]).then(([t, s]) => setOpsCfg({
+      hasTables: (t.count ?? 0) > 0,
+      holdMin: s.data?.no_show_hold_minutes ?? 15,
+      durations: (s.data?.durations ?? []) as { max_pax: number; minutes: number }[],
+    }))
+  }, [buId])
   const [cancelReason, setCancelReason] = useState('')
 
   const canWrite = ['MASTER', 'OPS_MANAGER', 'TEAM', 'MARKETING', 'HEART_OF_HOUSE'].includes(userRole ?? '')
@@ -337,16 +359,51 @@ export function Reservations({ userRole, userId }: Props) {
           </div>
         </div>
 
-        {view === 'day' && (
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
-            <KPITile label="Reservas" value={capacity ? `${kpis.total}/${capacity.max_reservations}` : String(kpis.total)}
-              color={capacity && kpis.total > capacity.max_reservations ? 'var(--status-attention)' : undefined} />
-            <KPITile label="Pax" value={capacity ? `${kpis.pax}/${capacity.max_pax}` : String(kpis.pax)}
-              color={capacity && kpis.pax > capacity.max_pax ? 'var(--status-attention)' : 'var(--accent)'} />
-            <KPITile label="Confirmadas" value={String(kpis.confirmed)} />
-            <KPITile label="Sentadas" value={String(kpis.seated)} color="var(--status-attention)" />
-          </div>
-        )}
+        {view === 'day' && (() => {
+          // Barra de excepciones: lo que requiere acción, no lo que va bien.
+          // Cada chip filtra la lista; los totales del día van en discreto.
+          const unconf = reservations.filter(r => r.status === 'requested').length
+          const noTable = opsCfg.hasTables
+            ? reservations.filter(r => ['requested', 'confirmed'].includes(r.status) && !r.table_id && !r.combo_id && (r.zone ?? '') !== 'Barra').length
+            : 0
+          const deposit = reservations.filter(r => ['requested', 'confirmed', 'seated'].includes(r.status) && (r.notes ?? '').toLowerCase().includes('depósito requerido')).length
+          const proposals = reservations.filter(r => !!r.proposed_time && ['requested', 'confirmed'].includes(r.status)).length
+          const chips = [
+            { id: 'unconfirmed' as const, n: unconf, label: unconf === 1 ? 'sin confirmar' : 'sin confirmar' },
+            { id: 'no_table' as const, n: noTable, label: 'sin mesa' },
+            { id: 'deposit' as const, n: deposit, label: deposit === 1 ? 'depósito pendiente' : 'depósitos pendientes' },
+            { id: 'proposal' as const, n: proposals, label: 'horario por confirmar' },
+          ].filter(c => c.n > 0)
+          const totales = `${kpis.total} reservas · ${kpis.pax} pax`
+          return (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              {chips.length === 0 ? (
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                  <span style={{ color: 'var(--status-healthy)', fontWeight: 700 }}>Todo en orden</span> · {totales}
+                </span>
+              ) : (
+                <>
+                  {chips.map(c => {
+                    const on = exFilter === c.id
+                    return (
+                      <button key={c.id} onClick={() => setExFilter(on ? 'all' : c.id)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 44, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? 'var(--status-attention)' : 'color-mix(in srgb, var(--status-attention) 12%, transparent)', border: `1px solid color-mix(in srgb, var(--status-attention) ${on ? '100' : '40'}%, transparent)`, color: on ? '#000' : 'var(--status-attention)' }}>
+                        <span className="num" style={{ fontSize: 18, fontFamily: 'var(--font-mono)' }}>{c.n}</span> {c.label}
+                      </button>
+                    )
+                  })}
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>{totales}</span>
+                </>
+              )}
+              {date === today && (
+                <button onClick={() => setView('floor')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 44, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', marginLeft: chips.length === 0 ? 'auto' : 0 }}>
+                  <Footprints size={13} /> Walk-in
+                </button>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Body */}
@@ -428,7 +485,7 @@ export function Reservations({ userRole, userId }: Props) {
         <>
           {/* Curva de ocupación — carga simultánea del día (pax/mesas vs capacidad) */}
           {buId && (
-            <OccupancyCurve buId={buId} reservations={reservations} capacity={capacity ?? null} guestMap={guestMap} />
+            <OccupancyCurve buId={buId} date={date} reservations={reservations} capacity={capacity ?? null} guestMap={guestMap} />
           )}
           {dayRows.length === 0 ? (
           <div style={{ textAlign: 'center', paddingTop: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
@@ -441,50 +498,134 @@ export function Reservations({ userRole, userId }: Props) {
             )}
           </div>
           ) : (
-          /* ── Día: agenda por hora de llegada — sin turnos, sin salida forzada ── */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {dayRows.map(r => {
+          /* ── Día operativo (HoH): agrupado por momento con acción contextual ── */
+          (() => {
+            const isToday = date === today
+            const now = new Date(nowTick)
+            const nowMin = now.getHours() * 60 + now.getMinutes()
+            const startMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0) }
+            const toLbl = (m: number) => `${String(Math.floor((m % 1440) / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+            const durOf = (r: Reservation) => r.duration_min
+              ?? ([...opsCfg.durations].sort((a, b) => a.max_pax - b.max_pax).find(d => d.max_pax >= r.party_size)?.minutes ?? 120)
+            const matchEx = (r: Reservation) => {
+              if (exFilter === 'unconfirmed') return r.status === 'requested'
+              if (exFilter === 'no_table') return ['requested', 'confirmed'].includes(r.status) && !r.table_id && !r.combo_id && (r.zone ?? '') !== 'Barra'
+              if (exFilter === 'deposit') return (r.notes ?? '').toLowerCase().includes('depósito requerido')
+              if (exFilter === 'proposal') return !!r.proposed_time
+              return true
+            }
+            type Ctx = 'now' | 'soon' | 'later' | 'done'
+            const ctxOf = (r: Reservation): Ctx => {
+              if (['completed', 'no_show', 'cancelled'].includes(r.status)) return 'done'
+              if (!isToday) return r.status === 'requested' ? 'soon' : 'later'
+              if (r.status === 'seated') return 'now'
+              const s = startMin(r.time_slot)
+              if (s <= nowMin + 20) return 'now'
+              if (s <= nowMin + 120) return 'soon'
+              return 'later'
+            }
+            const rows = dayRows.filter(matchEx)
+            const groups = ([
+              { key: 'now', label: 'Ahora' }, { key: 'soon', label: 'Próximas' },
+              { key: 'later', label: 'Más tarde' }, { key: 'done', label: 'Cerradas' },
+            ] as { key: Ctx; label: string }[])
+              .map(gr => ({ ...gr, rows: rows.filter(r => ctxOf(r) === gr.key) }))
+              .filter(gr => gr.rows.length > 0)
+
+            const chipStyle = (tone: 'amber' | 'red' | 'gold' | 'neutral'): React.CSSProperties => {
+              const c = tone === 'amber' ? 'var(--status-attention)' : tone === 'red' ? 'var(--status-risk)' : tone === 'gold' ? 'var(--accent)' : 'var(--text-tertiary)'
+              return { fontSize: 10, fontWeight: 700, color: c, background: `color-mix(in srgb, ${c} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${c} 40%, transparent)`, borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }
+            }
+
+            const renderRow = (r: Reservation, ctx: Ctx) => {
               const g = guestMap[r.guest_id]
               const meta = STATUS_META[r.status]
               const SrcIcon = SOURCE_ICON[r.source]
-              const terminal = !meta.next
+              const s = startMin(r.time_slot)
+              const notes = r.notes ?? ''
+              const pending = ['requested', 'confirmed'].includes(r.status)
+              const overdue = isToday && pending ? nowMin - s : 0
+              const holdLeft = opsCfg.holdMin - overdue
+              const sinMesa = opsCfg.hasTables && pending && !r.table_id && !r.combo_id && (r.zone ?? '') !== 'Barra'
+              const gname = g?.full_name ?? 'Cliente'
               return (
-                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '10px 12px', flexShrink: 0, opacity: r.status === 'cancelled' || r.status === 'no_show' ? 0.6 : 1 }}>
-                  <span className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', width: 46, flexShrink: 0, textAlign: 'center' }}>{r.time_slot}</span>
-                  <button onClick={() => setOpenGuestId(r.guest_id)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0, flex: 1, minWidth: 0, textAlign: 'left', minHeight: 44 }}>
-                    <Avatar name={g?.full_name ?? '?'} size={34} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{g?.full_name ?? 'Cliente'}</span>
-                        {(noShowMap[r.guest_id] ?? 0) >= 2 && (
-                          <span title={`${noShowMap[r.guest_id]} no-shows previos`} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 9, color: 'var(--status-attention)', fontFamily: 'var(--font-mono)' }}>
-                            <AlertTriangle size={10} /> {noShowMap[r.guest_id]}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                        <span className="num" style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700 }}>{r.party_size} pax</span>
-                        {r.proposed_time && (
-                          <span title="Cambio de horario propuesto — pendiente de confirmar con el cliente"
-                            style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--status-attention)', background: 'color-mix(in srgb, var(--status-attention) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 35%, transparent)', borderRadius: 4, padding: '1px 6px' }}>
-                            → {r.proposed_time} por confirmar
-                          </span>
-                        )}
-                        {r.zone && <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{r.zone}</span>}
-                        <SrcIcon size={11} style={{ color: 'var(--text-tertiary)' }} aria-label={SOURCE_LABEL[r.source]} />
-                        <span title={`Reservó: ${bookedBy(r)}`} style={{ fontSize: 10, color: bookedBy(r) === 'Concierge HOG' ? 'var(--accent)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>· {bookedBy(r)}</span>
-                        {r.notes && <span style={{ fontSize: 10, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>· {r.notes}</span>}
-                      </div>
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '8px 12px', flexShrink: 0, minHeight: 56, opacity: ctx === 'done' ? 0.55 : 1 }}>
+                  <span className="num" style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', width: 44, flexShrink: 0, textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{r.time_slot}</span>
+                  <button onClick={() => setOpenGuestId(r.guest_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flex: 1, minWidth: 0, textAlign: 'left', minHeight: 44 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{gname}</span>
+                      <span className="num" style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 700 }}>{r.party_size}p</span>
+                      {(noShowMap[r.guest_id] ?? 0) >= 2 && (
+                        <span title={`${noShowMap[r.guest_id]} no-shows previos`} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, color: 'var(--status-attention)', fontFamily: 'var(--font-mono)' }}>
+                          <AlertTriangle size={11} /> {noShowMap[r.guest_id]}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                      {sinMesa ? <span style={chipStyle('amber')}>Sin mesa</span>
+                        : r.zone ? <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{r.zone}</span> : null}
+                      {r.status === 'seated' && <span className="num" style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>sale ~{toLbl(s + durOf(r))}</span>}
+                      {isToday && pending && overdue > 0 && holdLeft > 0 && (
+                        <span style={chipStyle('amber')}>No-show en {holdLeft} min</span>
+                      )}
+                      {r.proposed_time && <span style={chipStyle('amber')}>→ {r.proposed_time} por confirmar</span>}
+                      {notes.toLowerCase().includes('depósito requerido') && <span style={chipStyle('amber')}>Depósito pendiente</span>}
+                      {(g?.tags ?? []).some(t => t.toLowerCase() === 'vip') && <span style={chipStyle('gold')}>VIP</span>}
+                      {/\bPR\b/.test(notes) && <span style={chipStyle('neutral')}>PR</span>}
+                      {/alerg/i.test(notes) && <span style={chipStyle('red')}>Alergia</span>}
+                      <SrcIcon size={12} style={{ color: 'var(--text-tertiary)' }} aria-label={SOURCE_LABEL[r.source]} />
+                      {ctx !== 'now' && notes && !notes.toLowerCase().includes('depósito requerido') && (
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>{notes}</span>
+                      )}
                     </div>
                   </button>
-                  <StatusBadgeV2 tone={meta.tone} label={meta.label} />
-                  {canWrite && !terminal && meta.next && (
-                    <button onClick={() => setStatus(r, meta.next!)}
+                  {(ctx === 'later' || ctx === 'done') && <StatusBadgeV2 tone={meta.tone} label={meta.label} />}
+                  {/* Acción contextual: la correcta en el momento correcto */}
+                  {canWrite && ctx === 'now' && pending && (
+                    isToday && overdue > opsCfg.holdMin ? (
+                      <>
+                        <button onClick={() => { if (window.confirm(`¿Marcar no-show a ${gname} (${r.party_size} pax, ${r.time_slot})?`)) setStatus(r, 'no_show') }}
+                          style={{ minHeight: 44, padding: '0 12px', borderRadius: 999, border: 'none', background: 'color-mix(in srgb, var(--status-risk) 18%, transparent)', color: 'var(--status-risk)', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          No-show
+                        </button>
+                        <button onClick={async () => {
+                          const nt = toLbl(s + 10)
+                          const { error } = await supabase.from('reservations').update({ time_slot: nt }).eq('id', r.id)
+                          if (error) { showToast(`No se pudo: ${error.message}`, 'error'); return }
+                          logActivity('reservation_updated', 'reservation', r.id, { guest: gname, antes: r.time_slot, ahora: nt, via: 'gracia_10min' })
+                          load()
+                        }}
+                          style={{ minHeight: 44, padding: '0 12px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          +10 min
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => { if (window.confirm(`¿Sentar a ${gname}, ${r.party_size} pax?`)) setStatus(r, 'seated') }}
+                        style={{ minHeight: 44, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        Sentar
+                      </button>
+                    )
+                  )}
+                  {canWrite && ctx === 'now' && r.status === 'seated' && (
+                    <button onClick={() => setStatus(r, 'completed')}
                       style={{ minHeight: 44, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {meta.nextLabel}
+                      Completar
                     </button>
                   )}
-                  {canWrite && !terminal && (
+                  {canWrite && ctx === 'soon' && (
+                    r.status === 'requested' ? (
+                      <button onClick={() => setStatus(r, 'confirmed')}
+                        style={{ minHeight: 44, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        Confirmar
+                      </button>
+                    ) : g?.phone ? (
+                      <a href={`tel:${g.phone}`} title={`Llamar a ${gname}`}
+                        style={{ width: 44, height: 44, borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                        <Phone size={16} />
+                      </a>
+                    ) : null
+                  )}
+                  {canWrite && ctx !== 'done' && (
                     <button onClick={() => { setMenuRes(r); setCancelReason('') }} aria-label="Más acciones"
                       style={{ width: 44, height: 44, borderRadius: 'var(--radius-sm)', border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <MoreHorizontal size={16} />
@@ -492,8 +633,29 @@ export function Reservations({ userRole, userId }: Props) {
                   )}
                 </div>
               )
-            })}
-          </div>
+            }
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {exFilter !== 'all' && (
+                  <button onClick={() => setExFilter('all')}
+                    style={{ alignSelf: 'flex-start', minHeight: 36, padding: '0 12px', borderRadius: 999, border: '1px solid var(--status-attention)', background: 'color-mix(in srgb, var(--status-attention) 12%, transparent)', color: 'var(--status-attention)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    Filtro activo · mostrar todas ×
+                  </button>
+                )}
+                {groups.map(gr => (
+                  <div key={gr.key}>
+                    <div style={{ position: 'sticky', top: -12, zIndex: 2, background: 'var(--bg-base)', padding: '8px 0 6px', fontSize: 11, fontWeight: 800, color: gr.key === 'now' ? 'var(--text-primary)' : 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
+                      {gr.label} · {gr.rows.length}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {gr.rows.map(r => renderRow(r, gr.key))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()
           )}
         </>
         )}
@@ -509,6 +671,10 @@ export function Reservations({ userRole, userId }: Props) {
               </h3>
               <button onClick={() => setMenuRes(null)} aria-label="Cerrar" style={{ width: 36, height: 36, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
             </div>
+            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '0 0 10px' }}>
+              {menuRes.party_size} pax · {SOURCE_LABEL[menuRes.source]} · Reservó: {bookedBy(menuRes)}
+              {menuRes.notes ? ` · ${menuRes.notes}` : ''}
+            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {menuRes.proposed_time && (
                 <div style={{ background: 'color-mix(in srgb, var(--status-attention) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 30%, transparent)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
@@ -538,6 +704,12 @@ export function Reservations({ userRole, userId }: Props) {
                     </button>
                   </div>
                 </div>
+              )}
+              {['requested', 'confirmed'].includes(menuRes.status) && (
+                <button onClick={() => { if (window.confirm(`¿Sentar a ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'}, ${menuRes.party_size} pax?`)) setStatus(menuRes, 'seated') }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 48, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  <Check size={15} /> Sentar ya (llegada anticipada)
+                </button>
               )}
               {menuRes.party_size >= eventPaxThreshold && (
                 <button onClick={() => convertToDeal(menuRes)}

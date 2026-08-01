@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useIsMobile } from '../../hooks/useIsMobile'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CURVA DE OCUPACIÓN — carga simultánea del día en slots de 30 min.
@@ -30,17 +31,27 @@ const LIVE = ['requested', 'confirmed', 'seated']
 const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0) }
 const toLabel = (m: number) => `${String(Math.floor((m % 1440) / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
 
-export function OccupancyCurve({ buId, reservations, capacity, guestMap }: {
+export function OccupancyCurve({ buId, date, reservations, capacity, guestMap }: {
   buId: string
+  date?: string
   reservations: ResLite[]
   capacity: CapacityRow | null
   guestMap: Record<string, { full_name: string }>
 }) {
+  const isMobile = useIsMobile()
   const [tables, setTables] = useState<{ id: string; name: string; max_pax: number; zone_id: string; active: boolean }[]>([])
   const [zones, setZones] = useState<{ id: string; kind: string; status: string; bar_seats: number }[]>([])
   const [settings, setSettings] = useState<{ durations: { max_pax: number; minutes: number }[]; buffer_minutes: number; pacing_max_pax: number } | null>(null)
   const [mode, setMode] = useState<'pax' | 'mesas'>('pax')
   const [selSlot, setSelSlot] = useState<number | null>(null)
+  // En teléfono inicia colapsada: una línea con el pico; expandir a demanda
+  const [collapsed, setCollapsed] = useState<boolean | null>(null)
+  useEffect(() => { setCollapsed(prev => prev === null ? isMobile : prev) }, [isMobile])
+  const [nowTick, setNowTick] = useState(Date.now())
+  useEffect(() => {
+    const iv = setInterval(() => setNowTick(Date.now()), 60_000)
+    return () => clearInterval(iv)
+  }, [])
 
   useEffect(() => {
     Promise.all([
@@ -115,10 +126,41 @@ export function OccupancyCurve({ buId, reservations, capacity, guestMap }: {
   const limit = mode === 'pax' ? aforo : mesasDisp
   const values = curve.slots.map(s => mode === 'pax' ? s.pax : s.mesas)
   const maxScale = Math.max(...values, limit || 0, 1) * 1.15
-  const overSlots = curve.slots.filter((_s, i) => limit > 0 && values[i] > limit)
+  // El color lo determina el conflicto de MESAS (detecta la sobreventa real),
+  // aunque la altura muestre pax. Sin piso configurado, aplica el aforo en pax.
+  const isOver = (s: { pax: number; mesas: number }) =>
+    mesasDisp > 0 ? s.mesas > mesasDisp : (aforo > 0 && s.pax > aforo)
+  const overSlots = curve.slots.filter(s => isOver(s))
+
+  // Línea de "ahora": lo pasado se atenúa — el foco es lo que viene
+  const today = (() => { const d = new Date(nowTick); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })()
+  const isToday = !date || date === today
+  const nowD = new Date(nowTick)
+  let nowMin = nowD.getHours() * 60 + nowD.getMinutes()
+  if (nowMin < curve.openM) nowMin += 1440
+  const nowInWindow = isToday && nowMin >= curve.openM && nowMin < curve.closeM
+
+  // Pico del día (para el resumen colapsado)
+  const peakIdx = values.reduce((best, v, i) => v > values[best] ? i : best, 0)
+  const peak = curve.slots[peakIdx]
+  const peakOver = isOver(peak)
 
   const sel = selSlot != null ? curve.slots.find(s => s.m === selSlot) : null
   const selRes = sel ? reservations.filter(r => sel.ids.includes(r.id)).sort((a, b) => a.time_slot.localeCompare(b.time_slot)) : []
+
+  // Colapsada (teléfono): resumen de una línea con el pico
+  if (collapsed) {
+    return (
+      <button onClick={() => setCollapsed(false)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'var(--bg-surface)', border: `1px solid ${peakOver ? 'color-mix(in srgb, var(--status-risk) 40%, transparent)' : 'var(--border-subtle)'}`, borderRadius: 'var(--radius-sm)', padding: '10px 12px', marginBottom: 12, cursor: 'pointer', minHeight: 44 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: peakOver ? 'var(--status-risk)' : 'var(--text-secondary)' }}>
+          Pico {mode === 'pax' ? `${peak.pax}/${aforo || '—'} pax` : `${peak.mesas}/${mesasDisp} mesas`} a las {toLabel(peak.m)}
+          {peakOver && ' — sobreventa'}
+        </span>
+        <ChevronDown size={15} style={{ marginLeft: 'auto', color: 'var(--text-tertiary)' }} />
+      </button>
+    )
+  }
 
   return (
     <div style={{ marginBottom: 12 }}>
@@ -128,11 +170,11 @@ export function OccupancyCurve({ buId, reservations, capacity, guestMap }: {
           style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'color-mix(in srgb, var(--status-risk) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--status-risk) 35%, transparent)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', marginBottom: 8, cursor: 'pointer' }}>
           <AlertTriangle size={14} style={{ color: 'var(--status-risk)', flexShrink: 0 }} />
           <span style={{ fontSize: 12, color: 'var(--status-risk)', fontWeight: 700 }}>
-            Sobreventa entre {toLabel(overSlots[0].m)} y {toLabel(overSlots[overSlots.length - 1].m + 30)}:{' '}
-            {mode === 'pax'
-              ? `${Math.max(...overSlots.map(s => s.pax))} pax simultáneos, aforo ${aforo}`
-              : `${Math.max(...overSlots.map(s => s.mesas))} mesas requeridas, ${mesasDisp} disponibles`}
-            {' '}— toca para ver las reservas
+            Sobreventa {toLabel(overSlots[0].m)}–{toLabel(overSlots[overSlots.length - 1].m + 30)}
+            {mesasDisp > 0
+              ? ` · faltan ${Math.max(...overSlots.map(s => s.mesas)) - mesasDisp} mesas`
+              : ` · ${Math.max(...overSlots.map(s => s.pax))} pax, aforo ${aforo}`}
+            {' '}· Ver {[...new Set(overSlots.flatMap(s => s.ids))].length} reservas en conflicto
           </span>
         </button>
       )}
@@ -141,6 +183,10 @@ export function OccupancyCurve({ buId, reservations, capacity, guestMap }: {
         <span style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>
           Curva de ocupación · {mode === 'pax' ? `aforo ${aforo}` : `${mesasDisp} mesas`}
         </span>
+        <button onClick={() => setCollapsed(true)} aria-label="Colapsar curva"
+          style={{ width: 32, height: 32, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
+          <ChevronUp size={14} />
+        </button>
         {mesasDisp > 0 && (
           <div style={{ display: 'flex', gap: 2, background: 'var(--bg-elevated)', borderRadius: 999, padding: 2 }}>
             {(['pax', 'mesas'] as const).map(mo => (
@@ -160,20 +206,26 @@ export function OccupancyCurve({ buId, reservations, capacity, guestMap }: {
             <span style={{ position: 'absolute', right: 0, top: -14, fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{limit}</span>
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 96 + 18, overflowX: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 96 + 34, overflowX: 'auto' }}>
           {curve.slots.map((s, i) => {
             const v = values[i]
-            const over = limit > 0 && v > limit
+            // Rojo por conflicto de MESAS (o pax sin piso); ámbar por pacing
+            const over = isOver(s)
             const pacingHit = pacing > 0 && s.llegadas > pacing
-            const color = over ? 'var(--status-risk)' : pacingHit ? 'var(--status-attention)' : 'var(--accent)'
+            const color = over ? 'var(--status-risk)' : pacingHit ? 'var(--status-attention)' : 'color-mix(in srgb, var(--accent) 65%, var(--text-tertiary))'
             const isSel = selSlot === s.m
+            const isPast = nowInWindow && s.m + 30 <= nowMin
+            const isNowSlot = nowInWindow && nowMin >= s.m && nowMin < s.m + 30
             return (
               <button key={s.m} onClick={() => setSelSlot(isSel ? null : s.m)}
                 title={`${toLabel(s.m)} · ${s.pax} pax · ${s.mesas} mesas · ${s.barra} en barra${pacingHit ? ` · llegadas ${s.llegadas} > pacing ${pacing}` : ''}`}
-                style={{ flex: '1 0 22px', minWidth: 22, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 2, background: 'none', border: 'none', cursor: 'pointer', padding: 0, height: '100%' }}>
-                <span className="num" style={{ fontSize: 8, color: v ? 'var(--text-secondary)' : 'transparent', fontFamily: 'var(--font-mono)' }}>{v || ''}</span>
+                style={{ flex: '1 0 26px', minWidth: 26, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 2, background: 'none', border: 'none', borderLeft: isNowSlot ? '2px solid var(--text-primary)' : '2px solid transparent', cursor: 'pointer', padding: 0, height: '100%', opacity: isPast ? 0.4 : 1 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: isNowSlot ? 'var(--text-primary)' : 'transparent', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  {isNowSlot ? `▾ ${toLabel(nowMin)}` : '·'}
+                </span>
+                <span className="num" style={{ fontSize: 13, fontWeight: 700, color: v ? (over ? 'var(--status-risk)' : 'var(--text-secondary)') : 'transparent', fontFamily: 'var(--font-mono)' }}>{v || ''}</span>
                 <div style={{ width: '100%', height: `${(v / maxScale) * 96}px`, minHeight: v > 0 ? 3 : 1, borderRadius: '3px 3px 0 0', background: v > 0 ? color : 'var(--bg-elevated)', outline: isSel ? '2px solid var(--text-primary)' : 'none' }} />
-                <span style={{ fontSize: 7.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', transform: 'none', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                   {s.m % 60 === 0 ? toLabel(s.m) : ''}
                 </span>
               </button>
