@@ -38,11 +38,14 @@ export function PublicReservation({ code }: { code: string }) {
   const [sending, setSending] = useState(false)
   const [formErr, setFormErr] = useState<string | null>(null)
   const [done, setDone] = useState<Done | null>(null)
-  // Motor por mesas: horarios reales del venue para la fecha y tamaño de grupo
+  // Horarios con lugar para la fecha y grupo (motor de mesas O aforo
+  // simultáneo). 'free' = venue sin aforo/horario → hora libre.
   const [slots, setSlots] = useState<string[] | null>(null)
+  const [slotsMode, setSlotsMode] = useState<'free' | 'slots'>('free')
   const [slotsLoading, setSlotsLoading] = useState(false)
 
   const tableEngine = info?.engine === 'tables'
+  const usePicker = slotsMode === 'slots'
 
   // El Edge Function responde con status != 2xx cuando rechaza (cupo lleno,
   // datos inválidos) — supabase-js lo entrega como FunctionsHttpError y el
@@ -61,19 +64,22 @@ export function PublicReservation({ code }: { code: string }) {
     return { errMsg: 'No se pudo enviar. Intenta de nuevo.' }
   }
   useEffect(() => {
-    if (!tableEngine || !fecha || !(parseInt(pax, 10) > 0)) { setSlots(null); return }
+    if (!fecha || !(parseInt(pax, 10) > 0) || !info?.supported) { setSlots(null); setSlotsMode('free'); return }
     setSlotsLoading(true)
     const t = setTimeout(() => {
       supabase.functions.invoke('public-reservation', { body: { action: 'slots', code, fecha, pax } })
-        .then(({ data }) => {
-          const list = (data?.slots ?? []) as string[]
+        .then(({ data, error }) => {
+          // Function viejo sin 'slots' o modo libre → hora libre (degrada bien)
+          if (error || !data || data.mode === 'free') { setSlots(null); setSlotsMode('free'); setSlotsLoading(false); return }
+          const list = (data.slots ?? []) as string[]
+          setSlotsMode('slots')
           setSlots(list)
           setSlotsLoading(false)
           setHorario(h => list.includes(h) ? h : (list[0] ?? ''))
         })
     }, 250)
     return () => clearTimeout(t)
-  }, [tableEngine, code, fecha, pax])
+  }, [code, fecha, pax, info?.supported])
 
   useEffect(() => {
     supabase.functions.invoke('public-reservation', { body: { action: 'info', code } })
@@ -88,7 +94,7 @@ export function PublicReservation({ code }: { code: string }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (tableEngine && (!horario || !(slots ?? []).includes(horario))) {
+    if (usePicker && (!horario || !(slots ?? []).includes(horario))) {
       setFormErr('Elige uno de los horarios disponibles.'); return
     }
     setFormErr(null); setSending(true)
@@ -153,7 +159,7 @@ export function PublicReservation({ code }: { code: string }) {
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}><span style={lbl}>Fecha</span>
               <input type="date" value={fecha} min={hoyISO} onChange={e => setFecha(e.target.value)} style={inp} required /></div>
-            {!tableEngine && (
+            {!usePicker && (
               <div style={{ flex: 1 }}><span style={lbl}>Hora de llegada</span>
                 <input type="time" value={horario} onChange={e => setHorario(e.target.value)} style={inp} required /></div>
             )}
@@ -166,8 +172,8 @@ export function PublicReservation({ code }: { code: string }) {
               </p>
             )}
           </div>
-          {tableEngine && (
-            <div><span style={lbl}>Hora de llegada</span>
+          {(usePicker || slotsLoading) && (
+            <div><span style={lbl}>Hora de llegada — horarios con lugar</span>
               {!fecha ? (
                 <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>Elige primero la fecha.</p>
               ) : slotsLoading ? (

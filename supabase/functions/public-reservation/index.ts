@@ -40,6 +40,37 @@ function normalizePhoneMX(raw: string): string | null {
   return /^52\d{10}$/.test(digits) ? '+' + digits : null
 }
 
+// Aforo simultáneo (modelo de rotación): pax presentes en una ventana de
+// tiempo con las duraciones configuradas — la misma regla que app y bot.
+// deno-lint-ignore no-explicit-any
+async function cargaSimultanea(admin: any, buId: string, fecha: string) {
+  const dow = new Date(fecha + 'T00:00:00').getDay()
+  const [{ data: cap }, { data: res }, { data: st }] = await Promise.all([
+    admin.from('venue_capacity').select('max_pax, open_time, close_time').eq('bu_id', buId).eq('day_of_week', dow).eq('active', true).maybeSingle(),
+    admin.from('reservations').select('time_slot, party_size, status, duration_min').eq('bu_id', buId).eq('date', fecha),
+    admin.from('venue_reservation_settings').select('durations').eq('bu_id', buId).maybeSingle(),
+  ])
+  const durs = (st?.durations ?? []) as { max_pax: number; minutes: number }[]
+  const durFor = (p: number) => [...durs].sort((a, b) => a.max_pax - b.max_pax).find(d => d.max_pax >= p)?.minutes ?? 120
+  const toMin = (t: string) => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0) }
+  const openM = cap?.open_time ? toMin(cap.open_time) : 12 * 60
+  let closeM = cap?.close_time ? toMin(cap.close_time) : 24 * 60
+  if (closeM <= openM) closeM += 1440
+  const norm = (t: string) => { let v = toMin(t); if (v < openM) v += 1440; return v }
+  // deno-lint-ignore no-explicit-any
+  const vivas = ((res ?? []) as any[]).filter(r => ['requested', 'confirmed', 'seated'].includes(r.status))
+  const enVentana = (t0: number, dur: number) => {
+    let s = 0
+    for (const r of vivas) {
+      const s0 = norm(r.time_slot), s1 = s0 + (r.duration_min ?? durFor(r.party_size))
+      if (s0 < t0 + dur && s1 > t0) s += r.party_size
+    }
+    return s
+  }
+  const lbl = (m: number) => `${String(Math.floor((m % 1440) / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+  return { maxPax: cap?.max_pax ?? null, hasHours: !!(cap?.open_time && cap?.close_time), openM, closeM, durFor, norm, enVentana, lbl }
+}
+
 // deno-lint-ignore no-explicit-any
 async function notifySlack(admin: any, text: string) {
   const { data } = await admin.from('app_settings').select('value').eq('key', 'slack_webhook').maybeSingle()
@@ -86,14 +117,26 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    // ── SLOTS: horarios disponibles del motor por mesas ────────────────────
+    // ── SLOTS: horarios CON LUGAR para la fecha y grupo ────────────────────
+    // Motor por mesas → fn_available_slots. Sin motor → aforo simultáneo:
+    // se ofrecen las horas donde el grupo cabe, para que el cliente no
+    // adivine una hora que luego rebota. Sin aforo/horario → hora libre.
     if (body.action === 'slots') {
-      if (!tableEngine) return json({ ok: true, engine: 'night', slots: [] })
       const fecha = String(body.fecha ?? '').trim()
       const pax = parseInt(String(body.pax ?? ''), 10)
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !(pax > 0)) return json({ ok: true, slots: [] })
-      const { data: slots } = await admin.rpc('fn_available_slots', { p_bu: bu.id, p_date: fecha, p_pax: pax, p_online: true })
-      return json({ ok: true, engine: 'tables', slots: (slots ?? []).map((s: { slot: string }) => s.slot) })
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !(pax > 0)) return json({ ok: true, mode: 'free', slots: [] })
+      if (tableEngine) {
+        const { data: slots } = await admin.rpc('fn_available_slots', { p_bu: bu.id, p_date: fecha, p_pax: pax, p_online: true })
+        return json({ ok: true, mode: 'tables', slots: (slots ?? []).map((s: { slot: string }) => s.slot) })
+      }
+      const carga = await cargaSimultanea(admin, bu.id, fecha)
+      if (carga.maxPax == null || !carga.hasHours) return json({ ok: true, mode: 'free', slots: [] })
+      const dur = carga.durFor(pax)
+      const slots: string[] = []
+      for (let m = carga.openM; m <= carga.closeM - dur; m += 30) {
+        if (carga.enVentana(m, dur) + pax <= carga.maxPax) slots.push(carga.lbl(m))
+      }
+      return json({ ok: true, mode: 'night', slots })
     }
 
     // ── BOOK: crear la reserva ─────────────────────────────────────────────
@@ -129,27 +172,18 @@ Deno.serve(async (req: Request) => {
 
       // Detector de horario — aforo SIMULTÁNEO en [hora, hora+duración): la
       // gente rota, así que el tope no es acumulado del día. max_pax = aforo.
-      const dow = new Date(fecha + 'T00:00:00').getDay()
-      const [{ data: cap }, { data: resNoche }, { data: setDur }] = await Promise.all([
-        admin.from('venue_capacity').select('max_pax, open_time, close_time').eq('bu_id', bu.id).eq('day_of_week', dow).eq('active', true).maybeSingle(),
-        admin.from('reservations').select('time_slot, party_size, status, duration_min').eq('bu_id', bu.id).eq('date', fecha),
-        admin.from('venue_reservation_settings').select('durations').eq('bu_id', bu.id).maybeSingle(),
-      ])
-      if (cap?.max_pax) {
-        const durs = (setDur?.durations ?? []) as { max_pax: number; minutes: number }[]
-        const durFor = (p: number) => [...durs].sort((a, b) => a.max_pax - b.max_pax).find(d => d.max_pax >= p)?.minutes ?? 120
-        const toMin = (t: string) => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0) }
-        const openM = cap.open_time ? toMin(cap.open_time) : 0
-        const norm = (t: string) => { let v = toMin(t); if (cap.open_time && v < openM) v += 1440; return v }
-        const t0 = norm(hora), t1 = t0 + durFor(pax)
-        let simult = 0
-        for (const r of resNoche ?? []) {
-          if (!['requested', 'confirmed', 'seated'].includes(r.status)) continue
-          const s0 = norm(r.time_slot), s1 = s0 + (r.duration_min ?? durFor(r.party_size))
-          if (s0 < t1 && s1 > t0) simult += r.party_size
-        }
-        if (simult + pax > cap.max_pax) {
-          return json({ error: 'A esa hora ya estamos llenos. Prueba otro horario 🙏', full: true }, 409)
+      const carga = await cargaSimultanea(admin, bu.id, fecha)
+      if (carga.maxPax != null) {
+        const dur = carga.durFor(pax)
+        const t0 = carga.norm(hora)
+        if (carga.enVentana(t0, dur) + pax > carga.maxPax) {
+          // Sugerir en el error las 3 horas cercanas con lugar
+          const cands: number[] = []
+          for (let m = carga.openM; m <= carga.closeM - dur; m += 30) {
+            if (carga.enVentana(m, dur) + pax <= carga.maxPax) cands.push(m)
+          }
+          const sug = cands.sort((a, b) => Math.abs(a - t0) - Math.abs(b - t0)).slice(0, 3).sort((a, b) => a - b).map(carga.lbl)
+          return json({ error: `A esa hora ya estamos llenos.${sug.length ? ` Tenemos lugar a las ${sug.join(', ')} 🙏` : ' Prueba otro horario 🙏'}`, full: true }, 409)
         }
       }
 

@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.50.1"
+export const APP_VERSION = "2.51.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.51.0",
+    date: "2026-08-01",
+    type: "MINOR",
+    changes: [
+      "Link público: ahora ofrece HORARIOS CON LUGAR como chips para cualquier venue con aforo y horario configurados (no solo con motor de mesas) — el cliente elige de lo disponible en vez de adivinar una hora que rebota",
+      "Si el horario elegido se llenó justo antes de enviar, el error sugiere las 3 horas cercanas con lugar",
+      "Venues sin aforo/horario configurado siguen con hora libre (degrada bien, incluso con el function viejo desplegado)",
+    ]
+  },
   {
     version: "2.50.1",
     date: "2026-08-01",
