@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.48.1"
+export const APP_VERSION = "2.48.2"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.48.2",
+    date: "2026-07-31",
+    type: "PATCH",
+    changes: [
+      "Apps por usuario ahora aplica igual a HoH: con apps asignadas en Usuarios, la barra inferior de la tablet se arma desde esas apps (máx 4 + Perfil) y el aterrizaje inicial cae en la primera app asignada",
+      "Sin asignación, HoH conserva su default: Mi turno · Reportar · Reservas · Perfil",
+    ]
+  },
   {
     version: "2.48.1",
     date: "2026-07-31",

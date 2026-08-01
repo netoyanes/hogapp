@@ -1,4 +1,4 @@
-import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, CalendarDays, ClipboardCheck, Camera } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, CalendarDays, ClipboardCheck, Camera, Megaphone, BarChart3, Target, FileText } from 'lucide-react'
 import { STR } from '../../lib/strings'
 
 interface Props {
@@ -34,13 +34,32 @@ const HOH_SLOTS = [
   { id: 'profile',   label: STR.nav.profile, icon: UserCircle },
 ]
 
+// Catálogo de slots para armar el bottom nav desde las apps asignadas
+// (user_apps): mismo orden de prioridad para todos los roles, HoH incluido.
+const SLOT_CATALOG = [
+  { id: 'casa',      label: 'Mi turno',          icon: ClipboardCheck },
+  { id: 'reportar',  label: 'Reportar',          icon: Camera },
+  { id: 'concierge', label: STR.nav.concierge,   icon: Shell },
+  { id: 'dashboard', label: STR.nav.dashboard,   icon: LayoutDashboard },
+  { id: 'tasks',     label: STR.nav.tasks,       icon: CheckSquare },
+  { id: 'crm',       label: STR.nav.crm,         icon: Handshake },
+  { id: 'events',    label: STR.nav.events,      icon: CalendarDays },
+  { id: 'objectives', label: STR.nav.objectives, icon: Target },
+  { id: 'content',   label: STR.nav.content,     icon: Megaphone },
+  { id: 'revenue',   label: STR.nav.revenue,     icon: BarChart3 },
+  { id: 'reports',   label: STR.nav.reports,     icon: FileText },
+]
+
 export function BottomNav({ activeView, onNavigate, userRole, userApps }: Props) {
   let items = userRole === 'MASTER' ? MASTER_SLOTS
     : userRole === 'HEART_OF_HOUSE' ? HOH_SLOTS
     : TEAM_SLOTS
-  // Apps por usuario: el bottom nav solo muestra lo que el usuario tiene asignado
+  // Apps por usuario: con asignación explícita, el bottom nav se ARMA desde
+  // esas apps (máx 4 + Perfil); el resto queda en el sheet "Más".
   if (userRole !== 'MASTER' && userApps && userApps.size > 0) {
-    items = items.filter(i => i.id === 'profile' || userApps.has(i.id) || (i.id === 'reportar' && userApps.has('casa')))
+    const assigned = SLOT_CATALOG.filter(s =>
+      userApps.has(s.id) || (s.id === 'reportar' && userRole === 'HEART_OF_HOUSE' && userApps.has('casa')))
+    items = [...assigned.slice(0, 4), { id: 'profile', label: STR.nav.profile, icon: UserCircle }]
   }
 
   return (
