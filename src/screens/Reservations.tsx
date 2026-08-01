@@ -119,6 +119,7 @@ export function Reservations({ userRole, userId }: Props) {
   const [capOpen, setCapOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [floorOpen, setFloorOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   // Vista operativa (HoH): filtro de excepciones + reloj + config del venue
   const [exFilter, setExFilter] = useState<'all' | 'unconfirmed' | 'no_table' | 'deposit' | 'proposal'>('all')
   const [opsCfg, setOpsCfg] = useState<{ hasTables: boolean; holdMin: number; durations: { max_pax: number; minutes: number }[] }>({ hasTables: false, holdMin: 15, durations: [] })
@@ -385,6 +386,12 @@ export function Reservations({ userRole, userId }: Props) {
             <button onClick={() => setCapOpen(true)} title="Configurar capacidad" aria-label="Configurar capacidad"
               style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
               <Settings2 size={17} />
+            </button>
+          )}
+          {canWrite && (
+            <button onClick={() => setSearchOpen(true)} title="Buscar reservas (todos los venues y fechas)" aria-label="Buscar reservas"
+              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <Search size={17} />
             </button>
           )}
           {canWrite && (
@@ -864,6 +871,15 @@ export function Reservations({ userRole, userId }: Props) {
           isMobile={isMobile} onClose={() => setShareOpen(false)} />
       )}
 
+      {searchOpen && (
+        <ReservationSearchSheet
+          buList={allowedBuList}
+          isMobile={isMobile}
+          onClose={() => setSearchOpen(false)}
+          onPick={r => { setSearchOpen(false); setBuId(r.bu_id); setDate(r.date); setView('day') }}
+        />
+      )}
+
       {creating && buId && (
         <CreateReservationSheet
           buId={buId}
@@ -1241,6 +1257,108 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
 // y lo copia; el cliente reserva en ?reservar=<CÓDIGO> respetando las reglas
 // del venue (cupo, apartado) vía el Edge Function public-reservation.
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Buscador general de reservas: todos los venues permitidos y todas las
+// fechas, por nombre, teléfono o texto en notas. Tap → salta al día.
+// ─────────────────────────────────────────────────────────────────────────────
+function ReservationSearchSheet({ buList, isMobile, onClose, onPick }: {
+  buList: { id: string; code: string; name: string }[]
+  isMobile: boolean
+  onClose: () => void
+  onPick: (r: { bu_id: string; date: string }) => void
+}) {
+  const [q, setQ] = useState('')
+  const [rows, setRows] = useState<(Reservation & { guest_name: string; guest_phone: string })[]>([])
+  const [searching, setSearching] = useState(false)
+  const codeOf = (id: string) => buList.find(b => b.id === id)?.code ?? '?'
+
+  useEffect(() => {
+    if (q.trim().length < 2) { setRows([]); setSearching(false); return }
+    setSearching(true)
+    const t = setTimeout(async () => {
+      const term = q.trim()
+      const digits = term.replace(/\D/g, '')
+      const buIds = buList.map(b => b.id)
+      // 1) clientes que coinciden por teléfono o nombre
+      let gq = supabase.from('guests').select('id, full_name, phone').limit(25)
+      gq = digits.length >= 3 ? gq.ilike('phone', `%${digits}%`) : gq.ilike('full_name', `%${term}%`)
+      const { data: gs } = await gq
+      const gMap: Record<string, { id: string; full_name: string; phone: string }> = Object.fromEntries((gs ?? []).map(g => [g.id, g]))
+      // 2) reservas de esos clientes + reservas cuyo texto en notas coincide
+      const [byGuest, byNotes] = await Promise.all([
+        (gs ?? []).length
+          ? supabase.from('reservations').select('*').in('guest_id', (gs ?? []).map(g => g.id)).in('bu_id', buIds).order('date', { ascending: false }).limit(50)
+          : Promise.resolve({ data: [] as Reservation[] }),
+        digits.length >= 3
+          ? Promise.resolve({ data: [] as Reservation[] })
+          : supabase.from('reservations').select('*').ilike('notes', `%${term}%`).in('bu_id', buIds).order('date', { ascending: false }).limit(25),
+      ])
+      const merged: Record<string, Reservation> = {}
+      for (const r of [...((byGuest.data ?? []) as Reservation[]), ...((byNotes.data ?? []) as Reservation[])]) merged[r.id] = r
+      const missing = [...new Set(Object.values(merged).map(r => r.guest_id).filter(id => !gMap[id]))]
+      if (missing.length) {
+        const { data: extra } = await supabase.from('guests').select('id, full_name, phone').in('id', missing)
+        for (const g of extra ?? []) gMap[g.id] = g
+      }
+      setRows(Object.values(merged)
+        .sort((a, b) => b.date.localeCompare(a.date) || a.time_slot.localeCompare(b.time_slot))
+        .slice(0, 50)
+        .map(r => ({ ...r, guest_name: gMap[r.guest_id]?.full_name ?? 'Cliente', guest_phone: gMap[r.guest_id]?.phone ?? '' })))
+      setSearching(false)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <Sheet open onClose={onClose} isMobile={isMobile} width={480}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-3) 0' }}>
+          <h2 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>Buscar reservas</h2>
+          <button onClick={onClose} aria-label="Cerrar" style={{ width: 36, height: 36, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
+        </div>
+        <div style={{ position: 'relative', marginBottom: 10 }}>
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+          <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Nombre, teléfono o texto en notas…"
+            style={{ width: '100%', minHeight: 46, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '0 12px 0 34px', fontSize: 14, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+        </div>
+        <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '0 0 10px' }}>Busca en todos tus venues y todas las fechas.</p>
+        {searching ? (
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 16 }}>Buscando…</p>
+        ) : q.trim().length >= 2 && rows.length === 0 ? (
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 16 }}>Sin resultados para “{q.trim()}”.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {rows.map(r => {
+              const meta = STATUS_META[r.status]
+              return (
+                <button key={r.id} onClick={() => onPick(r)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '10px 12px', cursor: 'pointer', textAlign: 'left', minHeight: 56 }}>
+                  <div style={{ textAlign: 'center', flexShrink: 0, width: 54 }}>
+                    <div className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                      {new Date(r.date + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+                    </div>
+                    <div className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{r.time_slot}</div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.guest_name}</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--accent)', background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>{codeOf(r.bu_id)}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.party_size} pax{r.guest_phone ? ` · ${formatPhone(r.guest_phone)}` : ''}{r.notes ? ` · ${r.notes}` : ''}
+                    </div>
+                  </div>
+                  <StatusBadgeV2 tone={meta.tone} label={meta.label} />
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </Sheet>
+  )
+}
+
 function ShareBookingSheet({ buId, code, venueName, isMobile, onClose }: {
   buId: string; code: string; venueName: string; isMobile: boolean; onClose: () => void
 }) {
