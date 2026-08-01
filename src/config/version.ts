@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.49.3"
+export const APP_VERSION = "2.49.4"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.49.4",
+    date: "2026-08-01",
+    type: "PATCH",
+    changes: [
+      "Botones del panel de la reserva homologados: todos píldora de 50px, contenido centrado con icono — dorado guardar, verde sentar, rojo tenue no-show, contorno cancelar/reactivar",
+    ]
+  },
   {
     version: "2.49.3",
     date: "2026-08-01",
