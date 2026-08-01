@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.49.2"
+export const APP_VERSION = "2.49.3"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.49.3",
+    date: "2026-08-01",
+    type: "PATCH",
+    changes: [
+      "Botones de Sentar en verde con icono de silla (fila AHORA, panel de la reserva y walk-in del Piso) — se identifican al vistazo",
+    ]
+  },
   {
     version: "2.49.2",
     date: "2026-08-01",

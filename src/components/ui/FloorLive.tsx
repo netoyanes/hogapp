@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, Receipt, LogOut, Undo2, X, GripHorizontal } from 'lucide-react'
+import { Receipt, LogOut, Undo2, X, GripHorizontal, Armchair } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { showToast, StatusBadgeV2 } from '../v2'
 
@@ -228,8 +228,8 @@ export function FloorLive({ buId, canWrite, userId }: { buId: string; canWrite: 
           <input type="number" inputMode="numeric" min={1} value={wiPax} onChange={e => setWiPax(Math.max(1, Number(e.target.value)))} className="num" style={{ ...inp, width: 64, textAlign: 'center' }} />
         </div>
         <button onClick={() => seatWalkIn(t, barZone)}
-          style={{ ...actionBtn, background: 'var(--accent)', color: 'var(--on-accent)' }}>
-          <Plus size={14} /> Sentar walk-in
+          style={{ ...actionBtn, background: 'var(--status-healthy)', color: '#04210f', fontWeight: 800 }}>
+          <Armchair size={15} /> Sentar walk-in
         </button>
       </div>
     </>
