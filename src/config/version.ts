@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.48.3"
+export const APP_VERSION = "2.48.4"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.48.4",
+    date: "2026-07-31",
+    type: "PATCH",
+    changes: [
+      "Un solo panel al tocar la reserva: datos del cliente (nombre y teléfono editables, etiquetas, no-shows previos, acceso al perfil completo) + edición de la reserva + acciones, todo en la misma ventana",
+      "Un solo botón 'Guardar cambios (reserva y cliente)' aplica ambos",
+    ]
+  },
   {
     version: "2.48.3",
     date: "2026-07-31",
