@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.46.0"
+export const APP_VERSION = "2.47.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.47.0",
+    date: "2026-07-31",
+    type: "MINOR",
+    changes: [
+      "Curva de ocupación en Reservas (vista Día): barras de 30 min con carga simultánea usando las duraciones configuradas del venue — azul ok, rojo sobreventa, ámbar pacing de cocina excedido",
+      "Toggle Pax vs Mesas: 'mesas requeridas vs disponibles' detecta la sobreventa real; línea punteada con el aforo autocalculado del mobiliario",
+      "Banner de sobreventa anticipada con rango horario y detalle; tocar una barra lista las reservas activas en ese slot con hora estimada de salida",
+      "Duración por reserva (duration_min) — el motor por mesas la respeta sobre la duración por tamaño de grupo",
+      "Propuestas de cambio de horario: la reserva marca '→ HH:MM por confirmar' y el equipo aplica o descarta cuando el cliente responde",
+    ]
+  },
   {
     version: "2.46.0",
     date: "2026-07-31",

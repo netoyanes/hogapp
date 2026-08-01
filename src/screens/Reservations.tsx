@@ -11,6 +11,7 @@ import { GuestCreateSheet } from './Guests'
 import { CapacityEditor } from '../components/ui/CapacityEditor'
 import { FloorEditor } from '../components/ui/FloorEditor'
 import { FloorLive } from '../components/ui/FloorLive'
+import { OccupancyCurve } from '../components/ui/OccupancyCurve'
 import { KPITile, SegmentedControl, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +26,10 @@ interface Reservation {
   time_slot: string
   party_size: number
   zone: string | null
+  zone_id?: string | null
+  table_id?: string | null
+  duration_min?: number | null
+  proposed_time?: string | null
   status: ResStatus
   source: ResSource
   notes: string | null
@@ -35,30 +40,8 @@ interface Reservation {
 interface GuestLite { id: string; full_name: string; phone: string; tags: string[] }
 interface CapacityRow { id: string; day_of_week: number; max_reservations: number; max_pax: number; open_time: string | null; close_time: string | null; active: boolean }
 
-// Ocupación por hora (modelo de horarios libres): quien llega a la hora H
-// ocupa su lugar de H al cierre — la ocupación es ACUMULADA. Devuelve, por
-// cada hora de operación, cuántos lugares hay ocupados y libres.
-function hourlyOccupancy(cap: CapacityRow, reservas: { time_slot: string; party_size: number; status: string }[]) {
-  if (!cap.open_time || !cap.close_time || !cap.max_pax) return null
-  const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0) }
-  const openM = toMin(cap.open_time)
-  let closeM = toMin(cap.close_time)
-  if (closeM <= openM) closeM += 1440 // cruza medianoche
-  const live = reservas.filter(r => ['requested', 'confirmed', 'seated', 'completed'].includes(r.status))
-  const rows: { hour: string; taken: number; free: number }[] = []
-  for (let m = openM; m < closeM; m += 60) {
-    const hourAbs = m % 1440
-    const label = `${String(Math.floor(hourAbs / 60)).padStart(2, '0')}:00`
-    // acumulado: todos los que llegaron a esta hora o antes siguen ocupando
-    let taken = 0
-    for (const r of live) {
-      let am = toMin(r.time_slot); if (am < openM) am += 1440
-      if (am <= m + 59) taken += r.party_size
-    }
-    rows.push({ hour: label, taken, free: Math.max(0, cap.max_pax - taken) })
-  }
-  return { rows, total: cap.max_pax }
-}
+// La curva de ocupación (OccupancyCurve) reemplazó al cálculo acumulado por
+// hora: ahora cada reserva ocupa llegada → llegada + duración configurada.
 
 const STATUS_META: Record<ResStatus, { label: string; tone: StatusTone; next?: ResStatus; nextLabel?: string }> = {
   requested: { label: 'Solicitada', tone: 'neutral',   next: 'confirmed', nextLabel: 'Confirmar' },
@@ -287,8 +270,6 @@ export function Reservations({ userRole, userId }: Props) {
     return [...reservations].sort((a, b) => a.time_slot.localeCompare(b.time_slot) || a.created_at.localeCompare(b.created_at))
   }, [reservations])
 
-  // Espacios libres por hora — solo si el venue tiene cupo total + horario
-  const occ = useMemo(() => capacity ? hourlyOccupancy(capacity, reservations) : null, [capacity, reservations])
 
   const kpis = useMemo(() => {
     const act = reservations.filter(r => ACTIVE_STATUSES.includes(r.status))
@@ -445,28 +426,9 @@ export function Reservations({ userRole, userId }: Props) {
           </div>
         ) : (
         <>
-          {/* Espacios libres por hora (cupo total − llegadas acumuladas) */}
-          {occ && (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
-                Espacios libres por hora · cupo {occ.total}
-              </div>
-              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
-                {occ.rows.map(h => {
-                  const fill = occ.total ? h.taken / occ.total : 0
-                  const color = fill >= 1 ? 'var(--status-risk)' : fill >= 0.85 ? 'var(--status-attention)' : 'var(--status-healthy)'
-                  return (
-                    <div key={h.hour} style={{ flex: '0 0 auto', minWidth: 54, textAlign: 'center', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '6px 4px' }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{h.hour}</div>
-                      <div className="num" style={{ fontSize: 17, fontWeight: 800, color }}>{h.free}</div>
-                      <div style={{ height: 3, borderRadius: 2, background: 'var(--bg-elevated)', marginTop: 3, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${Math.min(100, Math.round(fill * 100))}%`, background: color }} />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+          {/* Curva de ocupación — carga simultánea del día (pax/mesas vs capacidad) */}
+          {buId && (
+            <OccupancyCurve buId={buId} reservations={reservations} capacity={capacity ?? null} guestMap={guestMap} />
           )}
           {dayRows.length === 0 ? (
           <div style={{ textAlign: 'center', paddingTop: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
@@ -502,6 +464,12 @@ export function Reservations({ userRole, userId }: Props) {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
                         <span className="num" style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700 }}>{r.party_size} pax</span>
+                        {r.proposed_time && (
+                          <span title="Cambio de horario propuesto — pendiente de confirmar con el cliente"
+                            style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--status-attention)', background: 'color-mix(in srgb, var(--status-attention) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 35%, transparent)', borderRadius: 4, padding: '1px 6px' }}>
+                            → {r.proposed_time} por confirmar
+                          </span>
+                        )}
                         {r.zone && <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{r.zone}</span>}
                         <SrcIcon size={11} style={{ color: 'var(--text-tertiary)' }} aria-label={SOURCE_LABEL[r.source]} />
                         <span title={`Reservó: ${bookedBy(r)}`} style={{ fontSize: 10, color: bookedBy(r) === 'Concierge HOG' ? 'var(--accent)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>· {bookedBy(r)}</span>
@@ -542,6 +510,35 @@ export function Reservations({ userRole, userId }: Props) {
               <button onClick={() => setMenuRes(null)} aria-label="Cerrar" style={{ width: 36, height: 36, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {menuRes.proposed_time && (
+                <div style={{ background: 'color-mix(in srgb, var(--status-attention) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 30%, transparent)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                  <p style={{ fontSize: 12, color: 'var(--status-attention)', fontWeight: 700, margin: '0 0 8px' }}>
+                    Propuesta de cambio: {menuRes.time_slot} → {menuRes.proposed_time} (esperando al cliente)
+                  </p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={async () => {
+                      const { error } = await supabase.from('reservations').update({ time_slot: menuRes.proposed_time, proposed_time: null }).eq('id', menuRes.id)
+                      if (error) { showToast(`No se pudo aplicar: ${error.message}`, 'error'); return }
+                      logActivity('reservation_updated', 'reservation', menuRes.id, { antes: menuRes.time_slot, ahora: menuRes.proposed_time, via: 'propuesta_aceptada' })
+                      showToast(`Reserva movida a las ${menuRes.proposed_time}.`, 'success')
+                      setMenuRes(null); load()
+                    }}
+                      style={{ flex: 1, minHeight: 44, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      Cliente aceptó → mover
+                    </button>
+                    <button onClick={async () => {
+                      const { error } = await supabase.from('reservations').update({ proposed_time: null }).eq('id', menuRes.id)
+                      if (error) { showToast(`No se pudo: ${error.message}`, 'error'); return }
+                      logActivity('reservation_updated', 'reservation', menuRes.id, { mantiene: menuRes.time_slot, via: 'propuesta_rechazada' })
+                      showToast(`Se mantiene a las ${menuRes.time_slot} — resuelve el conflicto en la curva.`, 'success')
+                      setMenuRes(null); load()
+                    }}
+                      style={{ flex: 1, minHeight: 44, borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      No aceptó → mantener
+                    </button>
+                  </div>
+                </div>
+              )}
               {menuRes.party_size >= eventPaxThreshold && (
                 <button onClick={() => convertToDeal(menuRes)}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 48, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
