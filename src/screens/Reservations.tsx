@@ -1166,7 +1166,8 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
               <>
                 <div style={{ position: 'relative' }}>
                   <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
-                  <input value={gQuery} onChange={e => setGQuery(e.target.value)} inputMode="tel" autoFocus placeholder="Teléfono o nombre del cliente…" style={{ ...inputStyle, paddingLeft: 34 }} />
+                  {/* Teclado NORMAL (no tel): se busca por nombre o teléfono */}
+                  <input value={gQuery} onChange={e => setGQuery(e.target.value)} autoFocus placeholder="Nombre o teléfono del cliente…" style={{ ...inputStyle, paddingLeft: 34 }} />
                 </div>
                 {gResults.length > 0 && (
                   <div style={{ marginTop: 6, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
