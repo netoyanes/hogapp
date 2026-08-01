@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.47.0"
+export const APP_VERSION = "2.48.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.48.0",
+    date: "2026-07-31",
+    type: "MINOR",
+    changes: [
+      "Vista operativa HoH en Reservas → Día: barra de excepciones accionable (sin confirmar / sin mesa / depósitos / horarios por confirmar) que filtra la lista; 'Todo en orden' cuando no hay pendientes",
+      "Lista agrupada por momento: AHORA (botón Sentar con confirmación, cuenta regresiva de no-show y acciones No-show / +10 min al vencerse), PRÓXIMAS (Confirmar o Llamar), MÁS TARDE (solo estado), CERRADAS al final",
+      "Filas compactas sin avatar: hora, nombre, pax, mesa/zona, salida estimada y chips de estado (Sin mesa, Depósito pendiente, VIP, PR, Alergia) siempre visibles",
+      "Curva operativa: marcador de 'ahora' con pasado atenuado, color rojo por conflicto de MESAS (la sobreventa real), colapsada en teléfono con resumen 'Pico X/Y a las HH:MM'",
+      "Botón Walk-in en la barra (abre el Piso) y 'Sentar ya' para llegadas anticipadas en el menú de la reserva",
+    ]
+  },
   {
     version: "2.47.0",
     date: "2026-07-31",
