@@ -520,21 +520,21 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       if (invTipo === 'unit_stay') return await disponibilidadUnidades(ctx, input)
       // Motor por mesas (Fase 3): horarios reales calculados por el motor
       if (ctx.engine?.engine === 'tables') return await disponibilidadMesas(ctx, input)
-      const dow = new Date(input.fecha + 'T00:00:00').getDay()
-      const [{ data: cap }, { data: res }] = await Promise.all([
-        supabaseAdmin.from('venue_capacity').select('max_reservations, max_pax').eq('bu_id', ctx.conv.bu_id).eq('day_of_week', dow).eq('active', true).maybeSingle(),
-        supabaseAdmin.from('reservations').select('party_size, status').eq('bu_id', ctx.conv.bu_id).eq('date', input.fecha),
-      ])
-      if (!cap) return { fecha: input.fecha, sin_limite: true, nota: 'Este venue no tiene tope configurado esa noche — hay cupo libremente.' }
-      let usadas = 0, paxUsadas = 0
-      for (const r of res ?? []) if (['requested', 'confirmed', 'seated', 'completed'].includes(r.status)) {
-        usadas++; paxUsadas += r.party_size
+      // Aforo SIMULTÁNEO (detector de horario): la gente rota, el tope no es
+      // acumulado del día — se reportan las horas sin lugar para este grupo.
+      const carga = await cargaSimultanea(supabaseAdmin, ctx.conv.bu_id, input.fecha)
+      if (carga.maxPax == null) return { fecha: input.fecha, sin_limite: true, nota: 'Este venue no tiene aforo configurado ese día — hay cupo libremente.' }
+      const paxDisp = input.pax ?? 2
+      const llenos: string[] = []
+      for (let m = carga.openM; m <= carga.closeM - carga.durFor(paxDisp); m += 30) {
+        if (carga.enVentana(m, carga.durFor(paxDisp)) + paxDisp > carga.maxPax) llenos.push(carga.lbl(m))
       }
       return {
-        fecha: input.fecha,
-        reservas_max: cap.max_reservations, reservas_usadas: usadas,
-        pax_max: cap.max_pax, pax_usadas: paxUsadas,
-        casi_lleno: usadas >= cap.max_reservations * 0.85 || paxUsadas >= cap.max_pax * 0.85,
+        fecha: input.fecha, aforo_simultaneo: carga.maxPax,
+        horas_sin_lugar: llenos,
+        nota: llenos.length
+          ? 'Esas horas están llenas para este grupo. Si el cliente pide una de esas, ofrécele con buena onda la hora libre más cercana — el resto del horario SÍ tiene lugar (la gente rota).'
+          : 'Hay lugar a cualquier hora del servicio — no menciones límites.',
       }
     }
 
@@ -596,24 +596,25 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
         .in('status', ['requested', 'confirmed']).limit(1)
       const existente = existentes?.[0]
 
-      // Validación de cupo de la noche (crear Y modificar): el bot nunca
-      // sobrevende — el sobrecupo solo lo autoriza un humano desde la app.
-      const dow = new Date(input.fecha + 'T00:00:00').getDay()
-      const [{ data: capNoche }, { data: resNoche }] = await Promise.all([
-        supabaseAdmin.from('venue_capacity').select('max_reservations, max_pax').eq('bu_id', ctx.conv.bu_id).eq('day_of_week', dow).eq('active', true).maybeSingle(),
-        supabaseAdmin.from('reservations').select('id, party_size, status').eq('bu_id', ctx.conv.bu_id).eq('date', input.fecha),
-      ])
-      if (capNoche) {
-        let usadas = 0, paxUsadas = 0
-        for (const r of resNoche ?? []) {
-          if (!['requested', 'confirmed', 'seated', 'completed'].includes(r.status)) continue
-          if (existente && r.id === existente.id) continue // al modificar, su propia reserva no cuenta
-          usadas++; paxUsadas += r.party_size
+      // Validación de aforo SIMULTÁNEO en [hora, hora+duración) — detector de
+      // horario: el bot nunca sobrevende una hora, pero el día completo rota.
+      const carga = await cargaSimultanea(supabaseAdmin, ctx.conv.bu_id, input.fecha)
+      if (carga.maxPax != null) {
+        const t0 = carga.norm(hora)
+        const durNueva = carga.durFor(input.pax)
+        let simult = carga.enVentana(t0, durNueva)
+        if (existente) {
+          // al modificar, la propia reserva no cuenta si su ventana se cruza
+          const e0 = carga.norm(existente.time_slot)
+          const e1 = e0 + carga.durFor(existente.party_size)
+          if (e0 < t0 + durNueva && e1 > t0) simult -= existente.party_size
         }
-        const sinCupoReservas = !existente && usadas >= capNoche.max_reservations
-        const sinCupoPax = paxUsadas + input.pax > capNoche.max_pax
-        if (sinCupoReservas || sinCupoPax) {
-          return { error: `Esa noche ya no hay cupo (${usadas}/${capNoche.max_reservations} reservas, ${paxUsadas + input.pax}/${capNoche.max_pax} pax con esta reserva). NO confirmes: ofrécele al cliente otra fecha cercana con buena onda, y si insiste en esa noche usa escalar_a_humano — solo el equipo puede autorizar sobrecupo.` }
+        if (simult + input.pax > carga.maxPax) {
+          const sug: string[] = []
+          for (let m = carga.openM; m <= carga.closeM - durNueva && sug.length < 6; m += 30) {
+            if (carga.enVentana(m, durNueva) + input.pax <= carga.maxPax) sug.push(carga.lbl(m))
+          }
+          return { error: `A las ${hora} el venue está lleno (${simult + input.pax}/${carga.maxPax} pax simultáneos). NO confirmes esa hora: ofrécele los horarios cercanos que SÍ tienen lugar${sug.length ? ` (por ejemplo ${sug.slice(0, 4).join(', ')})` : ''}; si insiste en esa hora exacta, usa escalar_a_humano.` }
         }
       }
       if (existente) {
@@ -860,6 +861,38 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
 const ESTADOS_VIVOS = ['requested', 'confirmed', 'seated']
 
 // ── WELLNESS: horarios disponibles de un día ─────────────────────────────────
+// ── Aforo simultáneo (modelo de rotación) — pax presentes en una ventana de
+//    tiempo con las duraciones configuradas del venue. Sustituye al acumulado:
+//    max_pax de venue_capacity es el AFORO en un momento dado, no el del día.
+// deno-lint-ignore no-explicit-any
+async function cargaSimultanea(supabaseAdmin: any, buId: string, fecha: string) {
+  const dow = new Date(fecha + 'T00:00:00').getDay()
+  const [{ data: cap }, { data: res }, { data: st }] = await Promise.all([
+    supabaseAdmin.from('venue_capacity').select('max_pax, open_time, close_time').eq('bu_id', buId).eq('day_of_week', dow).eq('active', true).maybeSingle(),
+    supabaseAdmin.from('reservations').select('time_slot, party_size, status, duration_min').eq('bu_id', buId).eq('date', fecha),
+    supabaseAdmin.from('venue_reservation_settings').select('durations').eq('bu_id', buId).maybeSingle(),
+  ])
+  const durs = (st?.durations ?? []) as { max_pax: number; minutes: number }[]
+  const durFor = (p: number) => [...durs].sort((a, b) => a.max_pax - b.max_pax).find(d => d.max_pax >= p)?.minutes ?? 120
+  const toMin = (t: string) => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0) }
+  const openM = cap?.open_time ? toMin(cap.open_time) : 12 * 60
+  let closeM = cap?.close_time ? toMin(cap.close_time) : 24 * 60
+  if (closeM <= openM) closeM += 1440
+  const norm = (t: string) => { let v = toMin(t); if (v < openM) v += 1440; return v }
+  // deno-lint-ignore no-explicit-any
+  const vivas = ((res ?? []) as any[]).filter(r => ['requested', 'confirmed', 'seated'].includes(r.status))
+  const enVentana = (t0: number, dur: number) => {
+    let s = 0
+    for (const r of vivas) {
+      const s0 = norm(r.time_slot), s1 = s0 + (r.duration_min ?? durFor(r.party_size))
+      if (s0 < t0 + dur && s1 > t0) s += r.party_size
+    }
+    return s
+  }
+  const lbl = (m: number) => `${String(Math.floor((m % 1440) / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+  return { maxPax: cap?.max_pax ?? null, openM, closeM, durFor, norm, enVentana, lbl }
+}
+
 // ── Motor por mesas (Fase 3) — fn_available_slots / fn_assign_table viven en
 //    la base de datos: el bot, el app y el link público usan el MISMO cálculo.
 // deno-lint-ignore no-explicit-any

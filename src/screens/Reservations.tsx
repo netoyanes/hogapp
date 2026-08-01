@@ -978,7 +978,11 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
   const [creatingGuest, setCreatingGuest] = useState(false)
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [date, setDate] = useState(defaultDate)
-  const [dayCap, setDayCap] = useState<{ used: number; max: number | null; paxUsed: number; maxPax: number | null }>({ used: 0, max: null, paxUsed: 0, maxPax: null })
+  // Detector de horario: aforo SIMULTÁNEO a la hora elegida (no acumulado del
+  // día — la gente rota). max_pax del día = aforo del venue en un momento dado.
+  const [dayCap, setDayCap] = useState<{ maxPax: number | null; open: string | null; close: string | null }>({ maxPax: null, open: null, close: null })
+  const [dayRes, setDayRes] = useState<{ time_slot: string; party_size: number; status: string; duration_min: number | null }[]>([])
+  const [venueDurations, setVenueDurations] = useState<{ max_pax: number; minutes: number }[]>([])
   const [overrideCap, setOverrideCap] = useState(false)
   const [time, setTime] = useState('21:00')
   const [pax, setPax] = useState(2)
@@ -995,8 +999,11 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
   const [manualTime, setManualTime] = useState(false)
 
   useEffect(() => {
-    supabase.from('venue_reservation_settings').select('engine').eq('bu_id', venue).maybeSingle()
-      .then(({ data }) => setTableEngine(data?.engine === 'tables'))
+    supabase.from('venue_reservation_settings').select('engine, durations').eq('bu_id', venue).maybeSingle()
+      .then(({ data }) => {
+        setTableEngine(data?.engine === 'tables')
+        setVenueDurations((data?.durations ?? []) as { max_pax: number; minutes: number }[])
+      })
   }, [venue])
 
   useEffect(() => {
@@ -1012,8 +1019,8 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
       })
   }, [tableEngine, venue, date, pax]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // La autorización de sobrecupo no sobrevive a un cambio de fecha/venue/pax
-  useEffect(() => { setOverrideCap(false) }, [date, venue, pax])
+  // La autorización de sobrecupo no sobrevive a un cambio de fecha/venue/pax/hora
+  useEffect(() => { setOverrideCap(false) }, [date, venue, pax, time])
 
   useEffect(() => {
     supabase.from('guest_tag_options').select('label').eq('active', true).then(({ data }) => setTagOptions((data ?? []).map(t => t.label)))
@@ -1037,28 +1044,64 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
     async function loadDayCap() {
       const dow = new Date(date + 'T00:00:00').getDay()
       const [{ data: cap }, { data: res }] = await Promise.all([
-        supabase.from('venue_capacity').select('max_reservations, max_pax').eq('bu_id', venue).eq('day_of_week', dow).eq('active', true).maybeSingle(),
-        supabase.from('reservations').select('status, party_size').eq('bu_id', venue).eq('date', date),
+        supabase.from('venue_capacity').select('max_pax, open_time, close_time').eq('bu_id', venue).eq('day_of_week', dow).eq('active', true).maybeSingle(),
+        supabase.from('reservations').select('time_slot, party_size, status, duration_min').eq('bu_id', venue).eq('date', date),
       ])
-      let used = 0, paxUsed = 0
-      for (const r of res ?? []) if (['requested', 'confirmed', 'seated', 'completed'].includes(r.status)) {
-        used++; paxUsed += r.party_size ?? 0
-      }
-      setDayCap({ used, max: cap?.max_reservations ?? null, paxUsed, maxPax: cap?.max_pax ?? null })
+      setDayCap({ maxPax: cap?.max_pax ?? null, open: cap?.open_time ?? null, close: cap?.close_time ?? null })
+      setDayRes((res ?? []) as typeof dayRes)
     }
     loadDayCap()
-  }, [venue, date])
+  }, [venue, date]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Regla de sobrecupo: lleno por número de reservas o porque el pax no cabe esa noche
-  const dayFull = (dayCap.max !== null && dayCap.used >= dayCap.max) || (dayCap.maxPax !== null && dayCap.paxUsed + pax > dayCap.maxPax)
-  const blockedByCapacity = dayFull && !(canOverride && overrideCap)
+  // Detector de horario: pax SIMULTÁNEOS en [hora, hora + duración) usando las
+  // duraciones configuradas — la ocupación rota, no se acumula toda la noche.
+  const capToMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0) }
+  const durFor = useCallback((p: number) => {
+    const hit = [...venueDurations].sort((a, b) => a.max_pax - b.max_pax).find(d => d.max_pax >= p)
+    return hit?.minutes ?? 120
+  }, [venueDurations])
+  const simulAt = useCallback((tMin: number, forPax: number) => {
+    const openM = dayCap.open ? capToMin(dayCap.open) : 0
+    const norm = (t: string) => { let v = capToMin(t); if (dayCap.open && v < openM) v += 1440; return v }
+    const t1 = tMin + durFor(forPax)
+    let s = 0
+    for (const r of dayRes) {
+      if (!['requested', 'confirmed', 'seated'].includes(r.status)) continue
+      const s0 = norm(r.time_slot), s1 = s0 + (r.duration_min ?? durFor(r.party_size))
+      if (s0 < t1 && s1 > tMin) s += r.party_size
+    }
+    return s
+  }, [dayRes, dayCap.open, durFor])
+  const timeMin = useMemo(() => {
+    if (!time) return null
+    const openM = dayCap.open ? capToMin(dayCap.open) : 0
+    let v = capToMin(time); if (dayCap.open && v < openM) v += 1440
+    return v
+  }, [time, dayCap.open])
+  const simul = timeMin != null ? simulAt(timeMin, pax) : 0
+  const overCap = dayCap.maxPax !== null && timeMin != null && simul + pax > dayCap.maxPax
+  // Horarios cercanos donde SÍ cabe (3 sugerencias alrededor de la hora pedida)
+  const sugerencias = useMemo(() => {
+    if (!overCap || dayCap.maxPax == null || timeMin == null) return []
+    const openM = dayCap.open ? capToMin(dayCap.open) : 12 * 60
+    let closeM = dayCap.close ? capToMin(dayCap.close) : 23 * 60 + 30
+    if (closeM <= openM) closeM += 1440
+    const cands: number[] = []
+    for (let m = openM; m <= closeM - durFor(pax); m += 30) {
+      if (simulAt(m, pax) + pax <= dayCap.maxPax) cands.push(m)
+    }
+    return cands.sort((a, b) => Math.abs(a - timeMin) - Math.abs(b - timeMin)).slice(0, 3).sort((a, b) => a - b)
+      .map(m => `${String(Math.floor((m % 1440) / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`)
+  }, [overCap, dayCap, timeMin, pax, simulAt, durFor])
+
+  const blockedByCapacity = overCap && !(canOverride && overrideCap)
   const valid = !!guest && !!venue && !!date && !!time && pax > 0 && !blockedByCapacity
 
   async function save() {
     if (!valid || !guest) return
     setSaving(true); setError(null)
     const status = confirmNow ? 'confirmed' : 'requested'
-    const overbooking = dayFull && canOverride && overrideCap
+    const overbooking = overCap && canOverride && overrideCap
 
     // Motor por mesas: pedirle al motor la mejor mesa/combinación para el slot.
     // Sin mesa disponible solo se crea con autorización de sobrecupo (Ops+).
@@ -1196,9 +1239,9 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
             {tableEngine && !manualTime && slots.length > 0 && (
               <p style={{ color: 'var(--text-tertiary)', fontSize: 11, margin: '6px 0 0' }}>La mesa se asigna sola al crear (mejor zona y capacidad).</p>
             )}
-            {dayCap.max !== null && (
-              <p style={{ color: dayFull ? 'var(--status-attention)' : 'var(--text-tertiary)', fontSize: 11, margin: '6px 0 0' }}>
-                Cupo de la noche: {dayCap.used}/{dayCap.max} reservas · {dayCap.paxUsed}/{dayCap.maxPax} pax
+            {dayCap.maxPax !== null && timeMin != null && (
+              <p style={{ color: overCap ? 'var(--status-attention)' : 'var(--text-tertiary)', fontSize: 11, margin: '6px 0 0' }}>
+                A esa hora: {simul + pax}/{dayCap.maxPax} pax simultáneos (con esta reserva)
               </p>
             )}
           </div>
@@ -1246,13 +1289,22 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
             </div>
           </div>
 
-          {dayFull && (
+          {overCap && (
             <div style={{ background: 'color-mix(in srgb, var(--status-attention) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 35%, transparent)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
               <p style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--status-attention)', fontSize: 13, fontWeight: 700, margin: 0 }}>
-                <AlertTriangle size={14} /> Cupo de la noche lleno
-                {dayCap.max !== null && ` — ${dayCap.used}/${dayCap.max} reservas`}
-                {dayCap.maxPax !== null && ` · ${dayCap.paxUsed + pax}/${dayCap.maxPax} pax con esta reserva`}
+                <AlertTriangle size={14} /> A las {time} no cabe — {simul + pax}/{dayCap.maxPax} pax simultáneos con esta reserva
               </p>
+              {sugerencias.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Sí hay lugar a las:</span>
+                  {sugerencias.map(s => (
+                    <button key={s} onClick={() => setTime(s)}
+                      style={{ minHeight: 38, padding: '0 12px', borderRadius: 999, border: '1px solid var(--status-healthy)', background: 'color-mix(in srgb, var(--status-healthy) 12%, transparent)', color: 'var(--status-healthy)', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer' }}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
               {canOverride ? (
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, cursor: 'pointer', minHeight: 36 }}>
                   <input type="checkbox" checked={overrideCap} onChange={e => setOverrideCap(e.target.checked)} style={{ accentColor: 'var(--status-attention)', width: 18, height: 18 }} />

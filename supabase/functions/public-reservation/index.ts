@@ -127,20 +127,29 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Cupo de la noche (tope general — aplica en ambos motores): nunca sobrevende.
+      // Detector de horario — aforo SIMULTÁNEO en [hora, hora+duración): la
+      // gente rota, así que el tope no es acumulado del día. max_pax = aforo.
       const dow = new Date(fecha + 'T00:00:00').getDay()
-      const [{ data: cap }, { data: resNoche }] = await Promise.all([
-        admin.from('venue_capacity').select('max_reservations, max_pax').eq('bu_id', bu.id).eq('day_of_week', dow).eq('active', true).maybeSingle(),
-        admin.from('reservations').select('party_size, status').eq('bu_id', bu.id).eq('date', fecha),
+      const [{ data: cap }, { data: resNoche }, { data: setDur }] = await Promise.all([
+        admin.from('venue_capacity').select('max_pax, open_time, close_time').eq('bu_id', bu.id).eq('day_of_week', dow).eq('active', true).maybeSingle(),
+        admin.from('reservations').select('time_slot, party_size, status, duration_min').eq('bu_id', bu.id).eq('date', fecha),
+        admin.from('venue_reservation_settings').select('durations').eq('bu_id', bu.id).maybeSingle(),
       ])
-      if (cap) {
-        let usadas = 0, paxUsadas = 0
+      if (cap?.max_pax) {
+        const durs = (setDur?.durations ?? []) as { max_pax: number; minutes: number }[]
+        const durFor = (p: number) => [...durs].sort((a, b) => a.max_pax - b.max_pax).find(d => d.max_pax >= p)?.minutes ?? 120
+        const toMin = (t: string) => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0) }
+        const openM = cap.open_time ? toMin(cap.open_time) : 0
+        const norm = (t: string) => { let v = toMin(t); if (cap.open_time && v < openM) v += 1440; return v }
+        const t0 = norm(hora), t1 = t0 + durFor(pax)
+        let simult = 0
         for (const r of resNoche ?? []) {
-          if (!['requested', 'confirmed', 'seated', 'completed'].includes(r.status)) continue
-          usadas++; paxUsadas += r.party_size
+          if (!['requested', 'confirmed', 'seated'].includes(r.status)) continue
+          const s0 = norm(r.time_slot), s1 = s0 + (r.duration_min ?? durFor(r.party_size))
+          if (s0 < t1 && s1 > t0) simult += r.party_size
         }
-        if (usadas >= cap.max_reservations || paxUsadas + pax > cap.max_pax) {
-          return json({ error: 'Esa noche ya está llena. Prueba con otra fecha 🙏', full: true }, 409)
+        if (simult + pax > cap.max_pax) {
+          return json({ error: 'A esa hora ya estamos llenos. Prueba otro horario 🙏', full: true }, 409)
         }
       }
 

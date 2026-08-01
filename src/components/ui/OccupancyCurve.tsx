@@ -125,7 +125,9 @@ export function OccupancyCurve({ buId, date, reservations, capacity, guestMap }:
   const pacing = settings?.pacing_max_pax ?? 0
   const limit = mode === 'pax' ? aforo : mesasDisp
   const values = curve.slots.map(s => mode === 'pax' ? s.pax : s.mesas)
-  const maxScale = Math.max(...values, limit || 0, 1) * 1.15
+  // Escala FIJA anclada al aforo: la línea de cupo siempre queda a la misma
+  // altura y las barras se leen contra ella — no contra el pico del momento
+  const maxScale = Math.max((limit || 0) * 1.15, Math.max(...values, 1) * 1.08)
   // El color lo determina el conflicto de MESAS (detecta la sobreventa real),
   // aunque la altura muestre pax. Sin piso configurado, aplica el aforo en pax.
   const isOver = (s: { pax: number; mesas: number }) =>
@@ -199,14 +201,14 @@ export function OccupancyCurve({ buId, date, reservations, capacity, guestMap }:
         )}
       </div>
 
-      {/* Gráfica de barras con línea de capacidad */}
+      {/* Gráfica: escala fija, riel de cupo por columna y línea de aforo */}
       <div style={{ position: 'relative', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '10px 8px 4px' }}>
         {limit > 0 && (
-          <div style={{ position: 'absolute', left: 8, right: 8, bottom: `${4 + 18 + (limit / maxScale) * 96}px`, borderTop: '2px dashed color-mix(in srgb, var(--text-tertiary) 55%, transparent)', pointerEvents: 'none', zIndex: 1 }}>
-            <span style={{ position: 'absolute', right: 0, top: -14, fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{limit}</span>
+          <div style={{ position: 'absolute', left: 8, right: 8, bottom: `${4 + 16 + (limit / maxScale) * 110}px`, borderTop: '2px dashed color-mix(in srgb, var(--text-tertiary) 55%, transparent)', pointerEvents: 'none', zIndex: 1 }}>
+            <span style={{ position: 'absolute', right: 0, top: -14, fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{limit}</span>
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 96 + 34, overflowX: 'auto' }}>
+        <div style={{ display: 'flex', gap: 3, overflowX: 'auto' }}>
           {curve.slots.map((s, i) => {
             const v = values[i]
             // Rojo por conflicto de MESAS (o pax sin piso); ámbar por pacing
@@ -216,17 +218,27 @@ export function OccupancyCurve({ buId, date, reservations, capacity, guestMap }:
             const isSel = selSlot === s.m
             const isPast = nowInWindow && s.m + 30 <= nowMin
             const isNowSlot = nowInWindow && nowMin >= s.m && nowMin < s.m + 30
+            const hFill = Math.min(100, (v / maxScale) * 100)
+            const hTrack = limit > 0 ? Math.min(100, (limit / maxScale) * 100) : 0
             return (
               <button key={s.m} onClick={() => setSelSlot(isSel ? null : s.m)}
                 title={`${toLabel(s.m)} · ${s.pax} pax · ${s.mesas} mesas · ${s.barra} en barra${pacingHit ? ` · llegadas ${s.llegadas} > pacing ${pacing}` : ''}`}
-                style={{ flex: '1 0 26px', minWidth: 26, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 2, background: 'none', border: 'none', borderLeft: isNowSlot ? '2px solid var(--text-primary)' : '2px solid transparent', cursor: 'pointer', padding: 0, height: '100%', opacity: isPast ? 0.4 : 1 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: isNowSlot ? 'var(--text-primary)' : 'transparent', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                  {isNowSlot ? `▾ ${toLabel(nowMin)}` : '·'}
-                </span>
-                <span className="num" style={{ fontSize: 13, fontWeight: 700, color: v ? (over ? 'var(--status-risk)' : 'var(--text-secondary)') : 'transparent', fontFamily: 'var(--font-mono)' }}>{v || ''}</span>
-                <div style={{ width: '100%', height: `${(v / maxScale) * 96}px`, minHeight: v > 0 ? 3 : 1, borderRadius: '3px 3px 0 0', background: v > 0 ? color : 'var(--bg-elevated)', outline: isSel ? '2px solid var(--text-primary)' : 'none' }} />
-                <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                  {s.m % 60 === 0 ? toLabel(s.m) : ''}
+                style={{ flex: '1 0 28px', minWidth: 28, display: 'flex', flexDirection: 'column', gap: 2, background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: isPast ? 0.4 : 1 }}>
+                <div style={{ position: 'relative', width: '100%', height: 110 }}>
+                  {/* Riel de cupo: hasta aquí llega el aforo — barra baja = poca ocupación DEL cupo */}
+                  {hTrack > 0 && (
+                    <div style={{ position: 'absolute', bottom: 0, left: '14%', right: '14%', height: `${hTrack}%`, background: 'color-mix(in srgb, var(--bg-elevated) 85%, transparent)', borderRadius: '3px 3px 0 0' }} />
+                  )}
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${hFill}%`, minHeight: v > 0 ? 3 : 0, background: v > 0 ? color : 'transparent', borderRadius: '3px 3px 0 0', outline: isSel ? '2px solid var(--text-primary)' : 'none' }} />
+                  {v > 0 && (
+                    <span className="num" style={{ position: 'absolute', bottom: `calc(${hFill}% + 2px)`, left: -6, right: -6, textAlign: 'center', fontSize: 13, fontWeight: 700, color: over ? 'var(--status-risk)' : 'var(--text-secondary)', fontFamily: 'var(--font-mono)', pointerEvents: 'none' }}>{v}</span>
+                  )}
+                  {isNowSlot && (
+                    <div style={{ position: 'absolute', top: -6, bottom: 0, left: '50%', borderLeft: '2px dashed var(--text-primary)', opacity: 0.75, pointerEvents: 'none' }} />
+                  )}
+                </div>
+                <span style={{ fontSize: 10, height: 14, color: isNowSlot ? 'var(--text-primary)' : 'var(--text-tertiary)', fontWeight: isNowSlot ? 700 : 400, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', textAlign: 'center', width: '100%' }}>
+                  {isNowSlot ? toLabel(nowMin) : s.m % 60 === 0 ? toLabel(s.m) : ''}
                 </span>
               </button>
             )
