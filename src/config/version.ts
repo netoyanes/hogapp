@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.48.0"
+export const APP_VERSION = "2.48.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.48.1",
+    date: "2026-07-31",
+    type: "PATCH",
+    changes: [
+      "Menú ⋯ de cada reserva ahora incluye edición completa (fecha, hora, pax, zona, notas) para cualquier rol con escritura — HoH incluido; los cambios quedan en Actividad",
+      "El ⋯ aparece también en reservas cerradas, con 'Reactivar como confirmada' para corregir errores (no-show o cancelación por equivocación)",
+      "'Sentar ya (llegada anticipada)' disponible en el menú de toda reserva solicitada/confirmada",
+    ]
+  },
   {
     version: "2.48.0",
     date: "2026-07-31",

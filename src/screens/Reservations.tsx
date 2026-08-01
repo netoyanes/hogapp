@@ -129,6 +129,32 @@ export function Reservations({ userRole, userId }: Props) {
     return () => clearInterval(iv)
   }, [])
   useEffect(() => { setExFilter('all') }, [buId, date])
+  // Edición completa de la reserva desde el menú ⋯ (host/HoH incluido)
+  const [editForm, setEditForm] = useState<{ date: string; time: string; pax: number; zone: string; notes: string } | null>(null)
+  useEffect(() => {
+    setEditForm(menuRes ? { date: menuRes.date, time: menuRes.time_slot, pax: menuRes.party_size, zone: menuRes.zone ?? '', notes: menuRes.notes ?? '' } : null)
+  }, [menuRes?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveResEdit() {
+    if (!menuRes || !editForm) return
+    const cambios: string[] = []
+    if (editForm.date !== menuRes.date) cambios.push(`fecha ${menuRes.date} → ${editForm.date}`)
+    if (editForm.time !== menuRes.time_slot) cambios.push(`hora ${menuRes.time_slot} → ${editForm.time}`)
+    if (editForm.pax !== menuRes.party_size) cambios.push(`pax ${menuRes.party_size} → ${editForm.pax}`)
+    if (editForm.zone !== (menuRes.zone ?? '')) cambios.push(`zona → ${editForm.zone || 'sin zona'}`)
+    if (editForm.notes !== (menuRes.notes ?? '')) cambios.push('notas')
+    if (!cambios.length) { setMenuRes(null); return }
+    const { error } = await supabase.from('reservations').update({
+      date: editForm.date, time_slot: editForm.time, party_size: Math.max(1, editForm.pax),
+      zone: editForm.zone.trim() || null, notes: editForm.notes.trim() || null,
+    }).eq('id', menuRes.id)
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    logActivity('reservation_updated', 'reservation', menuRes.id, {
+      guest: guestMap[menuRes.guest_id]?.full_name, bu: buMap[menuRes.bu_id], cambios, via: 'edicion',
+    })
+    showToast('Reserva actualizada.', 'success')
+    setMenuRes(null); load()
+  }
   useEffect(() => {
     if (!buId) return
     Promise.all([
@@ -625,8 +651,8 @@ export function Reservations({ userRole, userId }: Props) {
                       </a>
                     ) : null
                   )}
-                  {canWrite && ctx !== 'done' && (
-                    <button onClick={() => { setMenuRes(r); setCancelReason('') }} aria-label="Más acciones"
+                  {canWrite && (
+                    <button onClick={() => { setMenuRes(r); setCancelReason('') }} aria-label="Editar / más acciones"
                       style={{ width: 44, height: 44, borderRadius: 'var(--radius-sm)', border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <MoreHorizontal size={16} />
                     </button>
@@ -676,6 +702,38 @@ export function Reservations({ userRole, userId }: Props) {
               {menuRes.notes ? ` · ${menuRes.notes}` : ''}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* Edición completa — cualquier rol con escritura (HoH incluido) */}
+              {canWrite && editForm && (
+                <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+                  <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 8 }}>Editar reserva</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 0.8fr', gap: 8, marginBottom: 8 }}>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Fecha
+                      <input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} className="num"
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3 }} /></label>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Hora
+                      <input type="time" value={editForm.time} onChange={e => setEditForm({ ...editForm, time: e.target.value })} className="num"
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, fontFamily: 'var(--font-mono)' }} /></label>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Pax
+                      <input type="number" inputMode="numeric" min={1} value={editForm.pax} onChange={e => setEditForm({ ...editForm, pax: Math.max(1, Number(e.target.value)) })} className="num"
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, textAlign: 'center' }} /></label>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8, marginBottom: 8 }}>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Zona
+                      <select value={editForm.zone} onChange={e => setEditForm({ ...editForm, zone: e.target.value })}
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, cursor: 'pointer' }}>
+                        <option value="">Sin zona</option>
+                        {[...new Set([...ZONES, ...(editForm.zone ? [editForm.zone] : [])])].map(z => <option key={z} value={z}>{z}</option>)}
+                      </select></label>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Notas
+                      <input value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Alergias, ocasión, mesa pedida…"
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3 }} /></label>
+                  </div>
+                  <button onClick={saveResEdit}
+                    style={{ width: '100%', minHeight: 44, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    Guardar cambios
+                  </button>
+                </div>
+              )}
               {menuRes.proposed_time && (
                 <div style={{ background: 'color-mix(in srgb, var(--status-attention) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 30%, transparent)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
                   <p style={{ fontSize: 12, color: 'var(--status-attention)', fontWeight: 700, margin: '0 0 8px' }}>
@@ -717,19 +775,29 @@ export function Reservations({ userRole, userId }: Props) {
                   <Handshake size={15} /> Convertir en deal (Evento) · {menuRes.party_size} pax
                 </button>
               )}
-              <button onClick={() => setStatus(menuRes, 'no_show')}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 48, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid color-mix(in srgb, var(--status-risk) 30%, transparent)', background: 'color-mix(in srgb, var(--status-risk) 8%, transparent)', color: 'var(--status-risk)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                <AlertTriangle size={15} /> Marcar no-show
-              </button>
-              <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
-                <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 6 }}>Cancelar reserva</label>
-                <input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="Motivo (opcional)…"
-                  style={{ width: '100%', minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }} />
-                <button onClick={() => setStatus(menuRes, 'cancelled', cancelReason)}
-                  style={{ width: '100%', minHeight: 44, borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  Cancelar reserva
+              {['completed', 'no_show', 'cancelled'].includes(menuRes.status) ? (
+                /* Reserva cerrada por error → se puede reactivar */
+                <button onClick={() => { if (window.confirm(`¿Reactivar la reserva de ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'} como confirmada?`)) setStatus(menuRes, 'confirmed') }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 48, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  <Check size={15} /> Reactivar como confirmada
                 </button>
-              </div>
+              ) : (
+                <>
+                  <button onClick={() => { if (window.confirm(`¿Marcar no-show a ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'} (${menuRes.party_size} pax)?`)) setStatus(menuRes, 'no_show') }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 48, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid color-mix(in srgb, var(--status-risk) 30%, transparent)', background: 'color-mix(in srgb, var(--status-risk) 8%, transparent)', color: 'var(--status-risk)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    <AlertTriangle size={15} /> Marcar no-show
+                  </button>
+                  <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+                    <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 6 }}>Cancelar reserva</label>
+                    <input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="Motivo (opcional)…"
+                      style={{ width: '100%', minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }} />
+                    <button onClick={() => setStatus(menuRes, 'cancelled', cancelReason)}
+                      style={{ width: '100%', minHeight: 44, borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      Cancelar reserva
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
