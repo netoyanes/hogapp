@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.48.4"
+export const APP_VERSION = "2.49.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.49.0",
+    date: "2026-07-31",
+    type: "MINOR",
+    changes: [
+      "Buscador general de reservas (lupa en el header): busca en todos tus venues y todas las fechas por nombre, teléfono o texto en notas; tocar un resultado salta a ese día y venue",
+    ]
+  },
   {
     version: "2.48.4",
     date: "2026-07-31",
