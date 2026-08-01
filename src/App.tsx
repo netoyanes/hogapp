@@ -38,6 +38,16 @@ export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL' || role === 'DEV'
 }
 
+// Alias legados de vistas: asignar un app libera también sus alias
+const APP_ALIASES: Record<string, string[]> = {
+  crm: ['contacts'], concierge: ['reservations'], casa: ['reportar'], revenue: ['upload'],
+}
+function expandApps(apps: Set<string>): Set<string> {
+  const s = new Set<string>(['profile'])
+  apps.forEach(a => { s.add(a); (APP_ALIASES[a] ?? []).forEach(x => s.add(x)) })
+  return s
+}
+
 // Detect deep-link URLs before rendering anything else
 const _params = new URLSearchParams(window.location.search)
 const _sharedTaskId = _params.get('share')
@@ -85,6 +95,17 @@ export default function App() {
     supabase.from('user_apps').select('app').eq('user_id', profile.id)
       .then(({ data }) => setUserApps(data && data.length ? new Set(data.map(a => a.app)) : null))
   }, [profile?.id])
+
+  // Con apps asignadas (cualquier rol, HoH incluido): si la vista actual no
+  // está permitida, aterrizar en la primera app asignada según prioridad.
+  useEffect(() => {
+    if (!role || role === 'MASTER' || !userApps || userApps.size === 0) return
+    const allowed = expandApps(userApps)
+    if (!allowed.has(activeView)) {
+      const orden = ['casa', 'concierge', 'tasks', 'dashboard', 'crm', 'events', 'objectives', 'content', 'revenue', 'reports', 'activity', 'templates']
+      setActiveView(orden.find(v => allowed.has(v)) ?? 'profile')
+    }
+  }, [role, userApps, activeView])
 
   // Role-based landing, applied once the profile (and any view-as override)
   // resolves: MASTER → dashboard · TEAM → social · managers → tasks.
@@ -163,16 +184,12 @@ export default function App() {
   // 'contacts' queda como alias legado (links viejos) — renderiza Comercial.
   // Apps por usuario: con asignación explícita (user_apps), el usuario ve SOLO
   // esas apps + Perfil (los alias legados se expanden). Sin asignación, rol.
-  const APP_ALIASES: Record<string, string[]> = {
-    crm: ['contacts'], concierge: ['reservations'], casa: ['reportar'], revenue: ['upload'],
-  }
+  // Aplica a TODOS los roles no-Master, HoH incluido.
   let ALLOWED_VIEWS: Set<string> | null
   if (role === 'MASTER') {
     ALLOWED_VIEWS = null // null = no restriction
   } else if (userApps && userApps.size > 0) {
-    const s = new Set<string>(['profile'])
-    userApps.forEach(a => { s.add(a); (APP_ALIASES[a] ?? []).forEach(x => s.add(x)) })
-    ALLOWED_VIEWS = s
+    ALLOWED_VIEWS = expandApps(userApps)
   } else {
     ALLOWED_VIEWS = role === 'DEV'
       ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'events', 'objectives',
