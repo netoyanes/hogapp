@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.51.0"
+export const APP_VERSION = "2.51.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.51.1",
+    date: "2026-08-01",
+    type: "PATCH",
+    changes: [
+      "Nueva reserva: el buscador de cliente abría el teclado numérico en iPhone y no dejaba escribir nombres — ahora abre el teclado normal",
+    ]
+  },
   {
     version: "2.51.0",
     date: "2026-08-01",
