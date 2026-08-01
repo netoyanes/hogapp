@@ -837,7 +837,7 @@ export function Reservations({ userRole, userId }: Props) {
                         style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3 }} /></label>
                   </div>
                   <button onClick={saveResEdit}
-                    style={{ width: '100%', minHeight: 44, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    style={{ width: '100%', minHeight: 50, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                     Guardar cambios (reserva y cliente)
                   </button>
                 </div>
@@ -879,28 +879,28 @@ export function Reservations({ userRole, userId }: Props) {
               )}
               {menuRes.party_size >= eventPaxThreshold && (
                 <button onClick={() => convertToDeal(menuRes)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 48, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                  <Handshake size={15} /> Convertir en deal (Evento) · {menuRes.party_size} pax
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                  <Handshake size={16} /> Convertir en deal (Evento) · {menuRes.party_size} pax
                 </button>
               )}
               {['completed', 'no_show', 'cancelled'].includes(menuRes.status) ? (
                 /* Reserva cerrada por error → se puede reactivar */
                 <button onClick={() => { if (window.confirm(`¿Reactivar la reserva de ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'} como confirmada?`)) setStatus(menuRes, 'confirmed') }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 48, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                  <Check size={15} /> Reactivar como confirmada
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-primary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                  <Check size={16} /> Reactivar como confirmada
                 </button>
               ) : (
                 <>
                   <button onClick={() => { if (window.confirm(`¿Marcar no-show a ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'} (${menuRes.party_size} pax)?`)) setStatus(menuRes, 'no_show') }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 48, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid color-mix(in srgb, var(--status-risk) 30%, transparent)', background: 'color-mix(in srgb, var(--status-risk) 8%, transparent)', color: 'var(--status-risk)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                    <AlertTriangle size={15} /> Marcar no-show
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: '1px solid color-mix(in srgb, var(--status-risk) 30%, transparent)', background: 'color-mix(in srgb, var(--status-risk) 10%, transparent)', color: 'var(--status-risk)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                    <AlertTriangle size={16} /> Marcar no-show
                   </button>
                   <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
                     <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 6 }}>Cancelar reserva</label>
                     <input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="Motivo (opcional)…"
                       style={{ width: '100%', minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }} />
                     <button onClick={() => setStatus(menuRes, 'cancelled', cancelReason)}
-                      style={{ width: '100%', minHeight: 44, borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      style={{ width: '100%', minHeight: 50, borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                       Cancelar reserva
                     </button>
                   </div>
