@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.49.0"
+export const APP_VERSION = "2.49.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.49.1",
+    date: "2026-07-31",
+    type: "PATCH",
+    changes: [
+      "Panel de la reserva → Cliente: notas persistentes del cliente (se recuerdan en cada visita) y toggles VIP / Socio de un toque — disponible para HoH",
+      "Los clientes Socio se reconocen en la fila igual que los VIP (chip dorado)",
+      "El buscador general ahora es una barra visible arriba de Reservas (ya no una lupa chiquita)",
+    ]
+  },
   {
     version: "2.49.0",
     date: "2026-07-31",
