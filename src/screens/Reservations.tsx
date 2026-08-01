@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Phone, MessageCircle, Camera, Footprints, Building2, AlertTriangle, MoreHorizontal, X, Search, Check, Settings2, Handshake, Share2, Copy, LayoutGrid } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Phone, MessageCircle, Camera, Footprints, Building2, AlertTriangle, MoreHorizontal, X, Search, Check, Settings2, Handshake, Share2, Copy, LayoutGrid, Armchair } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatPhone } from '../lib/phone'
 import { logActivity } from '../hooks/useActivityLog'
@@ -691,8 +691,8 @@ export function Reservations({ userRole, userId }: Props) {
                       </>
                     ) : (
                       <button onClick={() => { if (window.confirm(`¿Sentar a ${gname}, ${r.party_size} pax?`)) setStatus(r, 'seated') }}
-                        style={{ minHeight: 44, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                        Sentar
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 44, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 13, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, boxShadow: '0 0 0 2px color-mix(in srgb, var(--status-healthy) 30%, transparent)' }}>
+                        <Armchair size={15} /> Sentar
                       </button>
                     )
                   )}
@@ -873,8 +873,8 @@ export function Reservations({ userRole, userId }: Props) {
               )}
               {['requested', 'confirmed'].includes(menuRes.status) && (
                 <button onClick={() => { if (window.confirm(`¿Sentar a ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'}, ${menuRes.party_size} pax?`)) setStatus(menuRes, 'seated') }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 48, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                  <Check size={15} /> Sentar ya (llegada anticipada)
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+                  <Armchair size={17} /> Sentar
                 </button>
               )}
               {menuRes.party_size >= eventPaxThreshold && (
