@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.48.2"
+export const APP_VERSION = "2.48.3"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.48.3",
+    date: "2026-07-31",
+    type: "PATCH",
+    changes: [
+      "HoH aterriza directo en Reservas al entrar (la tablet vive en el host stand); Reservas pasa al primer lugar de su barra inferior",
+    ]
+  },
   {
     version: "2.48.2",
     date: "2026-07-31",

@@ -26,11 +26,12 @@ const TEAM_SLOTS = [
   { id: 'profile',  label: STR.nav.profile,   icon: UserCircle },
 ]
 
-// Heart of House (piso + tablet de host): Mi turno · Reportar · Reservas · Perfil.
+// Heart of House (piso + tablet de host): Reservas primero — es su pantalla
+// predefinida; Mi turno y Reportar le siguen.
 const HOH_SLOTS = [
+  { id: 'concierge', label: 'Reservas',  icon: Shell },
   { id: 'casa',      label: 'Mi turno',  icon: ClipboardCheck },
   { id: 'reportar',  label: 'Reportar',  icon: Camera },
-  { id: 'concierge', label: 'Reservas',  icon: Shell },
   { id: 'profile',   label: STR.nav.profile, icon: UserCircle },
 ]
 

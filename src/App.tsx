@@ -102,7 +102,9 @@ export default function App() {
     if (!role || role === 'MASTER' || !userApps || userApps.size === 0) return
     const allowed = expandApps(userApps)
     if (!allowed.has(activeView)) {
-      const orden = ['casa', 'concierge', 'tasks', 'dashboard', 'crm', 'events', 'objectives', 'content', 'revenue', 'reports', 'activity', 'templates']
+      const orden = role === 'HEART_OF_HOUSE'
+        ? ['concierge', 'casa', 'tasks', 'dashboard', 'crm', 'events', 'objectives', 'content', 'revenue', 'reports', 'activity', 'templates']
+        : ['casa', 'concierge', 'tasks', 'dashboard', 'crm', 'events', 'objectives', 'content', 'revenue', 'reports', 'activity', 'templates']
       setActiveView(orden.find(v => allowed.has(v)) ?? 'profile')
     }
   }, [role, userApps, activeView])
@@ -114,9 +116,10 @@ export default function App() {
   useEffect(() => {
     if (landedRef.current || !role) return
     landedRef.current = true
-    // Team en tablet (host stand) aterriza en Concierge (Reservas); en teléfono, en Tareas
+    // Team en tablet (host stand) aterriza en Concierge (Reservas); en teléfono, en Tareas.
+    // HoH aterriza SIEMPRE en Reservas (la tablet vive en el host stand).
     const teamLanding = window.innerWidth >= 768 ? 'concierge' : 'tasks'
-    setActiveView(role === 'MASTER' || role === 'DEV' ? 'dashboard' : role === 'HEART_OF_HOUSE' ? 'casa' : role === 'TEAM' ? teamLanding : 'tasks')
+    setActiveView(role === 'MASTER' || role === 'DEV' ? 'dashboard' : role === 'HEART_OF_HOUSE' ? 'concierge' : role === 'TEAM' ? teamLanding : 'tasks')
   }, [role])
   const [scoringBU, setScoringBU] = useState<string | null>(null)
   const [buFilter, setBuFilter] = useState('')
