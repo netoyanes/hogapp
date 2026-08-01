@@ -133,12 +133,34 @@ export function Reservations({ userRole, userId }: Props) {
   // Panel único de la reserva: edición de la reserva Y del cliente en la
   // misma ventana (host/HoH incluido)
   const [editForm, setEditForm] = useState<{ date: string; time: string; pax: number; zone: string; notes: string } | null>(null)
-  const [guestEdit, setGuestEdit] = useState<{ name: string; phone: string } | null>(null)
+  const [guestEdit, setGuestEdit] = useState<{ name: string; phone: string; notes: string } | null>(null)
+  const [guestNotes0, setGuestNotes0] = useState('')
   useEffect(() => {
     setEditForm(menuRes ? { date: menuRes.date, time: menuRes.time_slot, pax: menuRes.party_size, zone: menuRes.zone ?? '', notes: menuRes.notes ?? '' } : null)
     const g = menuRes ? guestMap[menuRes.guest_id] : null
-    setGuestEdit(menuRes ? { name: g?.full_name ?? '', phone: g?.phone ?? '' } : null)
+    setGuestEdit(menuRes ? { name: g?.full_name ?? '', phone: g?.phone ?? '', notes: '' } : null)
+    setGuestNotes0('')
+    // Notas del cliente (persisten entre visitas) — se cargan al abrir el panel
+    if (menuRes) {
+      supabase.from('guests').select('notes').eq('id', menuRes.guest_id).maybeSingle().then(({ data }) => {
+        setGuestEdit(prev => prev ? { ...prev, notes: data?.notes ?? '' } : prev)
+        setGuestNotes0(data?.notes ?? '')
+      })
+    }
   }, [menuRes?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // VIP / Socio: se marca con un toque y se guarda al instante en el cliente
+  async function toggleGuestTag(tag: string) {
+    if (!menuRes) return
+    const g = guestMap[menuRes.guest_id]
+    if (!g) return
+    const has = (g.tags ?? []).includes(tag)
+    const tags = has ? (g.tags ?? []).filter(t => t !== tag) : [...(g.tags ?? []), tag]
+    setGuestMap(m => ({ ...m, [g.id]: { ...g, tags } }))
+    const { error } = await supabase.from('guests').update({ tags }).eq('id', g.id)
+    if (error) { showToast(`No se pudo: ${error.message}`, 'error'); load(); return }
+    logActivity('guest_updated', 'guest', g.id, { guest: g.full_name, [has ? 'quita' : 'agrega']: tag })
+  }
 
   async function saveResEdit() {
     if (!menuRes || !editForm) return
@@ -149,14 +171,19 @@ export function Reservations({ userRole, userId }: Props) {
     if (editForm.pax !== menuRes.party_size) cambios.push(`pax ${menuRes.party_size} → ${editForm.pax}`)
     if (editForm.zone !== (menuRes.zone ?? '')) cambios.push(`zona → ${editForm.zone || 'sin zona'}`)
     if (editForm.notes !== (menuRes.notes ?? '')) cambios.push('notas')
-    const guestChanged = guestEdit && g && (guestEdit.name.trim() !== (g.full_name ?? '') || guestEdit.phone.trim() !== (g.phone ?? ''))
+    const guestChanged = guestEdit && g && (
+      guestEdit.name.trim() !== (g.full_name ?? '') ||
+      guestEdit.phone.trim() !== (g.phone ?? '') ||
+      guestEdit.notes.trim() !== guestNotes0.trim()
+    )
     if (!cambios.length && !guestChanged) { setMenuRes(null); return }
 
-    // Cliente primero (nombre/teléfono) — si el teléfono choca con otro
-    // cliente, se avisa y no se pierde el resto
+    // Cliente primero (nombre/teléfono/notas persistentes) — si el teléfono
+    // choca con otro cliente, se avisa y no se pierde el resto
     if (guestChanged && guestEdit && g) {
       const { error: gErr } = await supabase.from('guests').update({
         full_name: guestEdit.name.trim() || g.full_name, phone: guestEdit.phone.trim() || g.phone,
+        notes: guestEdit.notes.trim() || null,
       }).eq('id', g.id)
       if (gErr) { showToast(`Cliente: ${gErr.message.includes('duplicate') ? 'ese teléfono ya es de otro cliente.' : gErr.message}`, 'error'); return }
       cambios.push('datos del cliente')
@@ -389,17 +416,18 @@ export function Reservations({ userRole, userId }: Props) {
             </button>
           )}
           {canWrite && (
-            <button onClick={() => setSearchOpen(true)} title="Buscar reservas (todos los venues y fechas)" aria-label="Buscar reservas"
-              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              <Search size={17} />
-            </button>
-          )}
-          {canWrite && (
             <button onClick={() => setCreating(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 44, padding: '0 16px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>
               <Plus size={15} /> {!isMobile && 'Nueva reserva'}
             </button>
           )}
         </div>
+
+        {/* Barra buscadora general — todos los venues y fechas */}
+        <button onClick={() => setSearchOpen(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 46, padding: '0 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', color: 'var(--text-tertiary)', cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box' }}>
+          <Search size={16} style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 14 }}>Buscar reserva o cliente — nombre, teléfono o nota…</span>
+        </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', textTransform: 'capitalize' }}>
@@ -622,6 +650,7 @@ export function Reservations({ userRole, userId }: Props) {
                       {r.proposed_time && <span style={chipStyle('amber')}>→ {r.proposed_time} por confirmar</span>}
                       {notes.toLowerCase().includes('depósito requerido') && <span style={chipStyle('amber')}>Depósito pendiente</span>}
                       {(g?.tags ?? []).some(t => t.toLowerCase() === 'vip') && <span style={chipStyle('gold')}>VIP</span>}
+                      {(g?.tags ?? []).some(t => t.toLowerCase() === 'socio') && <span style={chipStyle('gold')}>Socio</span>}
                       {/\bPR\b/.test(notes) && <span style={chipStyle('neutral')}>PR</span>}
                       {/alerg/i.test(notes) && <span style={chipStyle('red')}>Alergia</span>}
                       <SrcIcon size={12} style={{ color: 'var(--text-tertiary)' }} aria-label={SOURCE_LABEL[r.source]} />
@@ -744,13 +773,26 @@ export function Reservations({ userRole, userId }: Props) {
                       <input value={guestEdit.phone} onChange={e => setGuestEdit({ ...guestEdit, phone: e.target.value })} inputMode="tel" className="num"
                         style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, fontFamily: 'var(--font-mono)' }} /></label>
                   </div>
+                  <label style={{ display: 'block', fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 8 }}>Notas del cliente — se recuerdan en cada visita
+                    <textarea value={guestEdit.notes} onChange={e => setGuestEdit({ ...guestEdit, notes: e.target.value })} rows={2}
+                      placeholder="Mesa favorita, alergias, cómo le gusta su bebida, aniversario…"
+                      style={{ width: '100%', minHeight: 52, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, resize: 'vertical' }} /></label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    {(guestMap[menuRes.guest_id]?.tags ?? []).map(t => (
+                    {(['VIP', 'Socio'] as const).map(tag => {
+                      const on = (guestMap[menuRes.guest_id]?.tags ?? []).includes(tag)
+                      return (
+                        <button key={tag} onClick={() => toggleGuestTag(tag)}
+                          style={{ minHeight: 38, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? 'var(--accent)' : 'transparent', border: `1px solid ${on ? 'var(--accent)' : 'var(--border-default)'}`, color: on ? 'var(--on-accent)' : 'var(--text-secondary)' }}>
+                          {on ? '★ ' : ''}{tag}
+                        </button>
+                      )
+                    })}
+                    {(guestMap[menuRes.guest_id]?.tags ?? []).filter(t => !['VIP', 'Socio'].includes(t)).map(t => (
                       <span key={t} style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', borderRadius: 4, padding: '1px 6px' }}>{t}</span>
                     ))}
                     <button onClick={() => { const gid = menuRes.guest_id; setMenuRes(null); setOpenGuestId(gid) }}
                       style={{ marginLeft: 'auto', minHeight: 36, padding: '0 10px', borderRadius: 999, border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                      Perfil completo (visitas, etiquetas, notas) →
+                      Perfil completo →
                     </button>
                   </div>
                 </div>
