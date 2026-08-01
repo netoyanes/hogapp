@@ -129,30 +129,48 @@ export function Reservations({ userRole, userId }: Props) {
     return () => clearInterval(iv)
   }, [])
   useEffect(() => { setExFilter('all') }, [buId, date])
-  // Edición completa de la reserva desde el menú ⋯ (host/HoH incluido)
+  // Panel único de la reserva: edición de la reserva Y del cliente en la
+  // misma ventana (host/HoH incluido)
   const [editForm, setEditForm] = useState<{ date: string; time: string; pax: number; zone: string; notes: string } | null>(null)
+  const [guestEdit, setGuestEdit] = useState<{ name: string; phone: string } | null>(null)
   useEffect(() => {
     setEditForm(menuRes ? { date: menuRes.date, time: menuRes.time_slot, pax: menuRes.party_size, zone: menuRes.zone ?? '', notes: menuRes.notes ?? '' } : null)
+    const g = menuRes ? guestMap[menuRes.guest_id] : null
+    setGuestEdit(menuRes ? { name: g?.full_name ?? '', phone: g?.phone ?? '' } : null)
   }, [menuRes?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function saveResEdit() {
     if (!menuRes || !editForm) return
+    const g = guestMap[menuRes.guest_id]
     const cambios: string[] = []
     if (editForm.date !== menuRes.date) cambios.push(`fecha ${menuRes.date} → ${editForm.date}`)
     if (editForm.time !== menuRes.time_slot) cambios.push(`hora ${menuRes.time_slot} → ${editForm.time}`)
     if (editForm.pax !== menuRes.party_size) cambios.push(`pax ${menuRes.party_size} → ${editForm.pax}`)
     if (editForm.zone !== (menuRes.zone ?? '')) cambios.push(`zona → ${editForm.zone || 'sin zona'}`)
     if (editForm.notes !== (menuRes.notes ?? '')) cambios.push('notas')
-    if (!cambios.length) { setMenuRes(null); return }
-    const { error } = await supabase.from('reservations').update({
-      date: editForm.date, time_slot: editForm.time, party_size: Math.max(1, editForm.pax),
-      zone: editForm.zone.trim() || null, notes: editForm.notes.trim() || null,
-    }).eq('id', menuRes.id)
-    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
-    logActivity('reservation_updated', 'reservation', menuRes.id, {
-      guest: guestMap[menuRes.guest_id]?.full_name, bu: buMap[menuRes.bu_id], cambios, via: 'edicion',
-    })
-    showToast('Reserva actualizada.', 'success')
+    const guestChanged = guestEdit && g && (guestEdit.name.trim() !== (g.full_name ?? '') || guestEdit.phone.trim() !== (g.phone ?? ''))
+    if (!cambios.length && !guestChanged) { setMenuRes(null); return }
+
+    // Cliente primero (nombre/teléfono) — si el teléfono choca con otro
+    // cliente, se avisa y no se pierde el resto
+    if (guestChanged && guestEdit && g) {
+      const { error: gErr } = await supabase.from('guests').update({
+        full_name: guestEdit.name.trim() || g.full_name, phone: guestEdit.phone.trim() || g.phone,
+      }).eq('id', g.id)
+      if (gErr) { showToast(`Cliente: ${gErr.message.includes('duplicate') ? 'ese teléfono ya es de otro cliente.' : gErr.message}`, 'error'); return }
+      cambios.push('datos del cliente')
+    }
+    if (cambios.length) {
+      const { error } = await supabase.from('reservations').update({
+        date: editForm.date, time_slot: editForm.time, party_size: Math.max(1, editForm.pax),
+        zone: editForm.zone.trim() || null, notes: editForm.notes.trim() || null,
+      }).eq('id', menuRes.id)
+      if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+      logActivity('reservation_updated', 'reservation', menuRes.id, {
+        guest: guestEdit?.name || g?.full_name, bu: buMap[menuRes.bu_id], cambios, via: 'edicion',
+      })
+    }
+    showToast('Cambios guardados.', 'success')
     setMenuRes(null); load()
   }
   useEffect(() => {
@@ -577,7 +595,7 @@ export function Reservations({ userRole, userId }: Props) {
               return (
                 <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '8px 12px', flexShrink: 0, minHeight: 56, opacity: ctx === 'done' ? 0.55 : 1 }}>
                   <span className="num" style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', width: 44, flexShrink: 0, textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{r.time_slot}</span>
-                  <button onClick={() => setOpenGuestId(r.guest_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flex: 1, minWidth: 0, textAlign: 'left', minHeight: 44 }}>
+                  <button onClick={() => { setMenuRes(r); setCancelReason('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flex: 1, minWidth: 0, textAlign: 'left', minHeight: 44 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{gname}</span>
                       <span className="num" style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 700 }}>{r.party_size}p</span>
@@ -702,10 +720,39 @@ export function Reservations({ userRole, userId }: Props) {
               {menuRes.notes ? ` · ${menuRes.notes}` : ''}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* Cliente — datos editables en la misma ventana */}
+              {canWrite && guestEdit && (
+                <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', flex: 1 }}>Cliente</label>
+                    {(noShowMap[menuRes.guest_id] ?? 0) > 0 && (
+                      <span style={{ fontSize: 10, color: 'var(--status-attention)', fontFamily: 'var(--font-mono)' }}>{noShowMap[menuRes.guest_id]} no-show{noShowMap[menuRes.guest_id] > 1 ? 's' : ''} previos</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 8, marginBottom: 8 }}>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Nombre
+                      <input value={guestEdit.name} onChange={e => setGuestEdit({ ...guestEdit, name: e.target.value })}
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3 }} /></label>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Teléfono
+                      <input value={guestEdit.phone} onChange={e => setGuestEdit({ ...guestEdit, phone: e.target.value })} inputMode="tel" className="num"
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, fontFamily: 'var(--font-mono)' }} /></label>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {(guestMap[menuRes.guest_id]?.tags ?? []).map(t => (
+                      <span key={t} style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', borderRadius: 4, padding: '1px 6px' }}>{t}</span>
+                    ))}
+                    <button onClick={() => { const gid = menuRes.guest_id; setMenuRes(null); setOpenGuestId(gid) }}
+                      style={{ marginLeft: 'auto', minHeight: 36, padding: '0 10px', borderRadius: 999, border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                      Perfil completo (visitas, etiquetas, notas) →
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Edición completa — cualquier rol con escritura (HoH incluido) */}
               {canWrite && editForm && (
                 <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
-                  <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 8 }}>Editar reserva</label>
+                  <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 8 }}>Reserva</label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 0.8fr', gap: 8, marginBottom: 8 }}>
                     <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Fecha
                       <input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} className="num"
@@ -730,7 +777,7 @@ export function Reservations({ userRole, userId }: Props) {
                   </div>
                   <button onClick={saveResEdit}
                     style={{ width: '100%', minHeight: 44, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                    Guardar cambios
+                    Guardar cambios (reserva y cliente)
                   </button>
                 </div>
               )}
