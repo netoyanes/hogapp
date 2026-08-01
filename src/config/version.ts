@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.49.4"
+export const APP_VERSION = "2.50.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.50.0",
+    date: "2026-08-01",
+    type: "MINOR",
+    changes: [
+      "El cupo dejó de ser acumulado del día: ahora es un DETECTOR DE HORARIO — valida los pax simultáneos a la hora elegida usando las duraciones (la gente rota); max_pax del día = aforo del venue en un momento dado",
+      "Nueva reserva: si a esa hora no cabe, sugiere los 3 horarios más cercanos con lugar (chips verdes de un toque); el sobrecupo sigue siendo autorización Ops/Master",
+      "Misma regla en el link público y el bot (requieren re-paste): el bot responde con las horas SIN lugar y ofrece las cercanas libres, en lugar de rechazar la noche entera",
+      "Curva de ocupación: escala fija anclada al aforo con riel de cupo por columna — una barra baja se lee como poca ocupación del cupo, no como cambio de escala",
+    ]
+  },
   {
     version: "2.49.4",
     date: "2026-08-01",
