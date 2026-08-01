@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.49.1"
+export const APP_VERSION = "2.49.2"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.49.2",
+    date: "2026-08-01",
+    type: "PATCH",
+    changes: [
+      "Header de Reservas compactado en móvil: buscador y '+' en la misma fila, placeholder corto, chips de excepciones en una línea con scroll (el Walk-in ya no se pierde)",
+      "HoH: se quitó la fila de pestañas de Concierge cuando solo hay una (Reservas) — una fila más de pantalla para la lista",
+      "Fecha bien escrita ('Sábado 1 de agosto', no '1 De Agosto'); un solo grupo por la mañana se etiqueta 'Hoy' y los días futuros van sin encabezados de momento",
+    ]
+  },
   {
     version: "2.49.1",
     date: "2026-07-31",

@@ -415,23 +415,26 @@ export function Reservations({ userRole, userId }: Props) {
               <Settings2 size={17} />
             </button>
           )}
+        </div>
+
+        {/* Barra buscadora (todos los venues y fechas) + Nueva reserva en la misma fila */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setSearchOpen(true)}
+            style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, minHeight: 46, padding: '0 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', color: 'var(--text-tertiary)', cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box' }}>
+            <Search size={16} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Buscar cliente o reserva…</span>
+          </button>
           {canWrite && (
-            <button onClick={() => setCreating(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 44, padding: '0 16px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>
-              <Plus size={15} /> {!isMobile && 'Nueva reserva'}
+            <button onClick={() => setCreating(true)} aria-label="Nueva reserva"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 46, width: isMobile ? 46 : 'auto', padding: isMobile ? 0 : '0 16px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: isMobile ? 'var(--radius-md)' : 999, cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              <Plus size={17} /> {!isMobile && 'Nueva reserva'}
             </button>
           )}
         </div>
 
-        {/* Barra buscadora general — todos los venues y fechas */}
-        <button onClick={() => setSearchOpen(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 46, padding: '0 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', color: 'var(--text-tertiary)', cursor: 'pointer', textAlign: 'left', boxSizing: 'border-box' }}>
-          <Search size={16} style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 14 }}>Buscar reserva o cliente — nombre, teléfono o nota…</span>
-        </button>
-
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', textTransform: 'capitalize' }}>
-            {new Date(date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+          <span className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {(() => { const s = new Date(date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }); return s.charAt(0).toUpperCase() + s.slice(1) })()}
           </span>
           <div style={{ marginLeft: 'auto', maxWidth: 280, flex: 1 }}>
             <SegmentedControl options={[{ id: 'day', label: 'Día' }, { id: 'week', label: 'Semana' }, { id: 'all', label: 'Todas' }, { id: 'floor', label: 'Piso' }]} value={view} onChange={id => setView(id as 'day' | 'week' | 'all' | 'floor')} />
@@ -455,30 +458,30 @@ export function Reservations({ userRole, userId }: Props) {
           ].filter(c => c.n > 0)
           const totales = `${kpis.total} reservas · ${kpis.pax} pax`
           return (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto', paddingBottom: 2 }}>
               {chips.length === 0 ? (
-                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   <span style={{ color: 'var(--status-healthy)', fontWeight: 700 }}>Todo en orden</span> · {totales}
                 </span>
               ) : (
-                <>
-                  {chips.map(c => {
-                    const on = exFilter === c.id
-                    return (
-                      <button key={c.id} onClick={() => setExFilter(on ? 'all' : c.id)}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 44, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? 'var(--status-attention)' : 'color-mix(in srgb, var(--status-attention) 12%, transparent)', border: `1px solid color-mix(in srgb, var(--status-attention) ${on ? '100' : '40'}%, transparent)`, color: on ? '#000' : 'var(--status-attention)' }}>
-                        <span className="num" style={{ fontSize: 18, fontFamily: 'var(--font-mono)' }}>{c.n}</span> {c.label}
-                      </button>
-                    )
-                  })}
-                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>{totales}</span>
-                </>
+                chips.map(c => {
+                  const on = exFilter === c.id
+                  return (
+                    <button key={c.id} onClick={() => setExFilter(on ? 'all' : c.id)}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 44, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: on ? 'var(--status-attention)' : 'color-mix(in srgb, var(--status-attention) 12%, transparent)', border: `1px solid color-mix(in srgb, var(--status-attention) ${on ? '100' : '40'}%, transparent)`, color: on ? '#000' : 'var(--status-attention)' }}>
+                      <span className="num" style={{ fontSize: 18, fontFamily: 'var(--font-mono)' }}>{c.n}</span> {c.label}
+                    </button>
+                  )
+                })
               )}
               {date === today && (
                 <button onClick={() => setView('floor')}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 44, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', marginLeft: chips.length === 0 ? 'auto' : 0 }}>
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 44, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
                   <Footprints size={13} /> Walk-in
                 </button>
+              )}
+              {chips.length > 0 && (
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto', whiteSpace: 'nowrap', flexShrink: 0, paddingLeft: 8 }}>{totales}</span>
               )}
             </div>
           )
@@ -604,12 +607,19 @@ export function Reservations({ userRole, userId }: Props) {
               return 'later'
             }
             const rows = dayRows.filter(matchEx)
-            const groups = ([
+            let groups = ([
               { key: 'now', label: 'Ahora' }, { key: 'soon', label: 'Próximas' },
               { key: 'later', label: 'Más tarde' }, { key: 'done', label: 'Cerradas' },
             ] as { key: Ctx; label: string }[])
               .map(gr => ({ ...gr, rows: rows.filter(r => ctxOf(r) === gr.key) }))
               .filter(gr => gr.rows.length > 0)
+            // Un solo grupo "Más tarde" (mañana temprano) o día futuro: el
+            // encabezado por momento no aporta — se etiqueta como el día
+            if (!isToday) {
+              groups = rows.length ? [{ key: 'later' as Ctx, label: '', rows }] : []
+            } else if (groups.length === 1 && groups[0].key === 'later') {
+              groups = [{ ...groups[0], label: 'Hoy' }]
+            }
 
             const chipStyle = (tone: 'amber' | 'red' | 'gold' | 'neutral'): React.CSSProperties => {
               const c = tone === 'amber' ? 'var(--status-attention)' : tone === 'red' ? 'var(--status-risk)' : tone === 'gold' ? 'var(--accent)' : 'var(--text-tertiary)'
@@ -725,11 +735,13 @@ export function Reservations({ userRole, userId }: Props) {
                 )}
                 {groups.map(gr => (
                   <div key={gr.key}>
-                    <div style={{ position: 'sticky', top: -12, zIndex: 2, background: 'var(--bg-base)', padding: '8px 0 6px', fontSize: 11, fontWeight: 800, color: gr.key === 'now' ? 'var(--text-primary)' : 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
-                      {gr.label} · {gr.rows.length}
-                    </div>
+                    {gr.label && (
+                      <div style={{ position: 'sticky', top: -12, zIndex: 2, background: 'var(--bg-base)', padding: '8px 0 6px', fontSize: 11, fontWeight: 800, color: gr.key === 'now' ? 'var(--text-primary)' : 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
+                        {gr.label} · {gr.rows.length}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {gr.rows.map(r => renderRow(r, gr.key))}
+                      {gr.rows.map(r => renderRow(r, isToday ? gr.key : ctxOf(r)))}
                     </div>
                   </div>
                 ))}
