@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.50.0"
+export const APP_VERSION = "2.50.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.50.1",
+    date: "2026-08-01",
+    type: "PATCH",
+    changes: [
+      "Formulario público: ahora muestra el motivo real cuando el sistema rechaza (cupo a esa hora, teléfono inválido…) en lugar del genérico 'No se pudo enviar'",
+      "Curva: espacio de cabecera en la escala — la barra más alta y su número ya no se cortan arriba",
+    ]
+  },
   {
     version: "2.50.0",
     date: "2026-08-01",

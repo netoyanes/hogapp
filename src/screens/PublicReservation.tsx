@@ -43,6 +43,23 @@ export function PublicReservation({ code }: { code: string }) {
   const [slotsLoading, setSlotsLoading] = useState(false)
 
   const tableEngine = info?.engine === 'tables'
+
+  // El Edge Function responde con status != 2xx cuando rechaza (cupo lleno,
+  // datos inválidos) — supabase-js lo entrega como FunctionsHttpError y el
+  // JSON con el motivo real viene en error.context. Sin esto, todo rechazo
+  // se veía como el genérico "No se pudo enviar".
+  async function invokePublic(body: Record<string, unknown>): Promise<{ data?: Record<string, unknown>; errMsg?: string }> {
+    const { data, error } = await supabase.functions.invoke('public-reservation', { body })
+    if (!error) return data?.error ? { errMsg: String(data.error) } : { data }
+    try {
+      const ctx = (error as { context?: Response }).context
+      if (ctx) {
+        const j = await ctx.json()
+        if (j?.error) return { errMsg: String(j.error) }
+      }
+    } catch { /* sin cuerpo legible — cae al genérico */ }
+    return { errMsg: 'No se pudo enviar. Intenta de nuevo.' }
+  }
   useEffect(() => {
     if (!tableEngine || !fecha || !(parseInt(pax, 10) > 0)) { setSlots(null); return }
     setSlotsLoading(true)
@@ -75,12 +92,10 @@ export function PublicReservation({ code }: { code: string }) {
       setFormErr('Elige uno de los horarios disponibles.'); return
     }
     setFormErr(null); setSending(true)
-    const { data, error } = await supabase.functions.invoke('public-reservation', {
-      body: { action: 'book', code, nombre, telefono, fecha, horario, pax, notas },
-    })
+    const { data, errMsg } = await invokePublic({ action: 'book', code, nombre, telefono, fecha, horario, pax, notas })
     setSending(false)
-    if (error || data?.error) { setFormErr(data?.error ?? 'No se pudo enviar. Intenta de nuevo.'); return }
-    setDone(data as Done)
+    if (errMsg) { setFormErr(errMsg); return }
+    setDone(data as unknown as Done)
   }
 
   const shell = (children: React.ReactNode) => (

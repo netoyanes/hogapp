@@ -126,8 +126,10 @@ export function OccupancyCurve({ buId, date, reservations, capacity, guestMap }:
   const limit = mode === 'pax' ? aforo : mesasDisp
   const values = curve.slots.map(s => mode === 'pax' ? s.pax : s.mesas)
   // Escala FIJA anclada al aforo: la línea de cupo siempre queda a la misma
-  // altura y las barras se leen contra ella — no contra el pico del momento
-  const maxScale = Math.max((limit || 0) * 1.15, Math.max(...values, 1) * 1.08)
+  // altura y las barras se leen contra ella — no contra el pico del momento.
+  // El headroom (1.18/1.25) garantiza que la barra más alta y su etiqueta
+  // SIEMPRE quepan dentro del área de trazado (nada se corta arriba).
+  const maxScale = Math.max((limit || 0) * 1.25, Math.max(...values, 1) * 1.18)
   // El color lo determina el conflicto de MESAS (detecta la sobreventa real),
   // aunque la altura muestre pax. Sin piso configurado, aplica el aforo en pax.
   const isOver = (s: { pax: number; mesas: number }) =>
