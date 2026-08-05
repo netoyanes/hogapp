@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.51.1"
+export const APP_VERSION = "2.52.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.52.0",
+    date: "2026-08-01",
+    type: "MINOR",
+    changes: [
+      "Eventos rediseñado como TABLA (estilo Asana) en escritorio: columnas de fecha, día coloreado, evento, tipo, venue, hora, cover, presupuesto, asistencia, colaboradores, responsable y estado — con sumas por mes de presupuesto y asistencia",
+      "Campos nuevos por evento: asistencia esperada, requerimientos y colaboradores/talento",
+      "Tareas del evento por BULLETS: escribes una por línea y el botón 'Pasar a Tareas' las crea en el Task Manager ligadas al evento (venue y fecha límite incluidos); también al crear el evento",
+      "En teléfono se mantienen las tarjetas compactas",
+    ]
+  },
   {
     version: "2.51.1",
     date: "2026-08-01",
