@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, X, Search, Trash2, CheckSquare } from 'lucide-react'
+import { Plus, X, Search, Trash2, CheckSquare, ListPlus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import { useIsMobile } from '../hooks/useIsMobile'
-import { Avatar } from '../components/ui/Avatar'
 import { BUChip, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EVENTOS — planeación de eventos multi-venue (estilo Asana):
-// lista agrupada por mes con descripción, fecha, tipo, cover, presupuesto y
-// responsable; cada evento liga tareas de ejecución del Task Manager.
+// en escritorio es una TABLA agrupada por mes con sumas (presupuesto y
+// asistencia); en teléfono, tarjetas. Cada evento captura descripción, fecha,
+// tipo, cover, presupuesto, asistencia esperada, requerimientos, colaboradores
+// y responsable — y sus tareas de ejecución se escriben por bullets y se pasan
+// al Task Manager con un botón.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type EventStatus = 'idea' | 'planning' | 'approved' | 'done' | 'cancelled'
@@ -27,6 +29,9 @@ interface EventPlan {
   has_cover: boolean
   cover_price: number | null
   budget: number | null
+  expected_attendance: number | null
+  requirements: string | null
+  collaborators: string | null
   responsible: string | null
   status: EventStatus
 }
@@ -51,8 +56,12 @@ const STATUS_META: Record<EventStatus, { label: string; tone: StatusTone }> = {
   cancelled: { label: 'Cancelado',      tone: 'risk' },
 }
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+// Chips de día coloreados como la referencia — se distingue el día al vistazo
+const DAY_COLORS = ['#5E9FB8', '#8FBF9F', '#D98C9F', '#DB9A6A', '#C9A76B', '#B08BC9', '#E8A33D']
 
 const mxn = (n: number) => `MX$${Number(n).toLocaleString('es-MX')}`
+// Bullets → títulos de tarea: quita viñetas (-, •, *) y líneas vacías
+const parseBullets = (text: string) => text.split('\n').map(l => l.replace(/^[-•*]\s*/, '').trim()).filter(Boolean)
 
 interface Props { userRole?: string; userId?: string; onOpenTask?: (id: string) => void }
 
@@ -98,6 +107,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
       if (!q) return true
       return r.name.toLowerCase().includes(q)
         || (r.description ?? '').toLowerCase().includes(q)
+        || (r.collaborators ?? '').toLowerCase().includes(q)
         || TYPE_META[r.event_type].label.toLowerCase().includes(q)
         || (buMap[r.bu_id] ?? '').toLowerCase().includes(q)
         || (nameOf(r.responsible) ?? '').toLowerCase().includes(q)
@@ -125,6 +135,23 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
     background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)',
     color: 'var(--text-primary)', padding: '8px 10px', fontSize: 13, outline: 'none', minHeight: 42, boxSizing: 'border-box',
   }
+  const th: React.CSSProperties = {
+    position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg-base)', textAlign: 'left',
+    fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase',
+    fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', padding: '8px 10px',
+    borderBottom: '1px solid var(--border-default)', whiteSpace: 'nowrap',
+  }
+  const td: React.CSSProperties = {
+    padding: '9px 10px', borderBottom: '1px solid var(--border-subtle)', fontSize: 12.5,
+    color: 'var(--text-secondary)', whiteSpace: 'nowrap', verticalAlign: 'middle',
+  }
+
+  const typePill = (t: EventType) => (
+    <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: TYPE_META[t].color, background: `color-mix(in srgb, ${TYPE_META[t].color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${TYPE_META[t].color} 40%, transparent)`, borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{TYPE_META[t].label}</span>
+  )
+  const dayChip = (d: Date) => (
+    <span style={{ fontSize: 10, fontWeight: 700, color: '#0d0d0d', background: DAY_COLORS[d.getDay()], borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{DAYS_ES[d.getDay()]}</span>
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -155,61 +182,132 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
         </div>
       </div>
 
-      {/* Lista agrupada por mes */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+      {/* Cuerpo: tabla (escritorio) / tarjetas (teléfono), agrupado por mes */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 16px' : '0 0 24px' }}>
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: isMobile ? 0 : 16 }}>
             {[64, 64, 64].map((h, i) => <div key={i} className="animate-pulse-green" style={{ height: h, background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)' }} />)}
           </div>
         ) : groups.length === 0 ? (
           <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>
             {rows.length === 0 ? 'Sin eventos todavía — crea el primero con “+ Evento”.' : 'Sin resultados con estos filtros.'}
           </p>
-        ) : groups.map(g => (
-          <div key={g.key} style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', margin: '0 0 8px' }}>
-              {g.label} <span style={{ fontWeight: 400 }}>· {g.items.length}</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {g.items.map(ev => {
-                const t = TYPE_META[ev.event_type]
-                const st = STATUS_META[ev.status]
-                const respName = nameOf(ev.responsible)
-                const d = ev.date ? new Date(ev.date + 'T00:00:00') : null
+        ) : !isMobile ? (
+          /* ── Tabla estilo Asana con sumas por mes ── */
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1080 }}>
+              <thead>
+                <tr>
+                  <th style={th}>Fecha</th><th style={th}>Día</th><th style={{ ...th, minWidth: 220 }}>Evento</th>
+                  <th style={th}>Tipo</th><th style={th}>Venue</th><th style={th}>Hora</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Cover</th><th style={{ ...th, textAlign: 'right' }}>Presupuesto</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Asistencia</th><th style={th}>Colaboradores</th>
+                  <th style={th}>Responsable</th><th style={th}>Estado</th>
+                </tr>
+              </thead>
+              {groups.map(g => {
+                const sumBudget = g.items.reduce((s, e) => s + (e.budget ?? 0), 0)
+                const sumAtt = g.items.reduce((s, e) => s + (e.expected_attendance ?? 0), 0)
                 return (
-                  <button key={ev.id} onClick={() => setEditing(ev)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '10px 12px', cursor: 'pointer', textAlign: 'left', minHeight: 60, opacity: ev.status === 'cancelled' ? 0.55 : 1 }}>
-                    <div style={{ textAlign: 'center', flexShrink: 0, width: 40 }}>
-                      {d ? (
-                        <>
-                          <div className="num" style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>{d.getDate()}</div>
-                          <div style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>{DAYS_ES[d.getDay()]}</div>
-                        </>
-                      ) : (
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>—</div>
-                      )}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{ev.name}</span>
-                        <BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" />
-                        <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)', color: t.color, background: `color-mix(in srgb, ${t.color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${t.color} 40%, transparent)`, borderRadius: 4, padding: '1px 6px' }}>{t.label}</span>
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        {ev.start_time && <span className="num">{ev.start_time}{ev.end_time ? `–${ev.end_time}` : ''}</span>}
-                        <span>{ev.has_cover ? `Cover ${ev.cover_price != null ? mxn(ev.cover_price) : ''}` : 'Sin cover'}</span>
-                        {ev.budget != null && <span>Presupuesto {mxn(ev.budget)}</span>}
-                        {respName && <span>· {respName}</span>}
-                      </div>
-                    </div>
-                    {!isMobile && respName && <Avatar name={respName} size={26} />}
-                    <StatusBadgeV2 tone={st.tone} label={st.label} />
-                  </button>
+                  <tbody key={g.key}>
+                    <tr>
+                      <td colSpan={12} style={{ ...td, borderBottom: 'none', paddingTop: 18, fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
+                        {g.label} · {g.items.length}
+                      </td>
+                    </tr>
+                    {g.items.map(ev => {
+                      const d = ev.date ? new Date(ev.date + 'T00:00:00') : null
+                      const respName = nameOf(ev.responsible)
+                      return (
+                        <tr key={ev.id} onClick={() => setEditing(ev)} className="hover:bg-[var(--bg-surface)]"
+                          style={{ cursor: 'pointer', opacity: ev.status === 'cancelled' ? 0.5 : 1 }}>
+                          <td style={{ ...td, fontFamily: 'var(--font-mono)' }} className="num">
+                            {d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '—'}
+                          </td>
+                          <td style={td}>{d ? dayChip(d) : ''}</td>
+                          <td style={{ ...td, whiteSpace: 'normal' }}>
+                            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>{ev.name}</span>
+                            {ev.description && <span style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>{ev.description}</span>}
+                          </td>
+                          <td style={td}>{typePill(ev.event_type)}</td>
+                          <td style={td}><BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" /></td>
+                          <td style={{ ...td, fontFamily: 'var(--font-mono)' }} className="num">
+                            {ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ''}` : '—'}
+                          </td>
+                          <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' }} className="num">
+                            {ev.has_cover ? (ev.cover_price != null ? mxn(ev.cover_price) : 'Sí') : '—'}
+                          </td>
+                          <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' }} className="num">
+                            {ev.budget != null ? mxn(ev.budget) : '—'}
+                          </td>
+                          <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' }} className="num">
+                            {ev.expected_attendance ?? '—'}
+                          </td>
+                          <td style={{ ...td, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.collaborators ?? '—'}</td>
+                          <td style={{ ...td, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>{respName ?? '—'}</td>
+                          <td style={td}><StatusBadgeV2 tone={STATUS_META[ev.status].tone} label={STATUS_META[ev.status].label} /></td>
+                        </tr>
+                      )
+                    })}
+                    {(sumBudget > 0 || sumAtt > 0) && (
+                      <tr>
+                        <td colSpan={7} style={{ ...td, textAlign: 'right', fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Suma del mes</td>
+                        <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)' }} className="num">{sumBudget > 0 ? mxn(sumBudget) : ''}</td>
+                        <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)' }} className="num">{sumAtt > 0 ? sumAtt : ''}</td>
+                        <td colSpan={3} style={td} />
+                      </tr>
+                    )}
+                  </tbody>
                 )
               })}
-            </div>
+            </table>
           </div>
-        ))}
+        ) : (
+          /* ── Teléfono: tarjetas compactas ── */
+          groups.map(g => (
+            <div key={g.key} style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', margin: '0 0 8px' }}>
+                {g.label} <span style={{ fontWeight: 400 }}>· {g.items.length}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {g.items.map(ev => {
+                  const d = ev.date ? new Date(ev.date + 'T00:00:00') : null
+                  const respName = nameOf(ev.responsible)
+                  return (
+                    <button key={ev.id} onClick={() => setEditing(ev)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '10px 12px', cursor: 'pointer', textAlign: 'left', minHeight: 60, opacity: ev.status === 'cancelled' ? 0.55 : 1 }}>
+                      <div style={{ textAlign: 'center', flexShrink: 0, width: 40 }}>
+                        {d ? (
+                          <>
+                            <div className="num" style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>{d.getDate()}</div>
+                            <div style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>{DAYS_ES[d.getDay()]}</div>
+                          </>
+                        ) : (
+                          <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>—</div>
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{ev.name}</span>
+                          <BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" />
+                          {typePill(ev.event_type)}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {ev.start_time && <span className="num">{ev.start_time}{ev.end_time ? `–${ev.end_time}` : ''}</span>}
+                          <span>{ev.has_cover ? `Cover ${ev.cover_price != null ? mxn(ev.cover_price) : ''}` : 'Sin cover'}</span>
+                          {ev.budget != null && <span>Presup. {mxn(ev.budget)}</span>}
+                          {ev.expected_attendance != null && <span>{ev.expected_attendance} asist.</span>}
+                          {respName && <span>· {respName}</span>}
+                        </div>
+                      </div>
+                      <StatusBadgeV2 tone={STATUS_META[ev.status].tone} label={STATUS_META[ev.status].label} />
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {(creating || editing) && (
@@ -230,7 +328,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
   )
 }
 
-// ── Sheet de crear/editar evento + tareas ligadas ────────────────────────────
+// ── Sheet de crear/editar evento + tareas por bullets ────────────────────────
 function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobile, onOpenTask, onClose, onSaved }: {
   event: EventPlan | null
   buList: { id: string; code: string; name: string }[]
@@ -253,11 +351,14 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
   const [hasCover, setHasCover] = useState(event?.has_cover ?? false)
   const [coverPrice, setCoverPrice] = useState(event?.cover_price != null ? String(event.cover_price) : '')
   const [budget, setBudget] = useState(event?.budget != null ? String(event.budget) : '')
+  const [expectedAtt, setExpectedAtt] = useState(event?.expected_attendance != null ? String(event.expected_attendance) : '')
+  const [requirements, setRequirements] = useState(event?.requirements ?? '')
+  const [collaborators, setCollaborators] = useState(event?.collaborators ?? '')
   const [responsible, setResponsible] = useState(event?.responsible ?? '')
   const [status, setStatus] = useState<EventStatus>(event?.status ?? 'idea')
   const [saving, setSaving] = useState(false)
   const [tasks, setTasks] = useState<TaskLite[]>([])
-  const [newTask, setNewTask] = useState('')
+  const [bulkTasks, setBulkTasks] = useState('')
   const canDelete = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '')
 
   useEffect(() => {
@@ -265,6 +366,22 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
     supabase.from('tasks').select('id, title, status').eq('event_id', event.id).order('created_at')
       .then(({ data }) => setTasks((data ?? []) as TaskLite[]))
   }, [event])
+
+  // Bullets → tareas reales en el Task Manager, ligadas al evento
+  async function pushBulkTasks(eventId: string, eventName: string, eventBu: string, eventDate: string | null): Promise<number> {
+    const lines = parseBullets(bulkTasks)
+    if (!lines.length) return 0
+    const rows = lines.map(title => ({
+      title, status: 'OPEN', priority: 'MEDIUM', deadline_type: 'SOFT',
+      bu_id: eventBu, due_date: eventDate, event_id: eventId, created_by: userId ?? null,
+    }))
+    const { data, error } = await supabase.from('tasks').insert(rows).select('id, title, status')
+    if (error || !data) { showToast(`No se pudieron crear las tareas: ${error?.message}`, 'error'); return 0 }
+    logActivity('task_created', 'event', eventId, { via: 'event_bullets', event: eventName, tareas: lines.length })
+    setTasks(prev => [...prev, ...(data as TaskLite[])])
+    setBulkTasks('')
+    return data.length
+  }
 
   async function save() {
     if (!name.trim() || !buId) { showToast('Ponle nombre y venue al evento.', 'error'); return }
@@ -275,6 +392,9 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
       event_type: type, has_cover: hasCover,
       cover_price: hasCover && coverPrice !== '' ? Number(coverPrice) : null,
       budget: budget !== '' ? Number(budget) : null,
+      expected_attendance: expectedAtt !== '' ? Math.max(0, Number(expectedAtt)) : null,
+      requirements: requirements.trim() || null,
+      collaborators: collaborators.trim() || null,
       responsible: responsible || null, status,
     }
     if (event) {
@@ -287,8 +407,11 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
       setSaving(false)
       if (error || !data) { showToast(`No se pudo crear: ${error?.message}`, 'error'); return }
       logActivity('event_created', 'event', data.id, { name: row.name })
+      // Bullets escritos durante la creación → se pasan a Tareas de una vez
+      const n = await pushBulkTasks(data.id, row.name, buId, row.date)
+      if (n) showToast(`Evento creado con ${n} tareas en Tareas.`, 'success')
     }
-    showToast(event ? 'Evento guardado.' : 'Evento creado.', 'success')
+    if (event) showToast('Evento guardado.', 'success')
     onSaved()
   }
 
@@ -300,27 +423,15 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
     onSaved()
   }
 
-  // Tarea rápida ligada al evento: cae al Task Manager con venue y fecha límite
-  async function addTask() {
-    if (!event || !newTask.trim()) return
-    const { data, error } = await supabase.from('tasks').insert({
-      title: newTask.trim(), status: 'OPEN', priority: 'MEDIUM', deadline_type: 'SOFT',
-      bu_id: event.bu_id, due_date: event.date, event_id: event.id, created_by: userId ?? null,
-    }).select('id, title, status').single()
-    if (error || !data) { showToast(`No se pudo crear la tarea: ${error?.message}`, 'error'); return }
-    logActivity('task_created', 'task', data.id, { title: newTask.trim(), via: 'event', event: event.name })
-    setTasks(prev => [...prev, data as TaskLite])
-    setNewTask('')
-  }
-
   const inp: React.CSSProperties = {
     width: '100%', minHeight: 44, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)',
     borderRadius: 'var(--radius-sm)', padding: '0 12px', fontSize: 14, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
   }
   const lbl: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
+  const bulkPending = parseBullets(bulkTasks).length
 
   return (
-    <Sheet open onClose={onClose} isMobile={isMobile} width={480}>
+    <Sheet open onClose={onClose} isMobile={isMobile} width={520}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-3) 0' }}>
           <h2 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>{event ? 'Evento' : 'Nuevo evento'}</h2>
@@ -364,22 +475,26 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
           </div>
 
           <div>
-            <label style={lbl}>Descripción</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} disabled={!canWrite}
-              placeholder="Concepto, line-up, requerimientos…" style={{ ...inp, minHeight: 72, padding: '10px 12px', resize: 'vertical' }} />
+            <label style={lbl}>Descripción / caption</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} disabled={!canWrite}
+              placeholder="Concepto, line-up, copy del evento…" style={{ ...inp, minHeight: 60, padding: '10px 12px', resize: 'vertical' }} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'end' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, alignItems: 'end' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minHeight: 44 }}>
               <input type="checkbox" checked={hasCover} onChange={e => setHasCover(e.target.checked)} disabled={!canWrite} style={{ accentColor: 'var(--accent)', width: 18, height: 18 }} />
               <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Tiene cover</span>
             </label>
-            {hasCover && (
+            {hasCover ? (
               <div>
-                <label style={lbl}>Precio cover (MXN)</label>
+                <label style={lbl}>Precio cover</label>
                 <input type="number" inputMode="numeric" min={0} value={coverPrice} onChange={e => setCoverPrice(e.target.value)} className="num" style={inp} disabled={!canWrite} />
               </div>
-            )}
+            ) : <div />}
+            <div>
+              <label style={lbl}>Asistencia esperada</label>
+              <input type="number" inputMode="numeric" min={0} value={expectedAtt} onChange={e => setExpectedAtt(e.target.value)} className="num" style={inp} disabled={!canWrite} placeholder="0" />
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -396,6 +511,19 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
             </div>
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div>
+              <label style={lbl}>Requerimientos</label>
+              <textarea value={requirements} onChange={e => setRequirements(e.target.value)} rows={2} disabled={!canWrite}
+                placeholder="dj setup, proyector, materiales…" style={{ ...inp, minHeight: 60, padding: '10px 12px', resize: 'vertical' }} />
+            </div>
+            <div>
+              <label style={lbl}>Colaboradores / talento</label>
+              <textarea value={collaborators} onChange={e => setCollaborators(e.target.value)} rows={2} disabled={!canWrite}
+                placeholder="DJs, artistas, marcas invitadas…" style={{ ...inp, minHeight: 60, padding: '10px 12px', resize: 'vertical' }} />
+            </div>
+          </div>
+
           <div>
             <label style={lbl}>Estado</label>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -408,12 +536,12 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
             </div>
           </div>
 
-          {/* Tareas del evento — la planeación baja al Task Manager */}
-          {event && (
+          {/* Tareas del evento — por bullets, con botón directo al Task Manager */}
+          {canWrite && (
             <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                 <CheckSquare size={13} style={{ color: 'var(--accent)' }} />
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Tareas del evento ({tasks.length})</span>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Tareas del evento{tasks.length ? ` (${tasks.length})` : ''}</span>
               </div>
               {tasks.map(t => (
                 <button key={t.id} onClick={() => onOpenTask?.(t.id)}
@@ -422,16 +550,20 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
                   <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{t.status}</span>
                 </button>
               ))}
-              {canWrite && (
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="Nueva tarea del evento…"
-                    onKeyDown={e => { if (e.key === 'Enter') addTask() }}
-                    style={{ ...inp, minHeight: 40, flex: 1 }} />
-                  <button onClick={addTask} disabled={!newTask.trim()}
-                    style={{ minHeight: 40, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: newTask.trim() ? 'var(--accent)' : 'var(--bg-base)', color: newTask.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', cursor: newTask.trim() ? 'pointer' : 'not-allowed', fontWeight: 700 }}>
-                    <Plus size={14} />
-                  </button>
-                </div>
+              <textarea value={bulkTasks} onChange={e => setBulkTasks(e.target.value)} rows={4}
+                placeholder={'Una tarea por línea (bullets):\n- Confirmar DJ y rider\n- Diseñar flyer\n- Brief a cocina'}
+                style={{ ...inp, minHeight: 88, padding: '10px 12px', resize: 'vertical', fontSize: 13, marginBottom: 8 }} />
+              {event ? (
+                <button onClick={() => pushBulkTasks(event.id, event.name, event.bu_id, event.date)} disabled={bulkPending === 0}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 44, borderRadius: 999, border: 'none', background: bulkPending ? 'var(--accent)' : 'var(--bg-base)', color: bulkPending ? 'var(--on-accent)' : 'var(--text-tertiary)', fontSize: 13, fontWeight: 700, cursor: bulkPending ? 'pointer' : 'not-allowed' }}>
+                  <ListPlus size={15} /> Pasar {bulkPending || ''} tarea{bulkPending === 1 ? '' : 's'} a Tareas
+                </button>
+              ) : (
+                bulkPending > 0 && (
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
+                    {bulkPending} tarea{bulkPending === 1 ? '' : 's'} se crearán en Tareas al guardar el evento.
+                  </p>
+                )
               )}
             </div>
           )}
