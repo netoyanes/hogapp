@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.55.0"
+export const APP_VERSION = "2.55.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.55.1",
+    date: "2026-08-06",
+    type: "PATCH",
+    changes: [
+      "Proyectos: la barra de avance contaba tareas con un estado inexistente (DONE) — ahora cuenta las Aprobadas, el estado terminal real",
+    ]
+  },
   {
     version: "2.55.0",
     date: "2026-08-01",

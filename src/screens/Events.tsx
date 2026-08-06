@@ -146,7 +146,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
     for (const t of (tk ?? []) as { event_id: string; status: string }[]) {
       const p = (pm[t.event_id] = pm[t.event_id] ?? { done: 0, total: 0 })
       p.total++
-      if (['DONE', 'ARCHIVED'].includes(t.status)) p.done++
+      if (t.status === 'APPROVED') p.done++ // estado terminal real de tasks
     }
     setProgress(pm)
     setLoading(false)
@@ -1094,7 +1094,7 @@ function EventSheet({ event, templates, buList, people, canWrite, userId, userRo
               {tasks.map(t => (
                 <button key={t.id} onClick={() => onOpenTask?.(t.id)}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left', minHeight: 40, marginBottom: 6 }}>
-                  <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', textDecoration: ['DONE', 'ARCHIVED'].includes(t.status) ? 'line-through' : 'none', opacity: ['DONE', 'ARCHIVED'].includes(t.status) ? 0.6 : 1 }}>{t.title}</span>
+                  <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', textDecoration: t.status === 'APPROVED' ? 'line-through' : 'none', opacity: t.status === 'APPROVED' ? 0.6 : 1 }}>{t.title}</span>
                   <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{t.status}</span>
                 </button>
               ))}
