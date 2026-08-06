@@ -49,7 +49,7 @@ const APP_CATALOG: { id: string; label: string }[] = [
   { id: 'crm',        label: 'Comercial' },
   { id: 'concierge',  label: 'Concierge' },
   { id: 'casa',       label: 'La Casa' },
-  { id: 'events',     label: 'Eventos' },
+  { id: 'events',     label: 'Proyectos' },
   { id: 'objectives', label: 'Objetivos' },
   { id: 'content',    label: 'Contenido' },
   { id: 'revenue',    label: 'Ingresos' },

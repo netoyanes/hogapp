@@ -16,13 +16,16 @@ import { BUChip, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../com
 
 type EventStatus = 'idea' | 'planning' | 'approved' | 'done' | 'cancelled'
 type EventType = 'musica' | 'arte' | 'performance' | 'workshop' | 'comunidad' | 'comercial' | 'deporte' | 'privado' | 'otro'
+type PlanKind = 'evento' | 'adecuacion' | 'remodelacion' | 'apertura' | 'mantenimiento' | 'otro'
 
 interface EventPlan {
   id: string
   bu_id: string
   name: string
   description: string | null
+  kind: PlanKind
   date: string | null
+  end_date: string | null
   start_time: string | null
   end_time: string | null
   event_type: EventType
@@ -36,6 +39,18 @@ interface EventPlan {
   status: EventStatus
 }
 interface TaskLite { id: string; title: string; status: string }
+interface Resource { id: string; name: string; qty: number; unit_cost: number | null; notes: string | null }
+interface BudgetItem { id: string; concept: string; amount: number; is_income: boolean; deal_id: string | null }
+
+// Disciplinas de proyecto (no-evento): adecuación, remodelación, apertura…
+const KIND_META: Record<PlanKind, { label: string; color: string }> = {
+  evento:        { label: 'Evento',        color: '#E8A33D' },
+  adecuacion:    { label: 'Adecuación',    color: '#7FA3C2' },
+  remodelacion:  { label: 'Remodelación',  color: '#D98C9F' },
+  apertura:      { label: 'Apertura',      color: '#5FBF7A' },
+  mantenimiento: { label: 'Mantenimiento', color: '#C9A76B' },
+  otro:          { label: 'Proyecto',      color: '#9C9488' },
+}
 
 const TYPE_META: Record<EventType, { label: string; color: string }> = {
   musica:      { label: 'Música',      color: '#D98C9F' },
@@ -73,6 +88,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
   const [people, setPeople] = useState<{ id: string; full_name: string | null }[]>([])
   const [loading, setLoading] = useState(true)
   const [buFilter, setBuFilter] = useState('')
+  const [kindFilter, setKindFilter] = useState<'all' | 'eventos' | 'proyectos'>('all')
   const [search, setSearch] = useState('')
   const [showPast, setShowPast] = useState(false)
   const [editing, setEditing] = useState<EventPlan | null>(null)
@@ -103,7 +119,10 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
     const q = search.trim().toLowerCase()
     return rows.filter(r => {
       if (buFilter && r.bu_id !== buFilter) return false
-      if (!showPast && r.date && r.date < monthStart) return false
+      if (kindFilter === 'eventos' && r.kind !== 'evento') return false
+      if (kindFilter === 'proyectos' && r.kind === 'evento') return false
+      // Un proyecto sigue vigente mientras su fecha FIN no haya pasado
+      if (!showPast && (r.end_date ?? r.date) && (r.end_date ?? r.date)! < monthStart) return false
       if (!q) return true
       return r.name.toLowerCase().includes(q)
         || (r.description ?? '').toLowerCase().includes(q)
@@ -112,7 +131,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
         || (buMap[r.bu_id] ?? '').toLowerCase().includes(q)
         || (nameOf(r.responsible) ?? '').toLowerCase().includes(q)
     })
-  }, [rows, buFilter, search, showPast, monthStart, buMap, nameOf])
+  }, [rows, buFilter, kindFilter, search, showPast, monthStart, buMap, nameOf])
 
   // Agrupar por mes (los sin fecha, al final en "Sin fecha")
   const groups = useMemo(() => {
@@ -149,6 +168,15 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
   const typePill = (t: EventType) => (
     <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: TYPE_META[t].color, background: `color-mix(in srgb, ${TYPE_META[t].color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${TYPE_META[t].color} 40%, transparent)`, borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{TYPE_META[t].label}</span>
   )
+  // Eventos muestran su tipo (Música, Arte…); proyectos su disciplina
+  const planPill = (ev: EventPlan) => ev.kind === 'evento'
+    ? typePill(ev.event_type)
+    : <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: KIND_META[ev.kind].color, background: `color-mix(in srgb, ${KIND_META[ev.kind].color} 14%, transparent)`, border: `1px solid ${KIND_META[ev.kind].color}`, borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{KIND_META[ev.kind].label}</span>
+  const fechaLabel = (ev: EventPlan) => {
+    if (!ev.date) return '—'
+    const f = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
+    return ev.end_date && ev.end_date !== ev.date ? `${f(ev.date)} – ${f(ev.end_date)}` : f(ev.date)
+  }
   const dayChip = (d: Date) => (
     <span style={{ fontSize: 10, fontWeight: 700, color: '#0d0d0d', background: DAY_COLORS[d.getDay()], borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{DAYS_ES[d.getDay()]}</span>
   )
@@ -158,7 +186,15 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
       {/* Header */}
       <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <h1 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 800, margin: 0, flex: isMobile ? '1 0 100%' : undefined }}>Eventos</h1>
+          <h1 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 800, margin: 0, flex: isMobile ? '1 0 100%' : undefined }}>Proyectos</h1>
+          <div style={{ display: 'flex', gap: 2, background: 'var(--bg-elevated)', borderRadius: 999, padding: 2 }}>
+            {([['all', 'Todos'], ['eventos', 'Eventos'], ['proyectos', 'Proyectos']] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setKindFilter(id)}
+                style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: kindFilter === id ? 'var(--accent)' : 'transparent', color: kindFilter === id ? 'var(--on-accent)' : 'var(--text-tertiary)' }}>
+                {label}
+              </button>
+            ))}
+          </div>
           <select value={buFilter} onChange={e => setBuFilter(e.target.value)}
             style={{ ...inp, cursor: 'pointer', minHeight: 40 }}>
             <option value="">Todos los venues</option>
@@ -221,15 +257,13 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
                       return (
                         <tr key={ev.id} onClick={() => setEditing(ev)} className="hover:bg-[var(--bg-surface)]"
                           style={{ cursor: 'pointer', opacity: ev.status === 'cancelled' ? 0.5 : 1 }}>
-                          <td style={{ ...td, fontFamily: 'var(--font-mono)' }} className="num">
-                            {d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '—'}
-                          </td>
+                          <td style={{ ...td, fontFamily: 'var(--font-mono)' }} className="num">{fechaLabel(ev)}</td>
                           <td style={td}>{d ? dayChip(d) : ''}</td>
                           <td style={{ ...td, whiteSpace: 'normal' }}>
                             <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>{ev.name}</span>
                             {ev.description && <span style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>{ev.description}</span>}
                           </td>
-                          <td style={td}>{typePill(ev.event_type)}</td>
+                          <td style={td}>{planPill(ev)}</td>
                           <td style={td}><BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" /></td>
                           <td style={{ ...td, fontFamily: 'var(--font-mono)' }} className="num">
                             {ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ''}` : '—'}
@@ -290,7 +324,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{ev.name}</span>
                           <BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" />
-                          {typePill(ev.event_type)}
+                          {planPill(ev)}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           {ev.start_time && <span className="num">{ev.start_time}{ev.end_time ? `–${ev.end_time}` : ''}</span>}
@@ -328,6 +362,165 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
   )
 }
 
+// ── Recursos requeridos: 1 bartender, 2 meseros, 1 guardia, equipo… ──────────
+function ResourcesSection({ eventId, canWrite }: { eventId: string; canWrite: boolean }) {
+  const [items, setItems] = useState<Resource[]>([])
+  const [nName, setNName] = useState('')
+  const [nQty, setNQty] = useState('1')
+  const [nCost, setNCost] = useState('')
+
+  useEffect(() => {
+    supabase.from('project_resources').select('id, name, qty, unit_cost, notes').eq('event_id', eventId).order('created_at')
+      .then(({ data }) => setItems((data ?? []) as Resource[]))
+  }, [eventId])
+
+  async function add() {
+    if (!nName.trim()) return
+    const { data, error } = await supabase.from('project_resources').insert({
+      event_id: eventId, name: nName.trim(), qty: Math.max(1, Number(nQty) || 1),
+      unit_cost: nCost !== '' ? Number(nCost) : null,
+    }).select('id, name, qty, unit_cost, notes').single()
+    if (error || !data) { showToast(`No se pudo agregar: ${error?.message}`, 'error'); return }
+    setItems(prev => [...prev, data as Resource])
+    setNName(''); setNQty('1'); setNCost('')
+  }
+  async function remove(id: string) {
+    await supabase.from('project_resources').delete().eq('id', id)
+    setItems(prev => prev.filter(i => i.id !== id))
+  }
+
+  const total = items.reduce((s, i) => s + (i.unit_cost ?? 0) * i.qty, 0)
+  const inp: React.CSSProperties = {
+    background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
+    color: 'var(--text-primary)', padding: '0 10px', fontSize: 13, outline: 'none', minHeight: 40, boxSizing: 'border-box',
+  }
+  return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Recursos requeridos{items.length ? ` (${items.length})` : ''}</span>
+        {total > 0 && <span className="num" style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{mxn(total)}</span>}
+      </div>
+      {items.map(i => (
+        <div key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+          <span className="num" style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', fontFamily: 'var(--font-mono)', width: 28, textAlign: 'center' }}>{i.qty}×</span>
+          <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{i.name}</span>
+          {i.unit_cost != null && <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{mxn(i.unit_cost)} c/u</span>}
+          {canWrite && (
+            <button onClick={() => remove(i.id)} aria-label="Quitar recurso" style={{ width: 32, height: 32, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Trash2 size={12} /></button>
+          )}
+        </div>
+      ))}
+      {canWrite && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <input type="number" inputMode="numeric" min={1} value={nQty} onChange={e => setNQty(e.target.value)} className="num" style={{ ...inp, width: 52, textAlign: 'center' }} aria-label="Cantidad" />
+          <input value={nName} onChange={e => setNName(e.target.value)} placeholder="Bartender, mesero, guardia, proyector…"
+            onKeyDown={e => { if (e.key === 'Enter') add() }} style={{ ...inp, flex: 1 }} />
+          <input type="number" inputMode="numeric" min={0} value={nCost} onChange={e => setNCost(e.target.value)} placeholder="$ c/u" className="num" style={{ ...inp, width: 76 }} aria-label="Costo unitario" />
+          <button onClick={add} disabled={!nName.trim()}
+            style={{ minHeight: 40, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: nName.trim() ? 'var(--accent)' : 'var(--bg-base)', color: nName.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', cursor: nName.trim() ? 'pointer' : 'not-allowed', fontWeight: 700 }}>
+            <Plus size={14} />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Presupuesto por partidas: gastos + patrocinios (ligados al CRM) ──────────
+function BudgetSection({ event, buCode, canWrite, userId }: { event: EventPlan; buCode: string; canWrite: boolean; userId?: string }) {
+  const [items, setItems] = useState<BudgetItem[]>([])
+  const [nConcept, setNConcept] = useState('')
+  const [nAmount, setNAmount] = useState('')
+  const [nIncome, setNIncome] = useState(false)
+
+  useEffect(() => {
+    supabase.from('project_budget_items').select('id, concept, amount, is_income, deal_id').eq('event_id', event.id).order('created_at')
+      .then(({ data }) => setItems((data ?? []) as BudgetItem[]))
+  }, [event.id])
+
+  async function add() {
+    if (!nConcept.trim() || nAmount === '') return
+    const { data, error } = await supabase.from('project_budget_items').insert({
+      event_id: event.id, concept: nConcept.trim(), amount: Number(nAmount), is_income: nIncome,
+    }).select('id, concept, amount, is_income, deal_id').single()
+    if (error || !data) { showToast(`No se pudo agregar: ${error?.message}`, 'error'); return }
+    setItems(prev => [...prev, data as BudgetItem])
+    setNConcept(''); setNAmount(''); setNIncome(false)
+  }
+  async function remove(id: string) {
+    await supabase.from('project_budget_items').delete().eq('id', id)
+    setItems(prev => prev.filter(i => i.id !== id))
+  }
+  // Patrocinio → deal en el CRM (pipeline comercial); ligado a la partida
+  async function toDeal(item: BudgetItem) {
+    if (item.deal_id) { window.dispatchEvent(new CustomEvent('hog:open-deal', { detail: item.deal_id })); return }
+    const title = `Patrocinio — ${item.concept} · ${event.name}`
+    const { data: deal, error } = await supabase.from('crm_deals').insert({
+      title, deal_type: 'EVENT', stage: 'LEAD', probability: 50, value: item.amount || null,
+      event_date: event.date, close_date: event.date, bu_id: event.bu_id,
+      description: `Patrocinio del plan "${event.name}" (${buCode}) — creado desde Proyectos`,
+      created_by: userId ?? null,
+    }).select('id').single()
+    if (error || !deal) { showToast(`No se pudo crear el deal: ${error?.message}`, 'error'); return }
+    await supabase.from('project_budget_items').update({ deal_id: deal.id }).eq('id', item.id)
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, deal_id: deal.id } : i))
+    logActivity('deal_created', 'deal', deal.id, { title, via: 'proyecto', event: event.name })
+    showToast('Deal de patrocinio creado en Comercial — ábrelo para ligar la marca.', 'success')
+    window.dispatchEvent(new CustomEvent('hog:open-deal', { detail: deal.id }))
+  }
+
+  const gastos = items.filter(i => !i.is_income).reduce((s, i) => s + i.amount, 0)
+  const ingresos = items.filter(i => i.is_income).reduce((s, i) => s + i.amount, 0)
+  const inp: React.CSSProperties = {
+    background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
+    color: 'var(--text-primary)', padding: '0 10px', fontSize: 13, outline: 'none', minHeight: 40, boxSizing: 'border-box',
+  }
+  return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Presupuesto por partidas</span>
+        {(gastos > 0 || ingresos > 0) && (
+          <span className="num" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+            Gastos {mxn(gastos)}{ingresos > 0 && <> · Patrocinios <span style={{ color: 'var(--status-healthy)' }}>{mxn(ingresos)}</span> · Neto {mxn(gastos - ingresos)}</>}
+          </span>
+        )}
+      </div>
+      {items.map(i => (
+        <div key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+          <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{i.concept}</span>
+          {i.is_income && (
+            <button onClick={() => canWrite && toDeal(i)} title={i.deal_id ? 'Abrir deal en Comercial' : 'Crear deal de patrocinio en Comercial'}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 30, padding: '0 8px', borderRadius: 999, border: `1px solid ${i.deal_id ? 'var(--status-healthy)' : 'var(--accent-border)'}`, background: 'none', color: i.deal_id ? 'var(--status-healthy)' : 'var(--accent)', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+              🤝 {i.deal_id ? 'Deal ligado' : 'Crear deal'}
+            </button>
+          )}
+          <span className="num" style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: i.is_income ? 'var(--status-healthy)' : 'var(--text-secondary)' }}>
+            {i.is_income ? '+' : '−'}{mxn(i.amount)}
+          </span>
+          {canWrite && (
+            <button onClick={() => remove(i.id)} aria-label="Quitar partida" style={{ width: 32, height: 32, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Trash2 size={12} /></button>
+          )}
+        </div>
+      ))}
+      {canWrite && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+          <input value={nConcept} onChange={e => setNConcept(e.target.value)} placeholder="Sombreros, vasos especiales, patrocinio X…"
+            onKeyDown={e => { if (e.key === 'Enter') add() }} style={{ ...inp, flex: 1, minWidth: 150 }} />
+          <input type="number" inputMode="numeric" min={0} value={nAmount} onChange={e => setNAmount(e.target.value)} placeholder="$" className="num" style={{ ...inp, width: 88 }} />
+          <button onClick={() => setNIncome(v => !v)} title="Gasto o patrocinio (ingreso)"
+            style={{ minHeight: 40, padding: '0 10px', borderRadius: 999, border: `1px solid ${nIncome ? 'var(--status-healthy)' : 'var(--border-default)'}`, background: nIncome ? 'color-mix(in srgb, var(--status-healthy) 12%, transparent)' : 'none', color: nIncome ? 'var(--status-healthy)' : 'var(--text-tertiary)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+            {nIncome ? 'Patrocinio' : 'Gasto'}
+          </button>
+          <button onClick={add} disabled={!nConcept.trim() || nAmount === ''}
+            style={{ minHeight: 40, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: nConcept.trim() && nAmount !== '' ? 'var(--accent)' : 'var(--bg-base)', color: nConcept.trim() && nAmount !== '' ? 'var(--on-accent)' : 'var(--text-tertiary)', cursor: nConcept.trim() && nAmount !== '' ? 'pointer' : 'not-allowed', fontWeight: 700 }}>
+            <Plus size={14} />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Sheet de crear/editar evento + tareas por bullets ────────────────────────
 function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobile, onOpenTask, onClose, onSaved }: {
   event: EventPlan | null
@@ -343,6 +536,8 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
 }) {
   const [name, setName] = useState(event?.name ?? '')
   const [buId, setBuId] = useState(event?.bu_id ?? (buList[0]?.id ?? ''))
+  const [kind, setKind] = useState<PlanKind>(event?.kind ?? 'evento')
+  const [endDate, setEndDate] = useState(event?.end_date ?? '')
   const [date, setDate] = useState(event?.date ?? '')
   const [startTime, setStartTime] = useState(event?.start_time ?? '')
   const [endTime, setEndTime] = useState(event?.end_time ?? '')
@@ -388,9 +583,10 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
     setSaving(true)
     const row = {
       bu_id: buId, name: name.trim(), description: description.trim() || null,
+      kind, end_date: endDate || null,
       date: date || null, start_time: startTime || null, end_time: endTime || null,
-      event_type: type, has_cover: hasCover,
-      cover_price: hasCover && coverPrice !== '' ? Number(coverPrice) : null,
+      event_type: type, has_cover: kind === 'evento' && hasCover,
+      cover_price: kind === 'evento' && hasCover && coverPrice !== '' ? Number(coverPrice) : null,
       budget: budget !== '' ? Number(budget) : null,
       expected_attendance: expectedAtt !== '' ? Math.max(0, Number(expectedAtt)) : null,
       requirements: requirements.trim() || null,
@@ -439,9 +635,26 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* ¿Evento o proyecto? — cambia los campos relevantes */}
+          <div>
+            <label style={lbl}>¿Qué planeas?</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button onClick={() => canWrite && setKind('evento')}
+                style={{ minHeight: 40, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700, background: kind === 'evento' ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${kind === 'evento' ? 'var(--accent)' : 'var(--border-default)'}`, color: kind === 'evento' ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                Evento
+              </button>
+              {(Object.keys(KIND_META) as PlanKind[]).filter(k => k !== 'evento').map(k => (
+                <button key={k} onClick={() => canWrite && setKind(k)}
+                  style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: kind === k ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${kind === k ? 'var(--accent)' : 'var(--border-default)'}`, color: kind === k ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                  {KIND_META[k].label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label style={lbl}>Nombre *</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Colombian Night, Art Talk…" style={inp} disabled={!canWrite} />
+            <input value={name} onChange={e => setName(e.target.value)} placeholder={kind === 'evento' ? 'Colombian Night, Art Talk…' : 'Remodelación terraza, Adecuación barra…'} style={inp} disabled={!canWrite} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -451,17 +664,24 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
                 {buList.map(b => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
               </select>
             </div>
-            <div>
-              <label style={lbl}>Tipo</label>
-              <select value={type} onChange={e => setType(e.target.value as EventType)} style={{ ...inp, cursor: 'pointer' }} disabled={!canWrite}>
-                {(Object.keys(TYPE_META) as EventType[]).map(t => <option key={t} value={t}>{TYPE_META[t].label}</option>)}
-              </select>
-            </div>
+            {kind === 'evento' ? (
+              <div>
+                <label style={lbl}>Tipo</label>
+                <select value={type} onChange={e => setType(e.target.value as EventType)} style={{ ...inp, cursor: 'pointer' }} disabled={!canWrite}>
+                  {(Object.keys(TYPE_META) as EventType[]).map(t => <option key={t} value={t}>{TYPE_META[t].label}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label style={lbl}>Fecha fin (estimada)</label>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="num" style={inp} disabled={!canWrite} />
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 8 }}>
             <div>
-              <label style={lbl}>Fecha</label>
+              <label style={lbl}>{kind === 'evento' ? 'Fecha' : 'Fecha inicio'}</label>
               <input type="date" value={date} onChange={e => setDate(e.target.value)} className="num" style={inp} disabled={!canWrite} />
             </div>
             <div>
@@ -480,22 +700,24 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
               placeholder="Concepto, line-up, copy del evento…" style={{ ...inp, minHeight: 60, padding: '10px 12px', resize: 'vertical' }} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, alignItems: 'end' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minHeight: 44 }}>
-              <input type="checkbox" checked={hasCover} onChange={e => setHasCover(e.target.checked)} disabled={!canWrite} style={{ accentColor: 'var(--accent)', width: 18, height: 18 }} />
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Tiene cover</span>
-            </label>
-            {hasCover ? (
+          {kind === 'evento' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, alignItems: 'end' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minHeight: 44 }}>
+                <input type="checkbox" checked={hasCover} onChange={e => setHasCover(e.target.checked)} disabled={!canWrite} style={{ accentColor: 'var(--accent)', width: 18, height: 18 }} />
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Tiene cover</span>
+              </label>
+              {hasCover ? (
+                <div>
+                  <label style={lbl}>Precio cover</label>
+                  <input type="number" inputMode="numeric" min={0} value={coverPrice} onChange={e => setCoverPrice(e.target.value)} className="num" style={inp} disabled={!canWrite} />
+                </div>
+              ) : <div />}
               <div>
-                <label style={lbl}>Precio cover</label>
-                <input type="number" inputMode="numeric" min={0} value={coverPrice} onChange={e => setCoverPrice(e.target.value)} className="num" style={inp} disabled={!canWrite} />
+                <label style={lbl}>Asistencia esperada</label>
+                <input type="number" inputMode="numeric" min={0} value={expectedAtt} onChange={e => setExpectedAtt(e.target.value)} className="num" style={inp} disabled={!canWrite} placeholder="0" />
               </div>
-            ) : <div />}
-            <div>
-              <label style={lbl}>Asistencia esperada</label>
-              <input type="number" inputMode="numeric" min={0} value={expectedAtt} onChange={e => setExpectedAtt(e.target.value)} className="num" style={inp} disabled={!canWrite} placeholder="0" />
             </div>
-          </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div>
@@ -535,6 +757,18 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
               ))}
             </div>
           </div>
+
+          {/* Recursos y presupuesto por partidas (requieren el plan guardado) */}
+          {event ? (
+            <>
+              <ResourcesSection eventId={event.id} canWrite={canWrite} />
+              <BudgetSection event={event} buCode={buList.find(b => b.id === event.bu_id)?.code ?? ''} canWrite={canWrite} userId={userId} />
+            </>
+          ) : (
+            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
+              💡 Al guardar podrás agregar <strong>recursos</strong> (bartenders, meseros, seguridad, equipo) y el <strong>presupuesto por partidas</strong> con patrocinios ligados al CRM.
+            </p>
+          )}
 
           {/* Tareas del evento — por bullets, con botón directo al Task Manager */}
           {canWrite && (

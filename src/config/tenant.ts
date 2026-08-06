@@ -26,7 +26,7 @@ export const TENANT: TenantConfig = {
     tasks:     'Tareas',
     crm:       'Comercial',
     contacts:  'Comercial',
-    events:    'Eventos',
+    events:    'Proyectos',
     content:   'Contenido',
     revenue:   'Ingresos',
     reports:   'Reportes',
