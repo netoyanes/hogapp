@@ -20,7 +20,7 @@ const APPS: App[] = [
   { id: 'crm',        label: 'CRM',         icon: Handshake,       color: '#D98C9F' },
   { id: 'concierge',  label: 'Concierge',   icon: Shell,           color: '#5E9FB8' },
   { id: 'contacts',   label: 'Directorio',  icon: Contact2,        color: '#6FA8A0' },
-  { id: 'events',     label: 'Eventos',     icon: CalendarDays,    color: '#B08BC9' },
+  { id: 'events',     label: 'Proyectos',   icon: CalendarDays,    color: '#B08BC9' },
   { id: 'objectives', label: 'Objetivos',   icon: Target,          color: '#5FBF7A' },
   { id: 'content',    label: 'Contenido',   icon: Megaphone,       color: '#DB9A6A' },
   { id: 'revenue',    label: 'Ingresos',    icon: BarChart3,       color: '#8FBF9F' },

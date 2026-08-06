@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.52.0"
+export const APP_VERSION = "2.53.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.53.0",
+    date: "2026-08-01",
+    type: "MINOR",
+    changes: [
+      "Eventos evoluciona a PROYECTOS: planea eventos O proyectos multidisciplinarios (adecuación, remodelación, apertura, mantenimiento) chicos o grandes, con fecha inicio-fin y filtro Eventos/Proyectos",
+      "Recursos requeridos por plan: 1 bartender, 2 meseros, 1 guardia, equipo… con cantidad y costo unitario (total autocalculado)",
+      "Presupuesto por partidas: gastos (sombreros, vasos…) y patrocinios como ingresos — con totales Gastos/Patrocinios/Neto",
+      "Patrocinio → botón 'Crear deal' lo conecta al pipeline de Comercial (CRM) y queda ligado a la partida",
+      "Las tareas por bullets siguen siendo el puente operativo hacia el Task Manager (y hacia gerentes de venue en una fase futura)",
+    ]
+  },
   {
     version: "2.52.0",
     date: "2026-08-01",
