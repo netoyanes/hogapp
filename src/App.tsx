@@ -12,7 +12,6 @@ import { Profile } from './screens/Profile'
 import { InviteUsers } from './screens/InviteUsers'
 import { EmptyState } from './components/ui/EmptyState'
 import { ActivityLog } from './screens/ActivityLog'
-import { CalendarHub } from './screens/CalendarHub'
 import { TaskTemplates } from './screens/TaskTemplates'
 import { NotificationBell } from './components/ui/NotificationBell'
 import { CRM } from './screens/CRM'
@@ -194,14 +193,15 @@ export default function App() {
   } else if (userApps && userApps.size > 0) {
     ALLOWED_VIEWS = expandApps(userApps)
   } else {
+    // Objetivos es SOLO Master; Contenido se retiró (vive en Proyectos)
     ALLOWED_VIEWS = role === 'DEV'
-      ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'events', 'objectives',
-                 'content', 'revenue', 'reports', 'activity', 'templates', 'profile']) // auditoría: todo menos admin (Usuarios/Carga)
+      ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'events',
+                 'revenue', 'reports', 'activity', 'templates', 'profile']) // auditoría: todo menos admin (Usuarios/Carga)
       : role === 'HEART_OF_HOUSE'
         ? new Set(['casa', 'reportar', 'concierge', 'profile']) // piso + tablet de host: La Casa y Reservas
         : role === 'TEAM' || role === 'MARKETING'
-          ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'events', 'objectives', 'profile'])
-          : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'events', 'objectives', 'profile'])
+          ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'events', 'profile'])
+          : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'events', 'profile'])
   }
 
   function handleNavigate(view: string) {
@@ -237,9 +237,10 @@ export default function App() {
       case 'events':
         return <Events userRole={role} userId={profile?.id} onOpenTask={openTaskOverlay} />
       case 'objectives':
-        return <Objectives profile={profile} userId={profile?.id} userRole={role} />
-      case 'content':
-        return <CalendarHub initialTab="content" userRole={role} />
+        // Objetivos es exclusivo del Master (dirección)
+        return role === 'MASTER'
+          ? <Objectives profile={profile} userId={profile?.id} userRole={role} />
+          : <EmptyState icon="🔒" title="Solo Master" description="Objetivos es exclusivo de dirección." />
       case 'revenue':
       case 'upload':
         return <RevenueUpload />

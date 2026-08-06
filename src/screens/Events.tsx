@@ -94,15 +94,26 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
   const [editing, setEditing] = useState<EventPlan | null>(null)
   const [creating, setCreating] = useState(false)
 
+  // Avance por plan: tareas ligadas hechas / totales
+  const [progress, setProgress] = useState<Record<string, { done: number; total: number }>>({})
+
   const load = useCallback(async () => {
-    const [{ data: ev }, { data: bus }, { data: ppl }] = await Promise.all([
+    const [{ data: ev }, { data: bus }, { data: ppl }, { data: tk }] = await Promise.all([
       supabase.from('event_plans').select('*').order('date', { ascending: true, nullsFirst: false }),
       supabase.from('business_units').select('id, code, name').order('name'),
       supabase.from('profiles').select('id, full_name').order('full_name'),
+      supabase.from('tasks').select('event_id, status').not('event_id', 'is', null),
     ])
     setRows((ev ?? []) as EventPlan[])
     setBuList(bus ?? [])
     setPeople(ppl ?? [])
+    const pm: Record<string, { done: number; total: number }> = {}
+    for (const t of (tk ?? []) as { event_id: string; status: string }[]) {
+      const p = (pm[t.event_id] = pm[t.event_id] ?? { done: 0, total: 0 })
+      p.total++
+      if (['DONE', 'ARCHIVED'].includes(t.status)) p.done++
+    }
+    setProgress(pm)
     setLoading(false)
   }, [])
   useEffect(() => { load() }, [load])
@@ -238,7 +249,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
                   <th style={th}>Tipo</th><th style={th}>Venue</th><th style={th}>Hora</th>
                   <th style={{ ...th, textAlign: 'right' }}>Cover</th><th style={{ ...th, textAlign: 'right' }}>Presupuesto</th>
                   <th style={{ ...th, textAlign: 'right' }}>Asistencia</th><th style={th}>Colaboradores</th>
-                  <th style={th}>Responsable</th><th style={th}>Estado</th>
+                  <th style={th}>Responsable</th><th style={th}>Avance</th><th style={th}>Estado</th>
                 </tr>
               </thead>
               {groups.map(g => {
@@ -247,7 +258,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
                 return (
                   <tbody key={g.key}>
                     <tr>
-                      <td colSpan={12} style={{ ...td, borderBottom: 'none', paddingTop: 18, fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
+                      <td colSpan={13} style={{ ...td, borderBottom: 'none', paddingTop: 18, fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
                         {g.label} · {g.items.length}
                       </td>
                     </tr>
@@ -279,6 +290,16 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
                           </td>
                           <td style={{ ...td, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.collaborators ?? '—'}</td>
                           <td style={{ ...td, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>{respName ?? '—'}</td>
+                          <td style={td}>
+                            {progress[ev.id] ? (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ width: 44, height: 5, borderRadius: 3, background: 'var(--bg-elevated)', overflow: 'hidden', display: 'inline-block' }}>
+                                  <span style={{ display: 'block', height: '100%', width: `${Math.round((progress[ev.id].done / progress[ev.id].total) * 100)}%`, background: progress[ev.id].done === progress[ev.id].total ? 'var(--status-healthy)' : 'var(--accent)' }} />
+                                </span>
+                                <span className="num" style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{progress[ev.id].done}/{progress[ev.id].total}</span>
+                              </span>
+                            ) : <span style={{ color: 'var(--text-tertiary)' }}>—</span>}
+                          </td>
                           <td style={td}><StatusBadgeV2 tone={STATUS_META[ev.status].tone} label={STATUS_META[ev.status].label} /></td>
                         </tr>
                       )
@@ -288,7 +309,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
                         <td colSpan={7} style={{ ...td, textAlign: 'right', fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Suma del mes</td>
                         <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)' }} className="num">{sumBudget > 0 ? mxn(sumBudget) : ''}</td>
                         <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)' }} className="num">{sumAtt > 0 ? sumAtt : ''}</td>
-                        <td colSpan={3} style={td} />
+                        <td colSpan={4} style={td} />
                       </tr>
                     )}
                   </tbody>
@@ -331,6 +352,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
                           <span>{ev.has_cover ? `Cover ${ev.cover_price != null ? mxn(ev.cover_price) : ''}` : 'Sin cover'}</span>
                           {ev.budget != null && <span>Presup. {mxn(ev.budget)}</span>}
                           {ev.expected_attendance != null && <span>{ev.expected_attendance} asist.</span>}
+                          {progress[ev.id] && <span className="num">{progress[ev.id].done}/{progress[ev.id].total} tareas</span>}
                           {respName && <span>· {respName}</span>}
                         </div>
                       </div>
