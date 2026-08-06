@@ -37,8 +37,8 @@ begin
     (e, 'Sombreros artesanales', 3500, false), (e, 'Vasos especiales edición POD', 2800, false),
     (e, 'Decoración y flores', 1900, false), (e, 'Patrocinio Cerveza Nacional', 20000, true);
   insert into tasks (title, status, priority, deadline_type, bu_id, due_date, event_id, area, client_impact) values
-    ('Confirmar DJ y rider técnico', 'DONE', 'HIGH', 'HARD', v_pc, '2026-08-05', e, 'talento', 'client_facing'),
-    ('Diseñar flyer y publicarlo', 'DONE', 'MEDIUM', 'SOFT', v_pc, '2026-08-03', e, 'marketing', 'client_facing'),
+    ('Confirmar DJ y rider técnico', 'APPROVED', 'HIGH', 'HARD', v_pc, '2026-08-05', e, 'talento', 'client_facing'),
+    ('Diseñar flyer y publicarlo', 'APPROVED', 'MEDIUM', 'SOFT', v_pc, '2026-08-03', e, 'marketing', 'client_facing'),
     ('Brief a cocina — menú de la noche', 'OPEN', 'MEDIUM', 'SOFT', v_pc, '2026-08-06', e, 'piso', 'client_facing'),
     ('Comprar sombreros y vasos', 'OPEN', 'MEDIUM', 'SOFT', v_pc, '2026-08-06', e, 'comercial', 'internal'),
     ('Cerrar convenio de patrocinio', 'OPEN', 'HIGH', 'HARD', v_pc, '2026-08-04', e, 'comercial', 'internal');
@@ -56,7 +56,7 @@ begin
   insert into project_budget_items (event_id, concept, amount, is_income) values
     (e, 'Honorarios DJ invitado', 8000, false), (e, 'Visuales y humo', 2500, false);
   insert into tasks (title, status, priority, deadline_type, bu_id, due_date, event_id, area, client_impact) values
-    ('Anunciar cartelera en IG', 'DONE', 'MEDIUM', 'SOFT', v_bm, '2026-08-04', e, 'marketing', 'client_facing'),
+    ('Anunciar cartelera en IG', 'APPROVED', 'MEDIUM', 'SOFT', v_bm, '2026-08-04', e, 'marketing', 'client_facing'),
     ('Prueba de sonido', 'OPEN', 'HIGH', 'HARD', v_bm, '2026-08-08', e, 'piso', 'client_facing'),
     ('Coordinar hospedaje del DJ', 'OPEN', 'MEDIUM', 'SOFT', v_bm, '2026-08-07', e, 'talento', 'internal');
 
@@ -71,7 +71,7 @@ begin
   insert into project_budget_items (event_id, concept, amount, is_income) values
     (e, 'Madera y herrajes', 18000, false), (e, 'Mano de obra', 25000, false);
   insert into tasks (title, status, priority, deadline_type, bu_id, due_date, event_id, area, client_impact) values
-    ('Aprobar diseño y cotización final', 'DONE', 'HIGH', 'HARD', v_oc, '2026-08-08', e, 'direccion', 'internal'),
+    ('Aprobar diseño y cotización final', 'APPROVED', 'HIGH', 'HARD', v_oc, '2026-08-08', e, 'direccion', 'internal'),
     ('Comprar materiales', 'OPEN', 'HIGH', 'HARD', v_oc, '2026-08-10', e, 'comercial', 'internal'),
     ('Supervisión de obra semana 1', 'OPEN', 'MEDIUM', 'SOFT', v_oc, '2026-08-15', e, 'mantenimiento', 'internal'),
     ('Instalación eléctrica y prueba', 'OPEN', 'MEDIUM', 'HARD', v_oc, '2026-08-21', e, 'mantenimiento', 'internal');
@@ -103,7 +103,7 @@ begin
   insert into project_budget_items (event_id, concept, amount, is_income) values
     (e, 'Equipamiento de cocina', 220000, false), (e, 'Licencias y permisos', 35000, false);
   insert into tasks (title, status, priority, deadline_type, bu_id, due_date, event_id, area, client_impact) values
-    ('Tramitar licencias municipales', 'DONE', 'HIGH', 'HARD', v_pm, '2026-08-20', e, 'legal', 'internal'),
+    ('Tramitar licencias municipales', 'APPROVED', 'HIGH', 'HARD', v_pm, '2026-08-20', e, 'legal', 'internal'),
     ('Recibir e instalar equipo de cocina', 'OPEN', 'HIGH', 'HARD', v_pm, '2026-09-05', e, 'mantenimiento', 'internal'),
     ('Contratar y entrenar staff', 'OPEN', 'HIGH', 'HARD', v_pm, '2026-09-20', e, 'rrhh', 'internal');
 
@@ -116,8 +116,8 @@ begin
   insert into project_resources (event_id, name, qty, unit_cost) values (e, 'Técnico HVAC', 2, 1800);
   insert into project_budget_items (event_id, concept, amount, is_income) values (e, 'Refacciones y gas refrigerante', 6500, false);
   insert into tasks (title, status, priority, deadline_type, bu_id, due_date, event_id, area, client_impact) values
-    ('Servicio a minisplits del salón', 'DONE', 'MEDIUM', 'HARD', v_am, '2026-08-05', e, 'mantenimiento', 'internal'),
-    ('Revisión de cámaras de refrigeración', 'DONE', 'MEDIUM', 'HARD', v_am, '2026-08-06', e, 'mantenimiento', 'internal');
+    ('Servicio a minisplits del salón', 'APPROVED', 'MEDIUM', 'HARD', v_am, '2026-08-05', e, 'mantenimiento', 'internal'),
+    ('Revisión de cámaras de refrigeración', 'APPROVED', 'MEDIUM', 'HARD', v_am, '2026-08-06', e, 'mantenimiento', 'internal');
 
   -- ── Plantilla de arranque: "Evento tipo POD" ───────────────────────────────
   insert into project_templates (name, kind, event_type, resources, budget_items, task_bullets)
