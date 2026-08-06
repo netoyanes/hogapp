@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.54.0"
+export const APP_VERSION = "2.55.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.55.0",
+    date: "2026-08-01",
+    type: "MINOR",
+    changes: [
+      "Proyectos — 3 vistas: Tabla, BOARD por estado (Idea → Planeación → Aprobado → Realizado, con flechas para mover) y CALENDARIO mensual (planes multi-día pintados en su rango; navegación por mes)",
+      "PLANTILLAS de plan: guarda un plan como plantilla (recursos + partidas + tareas típicas) y úsala al crear — 'Evento tipo POD' en un clic",
+      "REQUISICIÓN al gerente: los recursos del plan se envían como tarea de alta prioridad al Task Manager del venue (área Piso, con lista de staff/equipo y presupuesto) + aviso a Slack",
+      "La vista elegida se recuerda por dispositivo",
+    ]
+  },
   {
     version: "2.54.0",
     date: "2026-08-01",

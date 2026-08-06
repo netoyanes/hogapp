@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, X, Search, Trash2, CheckSquare, ListPlus } from 'lucide-react'
+import { Plus, X, Search, Trash2, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
+import { notifySlack } from '../hooks/useSlack'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { BUChip, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
 
@@ -37,10 +38,17 @@ interface EventPlan {
   collaborators: string | null
   responsible: string | null
   status: EventStatus
+  requisition_task_id: string | null
 }
 interface TaskLite { id: string; title: string; status: string }
 interface Resource { id: string; name: string; qty: number; unit_cost: number | null; notes: string | null }
 interface BudgetItem { id: string; concept: string; amount: number; is_income: boolean; deal_id: string | null }
+interface Template {
+  id: string; name: string; kind: PlanKind; event_type: EventType
+  resources: { name: string; qty: number; unit_cost: number | null }[]
+  budget_items: { concept: string; amount: number; is_income: boolean }[]
+  task_bullets: string | null
+}
 
 // Disciplinas de proyecto (no-evento): adecuación, remodelación, apertura…
 const KIND_META: Record<PlanKind, { label: string; color: string }> = {
@@ -78,6 +86,23 @@ const mxn = (n: number) => `MX$${Number(n).toLocaleString('es-MX')}`
 // Bullets → títulos de tarea: quita viñetas (-, •, *) y líneas vacías
 const parseBullets = (text: string) => text.split('\n').map(l => l.replace(/^[-•*]\s*/, '').trim()).filter(Boolean)
 
+// ── Pills compartidas por las vistas Tabla / Board / Calendario ──────────────
+const typePill = (t: EventType) => (
+  <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: TYPE_META[t].color, background: `color-mix(in srgb, ${TYPE_META[t].color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${TYPE_META[t].color} 40%, transparent)`, borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{TYPE_META[t].label}</span>
+)
+const planPill = (ev: EventPlan) => ev.kind === 'evento'
+  ? typePill(ev.event_type)
+  : <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: KIND_META[ev.kind].color, background: `color-mix(in srgb, ${KIND_META[ev.kind].color} 14%, transparent)`, border: `1px solid ${KIND_META[ev.kind].color}`, borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{KIND_META[ev.kind].label}</span>
+const planColor = (ev: EventPlan) => ev.kind === 'evento' ? TYPE_META[ev.event_type].color : KIND_META[ev.kind].color
+const dayChip = (d: Date) => (
+  <span style={{ fontSize: 10, fontWeight: 700, color: '#0d0d0d', background: DAY_COLORS[d.getDay()], borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{DAYS_ES[d.getDay()]}</span>
+)
+const fechaLabel = (ev: EventPlan) => {
+  if (!ev.date) return '—'
+  const f = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
+  return ev.end_date && ev.end_date !== ev.date ? `${f(ev.date)} – ${f(ev.end_date)}` : f(ev.date)
+}
+
 interface Props { userRole?: string; userId?: string; onOpenTask?: (id: string) => void }
 
 export function Events({ userRole, userId, onOpenTask }: Props) {
@@ -93,17 +118,27 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
   const [showPast, setShowPast] = useState(false)
   const [editing, setEditing] = useState<EventPlan | null>(null)
   const [creating, setCreating] = useState(false)
+  // Tres vistas del planeador: tabla, board por estado y calendario mensual
+  const [view, setView] = useState<'table' | 'board' | 'calendar'>(() =>
+    (localStorage.getItem('hog_projects_view') as 'table' | 'board' | 'calendar') || 'table')
+  useEffect(() => { localStorage.setItem('hog_projects_view', view) }, [view])
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [calMonth, setCalMonth] = useState(() => {
+    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
 
   // Avance por plan: tareas ligadas hechas / totales
   const [progress, setProgress] = useState<Record<string, { done: number; total: number }>>({})
 
   const load = useCallback(async () => {
-    const [{ data: ev }, { data: bus }, { data: ppl }, { data: tk }] = await Promise.all([
+    const [{ data: ev }, { data: bus }, { data: ppl }, { data: tk }, { data: tpl }] = await Promise.all([
       supabase.from('event_plans').select('*').order('date', { ascending: true, nullsFirst: false }),
       supabase.from('business_units').select('id, code, name').order('name'),
       supabase.from('profiles').select('id, full_name').order('full_name'),
       supabase.from('tasks').select('event_id, status').not('event_id', 'is', null),
+      supabase.from('project_templates').select('*').order('name'),
     ])
+    setTemplates((tpl ?? []) as Template[])
     setRows((ev ?? []) as EventPlan[])
     setBuList(bus ?? [])
     setPeople(ppl ?? [])
@@ -126,14 +161,14 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
   }, [])
 
-  const filtered = useMemo(() => {
+  // Base: filtros de venue/tipo/búsqueda (SIN filtro de pasado — el
+  // calendario navega cualquier mes); tabla y board aplican el pasado aparte
+  const filteredBase = useMemo(() => {
     const q = search.trim().toLowerCase()
     return rows.filter(r => {
       if (buFilter && r.bu_id !== buFilter) return false
       if (kindFilter === 'eventos' && r.kind !== 'evento') return false
       if (kindFilter === 'proyectos' && r.kind === 'evento') return false
-      // Un proyecto sigue vigente mientras su fecha FIN no haya pasado
-      if (!showPast && (r.end_date ?? r.date) && (r.end_date ?? r.date)! < monthStart) return false
       if (!q) return true
       return r.name.toLowerCase().includes(q)
         || (r.description ?? '').toLowerCase().includes(q)
@@ -142,7 +177,23 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
         || (buMap[r.bu_id] ?? '').toLowerCase().includes(q)
         || (nameOf(r.responsible) ?? '').toLowerCase().includes(q)
     })
-  }, [rows, buFilter, kindFilter, search, showPast, monthStart, buMap, nameOf])
+  }, [rows, buFilter, kindFilter, search, buMap, nameOf])
+
+  const filtered = useMemo(() =>
+    // Un proyecto sigue vigente mientras su fecha FIN no haya pasado
+    filteredBase.filter(r => showPast || !(r.end_date ?? r.date) || (r.end_date ?? r.date)! >= monthStart),
+    [filteredBase, showPast, monthStart])
+
+  // Board: mover de estado con las flechas de la tarjeta
+  const BOARD_ORDER: EventStatus[] = ['idea', 'planning', 'approved', 'done']
+  async function moveStatus(ev: EventPlan, dir: -1 | 1) {
+    const i = BOARD_ORDER.indexOf(ev.status)
+    const next = BOARD_ORDER[i + dir]
+    if (i === -1 || !next) return
+    setRows(rs => rs.map(r => r.id === ev.id ? { ...r, status: next } : r))
+    const { error } = await supabase.from('event_plans').update({ status: next }).eq('id', ev.id)
+    if (error) { showToast(`No se pudo mover: ${error.message}`, 'error'); load() }
+  }
 
   // Agrupar por mes (los sin fecha, al final en "Sin fecha")
   const groups = useMemo(() => {
@@ -176,21 +227,6 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
     color: 'var(--text-secondary)', whiteSpace: 'nowrap', verticalAlign: 'middle',
   }
 
-  const typePill = (t: EventType) => (
-    <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: TYPE_META[t].color, background: `color-mix(in srgb, ${TYPE_META[t].color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${TYPE_META[t].color} 40%, transparent)`, borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{TYPE_META[t].label}</span>
-  )
-  // Eventos muestran su tipo (Música, Arte…); proyectos su disciplina
-  const planPill = (ev: EventPlan) => ev.kind === 'evento'
-    ? typePill(ev.event_type)
-    : <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: KIND_META[ev.kind].color, background: `color-mix(in srgb, ${KIND_META[ev.kind].color} 14%, transparent)`, border: `1px solid ${KIND_META[ev.kind].color}`, borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{KIND_META[ev.kind].label}</span>
-  const fechaLabel = (ev: EventPlan) => {
-    if (!ev.date) return '—'
-    const f = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
-    return ev.end_date && ev.end_date !== ev.date ? `${f(ev.date)} – ${f(ev.end_date)}` : f(ev.date)
-  }
-  const dayChip = (d: Date) => (
-    <span style={{ fontSize: 10, fontWeight: 700, color: '#0d0d0d', background: DAY_COLORS[d.getDay()], borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{DAYS_ES[d.getDay()]}</span>
-  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -202,6 +238,14 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
             {([['all', 'Todos'], ['eventos', 'Eventos'], ['proyectos', 'Proyectos']] as const).map(([id, label]) => (
               <button key={id} onClick={() => setKindFilter(id)}
                 style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: kindFilter === id ? 'var(--accent)' : 'transparent', color: kindFilter === id ? 'var(--on-accent)' : 'var(--text-tertiary)' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 2, background: 'var(--bg-elevated)', borderRadius: 999, padding: 2 }}>
+            {([['table', isMobile ? 'Lista' : 'Tabla'], ['board', 'Board'], ['calendar', 'Calendario']] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setView(id)}
+                style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === id ? 'var(--accent)' : 'transparent', color: view === id ? 'var(--on-accent)' : 'var(--text-tertiary)' }}>
                 {label}
               </button>
             ))}
@@ -234,6 +278,18 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: isMobile ? 0 : 16 }}>
             {[64, 64, 64].map((h, i) => <div key={i} className="animate-pulse-green" style={{ height: h, background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)' }} />)}
+          </div>
+        ) : view === 'calendar' ? (
+          <div style={{ padding: isMobile ? 0 : 16 }}>
+            <CalendarView rows={filteredBase} month={calMonth} onMonth={setCalMonth} onOpen={ev => setEditing(ev)} isMobile={isMobile} buMap={buMap} />
+          </div>
+        ) : view === 'board' ? (
+          <div style={{ padding: isMobile ? 0 : 16 }}>
+            {filtered.length === 0 ? (
+              <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>Sin planes con estos filtros.</p>
+            ) : (
+              <BoardView rows={filtered} buMap={buMap} progress={progress} canWrite={canWrite} onOpen={ev => setEditing(ev)} onMove={moveStatus} />
+            )}
           </div>
         ) : groups.length === 0 ? (
           <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>
@@ -369,6 +425,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
       {(creating || editing) && (
         <EventSheet
           event={editing}
+          templates={templates}
           buList={buList}
           people={people}
           canWrite={canWrite}
@@ -380,6 +437,133 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
           onSaved={() => { setCreating(false); setEditing(null); load() }}
         />
       )}
+    </div>
+  )
+}
+
+// ── Board por estado: Idea → En planeación → Aprobado → Realizado ────────────
+function BoardView({ rows, buMap, progress, canWrite, onOpen, onMove }: {
+  rows: EventPlan[]
+  buMap: Record<string, string>
+  progress: Record<string, { done: number; total: number }>
+  canWrite: boolean
+  onOpen: (ev: EventPlan) => void
+  onMove: (ev: EventPlan, dir: -1 | 1) => void
+}) {
+  const cols: EventStatus[] = ['idea', 'planning', 'approved', 'done', 'cancelled']
+  const movable: EventStatus[] = ['idea', 'planning', 'approved', 'done']
+  return (
+    <div style={{ display: 'flex', gap: 10, overflowX: 'auto', alignItems: 'flex-start', paddingBottom: 8 }}>
+      {cols.map(st => {
+        const items = rows.filter(r => r.status === st)
+        if (st === 'cancelled' && items.length === 0) return null
+        return (
+          <div key={st} style={{ flex: '0 0 250px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <StatusBadgeV2 tone={STATUS_META[st].tone} label={STATUS_META[st].label} />
+              <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{items.length}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {items.map(ev => {
+                const i = movable.indexOf(ev.status)
+                return (
+                  <div key={ev.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', borderLeft: `3px solid ${planColor(ev)}` }}>
+                    <button onClick={() => onOpen(ev)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: '100%', textAlign: 'left' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{ev.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                        <BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" />
+                        {planPill(ev)}
+                        <span className="num" style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{fechaLabel(ev)}</span>
+                      </div>
+                      {progress[ev.id] && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                          <span style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--bg-base)', overflow: 'hidden' }}>
+                            <span style={{ display: 'block', height: '100%', width: `${Math.round((progress[ev.id].done / progress[ev.id].total) * 100)}%`, background: progress[ev.id].done === progress[ev.id].total ? 'var(--status-healthy)' : 'var(--accent)' }} />
+                          </span>
+                          <span className="num" style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{progress[ev.id].done}/{progress[ev.id].total}</span>
+                        </div>
+                      )}
+                    </button>
+                    {canWrite && i !== -1 && (
+                      <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                        <button onClick={() => onMove(ev, -1)} disabled={i === 0} aria-label="Estado anterior"
+                          style={{ flex: 1, minHeight: 30, border: '1px solid var(--border-subtle)', borderRadius: 6, background: 'none', color: i === 0 ? 'var(--border-subtle)' : 'var(--text-tertiary)', cursor: i === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <ChevronLeft size={13} />
+                        </button>
+                        <button onClick={() => onMove(ev, 1)} disabled={i === movable.length - 1} aria-label="Siguiente estado"
+                          style={{ flex: 1, minHeight: 30, border: '1px solid var(--border-subtle)', borderRadius: 6, background: 'none', color: i === movable.length - 1 ? 'var(--border-subtle)' : 'var(--text-tertiary)', cursor: i === movable.length - 1 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <ChevronRight size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              {items.length === 0 && <p style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', margin: '12px 0' }}>—</p>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Calendario mensual: los planes del mes en cuadrícula ─────────────────────
+function CalendarView({ rows, month, onMonth, onOpen, isMobile, buMap }: {
+  rows: EventPlan[]
+  month: string
+  onMonth: (m: string) => void
+  onOpen: (ev: EventPlan) => void
+  isMobile: boolean
+  buMap: Record<string, string>
+}) {
+  const first = new Date(month + '-01T00:00:00')
+  const label = first.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })
+  const daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate()
+  const startDow = first.getDay()
+  const isoOf = (day: number) => `${month}-${String(day).padStart(2, '0')}`
+  const now = new Date()
+  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  // Los proyectos multi-día aparecen en cada día de su rango
+  const eventsOn = (d: string) => rows.filter(r => r.date && (r.end_date ? r.date <= d && d <= r.end_date : r.date === d))
+  const shift = (n: number) => {
+    const d = new Date(first); d.setMonth(d.getMonth() + n)
+    onMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+  const maxChips = isMobile ? 2 : 3
+  const cells: (number | null)[] = [...Array(startDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <button onClick={() => shift(-1)} aria-label="Mes anterior" style={{ width: 40, height: 40, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ChevronLeft size={15} /></button>
+        <span style={{ flex: 1, textAlign: 'center', fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{label}</span>
+        <button onClick={() => shift(1)} aria-label="Mes siguiente" style={{ width: 40, height: 40, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={15} /></button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
+        {DAYS_ES.map(d => (
+          <div key={d} style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', textAlign: 'center', padding: '4px 0' }}>{d}</div>
+        ))}
+        {cells.map((day, i) => {
+          if (day === null) return <div key={`e${i}`} />
+          const dISO = isoOf(day)
+          const evs = eventsOn(dISO)
+          const isToday = dISO === todayISO
+          return (
+            <div key={dISO} style={{ minHeight: isMobile ? 62 : 88, background: 'var(--bg-surface)', border: `1px solid ${isToday ? 'var(--accent)' : 'var(--border-subtle)'}`, borderRadius: 6, padding: 3, overflow: 'hidden' }}>
+              <div className="num" style={{ fontSize: 10, fontWeight: isToday ? 800 : 400, color: isToday ? 'var(--accent)' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', padding: '0 2px' }}>{day}</div>
+              {evs.slice(0, maxChips).map(ev => (
+                <button key={ev.id} onClick={() => onOpen(ev)} title={`${ev.name} · ${buMap[ev.bu_id] ?? ''}`}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 2, padding: '2px 4px', borderRadius: 4, border: 'none', cursor: 'pointer', background: `color-mix(in srgb, ${planColor(ev)} 18%, transparent)`, borderLeft: `2px solid ${planColor(ev)}`, color: 'var(--text-primary)', fontSize: isMobile ? 8.5 : 10, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {ev.name}
+                </button>
+              ))}
+              {evs.length > maxChips && (
+                <div style={{ fontSize: 8.5, color: 'var(--text-tertiary)', padding: '1px 4px' }}>+{evs.length - maxChips} más</div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -544,8 +728,9 @@ function BudgetSection({ event, buCode, canWrite, userId }: { event: EventPlan; 
 }
 
 // ── Sheet de crear/editar evento + tareas por bullets ────────────────────────
-function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobile, onOpenTask, onClose, onSaved }: {
+function EventSheet({ event, templates, buList, people, canWrite, userId, userRole, isMobile, onOpenTask, onClose, onSaved }: {
   event: EventPlan | null
+  templates: Template[]
   buList: { id: string; code: string; name: string }[]
   people: { id: string; full_name: string | null }[]
   canWrite: boolean
@@ -576,7 +761,77 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
   const [saving, setSaving] = useState(false)
   const [tasks, setTasks] = useState<TaskLite[]>([])
   const [bulkTasks, setBulkTasks] = useState('')
+  const [templateId, setTemplateId] = useState('')
+  const [reqTaskId, setReqTaskId] = useState(event?.requisition_task_id ?? null)
   const canDelete = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '')
+  const buCode = buList.find(b => b.id === (event?.bu_id ?? buId))?.code ?? ''
+
+  // Plantilla elegida en modo creación: pre-carga tipo y bullets; recursos y
+  // presupuesto se insertan al guardar (necesitan el id del plan)
+  function applyTemplate(id: string) {
+    setTemplateId(id)
+    const t = templates.find(x => x.id === id)
+    if (!t) return
+    setKind(t.kind)
+    setType(t.event_type)
+    if (t.task_bullets) setBulkTasks(t.task_bullets)
+  }
+
+  // Guardar el plan actual (recursos + partidas + tareas) como plantilla
+  async function saveAsTemplate() {
+    if (!event) return
+    const tname = window.prompt('Nombre de la plantilla:', `${kind === 'evento' ? TYPE_META[type].label : KIND_META[kind].label} — ${name}`)
+    if (!tname?.trim()) return
+    const [{ data: res }, { data: bud }, { data: tks }] = await Promise.all([
+      supabase.from('project_resources').select('name, qty, unit_cost').eq('event_id', event.id),
+      supabase.from('project_budget_items').select('concept, amount, is_income').eq('event_id', event.id),
+      supabase.from('tasks').select('title').eq('event_id', event.id),
+    ])
+    const { error } = await supabase.from('project_templates').insert({
+      name: tname.trim(), kind, event_type: type,
+      resources: res ?? [], budget_items: bud ?? [],
+      task_bullets: (tks ?? []).map(t => `- ${t.title}`).join('\n') || null,
+      created_by: userId ?? null,
+    })
+    if (error) { showToast(`No se pudo guardar la plantilla: ${error.message}`, 'error'); return }
+    showToast(`Plantilla "${tname.trim()}" guardada — disponible al crear planes nuevos.`, 'success')
+  }
+
+  // Requisición operativa: los recursos del plan llegan al gerente del venue
+  // como tarea de alta prioridad en el Task Manager (+ aviso a Slack)
+  async function sendRequisition() {
+    if (!event) return
+    if (reqTaskId) { onOpenTask?.(reqTaskId); return }
+    const [{ data: res }, { data: bud }] = await Promise.all([
+      supabase.from('project_resources').select('name, qty, unit_cost').eq('event_id', event.id),
+      supabase.from('project_budget_items').select('concept, amount, is_income').eq('event_id', event.id),
+    ])
+    if (!(res ?? []).length) { showToast('Agrega primero los recursos requeridos.', 'error'); return }
+    const gastos = (bud ?? []).filter(b => !b.is_income).reduce((s, b) => s + b.amount, 0)
+    const desc = [
+      `Requisición de recursos — ${event.name} (${buCode})`,
+      event.date ? `Fecha: ${event.date}${event.end_date ? ` → ${event.end_date}` : ''}${startTime ? ` · ${startTime}` : ''}` : '',
+      '',
+      'RECURSOS REQUERIDOS:',
+      ...(res ?? []).map(r => `- ${r.qty}× ${r.name}${r.unit_cost != null ? ` (${mxn(r.unit_cost)} c/u)` : ''}`),
+      gastos > 0 ? `\nPresupuesto de gastos del plan: ${mxn(gastos)}` : '',
+      '',
+      'Confirmar plantilla del turno e insumos/inventario necesarios.',
+    ].filter(Boolean).join('\n')
+    const { data: task, error } = await supabase.from('tasks').insert({
+      title: `Requisición — ${event.name}${event.date ? ` (${event.date})` : ''}`,
+      description: desc, status: 'OPEN', priority: 'HIGH', deadline_type: 'HARD',
+      bu_id: event.bu_id, due_date: event.date, event_id: event.id,
+      area: 'piso', client_impact: 'internal', created_by: userId ?? null,
+    }).select('id, title, status').single()
+    if (error || !task) { showToast(`No se pudo crear la requisición: ${error?.message}`, 'error'); return }
+    await supabase.from('event_plans').update({ requisition_task_id: task.id }).eq('id', event.id)
+    setReqTaskId(task.id)
+    setTasks(prev => [...prev, task as TaskLite])
+    logActivity('task_created', 'task', task.id, { title: task.title, via: 'requisicion', event: event.name })
+    notifySlack(`📋 *Requisición de recursos* — ${event.name} (${buCode})${event.date ? ` · ${event.date}` : ''}\n${(res ?? []).slice(0, 6).map(r => `• ${r.qty}× ${r.name}`).join('\n')}${(res ?? []).length > 6 ? `\n…y ${(res ?? []).length - 6} más` : ''}`)
+    showToast('Requisición enviada al Task Manager del venue.', 'success')
+  }
 
   useEffect(() => {
     if (!event) return
@@ -627,7 +882,21 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
       logActivity('event_created', 'event', data.id, { name: row.name })
       // Bullets escritos durante la creación → se pasan a Tareas de una vez
       const n = await pushBulkTasks(data.id, row.name, buId, row.date)
-      if (n) showToast(`Evento creado con ${n} tareas en Tareas.`, 'success')
+      // Plantilla elegida → pre-cargar sus recursos y partidas de presupuesto
+      const tpl = templates.find(t => t.id === templateId)
+      if (tpl) {
+        if (tpl.resources?.length) {
+          await supabase.from('project_resources').insert(tpl.resources.map(r => ({
+            event_id: data.id, name: r.name, qty: r.qty || 1, unit_cost: r.unit_cost ?? null,
+          })))
+        }
+        if (tpl.budget_items?.length) {
+          await supabase.from('project_budget_items').insert(tpl.budget_items.map(b => ({
+            event_id: data.id, concept: b.concept, amount: b.amount || 0, is_income: !!b.is_income,
+          })))
+        }
+      }
+      if (n || tpl) showToast(`Plan creado${tpl ? ` con la plantilla "${tpl.name}"` : ''}${n ? ` y ${n} tareas` : ''}.`, 'success')
     }
     if (event) showToast('Evento guardado.', 'success')
     onSaved()
@@ -657,6 +926,17 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Plantilla (solo al crear): pre-carga recursos, partidas y tareas */}
+          {!event && templates.length > 0 && (
+            <div>
+              <label style={lbl}>Usar plantilla (opcional)</label>
+              <select value={templateId} onChange={e => applyTemplate(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                <option value="">Desde cero</option>
+                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          )}
+
           {/* ¿Evento o proyecto? — cambia los campos relevantes */}
           <div>
             <label style={lbl}>¿Qué planeas?</label>
@@ -784,7 +1064,19 @@ function EventSheet({ event, buList, people, canWrite, userId, userRole, isMobil
           {event ? (
             <>
               <ResourcesSection eventId={event.id} canWrite={canWrite} />
-              <BudgetSection event={event} buCode={buList.find(b => b.id === event.bu_id)?.code ?? ''} canWrite={canWrite} userId={userId} />
+              <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} />
+              {canWrite && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button onClick={sendRequisition}
+                    style={{ flex: 1, minWidth: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, borderRadius: 999, border: `1px solid ${reqTaskId ? 'var(--status-healthy)' : 'var(--accent-border)'}`, background: reqTaskId ? 'color-mix(in srgb, var(--status-healthy) 10%, transparent)' : 'var(--accent-bg)', color: reqTaskId ? 'var(--status-healthy)' : 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    <ClipboardList size={15} /> {reqTaskId ? 'Requisición enviada — ver tarea' : 'Enviar requisición al gerente'}
+                  </button>
+                  <button onClick={saveAsTemplate}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, padding: '0 14px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    <Save size={14} /> Guardar como plantilla
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
