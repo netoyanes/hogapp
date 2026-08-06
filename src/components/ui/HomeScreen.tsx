@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import {
-  LayoutDashboard, CheckSquare, Handshake, CalendarDays, Megaphone,
+  LayoutDashboard, CheckSquare, Handshake, CalendarDays,
   BarChart3, Activity, LayoutTemplate, Upload, UserPlus, UserCircle, FileText,
   Contact2, Target, Shell,
 } from 'lucide-react'
@@ -22,7 +22,6 @@ const APPS: App[] = [
   { id: 'contacts',   label: 'Directorio',  icon: Contact2,        color: '#6FA8A0' },
   { id: 'events',     label: 'Proyectos',   icon: CalendarDays,    color: '#B08BC9' },
   { id: 'objectives', label: 'Objetivos',   icon: Target,          color: '#5FBF7A' },
-  { id: 'content',    label: 'Contenido',   icon: Megaphone,       color: '#DB9A6A' },
   { id: 'revenue',    label: 'Ingresos',    icon: BarChart3,       color: '#8FBF9F' },
   { id: 'activity',   label: 'Actividad',   icon: Activity,        color: '#C9A76B' },
   { id: 'templates',  label: 'Plantillas',  icon: LayoutTemplate,  color: '#9BA3C9' },
@@ -55,8 +54,9 @@ export function HomeScreen({ onNavigate, onClose, userRole, userApps }: Props) {
       return app.id === 'profile' || userApps.has(app.id) || (app.id === 'contacts' && userApps.has('crm'))
     }
     if (app.id === 'concierge' && userRole === 'MARKETING') return false // hospitalidad sin Marketing
+    if (app.id === 'objectives' && userRole !== 'MASTER') return false // Objetivos = solo dirección
     if (userRole === 'MASTER') return true
-    return ['tasks', 'crm', 'concierge', 'contacts', 'events', 'objectives', 'profile'].includes(app.id)
+    return ['tasks', 'crm', 'concierge', 'contacts', 'events', 'profile'].includes(app.id)
   })
 
   function go(id: string) {

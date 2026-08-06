@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.53.0"
+export const APP_VERSION = "2.54.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.54.0",
+    date: "2026-08-01",
+    type: "MINOR",
+    changes: [
+      "Objetivos ahora es exclusivo del Master (dirección)",
+      "Contenido retirado — la planeación de contenido vive en Proyectos",
+      "Proyectos: columna de Avance — tareas hechas/total de cada plan con barra de progreso (verde al completar); también en las tarjetas de teléfono",
+    ]
+  },
   {
     version: "2.53.0",
     date: "2026-08-01",

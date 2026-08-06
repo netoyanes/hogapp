@@ -50,8 +50,6 @@ const APP_CATALOG: { id: string; label: string }[] = [
   { id: 'concierge',  label: 'Concierge' },
   { id: 'casa',       label: 'La Casa' },
   { id: 'events',     label: 'Proyectos' },
-  { id: 'objectives', label: 'Objetivos' },
-  { id: 'content',    label: 'Contenido' },
   { id: 'revenue',    label: 'Ingresos' },
   { id: 'reports',    label: 'Reportes' },
   { id: 'activity',   label: 'Actividad' },

@@ -1,4 +1,4 @@
-import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, CalendarDays, ClipboardCheck, Camera, Megaphone, BarChart3, Target, FileText } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, CalendarDays, ClipboardCheck, Camera, BarChart3, FileText } from 'lucide-react'
 import { STR } from '../../lib/strings'
 
 interface Props {
@@ -45,8 +45,6 @@ const SLOT_CATALOG = [
   { id: 'tasks',     label: STR.nav.tasks,       icon: CheckSquare },
   { id: 'crm',       label: STR.nav.crm,         icon: Handshake },
   { id: 'events',    label: STR.nav.events,      icon: CalendarDays },
-  { id: 'objectives', label: STR.nav.objectives, icon: Target },
-  { id: 'content',   label: STR.nav.content,     icon: Megaphone },
   { id: 'revenue',   label: STR.nav.revenue,     icon: BarChart3 },
   { id: 'reports',   label: STR.nav.reports,     icon: FileText },
 ]
