@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Plus, X, Search, Trash2, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
-import { notifySlack } from '../hooks/useSlack'
+import { notifySlack, notifyUserDM } from '../hooks/useSlack'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { BUChip, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
 
@@ -15,7 +15,7 @@ import { BUChip, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../com
 // al Task Manager con un botón.
 // ─────────────────────────────────────────────────────────────────────────────
 
-type EventStatus = 'idea' | 'planning' | 'approved' | 'done' | 'cancelled'
+type EventStatus = 'idea' | 'planning' | 'review' | 'approved' | 'done' | 'cancelled'
 type EventType = 'musica' | 'arte' | 'performance' | 'workshop' | 'comunidad' | 'comercial' | 'deporte' | 'privado' | 'otro'
 type PlanKind = 'evento' | 'adecuacion' | 'remodelacion' | 'apertura' | 'mantenimiento' | 'otro'
 
@@ -43,6 +43,7 @@ interface EventPlan {
 interface TaskLite { id: string; title: string; status: string }
 interface Resource { id: string; name: string; qty: number; unit_cost: number | null; notes: string | null }
 interface BudgetItem { id: string; concept: string; amount: number; is_income: boolean; deal_id: string | null }
+interface Approval { id: string; action: 'submitted' | 'approved' | 'returned'; comment: string | null; actor: string | null; created_at: string }
 interface Template {
   id: string; name: string; kind: PlanKind; event_type: EventType
   resources: { name: string; qty: number; unit_cost: number | null }[]
@@ -74,6 +75,7 @@ const TYPE_META: Record<EventType, { label: string; color: string }> = {
 const STATUS_META: Record<EventStatus, { label: string; tone: StatusTone }> = {
   idea:      { label: 'Idea',           tone: 'neutral' },
   planning:  { label: 'En planeación',  tone: 'accent' },
+  review:    { label: 'En aprobación',  tone: 'attention' },
   approved:  { label: 'Aprobado',       tone: 'healthy' },
   done:      { label: 'Realizado',      tone: 'neutral' },
   cancelled: { label: 'Cancelado',      tone: 'risk' },
@@ -103,11 +105,13 @@ const fechaLabel = (ev: EventPlan) => {
   return ev.end_date && ev.end_date !== ev.date ? `${f(ev.date)} – ${f(ev.end_date)}` : f(ev.date)
 }
 
-interface Props { userRole?: string; userId?: string; onOpenTask?: (id: string) => void }
+interface Props { userRole?: string; userId?: string; caps?: Set<string>; onOpenTask?: (id: string) => void }
 
-export function Events({ userRole, userId, onOpenTask }: Props) {
+export function Events({ userRole, userId, caps, onOpenTask }: Props) {
   const isMobile = useIsMobile()
   const canWrite = ['MASTER', 'C_LEVEL', 'OPS_MANAGER', 'MARKETING', 'TEAM'].includes(userRole ?? '')
+  // Aprobador (Gerente de Eficiencia): función 'aprobador' en Usuarios, o Master
+  const canApprove = userRole === 'MASTER' || (caps?.has('aprobador') ?? false)
   const [rows, setRows] = useState<EventPlan[]>([])
   const [buList, setBuList] = useState<{ id: string; code: string; name: string }[]>([])
   const [people, setPeople] = useState<{ id: string; full_name: string | null }[]>([])
@@ -184,12 +188,17 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
     filteredBase.filter(r => showPast || !(r.end_date ?? r.date) || (r.end_date ?? r.date)! >= monthStart),
     [filteredBase, showPast, monthStart])
 
-  // Board: mover de estado con las flechas de la tarjeta
-  const BOARD_ORDER: EventStatus[] = ['idea', 'planning', 'approved', 'done']
+  // Board: mover de estado con las flechas — entrar a 'approved' es EXCLUSIVO
+  // del aprobador; el resto del equipo llega hasta 'review' (En aprobación)
+  const BOARD_ORDER: EventStatus[] = ['idea', 'planning', 'review', 'approved', 'done']
   async function moveStatus(ev: EventPlan, dir: -1 | 1) {
     const i = BOARD_ORDER.indexOf(ev.status)
     const next = BOARD_ORDER[i + dir]
     if (i === -1 || !next) return
+    if (next === 'approved' && !canApprove) {
+      showToast('Solo el Aprobador (o Master) puede aprobar — envíalo a aprobación y él decide.', 'error')
+      return
+    }
     setRows(rs => rs.map(r => r.id === ev.id ? { ...r, status: next } : r))
     const { error } = await supabase.from('event_plans').update({ status: next }).eq('id', ev.id)
     if (error) { showToast(`No se pudo mover: ${error.message}`, 'error'); load() }
@@ -429,6 +438,7 @@ export function Events({ userRole, userId, onOpenTask }: Props) {
           buList={buList}
           people={people}
           canWrite={canWrite}
+          canApprove={canApprove}
           userId={userId}
           userRole={userRole}
           isMobile={isMobile}
@@ -450,8 +460,8 @@ function BoardView({ rows, buMap, progress, canWrite, onOpen, onMove }: {
   onOpen: (ev: EventPlan) => void
   onMove: (ev: EventPlan, dir: -1 | 1) => void
 }) {
-  const cols: EventStatus[] = ['idea', 'planning', 'approved', 'done', 'cancelled']
-  const movable: EventStatus[] = ['idea', 'planning', 'approved', 'done']
+  const cols: EventStatus[] = ['idea', 'planning', 'review', 'approved', 'done', 'cancelled']
+  const movable: EventStatus[] = ['idea', 'planning', 'review', 'approved', 'done']
   return (
     <div style={{ display: 'flex', gap: 10, overflowX: 'auto', alignItems: 'flex-start', paddingBottom: 8 }}>
       {cols.map(st => {
@@ -564,6 +574,172 @@ function CalendarView({ rows, month, onMonth, onOpen, isMobile, buMap }: {
           )
         })}
       </div>
+    </div>
+  )
+}
+
+// ── Aprobación (Gerente de Eficiencia): enviar → revisar → aprobar/regresar ──
+function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, status, onStatus }: {
+  event: EventPlan
+  buCode: string
+  canWrite: boolean
+  canApprove: boolean
+  userId?: string
+  people: { id: string; full_name: string | null }[]
+  status: EventStatus
+  onStatus: (s: EventStatus) => void
+}) {
+  const [history, setHistory] = useState<Approval[]>([])
+  const [fin, setFin] = useState<{ recursos: number; gastos: number; patroc: number; neto: number } | null>(null)
+  const [feedback, setFeedback] = useState('')
+  const [busy, setBusy] = useState(false)
+  const nameOf = (id: string | null) => people.find(p => p.id === id)?.full_name ?? '—'
+
+  useEffect(() => {
+    supabase.from('project_approvals').select('*').eq('event_id', event.id).order('created_at')
+      .then(({ data }) => setHistory((data ?? []) as Approval[]))
+    Promise.all([
+      supabase.from('project_resources').select('qty, unit_cost').eq('event_id', event.id),
+      supabase.from('project_budget_items').select('amount, is_income').eq('event_id', event.id),
+    ]).then(([{ data: res }, { data: bud }]) => {
+      const recursos = (res ?? []).reduce((s, r) => s + (r.unit_cost ?? 0) * r.qty, 0)
+      const gastos = (bud ?? []).filter(b => !b.is_income).reduce((s, b) => s + b.amount, 0)
+      const patroc = (bud ?? []).filter(b => b.is_income).reduce((s, b) => s + b.amount, 0)
+      setFin({ recursos, gastos, patroc, neto: gastos + recursos - patroc })
+    })
+  }, [event.id])
+
+  // Planner → Aprobador: cambia a 'review' y notifica (campana + Slack DM)
+  async function submitForApproval() {
+    setBusy(true)
+    const { error } = await supabase.from('event_plans').update({ status: 'review' }).eq('id', event.id)
+    if (error) { showToast(`No se pudo enviar: ${error.message}`, 'error'); setBusy(false); return }
+    const { data: row } = await supabase.from('project_approvals').insert({
+      event_id: event.id, action: 'submitted', actor: userId ?? null,
+    }).select('*').single()
+    if (row) setHistory(h => [...h, row as Approval])
+    onStatus('review')
+    const [{ data: apr }, { data: masters }] = await Promise.all([
+      supabase.from('user_capabilities').select('user_id').eq('capability', 'aprobador'),
+      supabase.from('profiles').select('id').eq('role', 'MASTER'),
+    ])
+    const ids = new Set<string>([...(apr ?? []).map(a => a.user_id), ...(masters ?? []).map(m => m.id)])
+    if (userId) ids.delete(userId)
+    if (ids.size) {
+      await supabase.from('notifications').insert([...ids].map(uid => ({
+        user_id: uid, title: 'Aprobación pendiente', body: `${event.name} (${buCode}) — presupuesto por revisar`,
+        type: 'approval_requested', entity_id: event.id,
+      })))
+      const f = fin ?? { recursos: 0, gastos: 0, patroc: 0, neto: 0 }
+      const msg = `🧮 *Aprobación pendiente* — ${event.name} (${buCode})\nGastos ${mxn(f.gastos)} + recursos ${mxn(f.recursos)} · Patrocinios ${mxn(f.patroc)} · *Neto ${mxn(f.neto)}*\n👉 HOG APP → Proyectos`
+      ;[...ids].forEach(uid => notifyUserDM(uid, msg))
+    }
+    logActivity('event_updated', 'event', event.id, { name: event.name, via: 'enviado_a_aprobacion' })
+    showToast('Enviado a aprobación — se notificó al Aprobador.', 'success')
+    setBusy(false)
+  }
+
+  // Aprobador: aprueba o regresa a planeación con feedback obligatorio
+  async function decide(action: 'approved' | 'returned') {
+    if (action === 'returned' && !feedback.trim()) { showToast('Escribe el feedback para regresarlo.', 'error'); return }
+    setBusy(true)
+    const nextStatus: EventStatus = action === 'approved' ? 'approved' : 'planning'
+    const { error } = await supabase.from('event_plans').update({ status: nextStatus }).eq('id', event.id)
+    if (error) { showToast(`No se pudo: ${error.message}`, 'error'); setBusy(false); return }
+    const { data: row } = await supabase.from('project_approvals').insert({
+      event_id: event.id, action, comment: feedback.trim() || null, actor: userId ?? null,
+    }).select('*').single()
+    if (row) setHistory(h => [...h, row as Approval])
+    onStatus(nextStatus)
+    const submitter = [...history].reverse().find(h => h.action === 'submitted')?.actor ?? null
+    const ids = new Set<string>([event.responsible, submitter].filter(Boolean) as string[])
+    if (userId) ids.delete(userId)
+    const label = action === 'approved' ? '✅ Plan aprobado' : '↩️ Plan regresado con feedback'
+    if (ids.size) {
+      await supabase.from('notifications').insert([...ids].map(uid => ({
+        user_id: uid, title: action === 'approved' ? 'Plan aprobado' : 'Plan regresado con feedback',
+        body: `${event.name}${feedback.trim() ? ` — "${feedback.trim()}"` : ''}`,
+        type: `plan_${action}`, entity_id: event.id,
+      })))
+      ;[...ids].forEach(uid => notifyUserDM(uid, `${label} — ${event.name} (${buCode})${feedback.trim() ? `\n💬 ${feedback.trim()}` : ''}`))
+    }
+    logActivity('event_updated', 'event', event.id, { name: event.name, via: action === 'approved' ? 'aprobado' : 'regresado_con_feedback', feedback: feedback.trim() || undefined })
+    showToast(action === 'approved' ? 'Plan aprobado ✅' : 'Regresado a planeación con tu feedback.', 'success')
+    setFeedback(''); setBusy(false)
+  }
+
+  const lastApproved = [...history].reverse().find(h => h.action === 'approved')
+  const inp: React.CSSProperties = {
+    width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
+    color: 'var(--text-primary)', padding: '10px 12px', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+  }
+  const ACTION_META = {
+    submitted: { icon: '📤', label: 'Enviado a aprobación' },
+    approved:  { icon: '✅', label: 'Aprobado' },
+    returned:  { icon: '↩️', label: 'Regresado con feedback' },
+  } as const
+
+  return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: status === 'review' ? '1px solid color-mix(in srgb, var(--status-attention) 45%, transparent)' : undefined }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Aprobación</span>
+        {fin && (
+          <span className="num" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+            Gastos {mxn(fin.gastos + fin.recursos)} · Patrocinios <span style={{ color: 'var(--status-healthy)' }}>{mxn(fin.patroc)}</span> · Neto <strong style={{ color: 'var(--text-primary)' }}>{mxn(fin.neto)}</strong>
+          </span>
+        )}
+      </div>
+
+      {/* Estado actual del flujo */}
+      {['idea', 'planning'].includes(status) && canWrite && (
+        <button onClick={submitForApproval} disabled={busy}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 46, borderRadius: 999, border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          📤 Enviar a aprobación
+        </button>
+      )}
+      {status === 'review' && !canApprove && (
+        <p style={{ fontSize: 12, color: 'var(--status-attention)', fontWeight: 700, margin: 0 }}>
+          ⏳ En aprobación — esperando al Aprobador. El plan se congela hasta su decisión.
+        </p>
+      )}
+      {status === 'review' && canApprove && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <textarea value={feedback} onChange={e => setFeedback(e.target.value)} rows={2}
+            placeholder="Feedback (obligatorio si lo regresas): ajustar partidas, negociar patrocinio, recortar staff…"
+            style={{ ...inp, minHeight: 56, resize: 'vertical' }} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => decide('approved')} disabled={busy}
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 46, borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+              ✅ Aprobar
+            </button>
+            <button onClick={() => decide('returned')} disabled={busy}
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 46, borderRadius: 999, border: '1px solid color-mix(in srgb, var(--status-attention) 45%, transparent)', background: 'color-mix(in srgb, var(--status-attention) 12%, transparent)', color: 'var(--status-attention)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              ↩ Regresar con feedback
+            </button>
+          </div>
+        </div>
+      )}
+      {status === 'approved' && lastApproved && (
+        <p style={{ fontSize: 12, color: 'var(--status-healthy)', fontWeight: 700, margin: 0 }}>
+          ✅ Aprobado por {nameOf(lastApproved.actor)} · {new Date(lastApproved.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+        </p>
+      )}
+
+      {/* Historial auditable */}
+      {history.length > 0 && (
+        <div style={{ marginTop: 10, borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+          {history.map(h => (
+            <div key={h.id} style={{ display: 'flex', gap: 8, padding: '4px 0', fontSize: 12 }}>
+              <span>{ACTION_META[h.action].icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{ACTION_META[h.action].label}</span>
+                <span style={{ color: 'var(--text-tertiary)' }}> · {nameOf(h.actor)} · {new Date(h.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                {h.comment && <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>💬 {h.comment}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -728,12 +904,13 @@ function BudgetSection({ event, buCode, canWrite, userId }: { event: EventPlan; 
 }
 
 // ── Sheet de crear/editar evento + tareas por bullets ────────────────────────
-function EventSheet({ event, templates, buList, people, canWrite, userId, userRole, isMobile, onOpenTask, onClose, onSaved }: {
+function EventSheet({ event, templates, buList, people, canWrite, canApprove, userId, userRole, isMobile, onOpenTask, onClose, onSaved }: {
   event: EventPlan | null
   templates: Template[]
   buList: { id: string; code: string; name: string }[]
   people: { id: string; full_name: string | null }[]
   canWrite: boolean
+  canApprove: boolean
   userId?: string
   userRole?: string
   isMobile: boolean
@@ -1051,14 +1228,26 @@ function EventSheet({ event, templates, buList, people, canWrite, userId, userRo
           <div>
             <label style={lbl}>Estado</label>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {(Object.keys(STATUS_META) as EventStatus[]).map(s => (
-                <button key={s} onClick={() => canWrite && setStatus(s)}
-                  style={{ minHeight: 38, padding: '0 12px', borderRadius: 999, cursor: canWrite ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, background: status === s ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${status === s ? 'var(--accent)' : 'var(--border-default)'}`, color: status === s ? 'var(--accent)' : 'var(--text-secondary)' }}>
-                  {STATUS_META[s].label}
-                </button>
-              ))}
+              {(Object.keys(STATUS_META) as EventStatus[]).map(s => {
+                // 'En aprobación' y 'Aprobado' se manejan por el flujo de
+                // aprobación — solo el Aprobador puede fijarlos a mano
+                const locked = !canApprove && ['review', 'approved'].includes(s) && status !== s
+                return (
+                  <button key={s} onClick={() => canWrite && !locked && setStatus(s)}
+                    title={locked ? 'Se asigna vía el flujo de aprobación' : undefined}
+                    style={{ minHeight: 38, padding: '0 12px', borderRadius: 999, cursor: canWrite && !locked ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, opacity: locked ? 0.45 : 1, background: status === s ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${status === s ? 'var(--accent)' : 'var(--border-default)'}`, color: status === s ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                    {STATUS_META[s].label}
+                  </button>
+                )
+              })}
             </div>
           </div>
+
+          {/* Flujo de aprobación (Gerente de Eficiencia) */}
+          {event && (
+            <ApprovalSection event={event} buCode={buCode} canWrite={canWrite} canApprove={canApprove}
+              userId={userId} people={people} status={status} onStatus={setStatus} />
+          )}
 
           {/* Recursos y presupuesto por partidas (requieren el plan guardado) */}
           {event ? (

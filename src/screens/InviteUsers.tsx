@@ -39,6 +39,7 @@ const ROLE_COLORS: Record<string, string> = {
 // el rol base. Extensible — agregar aquí y en el CHECK de user_capabilities.
 const CAPABILITIES: { id: string; label: string; desc: string }[] = [
   { id: 'talento', label: 'Talento', desc: 'Concierge → Talento: booking de DJs y fees' },
+  { id: 'aprobador', label: 'Aprobador', desc: 'Proyectos: aprueba presupuestos o los regresa con feedback (Gerente de Eficiencia)' },
 ]
 
 // Catálogo de apps asignables por usuario (user_apps). Con asignación explícita
