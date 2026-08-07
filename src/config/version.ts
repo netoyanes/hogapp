@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.57.0"
+export const APP_VERSION = "2.58.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.58.0",
+    date: "2026-08-06",
+    type: "MINOR",
+    changes: [
+      "Proyectos — CORTE POST-EVENTO: cuando el plan termina (Realizado o fecha pasada) se abre el corte — monto real por partida (campo 'real $', verde bajo presupuesto / rojo sobre) con totales Real y Δ vs presupuesto",
+      "Asistencia real vs esperada en el corte de eventos",
+      "El ciclo del Gerente de Eficiencia queda completo: aprueba presupuesto → ejecuta el equipo → corte real contra lo aprobado",
+    ]
+  },
   {
     version: "2.57.0",
     date: "2026-08-06",
