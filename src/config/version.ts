@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.56.0"
+export const APP_VERSION = "2.57.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.57.0",
+    date: "2026-08-06",
+    type: "MINOR",
+    changes: [
+      "Reservas Fase 4 — el sistema opera solo: NO-SHOW AUTOMÁTICO cada 10 min al vencer la tolerancia del venue (hora local por venue), con registro en Actividad y resumen a Slack",
+      "SIN GARANTÍA automático: reservas con depósito pendiente a menos de 24h se marcan (chip rojo + filtro en la barra de excepciones) y se alerta al equipo — el host decide si la sostiene",
+      "LISTA DE ESPERA real: botón ⏳ Espera en Reservas — anotas nombre+pax en segundos, ves cuánto llevan esperando, y con teléfono los conviertes en reserva de un toque (o los mandas al Piso como walk-in)",
+      "Requiere: SQL reservas_fase4.sql + crear la Edge Function reservations-cron + programar el cron",
+    ]
+  },
   {
     version: "2.56.0",
     date: "2026-08-06",

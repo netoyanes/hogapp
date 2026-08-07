@@ -121,7 +121,18 @@ export function Reservations({ userRole, userId }: Props) {
   const [floorOpen, setFloorOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   // Vista operativa (HoH): filtro de excepciones + reloj + config del venue
-  const [exFilter, setExFilter] = useState<'all' | 'unconfirmed' | 'no_table' | 'deposit' | 'proposal'>('all')
+  const [exFilter, setExFilter] = useState<'all' | 'unconfirmed' | 'no_table' | 'deposit' | 'proposal' | 'no_guarantee'>('all')
+  // Lista de espera (Fase 4): walk-ins sin lugar, gestionados por el host
+  const [waitOpen, setWaitOpen] = useState(false)
+  const [waitCount, setWaitCount] = useState(0)
+  const loadWaitCount = useCallback(async () => {
+    if (!buId) return
+    const { count } = await supabase.from('reservation_waitlist')
+      .select('id', { count: 'exact', head: true })
+      .eq('bu_id', buId).eq('date', today).eq('status', 'waiting')
+    setWaitCount(count ?? 0)
+  }, [buId, today])
+  useEffect(() => { loadWaitCount() }, [loadWaitCount])
   const [opsCfg, setOpsCfg] = useState<{ hasTables: boolean; holdMin: number; durations: { max_pax: number; minutes: number }[] }>({ hasTables: false, holdMin: 15, durations: [] })
   const [nowTick, setNowTick] = useState(Date.now())
 
@@ -450,9 +461,11 @@ export function Reservations({ userRole, userId }: Props) {
             : 0
           const deposit = reservations.filter(r => ['requested', 'confirmed', 'seated'].includes(r.status) && (r.notes ?? '').toLowerCase().includes('depósito requerido')).length
           const proposals = reservations.filter(r => !!r.proposed_time && ['requested', 'confirmed'].includes(r.status)).length
+          const noGuarantee = reservations.filter(r => ['requested', 'confirmed'].includes(r.status) && (r.notes ?? '').includes('SIN GARANTÍA')).length
           const chips = [
             { id: 'unconfirmed' as const, n: unconf, label: unconf === 1 ? 'sin confirmar' : 'sin confirmar' },
             { id: 'no_table' as const, n: noTable, label: 'sin mesa' },
+            { id: 'no_guarantee' as const, n: noGuarantee, label: 'sin garantía' },
             { id: 'deposit' as const, n: deposit, label: deposit === 1 ? 'depósito pendiente' : 'depósitos pendientes' },
             { id: 'proposal' as const, n: proposals, label: 'horario por confirmar' },
           ].filter(c => c.n > 0)
@@ -478,6 +491,12 @@ export function Reservations({ userRole, userId }: Props) {
                 <button onClick={() => setView('floor')}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 44, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
                   <Footprints size={13} /> Walk-in
+                </button>
+              )}
+              {date === today && (
+                <button onClick={() => setWaitOpen(true)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 44, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: waitCount ? 'var(--accent-bg)' : 'var(--bg-elevated)', border: `1px solid ${waitCount ? 'var(--accent)' : 'var(--border-default)'}`, color: waitCount ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                  ⏳ Espera{waitCount ? ` (${waitCount})` : ''}
                 </button>
               )}
               {chips.length > 0 && (
@@ -594,6 +613,7 @@ export function Reservations({ userRole, userId }: Props) {
               if (exFilter === 'no_table') return ['requested', 'confirmed'].includes(r.status) && !r.table_id && !r.combo_id && (r.zone ?? '') !== 'Barra'
               if (exFilter === 'deposit') return (r.notes ?? '').toLowerCase().includes('depósito requerido')
               if (exFilter === 'proposal') return !!r.proposed_time
+              if (exFilter === 'no_guarantee') return (r.notes ?? '').includes('SIN GARANTÍA')
               return true
             }
             type Ctx = 'now' | 'soon' | 'later' | 'done'
@@ -658,7 +678,9 @@ export function Reservations({ userRole, userId }: Props) {
                         <span style={chipStyle('amber')}>No-show en {holdLeft} min</span>
                       )}
                       {r.proposed_time && <span style={chipStyle('amber')}>→ {r.proposed_time} por confirmar</span>}
-                      {notes.toLowerCase().includes('depósito requerido') && <span style={chipStyle('amber')}>Depósito pendiente</span>}
+                      {notes.includes('SIN GARANTÍA')
+                        ? <span style={chipStyle('red')}>Sin garantía</span>
+                        : notes.toLowerCase().includes('depósito requerido') && <span style={chipStyle('amber')}>Depósito pendiente</span>}
                       {(g?.tags ?? []).some(t => t.toLowerCase() === 'vip') && <span style={chipStyle('gold')}>VIP</span>}
                       {(g?.tags ?? []).some(t => t.toLowerCase() === 'socio') && <span style={chipStyle('gold')}>Socio</span>}
                       {/\bPR\b/.test(notes) && <span style={chipStyle('neutral')}>PR</span>}
@@ -932,6 +954,13 @@ export function Reservations({ userRole, userId }: Props) {
           onClose={() => setSearchOpen(false)}
           onPick={r => { setSearchOpen(false); setBuId(r.bu_id); setDate(r.date); setView('day') }}
         />
+      )}
+
+      {waitOpen && buId && (
+        <WaitlistSheet buId={buId} buCode={buMap[buId] ?? ''} today={today} userId={userId}
+          isMobile={isMobile}
+          onClose={() => { setWaitOpen(false); loadWaitCount() }}
+          onConverted={() => { load(); loadWaitCount() }} />
       )}
 
       {creating && buId && (
@@ -1364,6 +1393,148 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
 // y lo copia; el cliente reserva en ?reservar=<CÓDIGO> respetando las reglas
 // del venue (cupo, apartado) vía el Edge Function public-reservation.
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Lista de espera (Fase 4): walk-ins sin lugar. El host los anota en segundos
+// y cuando se libera espacio los convierte en reserva (con teléfono) o los
+// manda al Piso como walk-in. Los que se cansaron se marcan y salen.
+// ─────────────────────────────────────────────────────────────────────────────
+function WaitlistSheet({ buId, buCode, today, userId, isMobile, onClose, onConverted }: {
+  buId: string
+  buCode: string
+  today: string
+  userId?: string
+  isMobile: boolean
+  onClose: () => void
+  onConverted: () => void
+}) {
+  interface WaitRow { id: string; guest_name: string; phone: string | null; party_size: number; notes: string | null; created_at: string }
+  const [rows, setRows] = useState<WaitRow[]>([])
+  const [nName, setNName] = useState('')
+  const [nPax, setNPax] = useState('2')
+  const [nPhone, setNPhone] = useState('')
+  const [nNotes, setNNotes] = useState('')
+
+  const loadList = useCallback(async () => {
+    const { data } = await supabase.from('reservation_waitlist')
+      .select('id, guest_name, phone, party_size, notes, created_at')
+      .eq('bu_id', buId).eq('date', today).eq('status', 'waiting').order('created_at')
+    setRows((data ?? []) as WaitRow[])
+  }, [buId, today])
+  useEffect(() => { loadList() }, [loadList])
+
+  async function add() {
+    if (!nName.trim()) return
+    const { error } = await supabase.from('reservation_waitlist').insert({
+      bu_id: buId, date: today, guest_name: nName.trim(), phone: nPhone.trim() || null,
+      party_size: Math.max(1, Number(nPax) || 1), notes: nNotes.trim() || null, created_by: userId ?? null,
+    })
+    if (error) { showToast(`No se pudo anotar: ${error.message}`, 'error'); return }
+    setNName(''); setNPax('2'); setNPhone(''); setNNotes('')
+    loadList()
+  }
+
+  async function setRowStatus(row: WaitRow, status: 'seated' | 'expired' | 'converted') {
+    await supabase.from('reservation_waitlist').update({ status }).eq('id', row.id)
+    setRows(rs => rs.filter(r => r.id !== row.id))
+  }
+
+  // Con teléfono → cliente + reserva confirmada a la media hora siguiente
+  async function convert(row: WaitRow) {
+    if (!row.phone) return
+    const digits = row.phone.replace(/\D/g, '')
+    const tel = digits.length === 10 ? `+52${digits}` : row.phone.startsWith('+') ? row.phone : `+${digits}`
+    const { data: guest, error: gErr } = await supabase.from('guests')
+      .upsert({ phone: tel, full_name: row.guest_name, origin_bu: buId }, { onConflict: 'phone', ignoreDuplicates: false })
+      .select('id').single()
+    if (gErr || !guest) { showToast(`Cliente: ${gErr?.message}`, 'error'); return }
+    const now = new Date()
+    const mins = now.getMinutes() < 30 ? 30 : 60
+    const t = new Date(now.getTime()); t.setMinutes(mins === 60 ? 0 : 30, 0, 0); if (mins === 60) t.setHours(t.getHours() + 1)
+    const slot = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`
+    const { data: res, error } = await supabase.from('reservations').insert({
+      guest_id: guest.id, bu_id: buId, date: today, time_slot: slot, party_size: row.party_size,
+      notes: row.notes ? `Lista de espera · ${row.notes}` : 'Desde lista de espera',
+      status: 'confirmed', source: 'walk_in', created_by: userId ?? null, confirmed_at: new Date().toISOString(),
+    }).select('id').single()
+    if (error || !res) { showToast(`No se pudo crear la reserva: ${error?.message}`, 'error'); return }
+    await setRowStatus(row, 'converted')
+    logActivity('reservation_created', 'reservation', res.id, { guest: row.guest_name, bu: buCode, date: today, time: slot, pax: row.party_size, via: 'lista_espera' })
+    showToast(`${row.guest_name} convertido en reserva a las ${slot}.`, 'success')
+    onConverted()
+  }
+
+  const waitMin = (iso: string) => Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 60000))
+  const inp: React.CSSProperties = {
+    background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
+    color: 'var(--text-primary)', padding: '0 10px', fontSize: 13, outline: 'none', minHeight: 42, boxSizing: 'border-box',
+  }
+  return (
+    <Sheet open onClose={onClose} isMobile={isMobile} width={460}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-3) 0' }}>
+          <h2 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>Lista de espera · {buCode}</h2>
+          <button onClick={onClose} aria-label="Cerrar" style={{ width: 36, height: 36, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
+        </div>
+
+        {/* Anotar en segundos: nombre + pax (tel y nota opcionales) */}
+        <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+            <input value={nName} onChange={e => setNName(e.target.value)} placeholder="Nombre *" autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') add() }} style={{ ...inp, flex: 1 }} />
+            <input type="number" inputMode="numeric" min={1} value={nPax} onChange={e => setNPax(e.target.value)} className="num" style={{ ...inp, width: 60, textAlign: 'center' }} aria-label="Pax" />
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input value={nPhone} onChange={e => setNPhone(e.target.value)} inputMode="tel" placeholder="Teléfono (para convertir en reserva)" style={{ ...inp, flex: 1 }} />
+            <input value={nNotes} onChange={e => setNNotes(e.target.value)} placeholder="Nota" style={{ ...inp, width: 110 }} />
+            <button onClick={add} disabled={!nName.trim()}
+              style={{ minHeight: 42, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: 'none', background: nName.trim() ? 'var(--accent)' : 'var(--bg-base)', color: nName.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', cursor: nName.trim() ? 'pointer' : 'not-allowed', fontWeight: 700 }}>
+              <Plus size={15} />
+            </button>
+          </div>
+        </div>
+
+        {rows.length === 0 ? (
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 16 }}>Nadie en espera ahora mismo.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {rows.map(r => (
+              <div key={r.id} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{r.guest_name}</span>
+                  <span className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>{r.party_size}p</span>
+                  <span className="num" style={{ fontSize: 11, color: waitMin(r.created_at) >= 30 ? 'var(--status-attention)' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{waitMin(r.created_at)}′ esperando</span>
+                </div>
+                {(r.phone || r.notes) && (
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                    {r.phone && <span className="num">{r.phone}</span>}{r.phone && r.notes && ' · '}{r.notes}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  {r.phone ? (
+                    <button onClick={() => convert(r)}
+                      style={{ flex: 1, minHeight: 40, borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+                      🪑 Convertir en reserva
+                    </button>
+                  ) : (
+                    <button onClick={() => setRowStatus(r, 'seated')} title="Siéntalo desde el Piso como walk-in"
+                      style={{ flex: 1, minHeight: 40, borderRadius: 999, border: '1px solid var(--status-healthy)', background: 'color-mix(in srgb, var(--status-healthy) 12%, transparent)', color: 'var(--status-healthy)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      Ya se sentó (walk-in en Piso)
+                    </button>
+                  )}
+                  <button onClick={() => setRowStatus(r, 'expired')}
+                    style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-tertiary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Ya no espera
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Sheet>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Buscador general de reservas: todos los venues permitidos y todas las
 // fechas, por nombre, teléfono o texto en notas. Tap → salta al día.
