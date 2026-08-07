@@ -21,6 +21,7 @@ interface TableRow {
   id: string; zone_id: string; name: string; min_pax: number; max_pax: number
   shape: 'square' | 'round' | 'booth' | 'lounge' | 'high'
   x: number; y: number; w: number; h: number; active: boolean
+  section: string | null   // sección/estación del mesero ("A", "Terraza"…)
 }
 interface Combo { id: string; zone_id: string; name: string; table_ids: string[]; min_pax: number; max_pax: number }
 
@@ -348,6 +349,8 @@ export function FloorEditor({ buId, buCode, onClose }: { buId: string; buCode: s
                 <input type="number" min={1} value={editTable.min_pax} onChange={e => setEditTable({ ...editTable, min_pax: Math.max(1, Number(e.target.value)) })} style={{ ...inp, width: '100%', marginTop: 4 }} /></label>
               <label style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Capacidad máx
                 <input type="number" min={1} value={editTable.max_pax} onChange={e => setEditTable({ ...editTable, max_pax: Math.max(1, Number(e.target.value)) })} style={{ ...inp, width: '100%', marginTop: 4 }} /></label>
+              <label style={{ fontSize: 11, color: 'var(--text-tertiary)', gridColumn: '1 / -1' }}>Sección (estación del mesero)
+                <input value={editTable.section ?? ''} onChange={e => setEditTable({ ...editTable, section: e.target.value })} placeholder="A, B, Terraza…" style={{ ...inp, width: '100%', marginTop: 4 }} /></label>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
               <input type="checkbox" checked={editTable.active} onChange={e => setEditTable({ ...editTable, active: e.target.checked })} />
@@ -356,7 +359,7 @@ export function FloorEditor({ buId, buCode, onClose }: { buId: string; buCode: s
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => {
                 if (editTable.min_pax > editTable.max_pax) { showToast('La capacidad mínima no puede ser mayor que la máxima.', 'error'); return }
-                patchTable(editTable.id, { name: editTable.name.trim() || editTable.name, shape: editTable.shape, min_pax: editTable.min_pax, max_pax: editTable.max_pax, active: editTable.active })
+                patchTable(editTable.id, { name: editTable.name.trim() || editTable.name, shape: editTable.shape, min_pax: editTable.min_pax, max_pax: editTable.max_pax, active: editTable.active, section: editTable.section?.trim() || null })
                 setEditTable(null)
               }}
                 style={{ flex: 1, background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 999, padding: 12, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
