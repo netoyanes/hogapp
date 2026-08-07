@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.55.1"
+export const APP_VERSION = "2.56.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.56.0",
+    date: "2026-08-06",
+    type: "MINOR",
+    changes: [
+      "Proyectos — flujo de APROBACIÓN (Gerente de Eficiencia): el planner envía a aprobación, el plan entra a 'En aprobación' y solo el Aprobador (función asignable en Usuarios, o Master) puede Aprobar o Regresar con feedback obligatorio",
+      "Panel de aprobación en cada plan: resumen financiero (gastos + recursos, patrocinios, neto), decisión con un toque e historial auditable de envíos/aprobaciones/regresos con comentarios",
+      "Notificaciones en cada paso: campana + Slack DM al Aprobador al enviar, y al responsable al aprobar o regresar",
+      "Board: nueva columna 'En aprobación'; mover a 'Aprobado' con flechas queda restringido al Aprobador",
+    ]
+  },
   {
     version: "2.55.1",
     date: "2026-08-06",

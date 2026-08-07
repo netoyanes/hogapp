@@ -235,7 +235,7 @@ export default function App() {
       case 'reportar': // slot de bottom-nav del HoH: La Casa con el reporte abierto
         return <Casa userId={profile?.id} userRole={role} initialReport />
       case 'events':
-        return <Events userRole={role} userId={profile?.id} onOpenTask={openTaskOverlay} />
+        return <Events userRole={role} userId={profile?.id} caps={caps} onOpenTask={openTaskOverlay} />
       case 'objectives':
         // Objetivos es exclusivo del Master (dirección)
         return role === 'MASTER'
