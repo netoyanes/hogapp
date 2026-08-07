@@ -19,6 +19,7 @@ interface TableRow {
   id: string; zone_id: string; name: string; min_pax: number; max_pax: number
   shape: 'square' | 'round' | 'booth' | 'lounge' | 'high'
   x: number; y: number; w: number; h: number; active: boolean
+  section: string | null
 }
 interface Session {
   id: string; zone_id: string; table_id: string | null; reservation_id: string | null
@@ -43,6 +44,9 @@ export function FloorLive({ buId, canWrite, userId }: { buId: string; canWrite: 
   const [resToday, setResToday] = useState<ResRow[]>([])
   const [guestNames, setGuestNames] = useState<Record<string, string>>({})
   const [zoneId, setZoneId] = useState('')
+  // "Mis mesas": el mesero filtra por su sección/estación
+  const [sectionFilter, setSectionFilter] = useState('')
+  const [durations, setDurations] = useState<{ max_pax: number; minutes: number }[]>([])
   const [loading, setLoading] = useState(true)
   const [selTable, setSelTable] = useState<TableRow | null>(null)
   const [barPanel, setBarPanel] = useState(false)
@@ -52,12 +56,14 @@ export function FloorLive({ buId, canWrite, userId }: { buId: string; canWrite: 
 
   const load = useCallback(async () => {
     const today = isoToday()
-    const [{ data: z }, { data: t }, { data: s }, { data: r }] = await Promise.all([
+    const [{ data: z }, { data: t }, { data: s }, { data: r }, { data: cfg }] = await Promise.all([
       supabase.from('venue_zones').select('id, name, kind, status, bar_seats, priority').eq('bu_id', buId).order('priority').order('created_at'),
       supabase.from('venue_tables').select('*').eq('bu_id', buId).eq('active', true),
       supabase.from('table_sessions').select('*').eq('bu_id', buId).in('status', ['seated', 'billing']),
       supabase.from('reservations').select('id, guest_id, time_slot, party_size, status, table_id, zone_id').eq('bu_id', buId).eq('date', today).in('status', ['requested', 'confirmed', 'seated']),
+      supabase.from('venue_reservation_settings').select('durations').eq('bu_id', buId).maybeSingle(),
     ])
+    setDurations((cfg?.durations ?? []) as { max_pax: number; minutes: number }[])
     setZones((z ?? []) as Zone[])
     setTables((t ?? []) as TableRow[])
     setSessions((s ?? []) as Session[])
@@ -90,7 +96,19 @@ export function FloorLive({ buId, canWrite, userId }: { buId: string; canWrite: 
   }, [])
 
   const zone = zones.find(z => z.id === zoneId) ?? null
-  const zoneTables = tables.filter(t => t.zone_id === zoneId)
+  const zoneTablesAll = tables.filter(t => t.zone_id === zoneId)
+  const sections = useMemo(() => [...new Set(zoneTablesAll.map(t => t.section).filter(Boolean))] as string[], [zoneTablesAll])
+  const zoneTables = sectionFilter ? zoneTablesAll.filter(t => t.section === sectionFilter) : zoneTablesAll
+
+  // Mesa EXCEDIDA: sentada (sin pedir cuenta) más allá de su duración + 20 min
+  const durFor = useCallback((p: number) => {
+    const hit = [...durations].sort((a, b) => a.max_pax - b.max_pax).find(d => d.max_pax >= p)
+    return hit?.minutes ?? 120
+  }, [durations])
+  const isExceeded = useCallback((s: Session) =>
+    s.status === 'seated' && (tick - Date.parse(s.seated_at)) / 60000 > durFor(s.party_size) + 20,
+    [tick, durFor])
+  const exceededCount = useMemo(() => sessions.filter(isExceeded).length, [sessions, isExceeded])
 
   const sessionByTable = useMemo(() => {
     const m: Record<string, Session> = {}
@@ -257,8 +275,26 @@ export function FloorLive({ buId, canWrite, userId }: { buId: string; canWrite: 
         })}
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-tertiary)' }}>
           {occTables} mesas ocupadas · <strong style={{ color: 'var(--text-primary)' }}>{occPax} pax</strong> en piso
+          {exceededCount > 0 && <> · <strong style={{ color: 'var(--status-risk)' }}>⚠ {exceededCount} excedida{exceededCount > 1 ? 's' : ''}</strong></>}
         </span>
       </div>
+
+      {/* "Mis mesas": filtro por sección/estación del mesero */}
+      {sections.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Sección</span>
+          <button onClick={() => setSectionFilter('')}
+            style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 11, fontWeight: 700, background: !sectionFilter ? 'var(--accent)' : 'var(--bg-elevated)', border: 'none', color: !sectionFilter ? 'var(--on-accent)' : 'var(--text-secondary)' }}>
+            Todas
+          </button>
+          {sections.map(s => (
+            <button key={s} onClick={() => setSectionFilter(prev => prev === s ? '' : s)}
+              style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 11, fontWeight: 700, background: sectionFilter === s ? 'var(--accent)' : 'var(--bg-elevated)', border: 'none', color: sectionFilter === s ? 'var(--on-accent)' : 'var(--text-secondary)' }}>
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Leyenda */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -280,11 +316,12 @@ export function FloorLive({ buId, canWrite, userId }: { buId: string; canWrite: 
           {zoneTables.map(t => {
             const v = tableVisual(t)
             const s = sessionByTable[t.id]
+            const exceeded = s ? isExceeded(s) : false
             return (
-              <button key={t.id} style={v.style} onClick={() => canWrite && setSelTable(t)}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary)' }}>{t.name}</span>
+              <button key={t.id} style={{ ...v.style, ...(exceeded ? { border: '2px solid var(--status-risk)', boxShadow: '0 0 0 3px color-mix(in srgb, var(--status-risk) 30%, transparent)' } : {}) }} onClick={() => canWrite && setSelTable(t)}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary)' }}>{exceeded && '⚠ '}{t.name}</span>
                 {s ? (
-                  <span className="num" style={{ fontSize: 9, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{s.party_size}p · {elapsedMin(s)}′</span>
+                  <span className="num" style={{ fontSize: 9, color: exceeded ? 'var(--status-risk)' : 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontWeight: exceeded ? 800 : 400 }}>{s.party_size}p · {elapsedMin(s)}′</span>
                 ) : (
                   <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{t.min_pax}–{t.max_pax}</span>
                 )}

@@ -63,6 +63,46 @@ export function CapacityEditor({ buId, buCode, onClose, onSaved }: {
     setLoading(false)
   }, [buId])
 
+  // Fase 5 — CALIBRACIÓN: duraciones REALES del piso (table_sessions cerradas,
+  // últimos 60 días) contra las configuradas, con sugerencia aplicable.
+  const [calib, setCalib] = useState<{ tier: number; label: string; n: number; realAvg: number; configured: number; suggested: number }[] | null>(null)
+  useEffect(() => {
+    if (!settings) return
+    const since = new Date(Date.now() - 60 * 86400000).toISOString()
+    supabase.from('table_sessions').select('party_size, seated_at, closed_at')
+      .eq('bu_id', buId).eq('status', 'closed').gte('seated_at', since)
+      .then(({ data }) => {
+        const rows = (data ?? []).filter(r => r.closed_at)
+        const tiers = [...settings.durations].sort((a, b) => a.max_pax - b.max_pax)
+        if (!rows.length || !tiers.length) { setCalib([]); return }
+        const buckets = tiers.map(t => ({ t, mins: [] as number[] }))
+        for (const r of rows) {
+          const dur = (Date.parse(r.closed_at as string) - Date.parse(r.seated_at as string)) / 60000
+          if (dur < 10 || dur > 600) continue // descarta ruido (cierres inmediatos u olvidados)
+          const b = buckets.find(x => (r.party_size as number) <= x.t.max_pax) ?? buckets[buckets.length - 1]
+          b.mins.push(dur)
+        }
+        setCalib(buckets.map((b, i) => {
+          const n = b.mins.length
+          const avg = n ? b.mins.reduce((s, x) => s + x, 0) / n : 0
+          // sugerido = promedio real + 10% de colchón, redondeado a 15 min
+          const suggested = n ? Math.max(30, Math.ceil((avg * 1.1) / 15) * 15) : b.t.minutes
+          const lo = i === 0 ? 1 : tiers[i - 1].max_pax + 1
+          return { tier: b.t.max_pax, label: `${lo}–${b.t.max_pax} pax`, n, realAvg: Math.round(avg), configured: b.t.minutes, suggested }
+        }))
+      })
+  }, [buId, settings ? JSON.stringify(settings.durations) : '']) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function applySuggested() {
+    if (!settings || !calib) return
+    const ds = settings.durations.map(d => {
+      const c = calib.find(x => x.tier === d.max_pax)
+      return c && c.n >= 5 ? { ...d, minutes: c.suggested } : d
+    })
+    await patchSettings({ durations: ds })
+    showToast('Duraciones calibradas con los datos reales del piso.', 'success')
+  }
+
   // Guardado inmediato de parámetros (upsert — la fila puede no existir aún)
   async function patchSettings(patch: Partial<ResSettings>) {
     if (!settings) return
@@ -263,6 +303,45 @@ export function CapacityEditor({ buId, buCode, onClose, onSaved }: {
                 </p>
               </div>
             )}
+
+            {/* Fase 5 — Calibración: lo que el piso midió vs lo configurado */}
+            <div style={{ marginTop: 12, borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+                📐 Calibración <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', fontSize: 10 }}>· duración real de las mesas (últimos 60 días)</span>
+              </div>
+              {calib === null ? null : calib.length === 0 || calib.every(c => c.n === 0) ? (
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
+                  Aún sin cierres de mesa registrados — la vista Piso alimenta esto sola (sentar → cerrar mesa).
+                </p>
+              ) : (
+                <>
+                  {calib.map(c => {
+                    const diff = c.suggested - c.configured
+                    const notable = c.n >= 5 && Math.abs(diff) >= 15
+                    return (
+                      <div key={c.tier} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12 }}>
+                        <span style={{ width: 76, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{c.label}</span>
+                        <span className="num" style={{ flex: 1, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                          {c.n ? `real prom. ${c.realAvg} min (${c.n} cierres)` : 'sin datos'}
+                        </span>
+                        <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>config. {c.configured}</span>
+                        {c.n >= 5 && (
+                          <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: notable ? 'var(--status-attention)' : 'var(--status-healthy)' }}>
+                            → {c.suggested}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {calib.some(c => c.n >= 5 && c.suggested !== c.configured) && (
+                    <button onClick={applySuggested}
+                      style={{ marginTop: 8, width: '100%', minHeight: 40, borderRadius: 999, border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      Aplicar duraciones sugeridas (solo rangos con 5+ cierres)
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>

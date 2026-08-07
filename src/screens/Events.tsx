@@ -123,9 +123,9 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
   const [showPast, setShowPast] = useState(false)
   const [editing, setEditing] = useState<EventPlan | null>(null)
   const [creating, setCreating] = useState(false)
-  // Tres vistas del planeador: tabla, board por estado y calendario mensual
-  const [view, setView] = useState<'table' | 'board' | 'calendar'>(() =>
-    (localStorage.getItem('hog_projects_view') as 'table' | 'board' | 'calendar') || 'table')
+  // Vistas del planeador: tabla, board, calendario y (aprobadores) su cabina
+  const [view, setView] = useState<'table' | 'board' | 'calendar' | 'approvals'>(() =>
+    (localStorage.getItem('hog_projects_view') as 'table' | 'board' | 'calendar' | 'approvals') || 'table')
   useEffect(() => { localStorage.setItem('hog_projects_view', view) }, [view])
   const [templates, setTemplates] = useState<Template[]>([])
   const [calMonth, setCalMonth] = useState(() => {
@@ -253,8 +253,9 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 2, background: 'var(--bg-elevated)', borderRadius: 999, padding: 2 }}>
-            {([['table', isMobile ? 'Lista' : 'Tabla'], ['board', 'Board'], ['calendar', 'Calendario']] as const).map(([id, label]) => (
-              <button key={id} onClick={() => setView(id)}
+            {([['table', isMobile ? 'Lista' : 'Tabla'], ['board', 'Board'], ['calendar', 'Calendario'],
+               ...(canApprove ? [['approvals', 'Aprobación'] as const] : [])] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setView(id as typeof view)}
                 style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === id ? 'var(--accent)' : 'transparent', color: view === id ? 'var(--on-accent)' : 'var(--text-tertiary)' }}>
                 {label}
               </button>
@@ -288,6 +289,10 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: isMobile ? 0 : 16 }}>
             {[64, 64, 64].map((h, i) => <div key={i} className="animate-pulse-green" style={{ height: h, background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)' }} />)}
+          </div>
+        ) : view === 'approvals' && canApprove ? (
+          <div style={{ padding: isMobile ? 0 : 16 }}>
+            <ApprovalsDashboard rows={rows} buMap={buMap} nameOf={nameOf} onOpen={ev => setEditing(ev)} />
           </div>
         ) : view === 'calendar' ? (
           <div style={{ padding: isMobile ? 0 : 16 }}>
@@ -574,6 +579,131 @@ function CalendarView({ rows, month, onMonth, onOpen, isMobile, buMap }: {
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// ── Cabina del Aprobador: pendientes de decisión + cortes con sobregiro ──────
+function ApprovalsDashboard({ rows, buMap, nameOf, onOpen }: {
+  rows: EventPlan[]
+  buMap: Record<string, string>
+  nameOf: (id: string | null) => string | null
+  onOpen: (ev: EventPlan) => void
+}) {
+  interface Agg { gastos: number; ingresos: number; recursos: number; real: number; presupConReal: number }
+  const [aggs, setAggs] = useState<Record<string, Agg>>({})
+  const todayISO = new Date().toISOString().slice(0, 10)
+
+  const pending = useMemo(() => rows.filter(r => r.status === 'review'), [rows])
+  const finished = useMemo(() => rows.filter(r => r.status === 'done' || ((r.end_date ?? r.date) && (r.end_date ?? r.date)! < todayISO && !['cancelled'].includes(r.status))), [rows, todayISO])
+
+  useEffect(() => {
+    const ids = [...new Set([...pending, ...finished].map(r => r.id))]
+    if (!ids.length) { setAggs({}); return }
+    Promise.all([
+      supabase.from('project_budget_items').select('event_id, amount, actual_amount, is_income').in('event_id', ids),
+      supabase.from('project_resources').select('event_id, qty, unit_cost').in('event_id', ids),
+    ]).then(([{ data: bud }, { data: res }]) => {
+      const m: Record<string, Agg> = {}
+      const get = (id: string) => (m[id] = m[id] ?? { gastos: 0, ingresos: 0, recursos: 0, real: 0, presupConReal: 0 })
+      for (const b of (bud ?? []) as { event_id: string; amount: number; actual_amount: number | null; is_income: boolean }[]) {
+        const a = get(b.event_id)
+        if (b.is_income) a.ingresos += b.amount
+        else {
+          a.gastos += b.amount
+          if (b.actual_amount != null) { a.real += b.actual_amount; a.presupConReal += b.amount }
+        }
+      }
+      for (const r of (res ?? []) as { event_id: string; qty: number; unit_cost: number | null }[]) {
+        get(r.event_id).recursos += (r.unit_cost ?? 0) * r.qty
+      }
+      setAggs(m)
+    })
+  }, [pending, finished])
+
+  const sobregiros = finished
+    .map(r => ({ r, a: aggs[r.id] }))
+    .filter(x => x.a && x.a.presupConReal > 0 && x.a.real > x.a.presupConReal)
+    .sort((x, y) => (y.a.real - y.a.presupConReal) - (x.a.real - x.a.presupConReal))
+  const porAprobar = pending.reduce((s, r) => { const a = aggs[r.id]; return s + (a ? a.gastos + a.recursos - a.ingresos : 0) }, 0)
+  const deltaTotal = sobregiros.reduce((s, x) => s + (x.a.real - x.a.presupConReal), 0)
+
+  const kpi = (label: string, value: string, color?: string) => (
+    <div style={{ flex: '1 1 120px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
+      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>{label}</div>
+      <div className="num" style={{ fontSize: 18, fontWeight: 800, color: color ?? 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</div>
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {kpi('Pendientes', String(pending.length), pending.length ? 'var(--status-attention)' : undefined)}
+        {kpi('Neto por aprobar', mxn(porAprobar))}
+        {kpi('Cortes con sobregiro', String(sobregiros.length), sobregiros.length ? 'var(--status-risk)' : 'var(--status-healthy)')}
+        {kpi('Δ sobregiro total', sobregiros.length ? `+${mxn(deltaTotal)}` : '—', sobregiros.length ? 'var(--status-risk)' : undefined)}
+      </div>
+
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
+          ⏳ Pendientes de tu decisión · {pending.length}
+        </div>
+        {pending.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: 0 }}>Nada por aprobar — bandeja limpia ✅</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pending.map(r => {
+              const a = aggs[r.id]
+              return (
+                <button key={r.id} onClick={() => onOpen(r)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-surface)', border: '1px solid color-mix(in srgb, var(--status-attention) 40%, transparent)', borderRadius: 'var(--radius-md)', padding: '10px 12px', cursor: 'pointer', textAlign: 'left', minHeight: 58 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{r.name}</span>
+                      <BUChip code={buMap[r.bu_id] ?? '?'} size="sm" />
+                      {planPill(r)}
+                    </div>
+                    <div className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
+                      {fechaLabel(r)} · {nameOf(r.responsible) ?? 'sin responsable'}
+                      {a && <> · Gastos {mxn(a.gastos + a.recursos)}{a.ingresos > 0 && <> · Patroc. {mxn(a.ingresos)}</>} · <strong style={{ color: 'var(--text-primary)' }}>Neto {mxn(a.gastos + a.recursos - a.ingresos)}</strong></>}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', whiteSpace: 'nowrap' }}>Revisar →</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
+          🔴 Cortes con sobregiro · {sobregiros.length}
+        </div>
+        {sobregiros.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: 0 }}>Ningún plan terminado se pasó del presupuesto capturado.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {sobregiros.map(({ r, a }) => (
+              <button key={r.id} onClick={() => onOpen(r)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-surface)', border: '1px solid color-mix(in srgb, var(--status-risk) 40%, transparent)', borderRadius: 'var(--radius-md)', padding: '10px 12px', cursor: 'pointer', textAlign: 'left', minHeight: 54 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{r.name}</span>
+                    <BUChip code={buMap[r.bu_id] ?? '?'} size="sm" />
+                  </div>
+                  <div className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
+                    Presupuestado {mxn(a.presupConReal)} · Real {mxn(a.real)}
+                  </div>
+                </div>
+                <span className="num" style={{ fontSize: 14, fontWeight: 800, color: 'var(--status-risk)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  +{mxn(a.real - a.presupConReal)}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.58.0"
+export const APP_VERSION = "2.59.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.59.0",
+    date: "2026-08-06",
+    type: "MINOR",
+    changes: [
+      "Proyectos — vista APROBACIÓN (cabina del Gerente de Eficiencia): pendientes de decisión con su neto, cortes con sobregiro ordenados por Δ, y KPIs (por aprobar, sobregiro total)",
+      "Piso — SECCIONES: cada mesa puede tener sección/estación (editor de piso) y el mesero filtra 'mis mesas'; MESA EXCEDIDA en rojo con ⚠ cuando pasa su duración + 20 min sin pedir cuenta (contador en el resumen)",
+      "Reservas FASE 5 — CALIBRACIÓN: en Capacidad y horario, la duración REAL de las mesas (cierres del Piso, últimos 60 días) contra la configurada, con sugerencia (+10% de colchón, redondeo a 15) y botón para aplicarla en rangos con 5+ cierres",
+    ]
+  },
   {
     version: "2.58.0",
     date: "2026-08-06",
