@@ -34,6 +34,7 @@ interface EventPlan {
   cover_price: number | null
   budget: number | null
   expected_attendance: number | null
+  actual_attendance: number | null
   requirements: string | null
   collaborators: string | null
   responsible: string | null
@@ -42,7 +43,7 @@ interface EventPlan {
 }
 interface TaskLite { id: string; title: string; status: string }
 interface Resource { id: string; name: string; qty: number; unit_cost: number | null; notes: string | null }
-interface BudgetItem { id: string; concept: string; amount: number; is_income: boolean; deal_id: string | null }
+interface BudgetItem { id: string; concept: string; amount: number; actual_amount: number | null; is_income: boolean; deal_id: string | null }
 interface Approval { id: string; action: 'submitted' | 'approved' | 'returned'; comment: string | null; actor: string | null; created_at: string }
 interface Template {
   id: string; name: string; kind: PlanKind; event_type: EventType
@@ -809,16 +810,25 @@ function ResourcesSection({ eventId, canWrite }: { eventId: string; canWrite: bo
 }
 
 // ── Presupuesto por partidas: gastos + patrocinios (ligados al CRM) ──────────
-function BudgetSection({ event, buCode, canWrite, userId }: { event: EventPlan; buCode: string; canWrite: boolean; userId?: string }) {
+function BudgetSection({ event, buCode, canWrite, userId, showCorte = false }: { event: EventPlan; buCode: string; canWrite: boolean; userId?: string; showCorte?: boolean }) {
   const [items, setItems] = useState<BudgetItem[]>([])
   const [nConcept, setNConcept] = useState('')
   const [nAmount, setNAmount] = useState('')
   const [nIncome, setNIncome] = useState(false)
 
   useEffect(() => {
-    supabase.from('project_budget_items').select('id, concept, amount, is_income, deal_id').eq('event_id', event.id).order('created_at')
+    supabase.from('project_budget_items').select('id, concept, amount, actual_amount, is_income, deal_id').eq('event_id', event.id).order('created_at')
       .then(({ data }) => setItems((data ?? []) as BudgetItem[]))
   }, [event.id])
+
+  // Corte: capturar el monto REAL de una partida (Δ contra presupuesto)
+  async function setActual(item: BudgetItem, raw: string) {
+    const v = raw === '' ? null : Math.max(0, Number(raw))
+    if (v === item.actual_amount) return
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, actual_amount: v } : i))
+    const { error } = await supabase.from('project_budget_items').update({ actual_amount: v }).eq('id', item.id)
+    if (error) showToast(`No se pudo guardar el real: ${error.message}`, 'error')
+  }
 
   async function add() {
     if (!nConcept.trim() || nAmount === '') return
@@ -853,6 +863,11 @@ function BudgetSection({ event, buCode, canWrite, userId }: { event: EventPlan; 
 
   const gastos = items.filter(i => !i.is_income).reduce((s, i) => s + i.amount, 0)
   const ingresos = items.filter(i => i.is_income).reduce((s, i) => s + i.amount, 0)
+  // Corte: totales reales (solo partidas con real capturado) y Δ vs presupuesto
+  const conReal = items.filter(i => !i.is_income && i.actual_amount != null)
+  const realGastos = conReal.reduce((s, i) => s + (i.actual_amount ?? 0), 0)
+  const presupDeConReal = conReal.reduce((s, i) => s + i.amount, 0)
+  const delta = realGastos - presupDeConReal
   const inp: React.CSSProperties = {
     background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
     color: 'var(--text-primary)', padding: '0 10px', fontSize: 13, outline: 'none', minHeight: 40, boxSizing: 'border-box',
@@ -864,6 +879,9 @@ function BudgetSection({ event, buCode, canWrite, userId }: { event: EventPlan; 
         {(gastos > 0 || ingresos > 0) && (
           <span className="num" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
             Gastos {mxn(gastos)}{ingresos > 0 && <> · Patrocinios <span style={{ color: 'var(--status-healthy)' }}>{mxn(ingresos)}</span> · Neto {mxn(gastos - ingresos)}</>}
+            {showCorte && conReal.length > 0 && (
+              <> · Real {mxn(realGastos)} · <span style={{ color: delta <= 0 ? 'var(--status-healthy)' : 'var(--status-risk)', fontWeight: 700 }}>Δ {delta > 0 ? '+' : ''}{mxn(delta)}</span></>
+            )}
           </span>
         )}
       </div>
@@ -879,6 +897,12 @@ function BudgetSection({ event, buCode, canWrite, userId }: { event: EventPlan; 
           <span className="num" style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: i.is_income ? 'var(--status-healthy)' : 'var(--text-secondary)' }}>
             {i.is_income ? '+' : '−'}{mxn(i.amount)}
           </span>
+          {showCorte && (
+            <input type="number" inputMode="numeric" min={0} defaultValue={i.actual_amount ?? ''} placeholder="real $"
+              disabled={!canWrite} onBlur={e => setActual(i, e.target.value)} className="num"
+              title="Monto real gastado/recibido (corte)"
+              style={{ width: 78, minHeight: 34, background: 'var(--bg-base)', border: `1px solid ${i.actual_amount != null ? (i.is_income ? 'var(--status-healthy)' : i.actual_amount > i.amount ? 'var(--status-risk)' : 'var(--status-healthy)') : 'var(--border-subtle)'}`, borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 12, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--font-mono)' }} />
+          )}
           {canWrite && (
             <button onClick={() => remove(i.id)} aria-label="Quitar partida" style={{ width: 32, height: 32, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Trash2 size={12} /></button>
           )}
@@ -931,6 +955,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const [coverPrice, setCoverPrice] = useState(event?.cover_price != null ? String(event.cover_price) : '')
   const [budget, setBudget] = useState(event?.budget != null ? String(event.budget) : '')
   const [expectedAtt, setExpectedAtt] = useState(event?.expected_attendance != null ? String(event.expected_attendance) : '')
+  const [actualAtt, setActualAtt] = useState(event?.actual_attendance != null ? String(event.actual_attendance) : '')
   const [requirements, setRequirements] = useState(event?.requirements ?? '')
   const [collaborators, setCollaborators] = useState(event?.collaborators ?? '')
   const [responsible, setResponsible] = useState(event?.responsible ?? '')
@@ -942,6 +967,9 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const [reqTaskId, setReqTaskId] = useState(event?.requisition_task_id ?? null)
   const canDelete = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '')
   const buCode = buList.find(b => b.id === (event?.bu_id ?? buId))?.code ?? ''
+  // Corte post-evento: se abre cuando el plan terminó (Realizado o fecha pasada)
+  const todayISO = new Date().toISOString().slice(0, 10)
+  const showCorte = !!event && (status === 'done' || !!((event.end_date ?? event.date) && (event.end_date ?? event.date)! < todayISO))
 
   // Plantilla elegida en modo creación: pre-carga tipo y bullets; recursos y
   // presupuesto se insertan al guardar (necesitan el id del plan)
@@ -1043,6 +1071,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
       cover_price: kind === 'evento' && hasCover && coverPrice !== '' ? Number(coverPrice) : null,
       budget: budget !== '' ? Number(budget) : null,
       expected_attendance: expectedAtt !== '' ? Math.max(0, Number(expectedAtt)) : null,
+      actual_attendance: actualAtt !== '' ? Math.max(0, Number(actualAtt)) : null,
       requirements: requirements.trim() || null,
       collaborators: collaborators.trim() || null,
       responsible: responsible || null, status,
@@ -1252,8 +1281,29 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
           {/* Recursos y presupuesto por partidas (requieren el plan guardado) */}
           {event ? (
             <>
+              {/* Corte post-evento: real vs presupuesto (aparece al terminar) */}
+              {showCorte && (
+                <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' }}>
+                  <label style={{ ...lbl, marginBottom: 8 }}>📊 Corte post-evento</label>
+                  {kind === 'evento' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <div>
+                        <label style={lbl}>Asistencia esperada</label>
+                        <div className="num" style={{ minHeight: 44, display: 'flex', alignItems: 'center', padding: '0 12px', fontSize: 14, color: 'var(--text-secondary)', background: 'var(--bg-base)', borderRadius: 'var(--radius-sm)' }}>{expectedAtt || '—'}</div>
+                      </div>
+                      <div>
+                        <label style={lbl}>Asistencia real</label>
+                        <input type="number" inputMode="numeric" min={0} value={actualAtt} onChange={e => setActualAtt(e.target.value)} className="num" style={inp} disabled={!canWrite} placeholder="0" />
+                      </div>
+                    </div>
+                  )}
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
+                    Captura los montos reales por partida abajo (campo "real $") — el Δ contra presupuesto se calcula solo. Guarda para registrar la asistencia real.
+                  </p>
+                </div>
+              )}
               <ResourcesSection eventId={event.id} canWrite={canWrite} />
-              <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} />
+              <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} showCorte={showCorte} />
               {canWrite && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button onClick={sendRequisition}
