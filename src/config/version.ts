@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.59.0"
+export const APP_VERSION = "2.60.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.60.0",
+    date: "2026-08-10",
+    type: "MINOR",
+    changes: [
+      "Proyectos — vista TIMELINE (Gantt): una barra por proyecto sobre una ventana de semanas con navegación ‹ › y botón Hoy, línea roja de HOY, avance de tareas dentro de la barra y duración/tiempo restante por proyecto",
+      "Hitos sobre la barra: cada tarea con fecha límite aparece como rombo (ámbar pendiente, verde aprobada) — los sprints se leen de un vistazo",
+      "Proyecto sembrado: Bruma Records — nueva distribución (vinilos + café), 3 sprints / 15 tareas con fechas del 10 al 28 de agosto",
+    ]
+  },
   {
     version: "2.59.0",
     date: "2026-08-06",
