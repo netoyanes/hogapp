@@ -42,6 +42,7 @@ interface EventPlan {
   requisition_task_id: string | null
 }
 interface TaskLite { id: string; title: string; status: string }
+interface PlanTask { title: string; status: string; due_date: string | null }
 interface Resource { id: string; name: string; qty: number; unit_cost: number | null; notes: string | null }
 interface BudgetItem { id: string; concept: string; amount: number; actual_amount: number | null; is_income: boolean; deal_id: string | null }
 interface Approval { id: string; action: 'submitted' | 'approved' | 'returned'; comment: string | null; actor: string | null; created_at: string }
@@ -123,9 +124,9 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
   const [showPast, setShowPast] = useState(false)
   const [editing, setEditing] = useState<EventPlan | null>(null)
   const [creating, setCreating] = useState(false)
-  // Vistas del planeador: tabla, board, calendario y (aprobadores) su cabina
-  const [view, setView] = useState<'table' | 'board' | 'calendar' | 'approvals'>(() =>
-    (localStorage.getItem('hog_projects_view') as 'table' | 'board' | 'calendar' | 'approvals') || 'table')
+  // Vistas del planeador: tabla, board, timeline, calendario y (aprobadores) su cabina
+  const [view, setView] = useState<'table' | 'board' | 'timeline' | 'calendar' | 'approvals'>(() =>
+    (localStorage.getItem('hog_projects_view') as 'table' | 'board' | 'timeline' | 'calendar' | 'approvals') || 'table')
   useEffect(() => { localStorage.setItem('hog_projects_view', view) }, [view])
   const [templates, setTemplates] = useState<Template[]>([])
   const [calMonth, setCalMonth] = useState(() => {
@@ -134,13 +135,15 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
 
   // Avance por plan: tareas ligadas hechas / totales
   const [progress, setProgress] = useState<Record<string, { done: number; total: number }>>({})
+  // Tareas por plan (título + fecha límite) — hitos sobre la barra del Timeline
+  const [planTasks, setPlanTasks] = useState<Record<string, PlanTask[]>>({})
 
   const load = useCallback(async () => {
     const [{ data: ev }, { data: bus }, { data: ppl }, { data: tk }, { data: tpl }] = await Promise.all([
       supabase.from('event_plans').select('*').order('date', { ascending: true, nullsFirst: false }),
       supabase.from('business_units').select('id, code, name').order('name'),
       supabase.from('profiles').select('id, full_name').order('full_name'),
-      supabase.from('tasks').select('event_id, status').not('event_id', 'is', null),
+      supabase.from('tasks').select('event_id, status, title, due_date').not('event_id', 'is', null),
       supabase.from('project_templates').select('*').order('name'),
     ])
     setTemplates((tpl ?? []) as Template[])
@@ -148,12 +151,15 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
     setBuList(bus ?? [])
     setPeople(ppl ?? [])
     const pm: Record<string, { done: number; total: number }> = {}
-    for (const t of (tk ?? []) as { event_id: string; status: string }[]) {
+    const tm: Record<string, PlanTask[]> = {}
+    for (const t of (tk ?? []) as ({ event_id: string } & PlanTask)[]) {
       const p = (pm[t.event_id] = pm[t.event_id] ?? { done: 0, total: 0 })
       p.total++
       if (t.status === 'APPROVED') p.done++ // estado terminal real de tasks
+      ;(tm[t.event_id] = tm[t.event_id] ?? []).push({ title: t.title, status: t.status, due_date: t.due_date })
     }
     setProgress(pm)
+    setPlanTasks(tm)
     setLoading(false)
   }, [])
   useEffect(() => { load() }, [load])
@@ -253,7 +259,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 2, background: 'var(--bg-elevated)', borderRadius: 999, padding: 2 }}>
-            {([['table', isMobile ? 'Lista' : 'Tabla'], ['board', 'Board'], ['calendar', 'Calendario'],
+            {([['table', isMobile ? 'Lista' : 'Tabla'], ['board', 'Board'], ['timeline', 'Timeline'], ['calendar', 'Calendario'],
                ...(canApprove ? [['approvals', 'Aprobación'] as const] : [])] as const).map(([id, label]) => (
               <button key={id} onClick={() => setView(id as typeof view)}
                 style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === id ? 'var(--accent)' : 'transparent', color: view === id ? 'var(--on-accent)' : 'var(--text-tertiary)' }}>
@@ -297,6 +303,10 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
         ) : view === 'calendar' ? (
           <div style={{ padding: isMobile ? 0 : 16 }}>
             <CalendarView rows={filteredBase} month={calMonth} onMonth={setCalMonth} onOpen={ev => setEditing(ev)} isMobile={isMobile} buMap={buMap} />
+          </div>
+        ) : view === 'timeline' ? (
+          <div style={{ padding: isMobile ? '0' : 16 }}>
+            <TimelineView rows={filteredBase} buMap={buMap} progress={progress} planTasks={planTasks} onOpen={ev => setEditing(ev)} isMobile={isMobile} />
           </div>
         ) : view === 'board' ? (
           <div style={{ padding: isMobile ? 0 : 16 }}>
@@ -580,6 +590,144 @@ function CalendarView({ rows, month, onMonth, onOpen, isMobile, buMap }: {
           )
         })}
       </div>
+    </div>
+  )
+}
+
+// ── Timeline (Gantt): una barra por proyecto sobre una ventana de semanas, con
+// hitos de tareas (rombos por fecha límite), avance dentro de la barra y la
+// línea de HOY — el "general" para medir tiempos de un vistazo ────────────────
+function TimelineView({ rows, buMap, progress, planTasks, onOpen, isMobile }: {
+  rows: EventPlan[]
+  buMap: Record<string, string>
+  progress: Record<string, { done: number; total: number }>
+  planTasks: Record<string, PlanTask[]>
+  onOpen: (ev: EventPlan) => void
+  isMobile: boolean
+}) {
+  const DAY = 86400000
+  const toD = (s: string) => new Date(s + 'T00:00:00')
+  const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const WEEKS = isMobile ? 5 : 9
+  const totalDays = WEEKS * 7
+  // Ventana: arranca el lunes de la semana pasada; ‹ › mueve de 2 en 2 semanas
+  const [start, setStart] = useState(() => {
+    const m = new Date(); m.setDate(m.getDate() - ((m.getDay() + 6) % 7) - 7); return isoOf(m)
+  })
+  const startD = toD(start)
+  const endISO = isoOf(new Date(startD.getTime() + (totalDays - 1) * DAY))
+  const todayISO = isoOf(new Date())
+  const shift = (n: number) => { const d = toD(start); d.setDate(d.getDate() + n * 14); setStart(isoOf(d)) }
+  const goToday = () => { const m = new Date(); m.setDate(m.getDate() - ((m.getDay() + 6) % 7) - 7); setStart(isoOf(m)) }
+  // % horizontal dentro de la ventana (centro del día para hitos y HOY)
+  const pctOf = (dISO: string, center = false) =>
+    (((toD(dISO).getTime() - startD.getTime()) / DAY + (center ? 0.5 : 0)) / totalDays) * 100
+
+  // Solo planes con fecha cuyo rango toca la ventana, ordenados por inicio
+  const items = rows
+    .filter(r => r.date && r.status !== 'cancelled' && r.date <= endISO && (r.end_date ?? r.date)! >= start)
+    .sort((a, b) => a.date!.localeCompare(b.date!))
+
+  const fmt = (dISO: string) => toD(dISO).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
+  const labelW = isMobile ? 118 : 220
+  const rowH = isMobile ? 52 : 46
+  const activos = items.filter(r => r.date! <= todayISO && (r.end_date ?? r.date)! >= todayISO).length
+
+  return (
+    <div>
+      {/* Navegación de ventana + resumen general */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <button onClick={() => shift(-1)} aria-label="Semanas anteriores" style={{ width: 40, height: 40, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ChevronLeft size={15} /></button>
+        <button onClick={goToday} style={{ minHeight: 40, padding: '0 12px', border: '1px solid var(--border-default)', borderRadius: 999, background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Hoy</button>
+        <span style={{ flex: 1, textAlign: 'center', fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }} className="num">
+          {fmt(start)} – {fmt(endISO)}
+          <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', fontSize: 11, marginLeft: 8 }}>{items.length} en ventana · {activos} en curso</span>
+        </span>
+        <button onClick={() => shift(1)} aria-label="Semanas siguientes" style={{ width: 40, height: 40, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={15} /></button>
+      </div>
+
+      {items.length === 0 ? (
+        <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>Sin proyectos en estas semanas — navega con ‹ › o pulsa Hoy.</p>
+      ) : (
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+          {/* Encabezado de semanas */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border-default)' }}>
+            <div style={{ width: labelW, flexShrink: 0, padding: '6px 10px', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>Proyecto</div>
+            <div style={{ flex: 1, display: 'flex' }}>
+              {Array.from({ length: WEEKS }, (_, w) => {
+                const ws = new Date(startD.getTime() + w * 7 * DAY)
+                return (
+                  <div key={w} className="num" style={{ flex: 1, padding: '6px 4px', fontSize: 9.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', borderLeft: '1px solid var(--border-subtle)', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                    {ws.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Cuerpo: overlay de rejilla + línea HOY, y una fila por plan */}
+          <div style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', left: labelW, right: 0, top: 0, bottom: 0, pointerEvents: 'none' }}>
+              {Array.from({ length: WEEKS }, (_, w) => (
+                <div key={w} style={{ position: 'absolute', left: `${(w / WEEKS) * 100}%`, top: 0, bottom: 0, width: 1, background: 'var(--border-subtle)' }} />
+              ))}
+              {todayISO >= start && todayISO <= endISO && (
+                <div style={{ position: 'absolute', left: `${pctOf(todayISO, true)}%`, top: 0, bottom: 0, width: 2, background: 'var(--status-risk)', zIndex: 3 }}>
+                  <span style={{ position: 'absolute', top: 2, left: 4, fontSize: 8.5, fontWeight: 800, color: 'var(--status-risk)', fontFamily: 'var(--font-mono)' }}>HOY</span>
+                </div>
+              )}
+            </div>
+
+            {items.map(ev => {
+              const s = ev.date!
+              const e = ev.end_date ?? ev.date!
+              const leftPct = Math.max(0, pctOf(s))
+              const rightPct = Math.min(100, pctOf(e) + 100 / totalDays)
+              const widthPct = Math.max(rightPct - leftPct, 1.2)
+              const durDays = Math.round((toD(e).getTime() - toD(s).getTime()) / DAY) + 1
+              const pg = progress[ev.id]
+              const color = planColor(ev)
+              // Tiempo restante: el dato clave para "medir tiempos"
+              const resta = e >= todayISO && s <= todayISO
+                ? `quedan ${Math.round((toD(e).getTime() - toD(todayISO).getTime()) / DAY)} d`
+                : s > todayISO ? `inicia en ${Math.round((toD(s).getTime() - toD(todayISO).getTime()) / DAY)} d` : 'terminó'
+              const hitos = (planTasks[ev.id] ?? []).filter(t => t.due_date && t.due_date >= start && t.due_date <= endISO)
+              return (
+                <div key={ev.id} style={{ display: 'flex', minHeight: rowH, borderBottom: '1px solid var(--border-subtle)', alignItems: 'stretch' }}>
+                  <button onClick={() => onOpen(ev)} style={{ width: labelW, flexShrink: 0, padding: '6px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', overflow: 'hidden' }}>
+                    <div style={{ fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }}>
+                      <BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" />
+                      <span className="num" style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{durDays} d · {resta}</span>
+                    </div>
+                  </button>
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <button onClick={() => onOpen(ev)} title={`${ev.name} · ${fechaLabel(ev)}${pg ? ` · ${pg.done}/${pg.total} tareas` : ''}`}
+                      style={{ position: 'absolute', left: `${leftPct}%`, width: `${widthPct}%`, top: '50%', transform: 'translateY(-50%)', height: isMobile ? 18 : 20, borderRadius: 5, border: `1px solid ${color}`, background: `color-mix(in srgb, ${color} 22%, transparent)`, cursor: 'pointer', overflow: 'hidden', padding: 0, zIndex: 1 }}>
+                      {pg && pg.total > 0 && (
+                        <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.round((pg.done / pg.total) * 100)}%`, background: `color-mix(in srgb, ${color} 55%, transparent)` }} />
+                      )}
+                      {!isMobile && widthPct > 12 && (
+                        <span className="num" style={{ position: 'relative', fontSize: 9.5, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', padding: '0 6px', whiteSpace: 'nowrap' }}>
+                          {pg && pg.total > 0 ? `${pg.done}/${pg.total}` : `${durDays} d`}
+                        </span>
+                      )}
+                    </button>
+                    {/* Hitos: rombo por fecha límite de tarea (verde = aprobada) */}
+                    {hitos.map((t, i) => (
+                      <span key={i} title={`${t.due_date!.slice(5)} · ${t.title}`}
+                        style={{ position: 'absolute', left: `calc(${pctOf(t.due_date!, true)}% - 4px)`, top: 'calc(50% - 4px)', width: 8, height: 8, transform: 'rotate(45deg)', background: t.status === 'APPROVED' ? 'var(--status-healthy)' : '#E8A33D', border: '1px solid var(--bg-base)', zIndex: 2, borderRadius: 1 }} />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 8 }}>
+        ◆ ámbar = tarea con fecha límite pendiente · ◆ verde = aprobada · la línea roja es hoy · toca la barra para abrir el proyecto.
+      </p>
     </div>
   )
 }
