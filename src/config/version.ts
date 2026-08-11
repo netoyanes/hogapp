@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.63.0"
+export const APP_VERSION = "2.64.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.64.0",
+    date: "2026-08-11",
+    type: "MINOR",
+    changes: [
+      "DRAG & DROP en los kanban de escritorio (Tareas y Proyectos): arrastra la tarjeta a la fase — la columna destino se ilumina; en Proyectos, soltar en 'Aprobado' sigue siendo exclusivo del Aprobador",
+      "En móvil se mantiene el patrón correcto de usabilidad: swipe + selector de estado en Tareas, flechas ‹ › en Proyectos (arrastrar en táctil pelea con el scroll)",
+    ]
+  },
   {
     version: "2.63.0",
     date: "2026-08-11",
