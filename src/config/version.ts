@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.64.1"
+export const APP_VERSION = "2.64.2"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.64.2",
+    date: "2026-08-11",
+    type: "PATCH",
+    changes: [
+      "Timeline pulido: barras más altas con sombra y texto legible (X/Y tareas), hitos SOBRE la barra sin encimar el texto, fines de semana sombreados, chip HOY, hover por fila y barra mínima legible para proyectos de un día",
+      "El botón '+ Evento' ahora es solo '+' — agrega evento o proyecto",
+    ]
+  },
   {
     version: "2.64.1",
     date: "2026-08-11",
