@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { Plus, X, Search, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save, Clock, CalendarDays, UserPlus, MessageCircle, Trash2, Copy, Archive, ArchiveRestore, Pencil } from 'lucide-react'
+import { Plus, X, Search, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save, Clock, CalendarDays, UserPlus, MessageCircle, Trash2, Copy, Archive, ArchiveRestore, Pencil, Link2, Unlink } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import { notifySlack, notifyUserDM } from '../hooks/useSlack'
@@ -1460,6 +1460,39 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
     return () => window.removeEventListener('hog:task-updated', loadTasks)
   }, [loadTasks])
 
+  // Vincular tareas EXISTENTES del Task Manager al proyecto (y desvincular)
+  const [linkQ, setLinkQ] = useState('')
+  const [linkResults, setLinkResults] = useState<{ id: string; title: string; status: string }[]>([])
+  useEffect(() => {
+    if (!event || linkQ.trim().length < 2) { setLinkResults([]); return }
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('tasks')
+        .select('id, title, status')
+        .is('event_id', null).eq('archived', false)
+        .ilike('title', `%${linkQ.trim()}%`)
+        .order('created_at', { ascending: false }).limit(8)
+      setLinkResults((data ?? []) as { id: string; title: string; status: string }[])
+    }, 250)
+    return () => clearTimeout(t)
+  }, [linkQ, event])
+
+  async function linkTask(taskId: string) {
+    if (!event) return
+    const { error } = await supabase.from('tasks').update({ event_id: event.id }).eq('id', taskId)
+    if (error) { showToast(`No se pudo vincular: ${error.message}`, 'error'); return }
+    logActivity('task_linked', 'event', event.id, { task: taskId, event: event.name })
+    showToast('Tarea vinculada al proyecto.', 'success')
+    setLinkQ(''); setLinkResults([])
+    loadTasks()
+  }
+
+  async function unlinkTask(taskId: string) {
+    const { error } = await supabase.from('tasks').update({ event_id: null }).eq('id', taskId)
+    if (error) { showToast(`No se pudo desvincular: ${error.message}`, 'error'); return }
+    showToast('Tarea desvinculada — sigue viva en Tareas.', 'success')
+    loadTasks()
+  }
+
   // Bullets → tareas reales en el Task Manager, ligadas al evento
   async function pushBulkTasks(eventId: string, eventName: string, eventBu: string, eventDate: string | null): Promise<number> {
     const lines = parseBullets(bulkTasks)
@@ -1766,6 +1799,13 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                     <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }}>{t.title}</span>
                       <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', flexShrink: 0 }}>{t.status}</span>
+                      {event && (
+                        <span role="button" title="Desvincular del proyecto (la tarea sigue viva en Tareas)"
+                          onClick={e => { e.stopPropagation(); unlinkTask(t.id) }}
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0 }}>
+                          <Unlink size={11} />
+                        </span>
+                      )}
                     </span>
                     {/* Iconografía: asignado · relacionados · estimado · deadline */}
                     <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -1802,6 +1842,30 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                   </button>
                 )
               })}
+              {/* Vincular una tarea que YA existe en el Task Manager */}
+              {event && (
+                <div style={{ position: 'relative', marginBottom: 8 }}>
+                  <Link2 size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+                  <input value={linkQ} onChange={e => setLinkQ(e.target.value)}
+                    placeholder="Vincular tarea existente — busca por título…"
+                    style={{ ...inp, minHeight: 40, fontSize: 12, paddingLeft: 30 }} />
+                  {linkResults.length > 0 && (
+                    <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, overflow: 'hidden', zIndex: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
+                      {linkResults.map(r => (
+                        <button key={r.id} onMouseDown={e => { e.preventDefault(); linkTask(r.id) }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 40, padding: '0 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                          <Link2 size={11} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                          <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+                          <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{r.status}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {linkQ.trim().length >= 2 && linkResults.length === 0 && (
+                    <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>Sin tareas sueltas con ese título (solo se listan las que no pertenecen a otro proyecto).</p>
+                  )}
+                </div>
+              )}
               <textarea value={bulkTasks} onChange={e => setBulkTasks(e.target.value)} rows={4}
                 placeholder={'Una tarea por línea (bullets):\n- Confirmar DJ y rider\n- Diseñar flyer\n- Brief a cocina'}
                 style={{ ...inp, minHeight: 88, padding: '10px 12px', resize: 'vertical', fontSize: 13, marginBottom: 8 }} />
