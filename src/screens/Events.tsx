@@ -349,9 +349,9 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
               style={{ ...inp, width: '100%', paddingLeft: 30, minHeight: 40 }} />
           </div>
           {canWrite && (
-            <button onClick={() => setCreating(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 14px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>
-              <Plus size={14} /> {!isMobile && 'Evento'}
+            <button onClick={() => setCreating(true)} title="Agregar evento o proyecto" aria-label="Agregar"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: 999, cursor: 'pointer', flexShrink: 0 }}>
+              <Plus size={16} />
             </button>
           )}
         </div>
@@ -718,7 +718,7 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, isMobile }: {
 
   const fmt = (dISO: string) => toD(dISO).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
   const labelW = isMobile ? 118 : 220
-  const rowH = isMobile ? 52 : 46
+  const rowH = isMobile ? 56 : 58
   const activos = items.filter(r => r.date! <= todayISO && (r.end_date ?? r.date)! >= todayISO).length
 
   return (
@@ -756,12 +756,16 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, isMobile }: {
           {/* Cuerpo: overlay de rejilla + línea HOY, y una fila por plan */}
           <div style={{ position: 'relative' }}>
             <div style={{ position: 'absolute', left: labelW, right: 0, top: 0, bottom: 0, pointerEvents: 'none' }}>
+              {/* Fin de semana sombreado — se lee el ritmo de semanas al vistazo */}
+              {Array.from({ length: WEEKS }, (_, w) => (
+                <div key={`we${w}`} style={{ position: 'absolute', left: `${((w * 7 + 5) / totalDays) * 100}%`, width: `${(2 / totalDays) * 100}%`, top: 0, bottom: 0, background: 'color-mix(in srgb, var(--text-primary) 3%, transparent)' }} />
+              ))}
               {Array.from({ length: WEEKS }, (_, w) => (
                 <div key={w} style={{ position: 'absolute', left: `${(w / WEEKS) * 100}%`, top: 0, bottom: 0, width: 1, background: 'var(--border-subtle)' }} />
               ))}
               {todayISO >= start && todayISO <= endISO && (
                 <div style={{ position: 'absolute', left: `${pctOf(todayISO, true)}%`, top: 0, bottom: 0, width: 2, background: 'var(--status-risk)', zIndex: 3 }}>
-                  <span style={{ position: 'absolute', top: 2, left: 4, fontSize: 8.5, fontWeight: 800, color: 'var(--status-risk)', fontFamily: 'var(--font-mono)' }}>HOY</span>
+                  <span style={{ position: 'absolute', top: 4, left: 4, fontSize: 8.5, fontWeight: 800, color: 'var(--status-risk)', fontFamily: 'var(--font-mono)', background: 'var(--bg-surface)', padding: '1px 4px', borderRadius: 3, border: '1px solid var(--status-risk)' }}>HOY</span>
                 </div>
               )}
             </div>
@@ -771,7 +775,7 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, isMobile }: {
               const e = ev.end_date ?? ev.date!
               const leftPct = Math.max(0, pctOf(s))
               const rightPct = Math.min(100, pctOf(e) + 100 / totalDays)
-              const widthPct = Math.max(rightPct - leftPct, 1.2)
+              const widthPct = Math.max(rightPct - leftPct, isMobile ? 4 : 2.5)
               const durDays = Math.round((toD(e).getTime() - toD(s).getTime()) / DAY) + 1
               const pg = progress[ev.id]
               const color = planColor(ev)
@@ -781,7 +785,7 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, isMobile }: {
                 : s > todayISO ? `inicia en ${Math.round((toD(s).getTime() - toD(todayISO).getTime()) / DAY)} d` : 'terminó'
               const hitos = (planTasks[ev.id] ?? []).filter(t => t.due_date && t.due_date >= start && t.due_date <= endISO)
               return (
-                <div key={ev.id} style={{ display: 'flex', minHeight: rowH, borderBottom: '1px solid var(--border-subtle)', alignItems: 'stretch' }}>
+                <div key={ev.id} className="hover:bg-[var(--bg-base)]" style={{ display: 'flex', minHeight: rowH, borderBottom: '1px solid var(--border-subtle)', alignItems: 'stretch' }}>
                   <button onClick={() => onOpen(ev)} style={{ width: labelW, flexShrink: 0, padding: '6px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', overflow: 'hidden' }}>
                     <div style={{ fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }}>
@@ -791,20 +795,21 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, isMobile }: {
                   </button>
                   <div style={{ flex: 1, position: 'relative' }}>
                     <button onClick={() => onOpen(ev)} title={`${ev.name} · ${fechaLabel(ev)}${pg ? ` · ${pg.done}/${pg.total} tareas` : ''}`}
-                      style={{ position: 'absolute', left: `${leftPct}%`, width: `${widthPct}%`, top: '50%', transform: 'translateY(-50%)', height: isMobile ? 18 : 20, borderRadius: 5, border: `1px solid ${color}`, background: `color-mix(in srgb, ${color} 22%, transparent)`, cursor: 'pointer', overflow: 'hidden', padding: 0, zIndex: 1 }}>
+                      style={{ position: 'absolute', left: `${leftPct}%`, width: `${widthPct}%`, top: '50%', transform: 'translateY(-50%)', height: isMobile ? 22 : 24, borderRadius: 6, border: `1px solid ${color}`, background: `color-mix(in srgb, ${color} 22%, transparent)`, cursor: 'pointer', overflow: 'hidden', padding: 0, zIndex: 1, display: 'flex', alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>
                       {pg && pg.total > 0 && (
                         <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.round((pg.done / pg.total) * 100)}%`, background: `color-mix(in srgb, ${color} 55%, transparent)` }} />
                       )}
-                      {!isMobile && widthPct > 12 && (
-                        <span className="num" style={{ position: 'relative', fontSize: 9.5, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', padding: '0 6px', whiteSpace: 'nowrap' }}>
-                          {pg && pg.total > 0 ? `${pg.done}/${pg.total}` : `${durDays} d`}
+                      {!isMobile && widthPct > 10 && (
+                        <span className="num" style={{ position: 'relative', fontSize: 10, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', padding: '0 8px', whiteSpace: 'nowrap' }}>
+                          {pg && pg.total > 0 ? `${pg.done}/${pg.total} tareas` : `${durDays} d`}
                         </span>
                       )}
                     </button>
-                    {/* Hitos: rombo por fecha límite de tarea (verde = aprobada) */}
+                    {/* Hitos: rombo por fecha límite de tarea, SOBRE la barra
+                        (verde = aprobada, ámbar = pendiente) — no tapan el texto */}
                     {hitos.map((t, i) => (
                       <span key={i} title={`${t.due_date!.slice(5)} · ${t.title}`}
-                        style={{ position: 'absolute', left: `calc(${pctOf(t.due_date!, true)}% - 4px)`, top: 'calc(50% - 4px)', width: 8, height: 8, transform: 'rotate(45deg)', background: t.status === 'APPROVED' ? 'var(--status-healthy)' : '#E8A33D', border: '1px solid var(--bg-base)', zIndex: 2, borderRadius: 1 }} />
+                        style={{ position: 'absolute', left: `calc(${pctOf(t.due_date!, true)}% - 4.5px)`, top: `calc(50% - ${isMobile ? 20 : 22}px)`, width: 9, height: 9, transform: 'rotate(45deg)', background: t.status === 'APPROVED' ? 'var(--status-healthy)' : '#E8A33D', border: '1.5px solid var(--bg-surface)', zIndex: 2, borderRadius: 1.5 }} />
                     ))}
                   </div>
                 </div>
