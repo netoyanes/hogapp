@@ -380,7 +380,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
             {filtered.length === 0 ? (
               <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>Sin planes con estos filtros.</p>
             ) : (
-              <BoardView rows={filtered} buMap={buMap} progress={progress} canWrite={canWrite} onOpen={ev => setEditing(ev)} onMove={moveStatus} onMoveTo={moveTo} onCtx={(e, ev) => canWrite && openMenu(e, planMenu(ev))} />
+              <BoardView rows={filtered} buMap={buMap} progress={progress} canWrite={canWrite} isMobile={isMobile} onOpen={ev => setEditing(ev)} onMove={moveStatus} onMoveTo={moveTo} onCtx={(e, ev) => canWrite && openMenu(e, planMenu(ev))} />
             )}
           </div>
         ) : groups.length === 0 ? (
@@ -536,11 +536,12 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
 }
 
 // ── Board por estado: Idea → En planeación → Aprobado → Realizado ────────────
-function BoardView({ rows, buMap, progress, canWrite, onOpen, onMove, onMoveTo, onCtx }: {
+function BoardView({ rows, buMap, progress, canWrite, isMobile, onOpen, onMove, onMoveTo, onCtx }: {
   rows: EventPlan[]
   buMap: Record<string, string>
   progress: Record<string, { done: number; total: number }>
   canWrite: boolean
+  isMobile: boolean
   onOpen: (ev: EventPlan) => void
   onMove: (ev: EventPlan, dir: -1 | 1) => void
   onMoveTo: (ev: EventPlan, status: EventStatus) => void
@@ -596,7 +597,8 @@ function BoardView({ rows, buMap, progress, canWrite, onOpen, onMove, onMoveTo, 
                         </div>
                       )}
                     </button>
-                    {canWrite && i !== -1 && (
+                    {/* Flechas solo en móvil — en escritorio la fase se cambia arrastrando */}
+                    {canWrite && i !== -1 && isMobile && (
                       <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
                         <button onClick={() => onMove(ev, -1)} disabled={i === 0} aria-label="Estado anterior"
                           style={{ flex: 1, minHeight: 30, border: '1px solid var(--border-subtle)', borderRadius: 6, background: 'none', color: i === 0 ? 'var(--border-subtle)' : 'var(--text-tertiary)', cursor: i === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

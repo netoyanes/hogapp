@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.64.0"
+export const APP_VERSION = "2.64.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.64.1",
+    date: "2026-08-11",
+    type: "PATCH",
+    changes: [
+      "Board de Proyectos en escritorio: fuera las flechas ‹ › — la fase se cambia arrastrando; en móvil se quedan (ahí no hay drag & drop)",
+    ]
+  },
   {
     version: "2.64.0",
     date: "2026-08-11",
