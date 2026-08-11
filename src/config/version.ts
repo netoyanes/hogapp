@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.65.1"
+export const APP_VERSION = "2.66.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.66.0",
+    date: "2026-08-11",
+    type: "MINOR",
+    changes: [
+      "Proyectos — VINCULAR TAREAS EXISTENTES: buscador dentro del proyecto que lista tareas sueltas del Task Manager (sin proyecto) y las liga con un clic; botón de desvincular en cada tarea (la tarea sigue viva en Tareas)",
+    ]
+  },
   {
     version: "2.65.1",
     date: "2026-08-11",
