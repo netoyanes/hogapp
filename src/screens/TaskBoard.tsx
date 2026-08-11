@@ -194,6 +194,11 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     load()
   }
 
+  // Drag & drop del kanban (solo escritorio; en móvil el patrón es swipe +
+  // selector de estado — arrastrar en táctil pelea con el scroll)
+  const dragTask = useRef<Task | null>(null)
+  const [dragOverCol, setDragOverCol] = useState<TaskStatus | null>(null)
+
   // Alta rápida desde la vista Lista: solo título + estatus del grupo; el
   // detalle (área, venue, horas) se completa después en el panel.
   async function quickAdd(status: TaskStatus, title: string) {
@@ -396,7 +401,15 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
             COLUMNS.map((col) => {
               const colTasks = filtered.filter((t) => t.status === col.id)
               return (
-                <div key={col.id} style={{ flex: '0 0 240px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div key={col.id}
+                  onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragOverCol !== col.id) setDragOverCol(col.id) }}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCol(c => c === col.id ? null : c) }}
+                  onDrop={e => {
+                    e.preventDefault(); setDragOverCol(null)
+                    const t = dragTask.current; dragTask.current = null
+                    if (t && t.status !== col.id) moveTask(t, col.id)
+                  }}
+                  style={{ flex: '0 0 240px', display: 'flex', flexDirection: 'column', gap: '8px', borderRadius: 'var(--radius-sm)', outline: dragOverCol === col.id ? '2px dashed var(--accent)' : 'none', outlineOffset: 2, background: dragOverCol === col.id ? 'var(--accent-bg)' : 'transparent', transition: 'background .12s' }}>
                   <div className="flex items-center gap-2 px-1 mb-1">
                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: STATUS_COLORS[col.id], flexShrink: 0 }} />
                     <span style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600 }}>{col.label}</span>
@@ -412,7 +425,10 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
                       </div>
                     ) : (
                       colTasks.map((task) => (
-                        <div key={task.id} onContextMenu={e => openMenu(e, taskMenu(task))}>
+                        <div key={task.id} draggable
+                          onDragStart={e => { dragTask.current = task; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', task.id) }}
+                          onDragEnd={() => { dragTask.current = null; setDragOverCol(null) }}
+                          onContextMenu={e => openMenu(e, taskMenu(task))} style={{ cursor: 'grab' }}>
                           <TaskCard
                             task={task}
                             buName={task.bu_id ? buMap[task.bu_id] : undefined}

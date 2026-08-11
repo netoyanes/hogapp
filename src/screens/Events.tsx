@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { Plus, X, Search, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save, Clock, CalendarDays, UserPlus, MessageCircle, Trash2, Copy, Archive, ArchiveRestore, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
@@ -226,10 +226,8 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
   // Board: mover de estado con las flechas — entrar a 'approved' es EXCLUSIVO
   // del aprobador; el resto del equipo llega hasta 'review' (En aprobación)
   const BOARD_ORDER: EventStatus[] = ['idea', 'planning', 'review', 'approved', 'done']
-  async function moveStatus(ev: EventPlan, dir: -1 | 1) {
-    const i = BOARD_ORDER.indexOf(ev.status)
-    const next = BOARD_ORDER[i + dir]
-    if (i === -1 || !next) return
+  async function moveTo(ev: EventPlan, next: EventStatus) {
+    if (next === ev.status) return
     if (next === 'approved' && !canApprove) {
       showToast('Solo el Aprobador (o Master) puede aprobar — envíalo a aprobación y él decide.', 'error')
       return
@@ -237,6 +235,12 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
     setRows(rs => rs.map(r => r.id === ev.id ? { ...r, status: next } : r))
     const { error } = await supabase.from('event_plans').update({ status: next }).eq('id', ev.id)
     if (error) { showToast(`No se pudo mover: ${error.message}`, 'error'); load() }
+  }
+  async function moveStatus(ev: EventPlan, dir: -1 | 1) {
+    const i = BOARD_ORDER.indexOf(ev.status)
+    const next = BOARD_ORDER[i + dir]
+    if (i === -1 || !next) return
+    moveTo(ev, next)
   }
 
   // Click derecho: Editar · Duplicar · Archivar (nada se elimina)
@@ -376,7 +380,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
             {filtered.length === 0 ? (
               <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>Sin planes con estos filtros.</p>
             ) : (
-              <BoardView rows={filtered} buMap={buMap} progress={progress} canWrite={canWrite} onOpen={ev => setEditing(ev)} onMove={moveStatus} onCtx={(e, ev) => canWrite && openMenu(e, planMenu(ev))} />
+              <BoardView rows={filtered} buMap={buMap} progress={progress} canWrite={canWrite} onOpen={ev => setEditing(ev)} onMove={moveStatus} onMoveTo={moveTo} onCtx={(e, ev) => canWrite && openMenu(e, planMenu(ev))} />
             )}
           </div>
         ) : groups.length === 0 ? (
@@ -532,24 +536,37 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
 }
 
 // ── Board por estado: Idea → En planeación → Aprobado → Realizado ────────────
-function BoardView({ rows, buMap, progress, canWrite, onOpen, onMove, onCtx }: {
+function BoardView({ rows, buMap, progress, canWrite, onOpen, onMove, onMoveTo, onCtx }: {
   rows: EventPlan[]
   buMap: Record<string, string>
   progress: Record<string, { done: number; total: number }>
   canWrite: boolean
   onOpen: (ev: EventPlan) => void
   onMove: (ev: EventPlan, dir: -1 | 1) => void
+  onMoveTo: (ev: EventPlan, status: EventStatus) => void
   onCtx?: (e: React.MouseEvent, ev: EventPlan) => void
 }) {
   const cols: EventStatus[] = ['idea', 'planning', 'review', 'approved', 'done', 'cancelled']
   const movable: EventStatus[] = ['idea', 'planning', 'review', 'approved', 'done']
+  // Drag & drop (escritorio): arrastra la tarjeta a la fase; la columna se ilumina
+  const dragEv = useRef<EventPlan | null>(null)
+  const [overCol, setOverCol] = useState<EventStatus | null>(null)
   return (
     <div style={{ display: 'flex', gap: 10, overflowX: 'auto', alignItems: 'flex-start', paddingBottom: 8 }}>
       {cols.map(st => {
         const items = rows.filter(r => r.status === st)
         if (st === 'cancelled' && items.length === 0) return null
+        const droppable = canWrite && movable.includes(st)
         return (
-          <div key={st} style={{ flex: '0 0 250px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: 10 }}>
+          <div key={st}
+            onDragOver={droppable ? e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (overCol !== st) setOverCol(st) } : undefined}
+            onDragLeave={droppable ? e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverCol(c => c === st ? null : c) } : undefined}
+            onDrop={droppable ? e => {
+              e.preventDefault(); setOverCol(null)
+              const ev = dragEv.current; dragEv.current = null
+              if (ev && ev.status !== st) onMoveTo(ev, st)
+            } : undefined}
+            style={{ flex: '0 0 250px', background: overCol === st ? 'var(--accent-bg)' : 'var(--bg-surface)', border: `1px solid ${overCol === st ? 'var(--accent)' : 'var(--border-subtle)'}`, borderRadius: 'var(--radius-md)', padding: 10, transition: 'background .12s, border-color .12s' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <StatusBadgeV2 tone={STATUS_META[st].tone} label={STATUS_META[st].label} />
               <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{items.length}</span>
@@ -558,7 +575,11 @@ function BoardView({ rows, buMap, progress, canWrite, onOpen, onMove, onCtx }: {
               {items.map(ev => {
                 const i = movable.indexOf(ev.status)
                 return (
-                  <div key={ev.id} onContextMenu={onCtx ? e => onCtx(e, ev) : undefined} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', borderLeft: `3px solid ${planColor(ev)}` }}>
+                  <div key={ev.id} draggable={canWrite}
+                    onDragStart={e => { dragEv.current = ev; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ev.id) }}
+                    onDragEnd={() => { dragEv.current = null; setOverCol(null) }}
+                    onContextMenu={onCtx ? e => onCtx(e, ev) : undefined}
+                    style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', borderLeft: `3px solid ${planColor(ev)}`, cursor: canWrite ? 'grab' : undefined }}>
                     <button onClick={() => onOpen(ev)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: '100%', textAlign: 'left' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{ev.name}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
