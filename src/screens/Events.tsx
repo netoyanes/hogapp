@@ -393,11 +393,13 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1080 }}>
               <thead>
                 <tr>
+                  {/* Estado y Avance junto al nombre — lo importante sin scroll */}
                   <th style={th}>Fecha</th><th style={th}>Día</th><th style={{ ...th, minWidth: 220 }}>Evento</th>
+                  <th style={th}>Estado</th><th style={th}>Avance</th>
                   <th style={th}>Tipo</th><th style={th}>Venue</th><th style={th}>Hora</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Cover</th><th style={{ ...th, textAlign: 'right' }}>Presupuesto</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Asistencia</th><th style={th}>Colaboradores</th>
-                  <th style={th}>Responsable</th><th style={th}>Avance</th><th style={th}>Estado</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Presupuesto</th><th style={{ ...th, textAlign: 'right' }}>Cover</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Asistencia</th>
+                  <th style={th}>Responsable</th><th style={th}>Colaboradores</th>
                 </tr>
               </thead>
               {groups.map(g => {
@@ -422,22 +424,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
                             <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>{ev.name}</span>
                             {ev.description && <span style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>{ev.description}</span>}
                           </td>
-                          <td style={td}>{planPill(ev)}</td>
-                          <td style={td}><BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" /></td>
-                          <td style={{ ...td, fontFamily: 'var(--font-mono)' }} className="num">
-                            {ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ''}` : '—'}
-                          </td>
-                          <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' }} className="num">
-                            {ev.has_cover ? (ev.cover_price != null ? mxn(ev.cover_price) : 'Sí') : '—'}
-                          </td>
-                          <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' }} className="num">
-                            {ev.budget != null ? mxn(ev.budget) : '—'}
-                          </td>
-                          <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' }} className="num">
-                            {ev.expected_attendance ?? '—'}
-                          </td>
-                          <td style={{ ...td, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.collaborators ?? '—'}</td>
-                          <td style={{ ...td, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>{respName ?? '—'}</td>
+                          <td style={td}><StatusBadgeV2 tone={STATUS_META[ev.status].tone} label={STATUS_META[ev.status].label} /></td>
                           <td style={td}>
                             {progress[ev.id] ? (
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -448,16 +435,32 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
                               </span>
                             ) : <span style={{ color: 'var(--text-tertiary)' }}>—</span>}
                           </td>
-                          <td style={td}><StatusBadgeV2 tone={STATUS_META[ev.status].tone} label={STATUS_META[ev.status].label} /></td>
+                          <td style={td}>{planPill(ev)}</td>
+                          <td style={td}><BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" /></td>
+                          <td style={{ ...td, fontFamily: 'var(--font-mono)' }} className="num">
+                            {ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ''}` : '—'}
+                          </td>
+                          <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' }} className="num">
+                            {ev.budget != null ? mxn(ev.budget) : '—'}
+                          </td>
+                          <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' }} className="num">
+                            {ev.has_cover ? (ev.cover_price != null ? mxn(ev.cover_price) : 'Sí') : '—'}
+                          </td>
+                          <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' }} className="num">
+                            {ev.expected_attendance ?? '—'}
+                          </td>
+                          <td style={{ ...td, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>{respName ?? '—'}</td>
+                          <td style={{ ...td, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.collaborators ?? '—'}</td>
                         </tr>
                       )
                     })}
                     {(sumBudget > 0 || sumAtt > 0) && (
                       <tr>
-                        <td colSpan={7} style={{ ...td, textAlign: 'right', fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Suma del mes</td>
+                        <td colSpan={8} style={{ ...td, textAlign: 'right', fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Suma del mes</td>
                         <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)' }} className="num">{sumBudget > 0 ? mxn(sumBudget) : ''}</td>
+                        <td style={td} />
                         <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)' }} className="num">{sumAtt > 0 ? sumAtt : ''}</td>
-                        <td colSpan={4} style={td} />
+                        <td colSpan={2} style={td} />
                       </tr>
                     )}
                   </tbody>
@@ -662,17 +665,26 @@ function CalendarView({ rows, month, onMonth, onOpen, isMobile, buMap }: {
           const dISO = isoOf(day)
           const evs = eventsOn(dISO)
           const isToday = dISO === todayISO
+          // Multi-día estilo Google Calendar: el nombre solo el PRIMER día del
+          // rango (o al arrancar la semana); los demás días, banda de color
+          const dow = new Date(dISO + 'T00:00:00').getDay()
+          const starts = evs.filter(ev => ev.date === dISO || dow === 0)
+          const conts = evs.filter(ev => !(ev.date === dISO || dow === 0))
           return (
             <div key={dISO} style={{ minHeight: isMobile ? 62 : 88, background: 'var(--bg-surface)', border: `1px solid ${isToday ? 'var(--accent)' : 'var(--border-subtle)'}`, borderRadius: 6, padding: 3, overflow: 'hidden' }}>
               <div className="num" style={{ fontSize: 10, fontWeight: isToday ? 800 : 400, color: isToday ? 'var(--accent)' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', padding: '0 2px' }}>{day}</div>
-              {evs.slice(0, maxChips).map(ev => (
+              {conts.map(ev => (
+                <button key={`c${ev.id}`} onClick={() => onOpen(ev)} title={`${ev.name} · ${buMap[ev.bu_id] ?? ''} (continúa)`} aria-label={ev.name}
+                  style={{ display: 'block', width: '100%', height: 7, marginTop: 3, borderRadius: 3, border: 'none', cursor: 'pointer', background: `color-mix(in srgb, ${planColor(ev)} 45%, transparent)`, padding: 0 }} />
+              ))}
+              {starts.slice(0, maxChips).map(ev => (
                 <button key={ev.id} onClick={() => onOpen(ev)} title={`${ev.name} · ${buMap[ev.bu_id] ?? ''}`}
                   style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 2, padding: '2px 4px', borderRadius: 4, border: 'none', cursor: 'pointer', background: `color-mix(in srgb, ${planColor(ev)} 18%, transparent)`, borderLeft: `2px solid ${planColor(ev)}`, color: 'var(--text-primary)', fontSize: isMobile ? 8.5 : 10, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {ev.name}
                 </button>
               ))}
-              {evs.length > maxChips && (
-                <div style={{ fontSize: 8.5, color: 'var(--text-tertiary)', padding: '1px 4px' }}>+{evs.length - maxChips} más</div>
+              {starts.length > maxChips && (
+                <div style={{ fontSize: 8.5, color: 'var(--text-tertiary)', padding: '1px 4px' }}>+{starts.length - maxChips} más</div>
               )}
             </div>
           )
@@ -783,7 +795,15 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, isMobile }: {
               const resta = e >= todayISO && s <= todayISO
                 ? `quedan ${Math.round((toD(e).getTime() - toD(todayISO).getTime()) / DAY)} d`
                 : s > todayISO ? `inicia en ${Math.round((toD(s).getTime() - toD(todayISO).getTime()) / DAY)} d` : 'terminó'
-              const hitos = (planTasks[ev.id] ?? []).filter(t => t.due_date && t.due_date >= start && t.due_date <= endISO)
+              // Hitos agrupados por fecha: un rombo por día (con contador si
+              // caen varios), verde solo cuando TODOS los de ese día están aprobados
+              const hitosByDate = new Map<string, PlanTask[]>()
+              for (const t of planTasks[ev.id] ?? []) {
+                if (t.due_date && t.due_date >= start && t.due_date <= endISO) {
+                  const arr = hitosByDate.get(t.due_date) ?? []
+                  arr.push(t); hitosByDate.set(t.due_date, arr)
+                }
+              }
               return (
                 <div key={ev.id} className="hover:bg-[var(--bg-base)]" style={{ display: 'flex', minHeight: rowH, borderBottom: '1px solid var(--border-subtle)', alignItems: 'stretch' }}>
                   <button onClick={() => onOpen(ev)} style={{ width: labelW, flexShrink: 0, padding: '6px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', overflow: 'hidden' }}>
@@ -805,12 +825,23 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, isMobile }: {
                         </span>
                       )}
                     </button>
-                    {/* Hitos: rombo por fecha límite de tarea, SOBRE la barra
-                        (verde = aprobada, ámbar = pendiente) — no tapan el texto */}
-                    {hitos.map((t, i) => (
-                      <span key={i} title={`${t.due_date!.slice(5)} · ${t.title}`}
-                        style={{ position: 'absolute', left: `calc(${pctOf(t.due_date!, true)}% - 4.5px)`, top: `calc(50% - ${isMobile ? 20 : 22}px)`, width: 9, height: 9, transform: 'rotate(45deg)', background: t.status === 'APPROVED' ? 'var(--status-healthy)' : '#E8A33D', border: '1.5px solid var(--bg-surface)', zIndex: 2, borderRadius: 1.5 }} />
-                    ))}
+                    {/* Etiqueta al lado de barras cortas (proyectos de 1-3 días) */}
+                    {!isMobile && widthPct <= 10 && (
+                      <span className="num" style={{ position: 'absolute', left: `calc(${leftPct + widthPct}% + 6px)`, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{durDays} d</span>
+                    )}
+                    {/* Hitos SOBRE la barra: un rombo por fecha, con contador si son varios */}
+                    {[...hitosByDate.entries()].map(([d2, ts]) => {
+                      const allDone = ts.every(t => t.status === 'APPROVED')
+                      return (
+                        <span key={d2} title={`${d2.slice(5)} · ${ts.map(t => t.title).join(' · ')}`}
+                          style={{ position: 'absolute', left: `calc(${pctOf(d2, true)}% - 4.5px)`, top: `calc(50% - ${isMobile ? 20 : 22}px)`, zIndex: 2 }}>
+                          <span style={{ display: 'block', width: 9, height: 9, transform: 'rotate(45deg)', background: allDone ? 'var(--status-healthy)' : '#E8A33D', border: '1.5px solid var(--bg-surface)', borderRadius: 1.5 }} />
+                          {ts.length > 1 && (
+                            <span className="num" style={{ position: 'absolute', top: -9, left: 3, fontSize: 8, fontWeight: 800, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{ts.length}</span>
+                          )}
+                        </span>
+                      )
+                    })}
                   </div>
                 </div>
               )
