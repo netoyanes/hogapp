@@ -7,7 +7,7 @@
 // SegmentedControl · EmptyState · Toast · Sheet (slide-over / bottom sheet)
 // CommandPalette ships with the Shell module (needs app-level wiring).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useState, type ReactNode, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react'
 import { buColor, buColorBg, buColorBorder, buMonogram } from '../../lib/buIdentity'
 
 // ── BUChip — the signature element ───────────────────────────────────────────
@@ -212,40 +212,97 @@ export function Toaster() {
   )
 }
 
-// ── Sheet — right slide-over on desktop, full-height bottom sheet on mobile ──
+// ── Pila global de ventanas (Sheet / paneles) ────────────────────────────────
+// Cada ventana abierta se registra aquí; con su posición en la pila sabe si es
+// la de hasta arriba (recibe Escape) y cuántas subventanas tiene encima (se
+// atenúa y encoge detrás — se VE que la subventana viene de la anterior).
+let layerSeq = 0
+const layerStack: number[] = []
+const layerSubs = new Set<() => void>()
+const notifyLayers = () => layerSubs.forEach(f => f())
+
+export function useSheetLayer(open: boolean) {
+  const idRef = useRef(0)
+  const [, force] = useState(0)
+  useEffect(() => {
+    if (!open) return
+    const id = ++layerSeq
+    idRef.current = id
+    layerStack.push(id)
+    notifyLayers()
+    return () => {
+      const i = layerStack.indexOf(id)
+      if (i !== -1) layerStack.splice(i, 1)
+      idRef.current = 0
+      notifyLayers()
+    }
+  }, [open])
+  useEffect(() => {
+    const f = () => force(n => n + 1)
+    layerSubs.add(f)
+    return () => { layerSubs.delete(f) }
+  }, [])
+  const idx = layerStack.indexOf(idRef.current)
+  const depth = idx === -1 ? 0 : idx                       // 0 = ventana base
+  const behind = idx === -1 ? 0 : layerStack.length - 1 - idx // capas encima
+  const isTop = idx !== -1 && behind === 0
+  return { depth, behind, isTop, zBase: 60 + depth * 4 }
+}
+
+// Estilo de "ventana detrás": atenuada, encogida y desplazada hacia arriba —
+// asoma tras la subventana activa, mostrando que están conectadas.
+const layerBehindFx = (behind: number, isMobile: boolean): CSSProperties => behind > 0
+  ? {
+      transform: isMobile
+        ? `translateY(${-6 - behind * 4}px) scale(${1 - 0.03 * behind})`
+        : `translate(-50%, calc(-50% - ${12 + behind * 8}px)) scale(${1 - 0.035 * behind})`,
+      filter: 'brightness(0.55) saturate(0.85)',
+      pointerEvents: 'none',
+    }
+  : {}
+
+// ── Sheet — en escritorio: modal CENTRADO; en teléfono: bottom sheet. Las
+// subventanas se apilan al centro con la anterior visible detrás ─────────────
 export function Sheet({ open, onClose, isMobile, children, width = 480 }: {
   open: boolean; onClose: () => void; isMobile: boolean; children: ReactNode; width?: number
 }) {
+  const { behind, isTop, zBase } = useSheetLayer(open)
   useEffect(() => {
     if (!open) return
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && isTop) onClose() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [open, onClose])
+  }, [open, onClose, isTop])
 
   if (!open) return null
 
   const panel: CSSProperties = isMobile
     ? {
-        position: 'fixed', left: 0, right: 0, bottom: 0, top: 'var(--space-6)', zIndex: 61,
+        position: 'fixed', left: 0, right: 0, bottom: 0, top: 'var(--space-6)', zIndex: zBase + 1,
         background: 'var(--bg-surface)', borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        animation: 'sheet-up var(--motion-sheet)',
+        animation: 'sheet-up var(--motion-sheet)', transformOrigin: 'top center',
+        transition: 'transform .28s cubic-bezier(.2,.8,.2,1), filter .28s',
+        ...layerBehindFx(behind, true),
       }
     : {
-        position: 'fixed', top: 0, right: 0, bottom: 0, width, maxWidth: '96vw', zIndex: 61,
-        background: 'var(--bg-surface)', borderLeft: '1px solid var(--border-default)',
+        position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+        width, maxWidth: '94vw', maxHeight: 'min(86vh, 860px)', zIndex: zBase + 1,
+        background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-lg)', boxShadow: '0 24px 80px rgba(0,0,0,0.55)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        animation: 'sheet-in var(--motion-sheet)',
+        animation: 'sheet-pop var(--motion-sheet)',
+        transition: 'transform .28s cubic-bezier(.2,.8,.2,1), filter .28s',
+        ...layerBehindFx(behind, false),
       }
 
   return (
     <>
       <style>{`
-        @keyframes sheet-in { from { transform: translateX(24px); opacity: 0 } to { transform: none; opacity: 1 } }
+        @keyframes sheet-pop { from { transform: translate(-50%, calc(-50% + 18px)) scale(0.97); opacity: 0 } to { transform: translate(-50%, -50%); opacity: 1 } }
         @keyframes sheet-up { from { transform: translateY(32px); opacity: 0 } to { transform: none; opacity: 1 } }
       `}</style>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 60 }} />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: zBase > 60 ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.55)', zIndex: zBase }} />
       <div role="dialog" aria-modal="true" style={panel}>
         {isMobile && (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-2) 0', flexShrink: 0 }}>

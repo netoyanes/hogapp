@@ -6,6 +6,7 @@ import { changeTaskStatus } from '../../lib/taskActions'
 import { logActivity } from '../../hooks/useActivityLog'
 import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
+import { useSheetLayer } from '../v2'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
 import { HtmlFrame } from './HtmlFrame'
@@ -150,6 +151,14 @@ function LinkCard({ link, onArchive }: { link: TaskLink; onArchive: () => void }
 
 export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRole: _userRole }: Props) {
   const isMobile = useIsMobile()
+  // Se apila sobre la ventana desde la que se abrió (p. ej. un proyecto):
+  // en escritorio se centra y la anterior queda visible detrás, conectadas
+  const { behind, isTop, zBase } = useSheetLayer(true)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && isTop) onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isTop, onClose])
   const [task, setTask] = useState<Task | null>(null)
   const [buName, setBuName] = useState('')
   const [creatorName, setCreatorName] = useState<string | null>(null)
@@ -550,18 +559,35 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose} />
+      <div className="fixed inset-0" style={{ background: zBase > 60 ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.5)', zIndex: zBase }} onClick={onClose} />
 
-      {/* Panel */}
+      {/* Panel: centrado en escritorio, hoja completa en teléfono; si tiene
+          subventanas encima se atenúa y asoma detrás (misma pila que Sheet) */}
       <div
         style={{
-          position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 50,
-          ...(isMobile ? { left: 0 } : {}),
-          width: '100%', maxWidth: isMobile ? '100%' : '480px',
+          zIndex: zBase + 1,
           background: 'var(--bg-surface)',
-          borderLeft: isMobile ? 'none' : '1px solid var(--border-default)',
           display: 'flex', flexDirection: 'column',
           overflowY: 'auto',
+          transition: 'transform .28s cubic-bezier(.2,.8,.2,1), filter .28s',
+          ...(isMobile
+            ? { position: 'fixed' as const, top: 0, right: 0, bottom: 0, left: 0, width: '100%' }
+            : {
+                position: 'fixed' as const, left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+                width: 480, maxWidth: '94vw', height: 'min(86vh, 860px)', maxHeight: '94vh',
+                border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)',
+                boxShadow: '0 24px 80px rgba(0,0,0,0.55)',
+                animation: 'sheet-pop var(--motion-sheet)',
+              }),
+          ...(behind > 0
+            ? {
+                transform: isMobile
+                  ? `translateY(${-6 - behind * 4}px) scale(${1 - 0.03 * behind})`
+                  : `translate(-50%, calc(-50% - ${12 + behind * 8}px)) scale(${1 - 0.035 * behind})`,
+                filter: 'brightness(0.55) saturate(0.85)',
+                pointerEvents: 'none' as const,
+              }
+            : {}),
         }}
       >
         {/* Header */}

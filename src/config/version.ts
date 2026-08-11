@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.60.0"
+export const APP_VERSION = "2.61.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.61.0",
+    date: "2026-08-11",
+    type: "MINOR",
+    changes: [
+      "Ventanas CENTRADAS en escritorio: todo lo que se abre (proyecto, tarea, reserva, cliente, editor de piso…) aparece como modal al centro con animación, en vez de panel lateral",
+      "SUBVENTANAS apiladas y conectadas: al abrir una tarea desde un proyecto (o un cliente desde una reserva), la ventana anterior queda visible detrás — atenuada, encogida y asomando arriba — y al cerrar la subventana regresa al frente",
+      "Escape cierra solo la ventana de hasta arriba; el detalle de tarea se integra a la misma pila",
+    ]
+  },
   {
     version: "2.60.0",
     date: "2026-08-10",
