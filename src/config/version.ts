@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.68.0"
+export const APP_VERSION = "2.68.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.68.1",
+    date: "2026-08-11",
+    type: "PATCH",
+    changes: [
+      "Nueva reserva (motor por mesas): cuando no hay horarios, el formulario diagnostica la CAUSA — día sin horario configurado, ninguna mesa acepta ese tamaño de grupo, u ocupación real",
+    ]
+  },
   {
     version: "2.68.0",
     date: "2026-08-11",

@@ -1066,6 +1066,9 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
   const [tableEngine, setTableEngine] = useState(false)
   const [slots, setSlots] = useState<{ slot: string; libres: number }[]>([])
   const [slotsLoading, setSlotsLoading] = useState(false)
+  // Cuando el motor no regresa horarios, diagnostica POR QUÉ (horario del día
+  // sin configurar vs mesas sin rango para el grupo vs ocupación real)
+  const [slotsHint, setSlotsHint] = useState<string | null>(null)
   const [manualTime, setManualTime] = useState(false)
 
   useEffect(() => {
@@ -1077,15 +1080,28 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
   }, [venue])
 
   useEffect(() => {
-    if (!tableEngine || !date || !(pax > 0)) { setSlots([]); return }
+    if (!tableEngine || !date || !(pax > 0)) { setSlots([]); setSlotsHint(null); return }
     setSlotsLoading(true)
     supabase.rpc('fn_available_slots', { p_bu: venue, p_date: date, p_pax: pax, p_online: false })
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         const rows = (data ?? []) as { slot: string; libres: number }[]
         setSlots(rows)
-        setSlotsLoading(false)
         // Si la hora elegida ya no está disponible, brinca a la primera libre
         if (!manualTime && rows.length && !rows.some(s => s.slot === time)) setTime(rows[0].slot)
+        if (rows.length === 0) {
+          // Diagnóstico: ¿falta horario del día, faltan mesas para el grupo, o es ocupación?
+          const dow = new Date(date + 'T00:00:00').getDay()
+          const [{ data: cap }, { count: fit }] = await Promise.all([
+            supabase.from('venue_capacity').select('open_time, close_time').eq('bu_id', venue).eq('day_of_week', dow).eq('active', true).maybeSingle(),
+            supabase.from('venue_tables').select('id', { count: 'exact', head: true }).eq('bu_id', venue).eq('active', true).lte('min_pax', pax).gte('max_pax', pax),
+          ])
+          setSlotsHint(!cap?.open_time || !cap?.close_time
+            ? 'Causa: este día de la semana no tiene horario de apertura/cierre en Capacidad y horario — el motor necesita ese rango para ofrecer slots.'
+            : (fit ?? 0) === 0
+              ? `Causa: ninguna mesa activa acepta ${pax} pax (revisa mín/máx por mesa en el editor de Piso, o crea una combinación).`
+              : 'Las mesas para ese tamaño ya están ocupadas todo el día — usa sobrecupo o mueve la fecha.')
+        } else setSlotsHint(null)
+        setSlotsLoading(false)
       })
   }, [tableEngine, venue, date, pax]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1283,6 +1299,7 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
               ) : slots.length === 0 ? (
                 <div>
                   <p style={{ color: 'var(--status-attention)', fontSize: 13, margin: 0 }}>Sin horarios disponibles para {pax} pax ese día.</p>
+                  {slotsHint && <p style={{ color: 'var(--text-tertiary)', fontSize: 12, margin: '6px 0 0', lineHeight: 1.5 }}>💡 {slotsHint}</p>}
                   {canOverride && (
                     <button onClick={() => setManualTime(true)} style={{ marginTop: 6, minHeight: 36, padding: '0 12px', borderRadius: 999, border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-tertiary)', fontSize: 11, cursor: 'pointer' }}>
                       Capturar hora manual (sobrecupo)
