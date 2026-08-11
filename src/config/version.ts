@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.61.0"
+export const APP_VERSION = "2.62.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.62.0",
+    date: "2026-08-11",
+    type: "MINOR",
+    changes: [
+      "Proyectos — iconografía en la lista de tareas del plan: círculo con iniciales del ASIGNADO (o 'Sin asignar' punteado), círculos apilados de RELACIONADOS (+N), reloj con TIEMPO ESTIMADO y calendario con DEADLINE",
+      "Semáforo del deadline: rojo vencido, ámbar a ≤2 días, gris con margen — tooltips con nombres completos y fechas",
+    ]
+  },
   {
     version: "2.61.0",
     date: "2026-08-11",
