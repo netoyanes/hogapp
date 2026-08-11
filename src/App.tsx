@@ -25,6 +25,7 @@ import { Casa } from './screens/Casa'
 import { SharedTask } from './screens/SharedTask'
 import { PrivacyNotice } from './screens/PrivacyNotice'
 import { PublicReservation } from './screens/PublicReservation'
+import { GuestReservation } from './screens/GuestReservation'
 import { AppLogoBadge } from './components/ui/AppLogo'
 import { TaskDetailPanel } from './components/ui/TaskDetailPanel'
 import { DealOverlay } from './components/ui/DealOverlay'
@@ -55,6 +56,7 @@ const _params = new URLSearchParams(window.location.search)
 const _sharedTaskId = _params.get('share')
 const _aviso = _params.get('aviso')
 const _reservar = _params.get('reservar')
+const _mireserva = _params.get('mireserva')
 
 // Strip a query param from the URL bar without reloading (so an overlay doesn't reopen on refresh)
 function stripUrlParam(key: string) {
@@ -66,6 +68,8 @@ function stripUrlParam(key: string) {
 export default function App() {
   // Reserva pública por venue — página aislada, sin sesión (?reservar=CÓDIGO)
   if (_reservar) return <PublicReservation code={_reservar} />
+  // Mi reserva — el cliente gestiona su reserva desde el link del WhatsApp
+  if (_mireserva) return <GuestReservation token={_mireserva} />
   // Shared task view — completely isolated, no app shell
   if (_sharedTaskId) return <SharedTask taskId={_sharedTaskId} />
   // Aviso de privacidad — página pública estática

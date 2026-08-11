@@ -37,6 +37,7 @@ interface Reservation {
   created_at: string
   created_by: string | null
   bot_conversation_id: string | null
+  manage_token?: string | null
 }
 interface GuestLite { id: string; full_name: string; phone: string; tags: string[] }
 interface CapacityRow { id: string; day_of_week: number; max_reservations: number; max_pax: number; open_time: string | null; close_time: string | null; active: boolean }
@@ -368,6 +369,40 @@ export function Reservations({ userRole, userId }: Props) {
     }
     if (status === 'completed') showToast('Reserva completada — visita registrada.', 'success')
     else showToast(`Reserva ${STATUS_META[status].label.toLowerCase()}.`, 'success')
+  }
+
+  // Confirmación por WhatsApp: confirma la reserva y envía el mensaje con el
+  // mini-link "mi reserva" (avisar retraso / cancelar). Si la reserva nació en
+  // el bot, la manda el concierge por su canal; si no, se abre WhatsApp con el
+  // mensaje listo para enviar desde el teléfono del venue.
+  async function confirmWhatsApp(res: Reservation) {
+    const g = guestMap[res.guest_id]
+    let token = res.manage_token ?? null
+    if (!token) {
+      token = crypto.randomUUID()
+      const { error } = await supabase.from('reservations').update({ manage_token: token }).eq('id', res.id)
+      if (error) { showToast(`No se pudo generar el link: ${error.message}`, 'error'); return }
+    }
+    if (res.status === 'requested') await setStatus(res, 'confirmed')
+    const venueName = buList.find(b => b.id === res.bu_id)?.name ?? buMap[res.bu_id] ?? ''
+    const fechaTxt = new Date(res.date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
+    const link = `${window.location.origin}/?mireserva=${token}`
+    const msg = `✅ ¡Tu reserva está confirmada!\n\n📍 ${venueName}\n📅 ${fechaTxt}\n🕗 ${res.time_slot.slice(0, 5)} · ${res.party_size} ${res.party_size === 1 ? 'persona' : 'personas'}\n👤 A nombre de ${g?.full_name ?? ''}\n\nSi llegas un poco tarde o te surge un imprevisto, avísanos aquí:\n${link}\n\n¡Te esperamos! 🥂`
+    if (res.bot_conversation_id) {
+      const { error } = await supabase.functions.invoke('concierge-send', { body: { conversationId: res.bot_conversation_id, body: msg } })
+      if (!error) {
+        logActivity('reservation_updated', 'reservation', res.id, { via: 'confirmacion_whatsapp_concierge' })
+        showToast('Confirmación enviada por el concierge ✅', 'success')
+        return
+      }
+      // si el canal del bot falla, cae al WhatsApp manual
+    }
+    const digits = (g?.phone ?? '').replace(/\D/g, '')
+    if (!digits) { showToast('El cliente no tiene teléfono guardado — agrégalo en su ficha.', 'error'); return }
+    const wa = digits.length === 10 ? `52${digits}` : digits
+    window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank')
+    logActivity('reservation_updated', 'reservation', res.id, { via: 'confirmacion_whatsapp_manual' })
+    showToast('WhatsApp abierto con la confirmación lista — solo envíala.', 'success')
   }
 
   // ── Día: horarios libres — agenda ordenada por hora de llegada, sin turnos ──
@@ -892,6 +927,12 @@ export function Reservations({ userRole, userId }: Props) {
                     </button>
                   </div>
                 </div>
+              )}
+              {['requested', 'confirmed'].includes(menuRes.status) && (
+                <button onClick={() => confirmWhatsApp(menuRes)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: '#1fa855', color: '#fff', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+                  <MessageCircle size={17} /> Confirmar por WhatsApp
+                </button>
               )}
               {['requested', 'confirmed'].includes(menuRes.status) && (
                 <button onClick={() => { if (window.confirm(`¿Sentar a ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'}, ${menuRes.party_size} pax?`)) setStatus(menuRes, 'seated') }}

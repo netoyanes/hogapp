@@ -84,6 +84,58 @@ Deno.serve(async (req: Request) => {
   try {
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const body = await req.json()
+
+    // ── MI RESERVA (?mireserva=<token>): el cliente ve su reserva y avisa si
+    // llega tarde o cancela — el token único de la reserva es la llave.
+    if (String(body.action ?? '').startsWith('manage_')) {
+      const token = String(body.token ?? '').trim()
+      if (!/^[0-9a-f-]{36}$/i.test(token)) return json({ error: 'Link inválido.' }, 400)
+      const { data: r } = await admin.from('reservations')
+        .select('id, bu_id, guest_id, date, time_slot, party_size, status, notes')
+        .eq('manage_token', token).maybeSingle()
+      if (!r) return json({ error: 'No encontramos tu reserva — revisa el link.' }, 404)
+      const [{ data: bu2 }, { data: g }] = await Promise.all([
+        admin.from('business_units').select('code, name').eq('id', r.bu_id).maybeSingle(),
+        admin.from('guests').select('full_name').eq('id', r.guest_id).maybeSingle(),
+      ])
+      const base = {
+        venue: bu2?.name ?? '', codigo: bu2?.code ?? '', nombre: g?.full_name ?? '',
+        fecha: r.date, hora: String(r.time_slot).slice(0, 5), pax: r.party_size, status: r.status,
+      }
+      const activa = ['requested', 'confirmed'].includes(r.status)
+
+      if (body.action === 'manage_info') return json({ ok: true, ...base })
+
+      if (body.action === 'manage_late') {
+        if (!activa && r.status !== 'seated') return json({ error: 'Tu reserva ya no está activa — escríbenos por WhatsApp y te ayudamos.' }, 400)
+        const mins = Math.min(Math.max(parseInt(String(body.minutos ?? '15'), 10) || 15, 5), 120)
+        const nota = `🕐 Cliente avisó: llega ~${mins} min tarde`
+        await admin.from('reservations').update({ notes: r.notes ? `${r.notes} · ${nota}` : nota }).eq('id', r.id)
+        await admin.from('activity_log').insert({
+          user_id: null, action: 'reservation_updated', entity_type: 'reservation', entity_id: r.id,
+          details: { actor: 'Cliente (mi reserva)', aviso: `llega ~${mins} min tarde` },
+        })
+        await notifySlack(admin, `🕐 *Aviso de retraso* — ${bu2?.name}\n${base.nombre} (${r.date} · ${base.hora} · ${r.party_size} pax) avisa que llega ~${mins} min tarde.`)
+        return json({ ok: true, ...base, aviso: mins })
+      }
+
+      if (body.action === 'manage_cancel') {
+        if (!activa) return json({ error: 'Tu reserva ya no se puede cancelar por aquí — escríbenos por WhatsApp.' }, 400)
+        const motivo = String(body.motivo ?? '').trim().slice(0, 200)
+        await admin.from('reservations').update({
+          status: 'cancelled',
+          cancel_reason: motivo ? `Cliente canceló desde su link: ${motivo}` : 'Cliente canceló desde su link',
+        }).eq('id', r.id)
+        await admin.from('activity_log').insert({
+          user_id: null, action: 'reservation_status', entity_type: 'reservation', entity_id: r.id,
+          details: { actor: 'Cliente (mi reserva)', to: 'Cancelada', motivo: motivo || null },
+        })
+        await notifySlack(admin, `❌ *Cancelación del cliente* — ${bu2?.name}\n${base.nombre} canceló su reserva del ${r.date} · ${base.hora} · ${r.party_size} pax.${motivo ? `\nMotivo: ${motivo}` : ''}`)
+        return json({ ok: true, ...base, status: 'cancelled' })
+      }
+      return json({ error: 'Acción desconocida.' }, 400)
+    }
+
     const code = String(body.code ?? '').trim().toUpperCase()
     if (!code) return json({ error: 'Falta el venue.' }, 400)
 
