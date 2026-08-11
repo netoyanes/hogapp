@@ -17,13 +17,14 @@ export const TENANT: TenantConfig = {
   appSubtitle: 'Command Center',
   logo: { type: 'symbol' },
   enabledViews: [
-    'resumen', 'dashboard', 'tasks', 'crm', 'concierge', 'casa', 'events', 'objectives',
+    'resumen', 'dashboard', 'pulso', 'tasks', 'crm', 'concierge', 'casa', 'events', 'objectives',
     'revenue', 'reports', 'activity', 'upload', 'templates',
     'invite', 'profile',
   ],
   viewTitles: {
     resumen:   'Mi Resumen',
     dashboard: 'Dashboard',
+    pulso:     'Pulso Social',
     tasks:     'Tareas',
     crm:       'Comercial',
     contacts:  'Comercial',

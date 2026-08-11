@@ -6,6 +6,7 @@ import { UserOnboarding } from './screens/UserOnboarding'
 import { Dashboard } from './screens/Dashboard'
 import { TaskBoard } from './screens/TaskBoard'
 import { MyWeek } from './screens/MyWeek'
+import { SocialPulse } from './screens/SocialPulse'
 import { RevenueUpload } from './screens/RevenueUpload'
 import { BUOnboardingForm } from './screens/BUOnboardingForm'
 import { AppLayout } from './components/layout/AppLayout'
@@ -201,10 +202,12 @@ export default function App() {
     // Objetivos es SOLO Master; Contenido se retiró (vive en Proyectos)
     ALLOWED_VIEWS = role === 'DEV'
       ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'events',
-                 'revenue', 'reports', 'activity', 'templates', 'profile', 'resumen']) // auditoría: todo menos admin (Usuarios/Carga)
+                 'revenue', 'reports', 'activity', 'templates', 'profile', 'resumen', 'pulso']) // auditoría: todo menos admin (Usuarios/Carga)
       : role === 'HEART_OF_HOUSE'
         ? new Set(['casa', 'reportar', 'concierge', 'profile', 'resumen']) // piso + tablet de host: La Casa y Reservas
-        : role === 'TEAM' || role === 'MARKETING'
+        : role === 'MARKETING'
+          ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'events', 'profile', 'resumen', 'pulso'])
+        : role === 'TEAM'
           ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'events', 'profile', 'resumen'])
           : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'events', 'profile', 'resumen'])
   }
@@ -229,6 +232,10 @@ export default function App() {
         return <Dashboard onScoreBU={(code) => setScoringBU(code)} onViewTasks={goToTasksForBU} userRole={role} />
       case 'resumen':
         return <MyWeek userId={profile?.id} userName={profile?.full_name ?? undefined} onOpenTask={openTaskOverlay} onNavigate={handleNavigate} />
+      case 'pulso':
+        return ['MASTER', 'C_LEVEL', 'DEV', 'MARKETING'].includes(role ?? '') || userApps?.has('pulso')
+          ? <SocialPulse userRole={role} />
+          : <EmptyState icon="🔒" title="Acceso restringido" description="Pulso Social es para dirección y marketing." />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':

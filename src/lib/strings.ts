@@ -28,6 +28,7 @@ export const STR = {
   nav: {
     resumen: 'Mi Resumen',
     dashboard: 'Dashboard',
+    pulso: 'Pulso Social',
     tasks: 'Tareas',
     crm: 'Comercial',
     reservations: 'Reservas',
