@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.66.0"
+export const APP_VERSION = "2.67.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.67.0",
+    date: "2026-08-11",
+    type: "MINOR",
+    changes: [
+      "LANDING PÚBLICO de El Oyster Club (?reservar=OC) con la identidad de la carta: portada con logo, lema y costas sobre azul cielo, formulario de reserva re-tematizado (Oswald/Cutive Mono/Inter, tinta) y botón VER EL MENÚ",
+      "Menú en línea servido en /menu/oc.html (misma URL del dominio) con botón fijo RESERVAR MESA que regresa al landing — listo para compartir en redes y en el concierge",
+    ]
+  },
   {
     version: "2.66.0",
     date: "2026-08-11",

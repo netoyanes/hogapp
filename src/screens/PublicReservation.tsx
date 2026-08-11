@@ -25,6 +25,24 @@ const inp: React.CSSProperties = {
 const lbl: React.CSSProperties = { display: 'block', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 600 }
 
 export function PublicReservation({ code }: { code: string }) {
+  // EL OYSTER CLUB tiene identidad propia (la misma del menú en /menu/oc.html):
+  // fondo azul cielo, tinta, Oswald/Cutive Mono/Inter. El resto de venues
+  // conserva el tema oscuro de la app.
+  const isOC = code.toUpperCase() === 'OC'
+  useEffect(() => {
+    if (!isOC) return
+    document.title = 'EL OYSTER CLUB · Reservas'
+    const meta = document.querySelector('meta[name="theme-color"]') ?? (() => {
+      const m = document.createElement('meta'); m.setAttribute('name', 'theme-color'); document.head.appendChild(m); return m
+    })()
+    meta.setAttribute('content', '#8bb8e6')
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = 'https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Cutive+Mono&family=Inter:wght@400;600;700&display=swap'
+    document.head.appendChild(link)
+    return () => { document.head.removeChild(link) }
+  }, [isOC])
+
   const [info, setInfo] = useState<Info | null>(null)
   const [loadErr, setLoadErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -104,7 +122,46 @@ export function PublicReservation({ code }: { code: string }) {
     setDone(data as unknown as Done)
   }
 
-  const shell = (children: React.ReactNode) => (
+  // Tema Oyster: se re-pintan las variables que ya usa el formulario, así toda
+  // la página (inputs, chips de horario, botones) adopta la identidad del menú
+  const ocVars = {
+    '--bg-base': '#8bb8e6', '--bg-surface': 'rgba(255,255,255,0.42)', '--bg-elevated': '#ffffff',
+    '--border-default': '#231f20', '--border-subtle': 'rgba(35,31,32,0.35)',
+    '--text-primary': '#231f20', '--text-secondary': '#3d3a3b', '--text-tertiary': '#3d3a3b',
+    '--accent': '#231f20', '--on-accent': '#8bb8e6', '--accent-bg': 'rgba(35,31,32,0.08)',
+    '--status-risk': '#8a1f1f', '--status-attention': '#7a4b00',
+    '--radius-md': '10px', '--radius-lg': '14px',
+  } as React.CSSProperties
+  const ocMono: React.CSSProperties = { fontFamily: '"Cutive Mono","Courier New",monospace', textTransform: 'uppercase', letterSpacing: '0.18em' }
+  const menuBtn = (solid: boolean): React.CSSProperties => ({
+    display: 'inline-block', textDecoration: 'none', textAlign: 'center', cursor: 'pointer',
+    fontFamily: '"Oswald","Arial Narrow",sans-serif', textTransform: 'uppercase', letterSpacing: '0.14em',
+    fontSize: 14, fontWeight: 600, padding: '13px 26px', borderRadius: 999, border: '2px solid #231f20',
+    background: solid ? '#231f20' : 'transparent', color: solid ? '#8bb8e6' : '#231f20',
+  })
+
+  const shell = (children: React.ReactNode) => isOC ? (
+    <div style={{ minHeight: '100vh', background: '#8bb8e6', color: '#231f20', padding: '34px 16px 40px', fontFamily: '"Inter",-apple-system,sans-serif', ...ocVars }}>
+      <div style={{ maxWidth: 480, margin: '0 auto' }}>
+        {/* Portada — misma cabecera que la carta */}
+        <div style={{ textAlign: 'center', marginBottom: 26 }}>
+          <img src="/menu/oc-logo.svg" alt="EL OYSTER CLUB" style={{ width: 'min(300px, 82%)', display: 'block', margin: '0 auto 10px' }} />
+          <p style={{ ...ocMono, fontSize: 13, margin: '0 0 4px' }}>Marisquería de tres costas</p>
+          <p style={{ ...ocMono, fontSize: 10, letterSpacing: '0.14em', margin: 0, opacity: 0.85 }}>Atlántico europeo · Mar de Cortés · Pacífico californiano</p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 18, flexWrap: 'wrap' }}>
+            <a href="#reservar" style={menuBtn(true)}>Reservar mesa</a>
+            <a href="/menu/oc.html" style={menuBtn(false)}>Ver el menú</a>
+          </div>
+        </div>
+        <div id="reservar" style={{ border: '2px solid #231f20', borderRadius: 16, overflow: 'hidden' }}>
+          {children}
+        </div>
+        <p style={{ ...ocMono, fontSize: 9.5, textAlign: 'center', marginTop: 18, opacity: 0.8 }}>
+          EL OYSTER CLUB · <a href="/menu/oc.html" style={{ color: '#231f20' }}>Menú en línea</a>
+        </p>
+      </div>
+    </div>
+  ) : (
     <div style={{ minHeight: '100vh', background: 'var(--bg-base)', padding: '28px 16px' }}>
       <div style={{ maxWidth: 460, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22, justifyContent: 'center' }}>
@@ -138,12 +195,17 @@ export function PublicReservation({ code }: { code: string }) {
           </p>
         </div>
       )}
+      {isOC && (
+        <a href="/menu/oc.html" style={{ ...menuBtn(true), marginTop: 20 }}>Ver el menú mientras tanto</a>
+      )}
     </div>
   )
 
   return shell(
     <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-lg)', padding: 24 }}>
-      <h1 style={{ color: 'var(--text-primary)', fontSize: 22, fontWeight: 800, margin: '0 0 4px' }}>Reserva en {info?.venue}</h1>
+      <h1 style={{ color: 'var(--text-primary)', fontSize: 22, fontWeight: 800, margin: '0 0 4px', ...(isOC ? { fontFamily: '"Oswald","Arial Narrow",sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 } : {}) }}>
+        {isOC ? 'Reservar mesa' : `Reserva en ${info?.venue}`}
+      </h1>
       <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: '0 0 20px' }}>Déjanos tus datos y te confirmamos por WhatsApp.</p>
 
       {info && !info.supported ? (
