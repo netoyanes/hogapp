@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck, Home } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck, Home, Radio } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
 import { STR } from '../../lib/strings'
@@ -18,6 +18,7 @@ interface Props {
 export const NAV_ITEMS = [
   { id: 'resumen',    label: STR.nav.resumen,    icon: Home },
   { id: 'dashboard',  label: STR.nav.dashboard,  icon: LayoutDashboard, shortcut: '1', cLevelOnly: true },
+  { id: 'pulso',      label: STR.nav.pulso,      icon: Radio },
   { id: 'tasks',      label: STR.nav.tasks,      icon: CheckSquare,     shortcut: '2' },
   { id: 'crm',        label: STR.nav.crm,        icon: Handshake,       shortcut: '3' },
   { id: 'concierge',  label: STR.nav.concierge,  icon: Shell },
@@ -34,7 +35,9 @@ export const NAV_ITEMS = [
 ]
 
 // Views every non-MASTER role can navigate to (mirrors ALLOWED_VIEWS in App)
-export const NON_MASTER_VIEWS = ['resumen', 'tasks', 'crm', 'concierge', 'casa', 'events', 'profile']
+export const NON_MASTER_VIEWS = ['resumen', 'tasks', 'crm', 'concierge', 'casa', 'events', 'profile', 'pulso']
+// Pulso Social: dirección y marketing
+const PULSO_ROLES = new Set(['MASTER', 'C_LEVEL', 'MARKETING', 'DEV'])
 // La Casa (operación de piso): personal HoH la vive, Ops la administra,
 // C-Level/Master supervisan. Marketing y Team no la ven.
 const CASA_ROLES = new Set(['MASTER', 'C_LEVEL', 'OPS_MANAGER', 'HEART_OF_HOUSE', 'DEV'])
@@ -57,6 +60,7 @@ export function navItemsForRole(userRole?: string, apps?: Set<string> | null) {
   return NAV_ITEMS.filter(item => {
     if (!TENANT.enabledViews.includes(item.id)) return false
     if (item.id === 'casa' && !CASA_ROLES.has(userRole ?? '')) return false
+    if (item.id === 'pulso' && !PULSO_ROLES.has(userRole ?? '')) return false
     if (userRole === 'MASTER') return true
     return NON_MASTER_VIEWS.includes(item.id)
   })

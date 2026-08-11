@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.64.3"
+export const APP_VERSION = "2.65.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.65.0",
+    date: "2026-08-11",
+    type: "MINOR",
+    changes: [
+      "PULSO SOCIAL — nueva app (dirección/marketing): conecta el Instagram, Facebook y Google Maps de cada venue y mide seguidores con tendencia, engagement, alcance, rating y reseñas",
+      "Análisis de EMOCIÓN con IA: cada comentario/reseña se clasifica (sentimiento -1..1, emoción dominante, intención de compra 💰) — se ve el pulso de cada cuenta y las menciones recientes",
+      "VENTAS POR DM medibles: reservas creadas vía concierge (WhatsApp/IG) por día + volumen de mensajes",
+      "Edge function social-pulse (extracción + análisis, cron diario) y seed social_pulse.sql",
+    ]
+  },
   {
     version: "2.64.3",
     date: "2026-08-11",
