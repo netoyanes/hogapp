@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.65.0"
+export const APP_VERSION = "2.65.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.65.1",
+    date: "2026-08-11",
+    type: "PATCH",
+    changes: [
+      "Pulso Social ahora es EXCLUSIVO del Master — no aparece en el menú ni es accesible para ningún otro rol",
+    ]
+  },
   {
     version: "2.65.0",
     date: "2026-08-11",

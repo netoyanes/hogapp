@@ -202,12 +202,10 @@ export default function App() {
     // Objetivos es SOLO Master; Contenido se retiró (vive en Proyectos)
     ALLOWED_VIEWS = role === 'DEV'
       ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'events',
-                 'revenue', 'reports', 'activity', 'templates', 'profile', 'resumen', 'pulso']) // auditoría: todo menos admin (Usuarios/Carga)
+                 'revenue', 'reports', 'activity', 'templates', 'profile', 'resumen']) // auditoría: todo menos admin (Usuarios/Carga)
       : role === 'HEART_OF_HOUSE'
         ? new Set(['casa', 'reportar', 'concierge', 'profile', 'resumen']) // piso + tablet de host: La Casa y Reservas
-        : role === 'MARKETING'
-          ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'events', 'profile', 'resumen', 'pulso'])
-        : role === 'TEAM'
+        : role === 'TEAM' || role === 'MARKETING'
           ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'events', 'profile', 'resumen'])
           : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'events', 'profile', 'resumen'])
   }
@@ -233,9 +231,10 @@ export default function App() {
       case 'resumen':
         return <MyWeek userId={profile?.id} userName={profile?.full_name ?? undefined} onOpenTask={openTaskOverlay} onNavigate={handleNavigate} />
       case 'pulso':
-        return ['MASTER', 'C_LEVEL', 'DEV', 'MARKETING'].includes(role ?? '') || userApps?.has('pulso')
+        // Pulso Social es EXCLUSIVO del Master
+        return role === 'MASTER'
           ? <SocialPulse userRole={role} />
-          : <EmptyState icon="🔒" title="Acceso restringido" description="Pulso Social es para dirección y marketing." />
+          : <EmptyState icon="🔒" title="Solo Master" description="Pulso Social es exclusivo de dirección." />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':
