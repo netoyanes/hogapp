@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, X, Search, Trash2, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save } from 'lucide-react'
+import { Plus, X, Search, Trash2, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save, Clock, CalendarDays, UserPlus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import { notifySlack, notifyUserDM } from '../hooks/useSlack'
@@ -41,7 +41,10 @@ interface EventPlan {
   status: EventStatus
   requisition_task_id: string | null
 }
-interface TaskLite { id: string; title: string; status: string }
+interface TaskLite {
+  id: string; title: string; status: string
+  assigned_to?: string | null; due_date?: string | null; estimated_hours?: number | null
+}
 interface PlanTask { title: string; status: string; due_date: string | null }
 interface Resource { id: string; name: string; qty: number; unit_cost: number | null; notes: string | null }
 interface BudgetItem { id: string; concept: string; amount: number; actual_amount: number | null; is_income: boolean; deal_id: string | null }
@@ -101,6 +104,10 @@ const planColor = (ev: EventPlan) => ev.kind === 'evento' ? TYPE_META[ev.event_t
 const dayChip = (d: Date) => (
   <span style={{ fontSize: 10, fontWeight: 700, color: '#0d0d0d', background: DAY_COLORS[d.getDay()], borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{DAYS_ES[d.getDay()]}</span>
 )
+// Iniciales para los círculos de asignado/relacionados en la lista de tareas
+const initialsOf = (name: string | null | undefined) =>
+  (name ?? '').trim().split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
+
 const fechaLabel = (ev: EventPlan) => {
   if (!ev.date) return '—'
   const f = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
@@ -1240,6 +1247,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const [status, setStatus] = useState<EventStatus>(event?.status ?? 'idea')
   const [saving, setSaving] = useState(false)
   const [tasks, setTasks] = useState<TaskLite[]>([])
+  const [taskFollowers, setTaskFollowers] = useState<Record<string, string[]>>({})
   const [bulkTasks, setBulkTasks] = useState('')
   const [templateId, setTemplateId] = useState('')
   const [reqTaskId, setReqTaskId] = useState(event?.requisition_task_id ?? null)
@@ -1306,7 +1314,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
       description: desc, status: 'OPEN', priority: 'HIGH', deadline_type: 'HARD',
       bu_id: event.bu_id, due_date: event.date, event_id: event.id,
       area: 'piso', client_impact: 'internal', created_by: userId ?? null,
-    }).select('id, title, status').single()
+    }).select('id, title, status, assigned_to, due_date, estimated_hours').single()
     if (error || !task) { showToast(`No se pudo crear la requisición: ${error?.message}`, 'error'); return }
     await supabase.from('event_plans').update({ requisition_task_id: task.id }).eq('id', event.id)
     setReqTaskId(task.id)
@@ -1318,8 +1326,17 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
 
   useEffect(() => {
     if (!event) return
-    supabase.from('tasks').select('id, title, status').eq('event_id', event.id).order('created_at')
-      .then(({ data }) => setTasks((data ?? []) as TaskLite[]))
+    supabase.from('tasks').select('id, title, status, assigned_to, due_date, estimated_hours').eq('event_id', event.id).order('created_at')
+      .then(async ({ data }) => {
+        const ts = (data ?? []) as TaskLite[]
+        setTasks(ts)
+        if (!ts.length) return
+        // Relacionados (seguidores) de cada tarea — para los círculos apilados
+        const { data: fl } = await supabase.from('task_followers').select('task_id, user_id').in('task_id', ts.map(t => t.id))
+        const m: Record<string, string[]> = {}
+        for (const f of (fl ?? []) as { task_id: string; user_id: string }[]) (m[f.task_id] = m[f.task_id] ?? []).push(f.user_id)
+        setTaskFollowers(m)
+      })
   }, [event])
 
   // Bullets → tareas reales en el Task Manager, ligadas al evento
@@ -1330,7 +1347,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
       title, status: 'OPEN', priority: 'MEDIUM', deadline_type: 'SOFT',
       bu_id: eventBu, due_date: eventDate, event_id: eventId, created_by: userId ?? null,
     }))
-    const { data, error } = await supabase.from('tasks').insert(rows).select('id, title, status')
+    const { data, error } = await supabase.from('tasks').insert(rows).select('id, title, status, assigned_to, due_date, estimated_hours')
     if (error || !data) { showToast(`No se pudieron crear las tareas: ${error?.message}`, 'error'); return 0 }
     logActivity('task_created', 'event', eventId, { via: 'event_bullets', event: eventName, tareas: lines.length })
     setTasks(prev => [...prev, ...(data as TaskLite[])])
@@ -1608,13 +1625,60 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 <CheckSquare size={13} style={{ color: 'var(--accent)' }} />
                 <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Tareas del evento{tasks.length ? ` (${tasks.length})` : ''}</span>
               </div>
-              {tasks.map(t => (
-                <button key={t.id} onClick={() => onOpenTask?.(t.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left', minHeight: 40, marginBottom: 6 }}>
-                  <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', textDecoration: t.status === 'APPROVED' ? 'line-through' : 'none', opacity: t.status === 'APPROVED' ? 0.6 : 1 }}>{t.title}</span>
-                  <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{t.status}</span>
-                </button>
-              ))}
+              {tasks.map(t => {
+                const done = t.status === 'APPROVED'
+                const asigName = t.assigned_to ? (people.find(p => p.id === t.assigned_to)?.full_name ?? null) : null
+                const rel = (taskFollowers[t.id] ?? []).filter(uid => uid !== t.assigned_to)
+                const relNames = rel.map(uid => people.find(p => p.id === uid)?.full_name ?? '¿?')
+                const n = new Date()
+                const hoy = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+                const dueDays = t.due_date ? Math.round((new Date(t.due_date + 'T00:00:00').getTime() - new Date(hoy + 'T00:00:00').getTime()) / 86400000) : null
+                // Semáforo del deadline: rojo vencida · ámbar ≤2 días · gris con margen
+                const dueColor = done || dueDays === null ? 'var(--text-tertiary)'
+                  : dueDays < 0 ? 'var(--status-risk)' : dueDays <= 2 ? '#E8A33D' : 'var(--text-tertiary)'
+                const dueLabel = t.due_date ? new Date(t.due_date + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : null
+                return (
+                  <button key={t.id} onClick={() => onOpenTask?.(t.id)}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 5, width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left', minHeight: 44, marginBottom: 6 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }}>{t.title}</span>
+                      <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', flexShrink: 0 }}>{t.status}</span>
+                    </span>
+                    {/* Iconografía: asignado · relacionados · estimado · deadline */}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      {asigName ? (
+                        <span title={`Asignada a ${asigName}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--accent-bg)', border: '1px solid var(--accent)', color: 'var(--accent)', fontSize: 8, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initialsOf(asigName)}</span>
+                          <span style={{ fontSize: 10, color: 'var(--text-secondary)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asigName}</span>
+                        </span>
+                      ) : (
+                        <span title="Sin asignar" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{ width: 18, height: 18, borderRadius: '50%', border: '1px dashed var(--border-strong)', color: 'var(--text-tertiary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><UserPlus size={9} /></span>
+                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Sin asignar</span>
+                        </span>
+                      )}
+                      {relNames.length > 0 && (
+                        <span title={`Relacionados: ${relNames.join(', ')}`} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          {relNames.slice(0, 3).map((nm, i) => (
+                            <span key={i} style={{ width: 16, height: 16, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', color: 'var(--text-secondary)', fontSize: 7.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: i === 0 ? 0 : -5, flexShrink: 0 }}>{initialsOf(nm)}</span>
+                          ))}
+                          {relNames.length > 3 && <span className="num" style={{ fontSize: 9, color: 'var(--text-tertiary)', marginLeft: 3, fontFamily: 'var(--font-mono)' }}>+{relNames.length - 3}</span>}
+                        </span>
+                      )}
+                      {t.estimated_hours != null && (
+                        <span title={`Tiempo estimado: ${t.estimated_hours} h`} className="num" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                          <Clock size={10} /> {t.estimated_hours}h
+                        </span>
+                      )}
+                      {dueLabel && (
+                        <span title={dueDays! < 0 && !done ? `Deadline vencido (${dueLabel})` : `Deadline: ${dueLabel}`} className="num" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: dueColor, fontWeight: dueDays! < 0 && !done ? 800 : 600, fontFamily: 'var(--font-mono)' }}>
+                          <CalendarDays size={10} /> {dueLabel}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                )
+              })}
               <textarea value={bulkTasks} onChange={e => setBulkTasks(e.target.value)} rows={4}
                 placeholder={'Una tarea por línea (bullets):\n- Confirmar DJ y rider\n- Diseñar flyer\n- Brief a cocina'}
                 style={{ ...inp, minHeight: 88, padding: '10px 12px', resize: 'vertical', fontSize: 13, marginBottom: 8 }} />
