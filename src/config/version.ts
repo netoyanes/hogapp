@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.64.2"
+export const APP_VERSION = "2.64.3"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.64.3",
+    date: "2026-08-11",
+    type: "PATCH",
+    changes: [
+      "Tabla de Proyectos: Estado y Avance junto al nombre (ya no se cortan con el scroll horizontal); números al final",
+      "Calendario: los proyectos multi-día muestran el nombre solo el primer día (y al arrancar cada semana); el resto son bandas delgadas de color — adiós al chip repetido 19 veces",
+      "Timeline: hitos agrupados por fecha (un rombo con contador cuando caen varios; verde solo si todos aprobados) y etiqueta de duración junto a las barras cortas",
+    ]
+  },
   {
     version: "2.64.2",
     date: "2026-08-11",
