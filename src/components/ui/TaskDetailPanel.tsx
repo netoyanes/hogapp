@@ -151,6 +151,9 @@ function LinkCard({ link, onArchive }: { link: TaskLink; onArchive: () => void }
 
 export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRole: _userRole }: Props) {
   const isMobile = useIsMobile()
+  // Cada cambio guardado avisa a TODA la app (evento global): la ventana desde
+  // la que se abrió esta tarea (proyecto, board, campana) se refresca sola
+  const notifyUpdated = () => { onUpdated(); window.dispatchEvent(new CustomEvent('hog:task-updated')) }
   // Se apila sobre la ventana desde la que se abrió (p. ej. un proyecto):
   // en escritorio se centra y la anterior queda visible detrás, conectadas
   const { behind, isTop, zBase } = useSheetLayer(true)
@@ -311,7 +314,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
     await changeTaskStatus(task, status, buName)
     setTask((t) => t ? { ...t, status, ...(status === 'APPROVED' ? { priority: 'LOW' } : {}) } : t)
     setPriority(status === 'APPROVED' ? 'LOW' : priority)
-    onUpdated()
+    notifyUpdated()
   }
 
   async function uploadProof(file: File) {
@@ -414,7 +417,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
     setTask(prev => prev ? { ...prev, title, description: description || null, due_date: dueDate || null, priority, area: taskArea, client_impact: clientImpact, bu_id: buId || null, proof_required: proofRequired, estimated_hours: newHours, deadline_type: deadlineType } : prev)
     setSaving(false)
     setEditing(false)
-    onUpdated()
+    notifyUpdated()
   }
 
   async function postComment() {
@@ -479,14 +482,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
     }
     logActivity('task_created', 'task', copy.id, { title: `${task.title} (copia)`, via: 'duplicate' })
     setDuplicating(false)
-    onUpdated()
+    notifyUpdated()
     if (onOpenTask) onOpenTask(copy.id); else onClose()
   }
 
   async function archiveTask() {
     await supabase.from('tasks').update({ archived: true, updated_at: new Date().toISOString() }).eq('id', taskId)
     logActivity('task_archived', 'task', taskId, { title: task?.title ?? '' })
-    onUpdated()
+    notifyUpdated()
     onClose()
   }
 
@@ -494,14 +497,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
     await supabase.from('tasks').update({ archived: false, updated_at: new Date().toISOString() }).eq('id', taskId)
     logActivity('task_restored', 'task', taskId, { title: task?.title ?? '' })
     setTask((t) => t ? { ...t, archived: false } : t)
-    onUpdated()
+    notifyUpdated()
   }
 
   async function togglePrivacy() {
     const next = !task?.is_private
     await supabase.from('tasks').update({ is_private: next, updated_at: new Date().toISOString() }).eq('id', taskId)
     setTask((t) => t ? { ...t, is_private: next } : t)
-    onUpdated()
+    notifyUpdated()
   }
 
   async function reassignTask(newId: string) {
@@ -519,7 +522,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
       sendTaskAssignmentEmail(taskId, newId)
       notifyUserDM(newId, taskAssignedMessage(task?.title ?? '', newName, taskLink(taskId)))
     }
-    onUpdated()
+    notifyUpdated()
   }
 
   async function addFollower(userId: string) {

@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.62.0"
+export const APP_VERSION = "2.62.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.62.1",
+    date: "2026-08-11",
+    type: "PATCH",
+    changes: [
+      "Al guardar un cambio en la subventana de tarea (asignar responsable, estado, fecha…), la ventana del proyecto y la pantalla de Proyectos se refrescan SOLAS al volver — lista de tareas, iconografía, barras de avance e hitos del Timeline al día sin recargar",
+    ]
+  },
   {
     version: "2.62.0",
     date: "2026-08-11",

@@ -170,6 +170,11 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
     setLoading(false)
   }, [])
   useEffect(() => { load() }, [load])
+  // Cambios guardados en la subventana de tarea → avance e hitos al día
+  useEffect(() => {
+    window.addEventListener('hog:task-updated', load)
+    return () => window.removeEventListener('hog:task-updated', load)
+  }, [load])
 
   const buMap = useMemo(() => Object.fromEntries(buList.map(b => [b.id, b.code])), [buList])
   const nameOf = useCallback((id: string | null) => people.find(p => p.id === id)?.full_name ?? null, [people])
@@ -1324,20 +1329,24 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
     showToast('Requisición enviada al Task Manager del venue.', 'success')
   }
 
-  useEffect(() => {
+  const loadTasks = useCallback(async () => {
     if (!event) return
-    supabase.from('tasks').select('id, title, status, assigned_to, due_date, estimated_hours').eq('event_id', event.id).order('created_at')
-      .then(async ({ data }) => {
-        const ts = (data ?? []) as TaskLite[]
-        setTasks(ts)
-        if (!ts.length) return
-        // Relacionados (seguidores) de cada tarea — para los círculos apilados
-        const { data: fl } = await supabase.from('task_followers').select('task_id, user_id').in('task_id', ts.map(t => t.id))
-        const m: Record<string, string[]> = {}
-        for (const f of (fl ?? []) as { task_id: string; user_id: string }[]) (m[f.task_id] = m[f.task_id] ?? []).push(f.user_id)
-        setTaskFollowers(m)
-      })
+    const { data } = await supabase.from('tasks').select('id, title, status, assigned_to, due_date, estimated_hours').eq('event_id', event.id).order('created_at')
+    const ts = (data ?? []) as TaskLite[]
+    setTasks(ts)
+    if (!ts.length) return
+    // Relacionados (seguidores) de cada tarea — para los círculos apilados
+    const { data: fl } = await supabase.from('task_followers').select('task_id, user_id').in('task_id', ts.map(t => t.id))
+    const m: Record<string, string[]> = {}
+    for (const f of (fl ?? []) as { task_id: string; user_id: string }[]) (m[f.task_id] = m[f.task_id] ?? []).push(f.user_id)
+    setTaskFollowers(m)
   }, [event])
+  useEffect(() => { loadTasks() }, [loadTasks])
+  // Al guardar algo en la subventana de tarea, esta lista se refresca sola
+  useEffect(() => {
+    window.addEventListener('hog:task-updated', loadTasks)
+    return () => window.removeEventListener('hog:task-updated', loadTasks)
+  }, [loadTasks])
 
   // Bullets → tareas reales en el Task Manager, ligadas al evento
   async function pushBulkTasks(eventId: string, eventName: string, eventBu: string, eventDate: string | null): Promise<number> {
