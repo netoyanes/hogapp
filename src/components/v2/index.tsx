@@ -8,6 +8,7 @@
 // CommandPalette ships with the Shell module (needs app-level wiring).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { buColor, buColorBg, buColorBorder, buMonogram } from '../../lib/buIdentity'
 
 // ── BUChip — the signature element ───────────────────────────────────────────
@@ -296,7 +297,11 @@ export function Sheet({ open, onClose, isMobile, children, width = 480 }: {
         ...layerBehindFx(behind, false),
       }
 
-  return (
+  // PORTAL a <body>: un Sheet anidado dentro del panel de otro Sheet heredaría
+  // su pointerEvents:none y su filter (que además rompe position:fixed) cuando
+  // el padre pasa a segundo plano — con el portal cada ventana vive en body y
+  // la pila funciona sin importar dónde se renderice en el árbol de React.
+  return createPortal(
     <>
       <style>{`
         @keyframes sheet-pop { from { transform: translate(-50%, calc(-50% + 18px)) scale(0.97); opacity: 0 } to { transform: translate(-50%, -50%); opacity: 1 } }
@@ -311,6 +316,7 @@ export function Sheet({ open, onClose, isMobile, children, width = 480 }: {
         )}
         {children}
       </div>
-    </>
+    </>,
+    document.body
   )
 }

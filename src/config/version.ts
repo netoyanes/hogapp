@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.67.0"
+export const APP_VERSION = "2.68.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.68.0",
+    date: "2026-08-11",
+    type: "MINOR",
+    changes: [
+      "Reservas — CONFIRMAR POR WHATSAPP: botón en el panel que confirma la reserva y envía el mensaje con un mini-link personal (?mireserva=token); si la reserva nació en el concierge la manda el bot, si no se abre WhatsApp con el mensaje listo",
+      "MI RESERVA (página pública del cliente): ve su reserva y puede avisar que llega ~10/20/30 min tarde (nota + alerta al equipo en Slack) o cancelar por imprevisto (con motivo opcional)",
+      "Token único por reserva (manage_token) + acciones manage_* en la edge function public-reservation (v4 desplegada)",
+      "FIX: al crear cliente dentro de Nueva reserva, la ventana se cerraba sola y te regresaba al día — las ventanas ahora se montan en un portal y las subventanas anidadas funcionan bien",
+    ]
+  },
   {
     version: "2.67.0",
     date: "2026-08-11",
