@@ -110,3 +110,9 @@
   50% { opacity: 0.4; }
 }
 .animate-pulse-green { animation: pulse-green 1.5s ease-in-out infinite; }
+
+/* Ventanas centradas (Sheet v2 / TaskDetailPanel): entrada desde el centro */
+@keyframes sheet-pop {
+  from { transform: translate(-50%, calc(-50% + 18px)) scale(0.97); opacity: 0; }
+  to   { transform: translate(-50%, -50%); opacity: 1; }
+}
