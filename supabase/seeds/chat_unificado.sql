@@ -47,7 +47,25 @@ create policy creads_select on comment_reads for select using (auth.role() = 'au
 drop policy if exists creads_insert on comment_reads;
 create policy creads_insert on comment_reads for insert with check (auth.uid() = user_id);
 
--- Reacciones también en comentarios de proyecto
+-- Reacciones con emoji (si el seed original nunca se corrió, se crea aquí)
+create table if not exists public.comment_reactions (
+  id           uuid primary key default gen_random_uuid(),
+  parent_type  text not null,
+  parent_id    uuid not null,
+  emoji        text not null,
+  user_id      uuid not null references profiles(id) on delete cascade,
+  created_at   timestamptz not null default now(),
+  unique (parent_type, parent_id, emoji, user_id)
+);
+create index if not exists idx_reactions_parent on comment_reactions (parent_type, parent_id);
+alter table comment_reactions enable row level security;
+drop policy if exists reactions_select on comment_reactions;
+create policy reactions_select on comment_reactions for select using (auth.role() = 'authenticated');
+drop policy if exists reactions_insert on comment_reactions;
+create policy reactions_insert on comment_reactions for insert with check (auth.uid() = user_id);
+drop policy if exists reactions_delete on comment_reactions;
+create policy reactions_delete on comment_reactions for delete using (auth.uid() = user_id);
+-- … y acepta también comentarios de proyecto
 alter table comment_reactions drop constraint if exists comment_reactions_parent_type_check;
 alter table comment_reactions add constraint comment_reactions_parent_type_check
   check (parent_type in ('task_comment', 'deal_activity', 'event_comment'));
