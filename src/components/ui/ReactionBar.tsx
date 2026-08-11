@@ -9,7 +9,7 @@ const PALETTE = ['👍', '❤️', '🎉', '😂', '👀', '🙏', '🔥', '✅'
 type Reaction = { emoji: string; user_id: string }
 
 export function ReactionBar({ parentType, parentId, userId }: {
-  parentType: 'task_comment' | 'deal_activity'
+  parentType: 'task_comment' | 'deal_activity' | 'event_comment'
   parentId: string
   userId?: string
 }) {

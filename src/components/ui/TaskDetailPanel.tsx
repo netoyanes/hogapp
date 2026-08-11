@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check, Link2, Plus, Trash2, ExternalLink, Copy } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { notifySlack, proofUploadedMessage, taskAssignedMessage, taskCommentMessage, notifyUserDM, taskLink } from '../../hooks/useSlack'
+import { notifySlack, proofUploadedMessage, taskAssignedMessage, notifyUserDM, taskLink } from '../../hooks/useSlack'
 import { changeTaskStatus } from '../../lib/taskActions'
 import { logActivity } from '../../hooks/useActivityLog'
 import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
@@ -11,7 +11,7 @@ import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
 import { HtmlFrame } from './HtmlFrame'
 import { Avatar } from './Avatar'
-import { ReactionBar } from './ReactionBar'
+import { EntityChat } from './EntityChat'
 import type { Task, TaskStatus, TaskPriority, TaskArea, ClientImpact, DeadlineType } from '../../types'
 import { TASK_AREA_LABELS, TASK_AREA_GROUPS, CLIENT_IMPACT_LABELS } from '../../lib/taskAreas'
 
@@ -181,9 +181,6 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
   const [estimatedHours, setEstimatedHours] = useState('')
   const [deadlineType, setDeadlineType] = useState<DeadlineType>('SOFT')
   const [saving, setSaving] = useState(false)
-  const [comments, setComments] = useState<{ id: string; content: string; created_at: string; author: string }[]>([])
-  const [newComment, setNewComment] = useState('')
-  const [postingComment, setPostingComment] = useState(false)
   const [proofs, setProofs] = useState<{ id: string; file_url: string; file_type: string; created_at: string; archived: boolean }[]>([])
   const [uploadingProof, setUploadingProof] = useState(false)
   const [links, setLinks] = useState<TaskLink[]>([])
@@ -192,7 +189,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
   const [addingLink, setAddingLink] = useState(false)
 
   const [followers, setFollowers] = useState<{ userId: string; name: string }[]>([])
-  const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined)
+  const [, setCurrentUserId] = useState<string | undefined>(undefined)
   const [dragOver, setDragOver] = useState(false)
   const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
   const [copied, setCopied] = useState(false)
@@ -261,20 +258,6 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
             ?? (members ?? []).find(m => m.id === f.user_id)?.email
             ?? 'Unknown',
         })))
-      }
-
-      // Load comments
-      const { data: c } = await supabase
-        .from('task_comments')
-        .select('id, content, created_at, author_id')
-        .eq('task_id', taskId)
-        .order('created_at')
-      if (c) {
-        const withAuthors = await Promise.all(c.map(async (cm) => {
-          const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', cm.author_id).single()
-          return { id: cm.id, content: cm.content, created_at: cm.created_at, author: p?.full_name ?? p?.email ?? 'Unknown' }
-        }))
-        setComments(withAuthors)
       }
 
       // Load proofs
@@ -418,34 +401,6 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
     setSaving(false)
     setEditing(false)
     notifyUpdated()
-  }
-
-  async function postComment() {
-    if (!newComment.trim()) return
-    setPostingComment(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    const content = newComment.trim()
-    await supabase.from('task_comments').insert({
-      task_id: taskId,
-      author_id: user?.id,
-      content,
-    })
-    const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', user?.id ?? '').single()
-    const authorName = p?.full_name ?? p?.email ?? 'Someone'
-    setComments((prev) => [...prev, {
-      id: Date.now().toString(),
-      content,
-      created_at: new Date().toISOString(),
-      author: authorName,
-    }])
-    logActivity('comment_posted', 'task', taskId, { title: task?.title ?? '' })
-    notifyAdminsAndAssignee('New comment', task?.title ?? '', 'comment_posted', taskId, task?.assigned_to ?? undefined)
-    // DM the assignee if they're not the one commenting
-    if (task?.assigned_to && task.assigned_to !== user?.id) {
-      notifyUserDM(task.assigned_to, taskCommentMessage(task.title, authorName, content, taskLink(taskId)))
-    }
-    setNewComment('')
-    setPostingComment(false)
   }
 
   const [duplicating, setDuplicating] = useState(false)
@@ -928,65 +883,26 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
           </div>
         </div>
 
-        {/* Comments */}
+        {/* Chat de la tarea — menciones @, doble palomita y tiempo real */}
         <div style={{ padding: '14px 20px', flex: 1 }}>
-          <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginBottom: '10px' }}>COMMENTS {comments.length > 0 && `· ${comments.length}`}</p>
-          <div className="flex flex-col gap-3 mb-4">
-            {comments.length === 0 && (
-              <p style={{ color: 'var(--text-tertiary)', fontSize: '12px' }}>No comments yet.</p>
-            )}
-            {comments.map((c) => (
-              <div key={c.id} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <Avatar name={c.author} size={28} />
-                <div style={{ flex: 1, background: 'var(--bg-elevated)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 600 }}>{c.author}</span>
-                    <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
-                      {new Date(c.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', margin: 0 }}>{c.content}</p>
-                  <ReactionBar parentType="task_comment" parentId={c.id} userId={currentUserId} />
-                </div>
-              </div>
-            ))}
+          <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginBottom: '10px' }}>CHAT</p>
+          <EntityChat scope="task" entityId={taskId} entityLabel={task.title} notifyUserIds={[task.assigned_to, task.created_by]} />
 
-            {/* Task created baseline entry */}
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', opacity: 0.6 }}>
-              {creatorName
-                ? <Avatar name={creatorName} size={28} />
-                : <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', flexShrink: 0 }}>✦</div>
-              }
-              <div style={{ flex: 1, background: 'var(--bg-elevated)', borderRadius: '8px', padding: '8px 12px', borderLeft: '2px solid var(--border-subtle)' }}>
-                <div className="flex items-center gap-2">
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600 }}>{creatorName ?? 'Unknown'}</span>
-                  <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
-                    {new Date(task.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-                <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', fontStyle: 'italic', margin: '2px 0 0' }}>Task created</p>
+          {/* Task created baseline entry */}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', opacity: 0.6, marginTop: 12 }}>
+            {creatorName
+              ? <Avatar name={creatorName} size={28} />
+              : <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', flexShrink: 0 }}>✦</div>
+            }
+            <div style={{ flex: 1, background: 'var(--bg-elevated)', borderRadius: '8px', padding: '8px 12px', borderLeft: '2px solid var(--border-subtle)' }}>
+              <div className="flex items-center gap-2">
+                <span style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600 }}>{creatorName ?? 'Unknown'}</span>
+                <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
+                  {new Date(task.created_at).toLocaleString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', fontStyle: 'italic', margin: '2px 0 0' }}>Tarea creada</p>
             </div>
-          </div>
-
-          {/* New comment */}
-          <div className="flex gap-2">
-            <input
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment() } }}
-              placeholder="Add a comment…"
-              style={{ ...inputStyle, flex: 1 }}
-              onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-              onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
-            />
-            <button
-              onClick={postComment}
-              disabled={postingComment || !newComment.trim()}
-              style={{ background: newComment.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: newComment.trim() ? '#000' : 'var(--text-tertiary)', border: 'none', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 600, cursor: newComment.trim() ? 'pointer' : 'not-allowed' }}
-            >
-              Post
-            </button>
           </div>
 
           {/* Response time */}

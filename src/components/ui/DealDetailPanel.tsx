@@ -7,6 +7,7 @@ import { TaskDetailPanel } from './TaskDetailPanel'
 import { Avatar } from './Avatar'
 import { ReactionBar } from './ReactionBar'
 import { notifySlack, dealStageChangedMessage, dealActivityMessage, dealCommentMessage, notifyUserDM, dealLink } from '../../hooks/useSlack'
+import { MentionArea, notifyMentions, useReadReceipts, ReadTicks, renderWithMentions, type Person } from './EntityChat'
 
 type DealStage = 'LEAD' | 'CONTACTED' | 'PROPOSAL' | 'NEGOTIATING' | 'WON' | 'LOST'
 type DealType  = 'SPONSORSHIP' | 'PARTNERSHIP' | 'ADVERTISING' | 'EVENT' | 'OTHER'
@@ -84,6 +85,14 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
   const [lostReason, setLostReason] = useState('')
   const [actType, setActType] = useState<ActivityType>('NOTE')
   const [actBody, setActBody] = useState('')
+  // Gente para @menciones y recibos de lectura (doble palomita) del hilo
+  const [people, setPeople] = useState<Person[]>([])
+  useEffect(() => {
+    supabase.from('profiles').select('id, full_name').order('full_name')
+      .then(({ data }) => setPeople((data ?? []) as Person[]))
+  }, [])
+  // Al abrir el hilo se marcan leídos los mensajes ajenos; devuelve quién vio cada uno
+  const actReads = useReadReceipts('deal', activities.map(a => ({ id: a.id, author: a.created_by })), currentUserId)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
 
   // edit state
@@ -229,8 +238,10 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
       const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
       const authorName = profile?.full_name ?? 'Someone'
       notifySlack(dealActivityMessage(deal?.title ?? '', actType, body, authorName))
-      // DM the deal owner if they're not the one commenting
-      if (deal?.created_by && deal.created_by !== user.id) {
+      // @menciones: campana + DM a los taggeados
+      const mentioned = await notifyMentions({ scope: 'deal', entityId: dealId, entityLabel: deal?.title ?? 'Deal', content: body, authorId: user.id, authorName, people })
+      // DM the deal owner if they're not the one commenting (ni fueron taggeados)
+      if (deal?.created_by && deal.created_by !== user.id && !mentioned.includes(deal.created_by)) {
         notifyUserDM(deal.created_by, dealCommentMessage(deal.title, authorName, body, dealLink(dealId)))
       }
     }
@@ -487,13 +498,8 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
               ))}
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>
-              <input
-                value={actBody}
-                onChange={e => setActBody(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addActivity() } }}
-                placeholder="Agrega una nota, registra una llamada…"
-                style={{ ...inputStyle, flex: 1 }}
-              />
+              <MentionArea value={actBody} onChange={setActBody} onSubmit={addActivity} people={people}
+                placeholder="Nota, llamada… usa @ para taggear" style={{ ...inputStyle, minHeight: 34 }} />
               <button onClick={addActivity} disabled={!actBody.trim()} style={{ padding: '7px 12px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 600, opacity: actBody.trim() ? 1 : 0.4 }}>Add</button>
             </div>
 
@@ -514,10 +520,11 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                         <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>{authorName}</span>
                         <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                          {new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          {new Date(a.created_at).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>
+                        {a.created_by === currentUserId && <ReadTicks readers={actReads[a.id] ?? []} people={people} me={currentUserId} />}
                       </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{a.body}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{renderWithMentions(a.body, people.map(p => p.full_name).filter((n): n is string => !!n))}</div>
                       {a.body && <ReactionBar parentType="deal_activity" parentId={a.id} userId={currentUserId} />}
                     </div>
                   </div>

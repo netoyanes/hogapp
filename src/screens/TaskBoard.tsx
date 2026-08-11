@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Filter, ArrowRightLeft, LayoutGrid, List, ChevronDown, ChevronRight, Paperclip, Search } from 'lucide-react'
+import { Filter, ArrowRightLeft, LayoutGrid, List, ChevronDown, ChevronRight, Paperclip, Search, Pencil, Copy, Archive, ArchiveRestore } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { TaskCard } from '../components/ui/TaskCard'
 import { CreateTaskModal } from '../components/ui/CreateTaskModal'
 import { TaskDetailPanel } from '../components/ui/TaskDetailPanel'
 import { EmptyState } from '../components/ui/EmptyState'
-import { SegmentedControl, Sheet } from '../components/v2'
+import { SegmentedControl, Sheet, showToast } from '../components/v2'
+import { useContextMenu, type CtxItem } from '../components/ui/ContextMenu'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { changeTaskStatus } from '../lib/taskActions'
@@ -107,6 +108,35 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     window.addEventListener('hog:create-task', openCreate)
     return () => window.removeEventListener('hog:create-task', openCreate)
   }, [])
+
+  // Click derecho en una tarjeta: Editar · Duplicar · Archivar (nada se elimina)
+  const { openMenu, menuElement } = useContextMenu()
+  async function duplicateTask(t: Task) {
+    const { error } = await supabase.from('tasks').insert({
+      title: `${t.title} (copia)`, description: t.description, status: 'OPEN',
+      priority: t.priority, deadline_type: t.deadline_type, area: t.area,
+      client_impact: t.client_impact, bu_id: t.bu_id, estimated_hours: t.estimated_hours,
+      proof_required: t.proof_required, is_private: t.is_private, created_by: userId ?? null,
+    })
+    if (error) showToast(`No se pudo duplicar: ${error.message}`, 'error')
+    else { showToast('Duplicada — quedó Abierta y sin fecha.', 'success'); load() }
+  }
+  async function archiveTaskRow(t: Task, arch: boolean) {
+    const { error } = await supabase.from('tasks').update({ archived: arch }).eq('id', t.id)
+    if (error) showToast(`No se pudo ${arch ? 'archivar' : 'restaurar'}: ${error.message}`, 'error')
+    else {
+      logActivity(arch ? 'task_archived' : 'task_restored', 'task', t.id, { title: t.title })
+      showToast(arch ? 'Archivada — la ves en el filtro Archivadas.' : 'Restaurada.', 'success')
+      load()
+    }
+  }
+  const taskMenu = (t: Task): CtxItem[] => [
+    { label: 'Editar', icon: <Pencil size={13} />, onClick: () => setSelectedTaskId(t.id) },
+    { label: 'Duplicar', icon: <Copy size={13} />, onClick: () => duplicateTask(t) },
+    t.archived
+      ? { label: 'Restaurar', icon: <ArchiveRestore size={13} />, onClick: () => archiveTaskRow(t, false) }
+      : { label: 'Archivar', icon: <Archive size={13} />, danger: true, onClick: () => archiveTaskRow(t, true) },
+  ]
 
   // Real-time + auto-refresh fallback
   useEffect(() => {
@@ -341,13 +371,15 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
                   onSwipeRight={() => setStatusSheetTask(task)}
                   onSwipeLeft={() => setSelectedTaskId(task.id)}
                 >
-                  <TaskCard
-                    task={task}
-                    buName={task.bu_id ? buMap[task.bu_id] : undefined}
-                    assigneeName={task.assigned_to ? profileMap[task.assigned_to] : undefined}
-                    proofCount={proofCounts[task.id] ?? 0}
-                    onClick={() => setSelectedTaskId(task.id)}
-                  />
+                  <div onContextMenu={e => openMenu(e, taskMenu(task))}>
+                    <TaskCard
+                      task={task}
+                      buName={task.bu_id ? buMap[task.bu_id] : undefined}
+                      assigneeName={task.assigned_to ? profileMap[task.assigned_to] : undefined}
+                      proofCount={proofCounts[task.id] ?? 0}
+                      onClick={() => setSelectedTaskId(task.id)}
+                    />
+                  </div>
                 </SwipeableRow>
               ))}
             </>
@@ -380,14 +412,15 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
                       </div>
                     ) : (
                       colTasks.map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          buName={task.bu_id ? buMap[task.bu_id] : undefined}
-                          assigneeName={task.assigned_to ? profileMap[task.assigned_to] : undefined}
-                          proofCount={proofCounts[task.id] ?? 0}
-                          onClick={() => setSelectedTaskId(task.id)}
-                        />
+                        <div key={task.id} onContextMenu={e => openMenu(e, taskMenu(task))}>
+                          <TaskCard
+                            task={task}
+                            buName={task.bu_id ? buMap[task.bu_id] : undefined}
+                            assigneeName={task.assigned_to ? profileMap[task.assigned_to] : undefined}
+                            proofCount={proofCounts[task.id] ?? 0}
+                            onClick={() => setSelectedTaskId(task.id)}
+                          />
+                        </div>
                       ))
                     )}
                   </div>
@@ -448,6 +481,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
         )}
       </Sheet>
 
+      {menuElement}
       {showCreate && (
         <CreateTaskModal onClose={() => setShowCreate(false)} onCreated={load} userRole={userRole} />
       )}
