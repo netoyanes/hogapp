@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck, Home } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
 import { STR } from '../../lib/strings'
@@ -16,6 +16,7 @@ interface Props {
 }
 
 export const NAV_ITEMS = [
+  { id: 'resumen',    label: STR.nav.resumen,    icon: Home },
   { id: 'dashboard',  label: STR.nav.dashboard,  icon: LayoutDashboard, shortcut: '1', cLevelOnly: true },
   { id: 'tasks',      label: STR.nav.tasks,      icon: CheckSquare,     shortcut: '2' },
   { id: 'crm',        label: STR.nav.crm,        icon: Handshake,       shortcut: '3' },
@@ -33,7 +34,7 @@ export const NAV_ITEMS = [
 ]
 
 // Views every non-MASTER role can navigate to (mirrors ALLOWED_VIEWS in App)
-export const NON_MASTER_VIEWS = ['tasks', 'crm', 'concierge', 'casa', 'events', 'profile']
+export const NON_MASTER_VIEWS = ['resumen', 'tasks', 'crm', 'concierge', 'casa', 'events', 'profile']
 // La Casa (operación de piso): personal HoH la vive, Ops la administra,
 // C-Level/Master supervisan. Marketing y Team no la ven.
 const CASA_ROLES = new Set(['MASTER', 'C_LEVEL', 'OPS_MANAGER', 'HEART_OF_HOUSE', 'DEV'])
@@ -43,11 +44,11 @@ const CASA_ROLES = new Set(['MASTER', 'C_LEVEL', 'OPS_MANAGER', 'HEART_OF_HOUSE'
 export function navItemsForRole(userRole?: string, apps?: Set<string> | null) {
   if (userRole !== 'MASTER' && apps && apps.size > 0) {
     return NAV_ITEMS.filter(item => TENANT.enabledViews.includes(item.id) && !item.masterOnly
-      && (item.id === 'profile' || apps.has(item.id)))
+      && (item.id === 'profile' || item.id === 'resumen' || apps.has(item.id)))
   }
   // Heart of House (piso + tablet de host): La Casa, Reservas (Concierge) y Perfil
   if (userRole === 'HEART_OF_HOUSE') {
-    return NAV_ITEMS.filter(item => ['casa', 'concierge', 'profile'].includes(item.id))
+    return NAV_ITEMS.filter(item => ['resumen', 'casa', 'concierge', 'profile'].includes(item.id))
   }
   // DEV (auditoría): ve toda la plataforma menos administración (Usuarios/Carga)
   if (userRole === 'DEV') {

@@ -26,6 +26,7 @@ export const STR = {
     of: 'de',
   },
   nav: {
+    resumen: 'Mi Resumen',
     dashboard: 'Dashboard',
     tasks: 'Tareas',
     crm: 'Comercial',

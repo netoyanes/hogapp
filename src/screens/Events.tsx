@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, X, Search, Trash2, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save, Clock, CalendarDays, UserPlus } from 'lucide-react'
+import { Plus, X, Search, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save, Clock, CalendarDays, UserPlus, MessageCircle, Trash2, Copy, Archive, ArchiveRestore, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import { notifySlack, notifyUserDM } from '../hooks/useSlack'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { EntityChat } from '../components/ui/EntityChat'
+import { useContextMenu, type CtxItem } from '../components/ui/ContextMenu'
 import { BUChip, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,6 +42,7 @@ interface EventPlan {
   responsible: string | null
   status: EventStatus
   requisition_task_id: string | null
+  archived?: boolean | null
 }
 interface TaskLite {
   id: string; title: string; status: string
@@ -129,6 +132,8 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
   const [kindFilter, setKindFilter] = useState<'all' | 'eventos' | 'proyectos'>('all')
   const [search, setSearch] = useState('')
   const [showPast, setShowPast] = useState(false)
+  // Nada se elimina: se archiva. Este toggle muestra SOLO lo archivado.
+  const [showArchived, setShowArchived] = useState(false)
   const [editing, setEditing] = useState<EventPlan | null>(null)
   const [creating, setCreating] = useState(false)
   // Vistas del planeador: tabla, board, timeline, calendario y (aprobadores) su cabina
@@ -176,6 +181,16 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
     return () => window.removeEventListener('hog:task-updated', load)
   }, [load])
 
+  // Deep-link: abrir un proyecto pedido desde Mi Resumen o la campana
+  useEffect(() => {
+    if (loading) return
+    const pending = localStorage.getItem('hog_pending_project')
+    if (!pending) return
+    localStorage.removeItem('hog_pending_project')
+    const r = rows.find(x => x.id === pending)
+    if (r) setEditing(r)
+  }, [loading, rows])
+
   const buMap = useMemo(() => Object.fromEntries(buList.map(b => [b.id, b.code])), [buList])
   const nameOf = useCallback((id: string | null) => people.find(p => p.id === id)?.full_name ?? null, [people])
 
@@ -189,6 +204,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
   const filteredBase = useMemo(() => {
     const q = search.trim().toLowerCase()
     return rows.filter(r => {
+      if ((r.archived ?? false) !== showArchived) return false
       if (buFilter && r.bu_id !== buFilter) return false
       if (kindFilter === 'eventos' && r.kind !== 'evento') return false
       if (kindFilter === 'proyectos' && r.kind === 'evento') return false
@@ -200,7 +216,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
         || (buMap[r.bu_id] ?? '').toLowerCase().includes(q)
         || (nameOf(r.responsible) ?? '').toLowerCase().includes(q)
     })
-  }, [rows, buFilter, kindFilter, search, buMap, nameOf])
+  }, [rows, buFilter, kindFilter, search, buMap, nameOf, showArchived])
 
   const filtered = useMemo(() =>
     // Un proyecto sigue vigente mientras su fecha FIN no haya pasado
@@ -222,6 +238,37 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
     const { error } = await supabase.from('event_plans').update({ status: next }).eq('id', ev.id)
     if (error) { showToast(`No se pudo mover: ${error.message}`, 'error'); load() }
   }
+
+  // Click derecho: Editar · Duplicar · Archivar (nada se elimina)
+  const { openMenu, menuElement } = useContextMenu()
+  async function duplicatePlan(ev: EventPlan) {
+    const { error } = await supabase.from('event_plans').insert({
+      bu_id: ev.bu_id, name: `${ev.name} (copia)`, description: ev.description, kind: ev.kind,
+      date: ev.date, end_date: ev.end_date, start_time: ev.start_time, end_time: ev.end_time,
+      event_type: ev.event_type, has_cover: ev.has_cover, cover_price: ev.cover_price,
+      budget: ev.budget, expected_attendance: ev.expected_attendance, requirements: ev.requirements,
+      collaborators: ev.collaborators, responsible: ev.responsible, status: 'idea', created_by: userId ?? null,
+    })
+    if (error) showToast(`No se pudo duplicar: ${error.message}`, 'error')
+    else { showToast('Duplicado — quedó en Idea.', 'success'); load() }
+  }
+  async function archivePlan(ev: EventPlan, arch: boolean) {
+    const { error } = await supabase.from('event_plans').update({ archived: arch }).eq('id', ev.id)
+    if (error) showToast(`No se pudo ${arch ? 'archivar' : 'restaurar'}: ${error.message}`, 'error')
+    else {
+      logActivity(arch ? 'event_archived' : 'event_restored', 'event', ev.id, { name: ev.name })
+      showToast(arch ? 'Archivado — lo encuentras con el filtro Archivados.' : 'Restaurado.', 'success')
+      load()
+    }
+  }
+  const planMenu = (ev: EventPlan): CtxItem[] => [
+    { label: 'Editar', icon: <Pencil size={13} />, onClick: () => setEditing(ev) },
+    { label: 'Duplicar', icon: <Copy size={13} />, onClick: () => duplicatePlan(ev) },
+    (ev.archived ?? false)
+      ? { label: 'Restaurar', icon: <ArchiveRestore size={13} />, onClick: () => archivePlan(ev, false) }
+      : { label: 'Archivar', icon: <Archive size={13} />, danger: true, onClick: () => archivePlan(ev, true) },
+  ]
+  const ctxProps = (ev: EventPlan) => canWrite ? { onContextMenu: (e: React.MouseEvent) => openMenu(e, planMenu(ev)) } : {}
 
   // Agrupar por mes (los sin fecha, al final en "Sin fecha")
   const groups = useMemo(() => {
@@ -288,6 +335,10 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
             style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: showPast ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${showPast ? 'var(--accent)' : 'var(--border-default)'}`, color: showPast ? 'var(--accent)' : 'var(--text-secondary)' }}>
             Pasados
           </button>
+          <button onClick={() => setShowArchived(a => !a)} title="Ver lo archivado — nada se elimina"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, minHeight: 40, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: showArchived ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${showArchived ? 'var(--accent)' : 'var(--border-default)'}`, color: showArchived ? 'var(--accent)' : 'var(--text-secondary)' }}>
+            <Archive size={12} /> {showArchived ? 'Archivados' : !isMobile ? 'Archivados' : ''}
+          </button>
           <div style={{ position: 'relative', flex: 1, minWidth: 140 }}>
             <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar evento…"
@@ -325,7 +376,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
             {filtered.length === 0 ? (
               <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>Sin planes con estos filtros.</p>
             ) : (
-              <BoardView rows={filtered} buMap={buMap} progress={progress} canWrite={canWrite} onOpen={ev => setEditing(ev)} onMove={moveStatus} />
+              <BoardView rows={filtered} buMap={buMap} progress={progress} canWrite={canWrite} onOpen={ev => setEditing(ev)} onMove={moveStatus} onCtx={(e, ev) => canWrite && openMenu(e, planMenu(ev))} />
             )}
           </div>
         ) : groups.length === 0 ? (
@@ -359,7 +410,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
                       const d = ev.date ? new Date(ev.date + 'T00:00:00') : null
                       const respName = nameOf(ev.responsible)
                       return (
-                        <tr key={ev.id} onClick={() => setEditing(ev)} className="hover:bg-[var(--bg-surface)]"
+                        <tr key={ev.id} onClick={() => setEditing(ev)} {...ctxProps(ev)} className="hover:bg-[var(--bg-surface)]"
                           style={{ cursor: 'pointer', opacity: ev.status === 'cancelled' ? 0.5 : 1 }}>
                           <td style={{ ...td, fontFamily: 'var(--font-mono)' }} className="num">{fechaLabel(ev)}</td>
                           <td style={td}>{d ? dayChip(d) : ''}</td>
@@ -422,7 +473,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
                   const d = ev.date ? new Date(ev.date + 'T00:00:00') : null
                   const respName = nameOf(ev.responsible)
                   return (
-                    <button key={ev.id} onClick={() => setEditing(ev)}
+                    <button key={ev.id} onClick={() => setEditing(ev)} {...ctxProps(ev)}
                       style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '10px 12px', cursor: 'pointer', textAlign: 'left', minHeight: 60, opacity: ev.status === 'cancelled' ? 0.55 : 1 }}>
                       <div style={{ textAlign: 'center', flexShrink: 0, width: 40 }}>
                         {d ? (
@@ -459,6 +510,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
         )}
       </div>
 
+      {menuElement}
       {(creating || editing) && (
         <EventSheet
           event={editing}
@@ -480,13 +532,14 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
 }
 
 // ── Board por estado: Idea → En planeación → Aprobado → Realizado ────────────
-function BoardView({ rows, buMap, progress, canWrite, onOpen, onMove }: {
+function BoardView({ rows, buMap, progress, canWrite, onOpen, onMove, onCtx }: {
   rows: EventPlan[]
   buMap: Record<string, string>
   progress: Record<string, { done: number; total: number }>
   canWrite: boolean
   onOpen: (ev: EventPlan) => void
   onMove: (ev: EventPlan, dir: -1 | 1) => void
+  onCtx?: (e: React.MouseEvent, ev: EventPlan) => void
 }) {
   const cols: EventStatus[] = ['idea', 'planning', 'review', 'approved', 'done', 'cancelled']
   const movable: EventStatus[] = ['idea', 'planning', 'review', 'approved', 'done']
@@ -505,7 +558,7 @@ function BoardView({ rows, buMap, progress, canWrite, onOpen, onMove }: {
               {items.map(ev => {
                 const i = movable.indexOf(ev.status)
                 return (
-                  <div key={ev.id} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', borderLeft: `3px solid ${planColor(ev)}` }}>
+                  <div key={ev.id} onContextMenu={onCtx ? e => onCtx(e, ev) : undefined} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', borderLeft: `3px solid ${planColor(ev)}` }}>
                     <button onClick={() => onOpen(ev)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: '100%', textAlign: 'left' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{ev.name}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
@@ -1412,11 +1465,13 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
     onSaved()
   }
 
-  async function deleteEvent() {
+  // Nada se elimina: se archiva y se puede ver/restaurar con el filtro Archivados
+  async function archiveEvent() {
     if (!event) return
-    if (!window.confirm(`¿Eliminar "${event.name}"? Las tareas ligadas NO se borran, solo se desligan.`)) return
-    await supabase.from('event_plans').delete().eq('id', event.id)
-    logActivity('event_deleted', 'event', event.id, { name: event.name })
+    if (!window.confirm(`¿Archivar "${event.name}"? No se borra nada — lo encuentras con el filtro Archivados y lo puedes restaurar.`)) return
+    await supabase.from('event_plans').update({ archived: true }).eq('id', event.id)
+    logActivity('event_archived', 'event', event.id, { name: event.name })
+    showToast('Archivado.', 'success')
     onSaved()
   }
 
@@ -1706,6 +1761,17 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             </div>
           )}
 
+          {/* Chat del proyecto — menciones @, doble palomita, tiempo real */}
+          {event && (
+            <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <MessageCircle size={13} style={{ color: 'var(--accent)' }} />
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Chat del proyecto</span>
+              </div>
+              <EntityChat scope="event" entityId={event.id} entityLabel={event.name} notifyUserIds={[event.responsible]} />
+            </div>
+          )}
+
           {canWrite && (
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={save} disabled={saving}
@@ -1713,9 +1779,9 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 {saving ? 'Guardando…' : event ? 'Guardar cambios' : 'Crear evento'}
               </button>
               {event && canDelete && (
-                <button onClick={deleteEvent} title="Eliminar evento"
+                <button onClick={archiveEvent} title="Archivar (nada se elimina)"
                   style={{ minHeight: 48, padding: '0 14px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--status-risk)', cursor: 'pointer' }}>
-                  <Trash2 size={15} />
+                  <Archive size={15} />
                 </button>
               )}
             </div>

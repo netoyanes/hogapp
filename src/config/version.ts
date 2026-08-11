@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.62.1"
+export const APP_VERSION = "2.63.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.63.0",
+    date: "2026-08-11",
+    type: "MINOR",
+    changes: [
+      "MI RESUMEN — dashboard personal (todos los roles): tareas asignadas de la semana, horas por trabajar vs horas trabajadas la semana pasada, mensajes sin leer y tus proyectos próximos — todo clickeable",
+      "CHAT en cada tarea, proyecto y deal del CRM — con @menciones (autocompletar, notificación campana + DM), DOBLE PALOMITA ✓✓ cuando alguien ya vio tu mensaje (tooltip dice quién) y tiempo real",
+      "Contador de mensajes sin leer por entidad relacionada contigo (asignado, responsable, seguidor o participante)",
+      "CLICK DERECHO en tareas y proyectos: Editar · Duplicar · Archivar — nada se elimina; lo archivado se ve y restaura con el filtro Archivados (proyectos lo estrena, tareas ya lo tenía)",
+    ]
+  },
   {
     version: "2.62.1",
     date: "2026-08-11",

@@ -5,6 +5,7 @@ import { Auth } from './screens/Auth'
 import { UserOnboarding } from './screens/UserOnboarding'
 import { Dashboard } from './screens/Dashboard'
 import { TaskBoard } from './screens/TaskBoard'
+import { MyWeek } from './screens/MyWeek'
 import { RevenueUpload } from './screens/RevenueUpload'
 import { BUOnboardingForm } from './screens/BUOnboardingForm'
 import { AppLayout } from './components/layout/AppLayout'
@@ -42,7 +43,8 @@ const APP_ALIASES: Record<string, string[]> = {
   crm: ['contacts'], concierge: ['reservations'], casa: ['reportar'], revenue: ['upload'],
 }
 function expandApps(apps: Set<string>): Set<string> {
-  const s = new Set<string>(['profile'])
+  // Perfil y Mi Resumen son de todos — no se administran por app
+  const s = new Set<string>(['profile', 'resumen'])
   apps.forEach(a => { s.add(a); (APP_ALIASES[a] ?? []).forEach(x => s.add(x)) })
   return s
 }
@@ -138,11 +140,14 @@ export default function App() {
   // Cross-module hops: Calendario → Reservas (día) y "Convertir en deal" → overlay
   useEffect(() => {
     const goRes = () => handleNavigate('concierge')
+    const goProjects = () => handleNavigate('events')
     const openDeal = (e: Event) => { const id = (e as CustomEvent).detail; if (id) setOverlayDealId(id) }
     window.addEventListener('hog:open-reservations', goRes)
+    window.addEventListener('hog:goto-projects', goProjects)
     window.addEventListener('hog:open-deal', openDeal)
     return () => {
       window.removeEventListener('hog:open-reservations', goRes)
+      window.removeEventListener('hog:goto-projects', goProjects)
       window.removeEventListener('hog:open-deal', openDeal)
     }
   })
@@ -196,12 +201,12 @@ export default function App() {
     // Objetivos es SOLO Master; Contenido se retiró (vive en Proyectos)
     ALLOWED_VIEWS = role === 'DEV'
       ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'events',
-                 'revenue', 'reports', 'activity', 'templates', 'profile']) // auditoría: todo menos admin (Usuarios/Carga)
+                 'revenue', 'reports', 'activity', 'templates', 'profile', 'resumen']) // auditoría: todo menos admin (Usuarios/Carga)
       : role === 'HEART_OF_HOUSE'
-        ? new Set(['casa', 'reportar', 'concierge', 'profile']) // piso + tablet de host: La Casa y Reservas
+        ? new Set(['casa', 'reportar', 'concierge', 'profile', 'resumen']) // piso + tablet de host: La Casa y Reservas
         : role === 'TEAM' || role === 'MARKETING'
-          ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'events', 'profile'])
-          : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'events', 'profile'])
+          ? new Set(['tasks', 'crm', 'concierge', 'contacts', 'events', 'profile', 'resumen'])
+          : new Set(['tasks', 'crm', 'concierge', 'casa', 'contacts', 'events', 'profile', 'resumen'])
   }
 
   function handleNavigate(view: string) {
@@ -222,6 +227,8 @@ export default function App() {
           )
         }
         return <Dashboard onScoreBU={(code) => setScoringBU(code)} onViewTasks={goToTasksForBU} userRole={role} />
+      case 'resumen':
+        return <MyWeek userId={profile?.id} userName={profile?.full_name ?? undefined} onOpenTask={openTaskOverlay} onNavigate={handleNavigate} />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':

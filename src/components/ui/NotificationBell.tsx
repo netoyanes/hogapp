@@ -27,7 +27,10 @@ interface Props {
 }
 
 // Notification types whose entity_id points at a task
-const TASK_TYPES = new Set(['task_created', 'status_changed', 'proof_uploaded', 'comment_posted'])
+const TASK_TYPES = new Set(['task_created', 'status_changed', 'proof_uploaded', 'comment_posted', 'mention_task'])
+// … at a deal (CRM) or a project/event — deep-link vía eventos globales
+const DEAL_TYPES = new Set(['mention_deal', 'comment_deal'])
+const EVENT_TYPES = new Set(['mention_event', 'comment_event'])
 
 // Top-bar bell (v2) — replaces the floating FAB. Renders inline wherever the
 // shell places it (sidebar header on desktop, top bar on mobile); the panel
@@ -128,11 +131,18 @@ export function NotificationBell({ userId, onOpenTask }: Props) {
                 </div>
               ) : (
                 notifications.map((notif) => {
-                  const canOpen = !!(onOpenTask && notif.entity_id && TASK_TYPES.has(notif.type ?? ''))
+                  const isTask = !!(onOpenTask && notif.entity_id && TASK_TYPES.has(notif.type ?? ''))
+                  const isDeal = !!(notif.entity_id && DEAL_TYPES.has(notif.type ?? ''))
+                  const isEvent = !!(notif.entity_id && EVENT_TYPES.has(notif.type ?? ''))
+                  const canOpen = isTask || isDeal || isEvent
                   function handleClick() {
                     if (!notif.read) markRead(notif.id)
-                    if (canOpen) {
-                      onOpenTask!(notif.entity_id!)
+                    if (isTask) { onOpenTask!(notif.entity_id!); setOpen(false) }
+                    else if (isDeal) { window.dispatchEvent(new CustomEvent('hog:open-deal', { detail: notif.entity_id })); setOpen(false) }
+                    else if (isEvent) {
+                      // Proyecto: se navega a Proyectos y ahí se abre el pendiente
+                      localStorage.setItem('hog_pending_project', notif.entity_id!)
+                      window.dispatchEvent(new CustomEvent('hog:goto-projects'))
                       setOpen(false)
                     }
                   }
