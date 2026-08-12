@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.68.1"
+export const APP_VERSION = "2.69.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.69.0",
+    date: "2026-08-11",
+    type: "MINOR",
+    changes: [
+      "FINANZAS — nueva app exclusiva del Master (acceso otorgable solo por él, app 'finanzas'): ingresos vs egresos por mes (12m), PASIVOS vivos (órdenes sin liquidar), ratio ingresos/egresos con semáforo de salud, saldo BANX y nómina espejo",
+      "Conexión BANX (sandbox listo): edge functions banx-sync (ping, sync incremental con cursor, orden y nómina de prueba) y banx-webhook (firma HMAC verificada + dedup) — mapeo venue↔sucursal desde la app",
+      "Captura rápida de ingresos por venue para medir 'cuánto gano en el tiempo' desde hoy",
+    ]
+  },
   {
     version: "2.68.1",
     date: "2026-08-11",

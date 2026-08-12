@@ -7,6 +7,7 @@ import { Dashboard } from './screens/Dashboard'
 import { TaskBoard } from './screens/TaskBoard'
 import { MyWeek } from './screens/MyWeek'
 import { SocialPulse } from './screens/SocialPulse'
+import { Finanzas } from './screens/Finanzas'
 import { RevenueUpload } from './screens/RevenueUpload'
 import { BUOnboardingForm } from './screens/BUOnboardingForm'
 import { AppLayout } from './components/layout/AppLayout'
@@ -239,6 +240,11 @@ export default function App() {
         return role === 'MASTER'
           ? <SocialPulse userRole={role} />
           : <EmptyState icon="🔒" title="Solo Master" description="Pulso Social es exclusivo de dirección." />
+      case 'finanzas':
+        // Finanzas: Master, o acceso otorgado por él (app 'finanzas' en Usuarios)
+        return role === 'MASTER' || userApps?.has('finanzas')
+          ? <Finanzas userId={profile?.id} isMaster={role === 'MASTER'} />
+          : <EmptyState icon="🔒" title="Acceso restringido" description="Finanzas es exclusivo del Master — él otorga el acceso." />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':
