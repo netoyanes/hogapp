@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck, Home, Radio } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck, Home, Radio, Landmark } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
 import { STR } from '../../lib/strings'
@@ -19,6 +19,7 @@ export const NAV_ITEMS = [
   { id: 'resumen',    label: STR.nav.resumen,    icon: Home },
   { id: 'dashboard',  label: STR.nav.dashboard,  icon: LayoutDashboard, shortcut: '1', cLevelOnly: true },
   { id: 'pulso',      label: STR.nav.pulso,      icon: Radio,           masterOnly: true },
+  { id: 'finanzas',   label: STR.nav.finanzas,   icon: Landmark },
   { id: 'tasks',      label: STR.nav.tasks,      icon: CheckSquare,     shortcut: '2' },
   { id: 'crm',        label: STR.nav.crm,        icon: Handshake,       shortcut: '3' },
   { id: 'concierge',  label: STR.nav.concierge,  icon: Shell },
@@ -51,9 +52,9 @@ export function navItemsForRole(userRole?: string, apps?: Set<string> | null) {
   if (userRole === 'HEART_OF_HOUSE') {
     return NAV_ITEMS.filter(item => ['resumen', 'casa', 'concierge', 'profile'].includes(item.id))
   }
-  // DEV (auditoría): ve toda la plataforma menos administración (Usuarios/Carga)
+  // DEV (auditoría): ve toda la plataforma menos administración y Finanzas
   if (userRole === 'DEV') {
-    return NAV_ITEMS.filter(item => TENANT.enabledViews.includes(item.id) && !item.masterOnly)
+    return NAV_ITEMS.filter(item => TENANT.enabledViews.includes(item.id) && !item.masterOnly && item.id !== 'finanzas')
   }
   return NAV_ITEMS.filter(item => {
     if (!TENANT.enabledViews.includes(item.id)) return false

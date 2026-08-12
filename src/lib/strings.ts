@@ -29,6 +29,7 @@ export const STR = {
     resumen: 'Mi Resumen',
     dashboard: 'Dashboard',
     pulso: 'Pulso Social',
+    finanzas: 'Finanzas',
     tasks: 'Tareas',
     crm: 'Comercial',
     reservations: 'Reservas',
