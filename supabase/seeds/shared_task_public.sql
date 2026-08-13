@@ -1,9 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Tarea compartida PÚBLICA (?share=<id>): cualquiera con el link ve el
--- contenido completo, con o sin sesión. El UUID de la tarea es la llave
+-- contenido de la tarea, con o sin sesión. El UUID de la tarea es la llave
 -- (no adivinable). Reglas:
 --   · Las tareas PRIVADAS (is_private) nunca se exponen — devuelve {private}.
---   · El chat interno NO se incluye a propósito (conversación del equipo).
+--   · El chat interno NO se incluye a propósito (conversación del equipo);
+--     solo el CONTEO de mensajes, para invitar a entrar a HOG APP.
 --   · Cada vista queda en activity_log (usuario logueado o "anónimo").
 -- Idempotente.
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -42,7 +43,9 @@ begin
       select jsonb_agg(jsonb_build_object('id', l.id, 'url', l.url, 'title', l.title)
                        order by l.created_at)
       from task_links l where l.task_id = t.id and coalesce(l.archived, false) = false
-    ), '[]'::jsonb)
+    ), '[]'::jsonb),
+    -- Solo el conteo: el contenido del chat es interno del equipo
+    'comment_count', (select count(*) from task_comments c where c.task_id = t.id)
   );
 
   insert into activity_log (user_id, action, entity_type, entity_id, details)

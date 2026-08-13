@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.73.1"
+export const APP_VERSION = "2.74.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.74.0",
+    date: "2026-08-13",
+    type: "MINOR",
+    changes: [
+      "TAREA COMPARTIDA — vista pública rediseñada para quien NO tiene HOG APP: sello 'VISTA PÚBLICA', banner que explica que es de solo lectura, y cierre invitando a iniciar sesión para comentar, dar feedback y ver el proyecto completo",
+      "La conversación del equipo aparece bajo candado (se ve que existe y cuántos mensajes hay, pero no su contenido) — el chat interno nunca sale por el link",
+      "Si quien abre el link ya tiene sesión, el cierre cambia a 'Abrir en HOG APP'",
+    ]
+  },
   {
     version: "2.73.1",
     date: "2026-08-13",
