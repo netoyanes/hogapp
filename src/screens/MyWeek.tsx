@@ -1,8 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckSquare, Clock, MessageCircle, CalendarDays, Handshake, Banknote, Timer, MailOpen, TrendingUp, TrendingDown, Minus, Eye } from 'lucide-react'
+import { CheckSquare, Clock, MessageCircle, CalendarDays, Handshake, Banknote, Timer, MailOpen, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { BUChip, KPITile } from '../components/v2'
+import { Avatar } from '../components/ui/Avatar'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MI RESUMEN — el dashboard personal orientado a PRODUCTIVIDAD.
@@ -77,6 +78,50 @@ function FunnelBar({ status }: { status: string }) {
   )
 }
 
+// ── Quién responde y quién está involucrado ─────────────────────────────────
+// El RESPONSABLE va primero y destacado (anillo de acento; "TÚ" si eres tú),
+// y detrás los involucrados en círculos más chicos y encimados. Así sabes de
+// un vistazo si la tarea es tuya o a quién buscar para darle seguimiento.
+function PeopleCluster({ leadId, followerIds, nameOf, meId }: {
+  leadId: string | null
+  followerIds: string[]
+  nameOf: (id: string) => string
+  meId?: string
+}) {
+  const isMine = !!leadId && leadId === meId
+  const others = followerIds.filter(id => id !== leadId)
+  const shown = others.slice(0, 3)
+  const rest = others.length - shown.length
+  const tip = [
+    leadId ? `Responsable: ${isMine ? 'tú' : nameOf(leadId)}` : 'Sin responsable asignado',
+    others.length ? `Involucrados: ${others.map(nameOf).join(', ')}` : null,
+  ].filter(Boolean).join(' · ')
+
+  return (
+    <span title={tip} style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+      {leadId ? (
+        isMine ? (
+          <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 9, fontWeight: 800, fontFamily: 'var(--font-mono)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>TÚ</span>
+        ) : (
+          <span style={{ display: 'inline-flex', borderRadius: '50%', boxShadow: '0 0 0 1.5px var(--accent)', flexShrink: 0 }}>
+            <Avatar name={nameOf(leadId)} size={20} />
+          </span>
+        )
+      ) : (
+        <span style={{ width: 22, height: 22, borderRadius: '50%', border: '1px dashed var(--border-strong)', color: 'var(--text-tertiary)', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>?</span>
+      )}
+      {shown.map(id => (
+        <span key={id} style={{ display: 'inline-flex', marginLeft: -6, borderRadius: '50%', boxShadow: '0 0 0 1.5px var(--bg-elevated)', opacity: 0.9, flexShrink: 0 }}>
+          <Avatar name={nameOf(id)} size={16} />
+        </span>
+      ))}
+      {rest > 0 && (
+        <span className="num" style={{ marginLeft: -5, width: 16, height: 16, borderRadius: '50%', background: 'var(--bg-surface)', boxShadow: '0 0 0 1.5px var(--bg-elevated)', color: 'var(--text-tertiary)', fontSize: 8, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>+{rest}</span>
+      )}
+    </span>
+  )
+}
+
 const fmtMoney = (n: number) =>
   n >= 1e6 ? `$${(n / 1e6).toFixed(1)} M` : n >= 1000 ? `$${Math.round(n / 1000)} k` : `$${Math.round(n)}`
 const fmtDur = (h: number | null) =>
@@ -122,6 +167,8 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
   const [plans, setPlans] = useState<MyPlan[]>([])
   const [buList, setBuList] = useState<{ id: string; code: string }[]>([])
   const [metrics, setMetrics] = useState<MonthMetrics | null>(null)
+  const [people, setPeople] = useState<Record<string, string>>({})            // userId → nombre
+  const [taskPeople, setTaskPeople] = useState<Record<string, string[]>>({})  // taskId → seguidores
   const [loading, setLoading] = useState(true)
 
   // Semana actual (lun-dom) + fronteras de mes actual y anterior
@@ -149,7 +196,7 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
       ? `assigned_to.eq.${userId},id.in.(${followerIds.join(',')})`
       : `assigned_to.eq.${userId}`
 
-    const [{ data: tk }, { data: pl }, { data: bus }, rpc, { data: myActs }, { data: allDeals }, { data: doneTasks }, { data: reads }] = await Promise.all([
+    const [{ data: tk }, { data: pl }, { data: bus }, rpc, { data: myActs }, { data: allDeals }, { data: doneTasks }, { data: reads }, { data: profs }] = await Promise.all([
       supabase.from('tasks').select('id, title, status, priority, due_date, estimated_hours, bu_id, assigned_to')
         .or(taskFilter).eq('archived', false).neq('status', 'APPROVED').order('due_date', { ascending: true, nullsFirst: false }),
       supabase.from('event_plans').select('id, name, date, end_date, bu_id, status')
@@ -165,11 +212,22 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
       // Respuesta a mensajes: tus recibos de lectura (✓✓) del bimestre
       supabase.from('comment_reads').select('scope, comment_id, read_at').eq('user_id', userId)
         .gte('read_at', prevMonthStart + 'T00:00:00').order('read_at', { ascending: false }).limit(600),
+      supabase.from('profiles').select('id, full_name, email'),
     ])
     setTasks(((tk ?? []) as MyTask[]).map(t => ({ ...t, mine: t.assigned_to === userId })))
     setPlans(((pl ?? []) as MyPlan[]).filter(p => p.date && (p.end_date ?? p.date)! >= todayISO).slice(0, 6))
     setBuList(bus ?? [])
     setUnread(((rpc.data ?? []) as UnreadRow[]))
+    setPeople(Object.fromEntries((profs ?? []).map(p => [p.id, p.full_name ?? p.email ?? 'Sin nombre'])))
+
+    // Quién más está involucrado en cada tarea que se va a mostrar
+    const shownIds = (tk ?? []).map(t => t.id)
+    if (shownIds.length) {
+      const { data: fw2 } = await supabase.from('task_followers').select('task_id, user_id').in('task_id', shownIds)
+      const m: Record<string, string[]> = {}
+      for (const r of fw2 ?? []) (m[r.task_id as string] ??= []).push(r.user_id as string)
+      setTaskPeople(m)
+    } else setTaskPeople({})
 
     // ── Deals activos + $ en juego, hoy vs arranque de mes ──
     const monthT = monthStart + 'T00:00:00'
@@ -240,6 +298,7 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
   }, [load])
 
   const buCode = useMemo(() => Object.fromEntries(buList.map(b => [b.id, b.code])), [buList])
+  const nameOf = useCallback((id: string) => people[id] ?? 'Alguien del equipo', [people])
   const unreadByEntity = useMemo(() => Object.fromEntries(unread.map(u => [`${u.scope}:${u.entity_id}`, u.unread])), [unread])
 
   // Tareas de la semana (con fecha dentro de la semana o ya vencidas), en el
@@ -354,7 +413,7 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
             <CheckSquare size={12} /> Mis tareas de la semana {weekTasks.length > 0 && `· ${weekTasks.length}`}
             {relatedCount > 0 && (
               <span style={{ fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'none', letterSpacing: 0 }}>
-                ({relatedCount} relacionada{relatedCount === 1 ? '' : 's'})
+                ({relatedCount} de otros)
               </span>
             )}
           </p>
@@ -371,27 +430,32 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
                     <span className="num" style={{ fontSize: 10, fontWeight: overdue ? 800 : 600, fontFamily: 'var(--font-mono)', color: overdue ? 'var(--status-risk)' : 'var(--text-tertiary)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                       <CalendarDays size={10} /> {fmtDay(t.due_date!)}
                     </span>
-                    {!t.mine && <Eye size={11} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} aria-label="Estás relacionado" />}
                     <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', fontWeight: t.mine ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-                    {t.estimated_hours != null && (
+                    {t.estimated_hours != null && !isMobile && (
                       <span className="num" style={{ fontSize: 10, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0 }}><Clock size={10} /> {t.estimated_hours}h</span>
                     )}
-                    {t.bu_id && buCode[t.bu_id] && <BUChip code={buCode[t.bu_id]} size="sm" />}
+                    {t.bu_id && buCode[t.bu_id] && !isMobile && <BUChip code={buCode[t.bu_id]} size="sm" />}
+                    <PeopleCluster leadId={t.assigned_to} followerIds={taskPeople[t.id] ?? []} nameOf={nameOf} meId={userId} />
                     <FunnelBar status={t.status} />
                   </button>
                 )
               })}
             </div>
           )}
-          {/* Leyenda del funnel — una línea, al pie */}
+          {/* Leyenda: fases del funnel + cómo leer las personas */}
           {weekTasks.length > 0 && (
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10, paddingTop: 9, borderTop: '1px solid var(--border-subtle)' }}>
-              {(['OPEN', 'IN_PROGRESS', 'PROOF_SUBMITTED', 'REVISION', 'APPROVED'] as const).map(s => (
-                <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: PHASE[s].color, flexShrink: 0 }} />
-                  {PHASE[s].label}
-                </span>
-              ))}
+            <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {(['OPEN', 'IN_PROGRESS', 'PROOF_SUBMITTED', 'REVISION', 'APPROVED'] as const).map(s => (
+                  <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: PHASE[s].color, flexShrink: 0 }} />
+                    {PHASE[s].label}
+                  </span>
+                ))}
+              </div>
+              <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.4 }}>
+                El círculo con anillo es el responsable (TÚ si es tuya); los de atrás, los involucrados. Pasa el cursor para ver los nombres.
+              </p>
             </div>
           )}
         </div>

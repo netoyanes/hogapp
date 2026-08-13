@@ -32,15 +32,46 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   REVISION: 'Revision',
 }
 
+// ── Firma del adjunto: quién lo subió y hace cuánto ─────────────────────────
+// Barra discreta al pie de la caja, dentro del margen del archivo/link: no
+// compite con el contenido, pero siempre está ahí cuando quieres saber.
+function timeAgoEs(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (mins < 1) return 'hace un momento'
+  if (mins < 60) return `hace ${mins} min`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `hace ${hrs} h`
+  const days = Math.round(hrs / 24)
+  if (days < 30) return `hace ${days} d`
+  return new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function SignatureBar({ verb, who, when }: { verb: string; who: string | null; when: string }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '4px 10px', borderTop: '1px solid var(--border-subtle)',
+      background: 'var(--bg-base)', fontFamily: 'var(--font-mono)', fontSize: '9.5px',
+      color: 'var(--text-tertiary)', letterSpacing: '0.01em',
+    }}>
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {verb} {who ?? 'alguien del equipo'}
+      </span>
+      <span title={new Date(when).toLocaleString('es-MX')} style={{ flexShrink: 0 }}>{timeAgoEs(when)}</span>
+    </div>
+  )
+}
+
 interface ProofCardProps {
-  proof: { id: string; file_url: string; file_type: string; created_at: string; archived: boolean }
+  proof: { id: string; file_url: string; file_type: string; created_at: string; archived: boolean; uploaded_by?: string | null }
   archived?: boolean
+  uploaderName?: string | null
   onPreview: () => void
   onArchive?: () => void
   onUnarchive?: () => void
 }
 
-function ProofCard({ proof: p, archived, onPreview, onArchive, onUnarchive }: ProofCardProps) {
+function ProofCard({ proof: p, archived, uploaderName, onPreview, onArchive, onUnarchive }: ProofCardProps) {
   const isImage = p.file_type.startsWith('image/')
   const isPDF = p.file_type === 'application/pdf'
   const isVideo = p.file_type.startsWith('video/')
@@ -90,11 +121,12 @@ function ProofCard({ proof: p, archived, onPreview, onArchive, onUnarchive }: Pr
       {!archived && isHTML && (
         <HtmlFrame url={p.file_url} title="HTML preview" style={{ width: '100%', height: '220px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block', background: '#fff' }} />
       )}
+      <SignatureBar verb="Subió" who={uploaderName ?? null} when={p.created_at} />
     </div>
   )
 }
 
-interface TaskLink { id: string; url: string; title: string | null; created_at: string; archived: boolean }
+interface TaskLink { id: string; url: string; title: string | null; created_at: string; archived: boolean; added_by?: string | null }
 
 // Preview de link sin servidor: deduce el tipo por el URL. YouTube → embed;
 // imagen directa → miniatura; el resto → tarjeta con favicon + dominio.
@@ -113,7 +145,7 @@ function hostOf(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url }
 }
 
-function LinkCard({ link, onArchive }: { link: TaskLink; onArchive: () => void }) {
+function LinkCard({ link, adderName, onArchive }: { link: TaskLink; adderName?: string | null; onArchive: () => void }) {
   const meta = linkKind(link.url)
   const host = hostOf(link.url)
   const favicon = `https://www.google.com/s2/favicons?domain=${host}&sz=64`
@@ -145,6 +177,7 @@ function LinkCard({ link, onArchive }: { link: TaskLink; onArchive: () => void }
       {meta.kind === 'video' && (
         <video src={link.url} controls style={{ width: '100%', maxHeight: '200px', display: 'block', borderTop: '1px solid var(--border-subtle)' }} />
       )}
+      <SignatureBar verb="Agregó" who={adderName ?? null} when={link.created_at} />
     </div>
   )
 }
@@ -181,7 +214,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
   const [estimatedHours, setEstimatedHours] = useState('')
   const [deadlineType, setDeadlineType] = useState<DeadlineType>('SOFT')
   const [saving, setSaving] = useState(false)
-  const [proofs, setProofs] = useState<{ id: string; file_url: string; file_type: string; created_at: string; archived: boolean }[]>([])
+  const [proofs, setProofs] = useState<{ id: string; file_url: string; file_type: string; created_at: string; archived: boolean; uploaded_by?: string | null }[]>([])
   const [uploadingProof, setUploadingProof] = useState(false)
   const [links, setLinks] = useState<TaskLink[]>([])
   const [newLink, setNewLink] = useState('')
@@ -198,6 +231,13 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
   // Metadata collapses so comments + evidence get the vertical space (mobile-first)
   const [metaOpen, setMetaOpen] = useState(!isMobile)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Nombre de quien subió/agregó un adjunto (para la firma al pie de la caja)
+  const nameOfUser = (id?: string | null) => {
+    if (!id) return null
+    const m = teamMembers.find(x => x.id === id)
+    return m?.full_name ?? m?.email ?? null
+  }
 
   function copyShareLink() {
     const url = `${window.location.origin}?share=${taskId}`
@@ -264,7 +304,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
       // Load proofs
       const { data: pr } = await supabase
         .from('task_proofs')
-        .select('id, file_url, file_type, created_at, archived')
+        .select('id, file_url, file_type, created_at, archived, uploaded_by')
         .eq('task_id', taskId)
         .order('created_at')
       setProofs((pr ?? []).map(p => ({ ...p, archived: p.archived ?? false })))
@@ -272,7 +312,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
       // Load links (referencias externas: Drive, Figma, YouTube…)
       const { data: lk } = await supabase
         .from('task_links')
-        .select('id, url, title, created_at, archived')
+        .select('id, url, title, created_at, archived, added_by')
         .eq('task_id', taskId)
         .order('created_at')
       setLinks((lk ?? []) as TaskLink[])
@@ -314,7 +354,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
       file_type: file.type,
       uploaded_by: user?.id,
     })
-    setProofs((prev) => [...prev, { id: Date.now().toString() + Math.random(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString(), archived: false }])
+    setProofs((prev) => [...prev, { id: Date.now().toString() + Math.random(), file_url: urlData.publicUrl, file_type: file.type, created_at: new Date().toISOString(), archived: false, uploaded_by: user?.id ?? null }])
     return urlData.publicUrl
   }
 
@@ -347,7 +387,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
     const { data: { user } } = await supabase.auth.getUser()
     const { data, error } = await supabase.from('task_links')
       .insert({ task_id: taskId, url, title: newLinkTitle.trim() || null, added_by: user?.id ?? null })
-      .select('id, url, title, created_at, archived').single()
+      .select('id, url, title, created_at, archived, added_by').single()
     setAddingLink(false)
     if (error || !data) return
     setLinks(prev => [...prev, data as TaskLink])
@@ -821,6 +861,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
                 <ProofCard
                   key={p.id}
                   proof={p}
+                  uploaderName={nameOfUser(p.uploaded_by)}
                   onPreview={() => setPreviewProof({ url: p.file_url, type: p.file_type })}
                   onArchive={() => archiveProof(p.id)}
                 />
@@ -863,7 +904,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
 
           {links.length > 0 && (
             <div className="flex flex-col gap-2 mb-3">
-              {links.map(l => <LinkCard key={l.id} link={l} onArchive={() => archiveLink(l.id)} />)}
+              {links.map(l => <LinkCard key={l.id} link={l} adderName={nameOfUser(l.added_by)} onArchive={() => archiveLink(l.id)} />)}
             </div>
           )}
 

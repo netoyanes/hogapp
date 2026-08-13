@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.76.0"
+export const APP_VERSION = "2.77.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.77.0",
+    date: "2026-08-13",
+    type: "MINOR",
+    changes: [
+      "MI RESUMEN — cada tarea muestra ahora QUIÉN responde y QUIÉNES están involucrados: el responsable va destacado con anillo (o 'TÚ' si eres tú) y detrás los involucrados en círculos encimados; el cursor revela los nombres para saber a quién buscar",
+      "TAREAS — cada archivo y cada link adjunto trae al pie una firma discreta: quién lo subió y hace cuánto, dentro del margen de la caja para no estorbar la vista del contenido",
+    ]
+  },
   {
     version: "2.76.0",
     date: "2026-08-13",
