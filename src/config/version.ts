@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.69.0"
+export const APP_VERSION = "2.69.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.69.1",
+    date: "2026-08-13",
+    type: "PATCH",
+    changes: [
+      "FIX: las sub-pantallas (p. ej. la conversación del Concierge) no dejaban scrollear — la ventana centrada limitaba el alto pero su contenido no podía encogerse; ahora todas las ventanas scrollean bien",
+    ]
+  },
   {
     version: "2.69.0",
     date: "2026-08-11",

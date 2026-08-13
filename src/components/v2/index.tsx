@@ -306,9 +306,13 @@ export function Sheet({ open, onClose, isMobile, children, width = 480 }: {
       <style>{`
         @keyframes sheet-pop { from { transform: translate(-50%, calc(-50% + 18px)) scale(0.97); opacity: 0 } to { transform: translate(-50%, -50%); opacity: 1 } }
         @keyframes sheet-up { from { transform: translateY(32px); opacity: 0 } to { transform: none; opacity: 1 } }
+        /* El panel limita su alto con maxHeight; sus hijos flex necesitan
+           min-height:0 para poder encogerse — sin esto, un hijo con contenido
+           largo empuja el panel y las zonas con overflow:auto nunca scrollean. */
+        .hog-sheet-panel > * { min-height: 0 }
       `}</style>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: zBase > 60 ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.55)', zIndex: zBase }} />
-      <div role="dialog" aria-modal="true" style={panel}>
+      <div role="dialog" aria-modal="true" className="hog-sheet-panel" style={panel}>
         {isMobile && (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-2) 0', flexShrink: 0 }}>
             <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border-strong)' }} />
