@@ -409,7 +409,9 @@ export function Reservations({ userRole, userId }: Props) {
     const venueName = buList.find(b => b.id === res.bu_id)?.name ?? buMap[res.bu_id] ?? ''
     const fechaTxt = new Date(res.date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
     const link = `${window.location.origin}/?mireserva=${token}`
-    const msg = `✅ ¡Tu reserva está confirmada!\n\n📍 ${venueName}\n📅 ${fechaTxt}\n🕗 ${res.time_slot.slice(0, 5)} · ${res.party_size} ${res.party_size === 1 ? 'persona' : 'personas'}\n👤 A nombre de ${g?.full_name ?? ''}\n\nSi llegas un poco tarde o te surge un imprevisto, avísanos aquí:\n${link}\n\n¡Te esperamos! 🥂`
+    // Texto plano SIN emojis: el prefill de wa.me corrompe los caracteres
+    // fuera de ASCII en algunos teléfonos (salen "�" y hasta rompe el link).
+    const msg = `¡Tu reserva está confirmada!\n\n${venueName}\n${fechaTxt}\n${res.time_slot.slice(0, 5)} hrs · ${res.party_size} ${res.party_size === 1 ? 'persona' : 'personas'}\nA nombre de ${g?.full_name ?? ''}\n\nSi llegas un poco tarde o te surge un imprevisto, avísanos aquí:\n${link}\n\n¡Te esperamos!`
     if (res.bot_conversation_id) {
       const { error } = await supabase.functions.invoke('concierge-send', { body: { conversationId: res.bot_conversation_id, body: msg } })
       if (!error) {
