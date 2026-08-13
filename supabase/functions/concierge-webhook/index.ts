@@ -162,7 +162,10 @@ async function handleInstagram(supabaseAdmin: any, body: any) {
   for (const entry of body.entry ?? []) {
     const igAccountId = entry.id as string // cuenta de IG que RECIBIÓ el mensaje → identifica el venue
     for (const event of entry.messaging ?? []) {
-      if (event.message?.is_echo) continue // ignora eco de mensajes propios
+      // Eco = mensaje que NUESTRA cuenta envió. Si lo mandó el sistema
+      // (bot/Bandeja) se reconoce y se ignora; si no, alguien del equipo
+      // respondió desde la app de Instagram — se registra en el hilo.
+      if (event.message?.is_echo) { await ingestIgEcho(supabaseAdmin, event); continue }
       const from = event.sender?.id as string
       const buId = await resolveVenueForChannel(supabaseAdmin, 'instagram', igAccountId, from)
       const imageUrl = (event.message?.attachments ?? []).find((a: { type: string }) => a.type === 'image')?.payload?.url ?? null
@@ -192,6 +195,54 @@ async function handleInstagram(supabaseAdmin: any, body: any) {
         fetchDisplayName: () => fetchIgProfile(from), // solo se llama si aún no lo tenemos
       })
     }
+  }
+}
+
+// Eco de Instagram (is_echo): lo envió nuestra cuenta. Los envíos del propio
+// sistema se reconocen por el mid guardado al enviar o por texto idéntico
+// reciente (cubre la carrera eco-vs-insert). Lo demás lo escribió ALGUIEN DEL
+// EQUIPO desde la app de Instagram: se registra como mensaje del equipo y la
+// conversación pasa a manos humanas — el bot se calla, igual que cuando
+// responden desde la Bandeja.
+// deno-lint-ignore no-explicit-any
+async function ingestIgEcho(supabaseAdmin: any, event: any) {
+  try {
+    const guestId = event.recipient?.id as string | undefined
+    if (!guestId) return
+    const mid = (event.message?.mid as string | undefined) ?? null
+    const text = (event.message?.text as string | undefined)?.trim()
+      || (event.message?.attachments?.length ? '[📎 El equipo envió un adjunto]' : '')
+    if (!text) return
+
+    const { data: conv } = await supabaseAdmin.from('bot_conversations')
+      .select('id, status').eq('channel', 'instagram').eq('external_id', guestId).maybeSingle()
+    if (!conv) return // eco de una conversación que no seguimos
+
+    if (mid) {
+      const { data: byMid } = await supabaseAdmin.from('bot_messages')
+        .select('id').eq('conversation_id', conv.id).contains('meta', { mid }).limit(1)
+      if (byMid?.length) return
+    }
+    const cutoff = new Date(Date.now() - 10 * 60000).toISOString()
+    const { data: recent } = await supabaseAdmin.from('bot_messages')
+      .select('body').eq('conversation_id', conv.id).in('role', ['bot', 'agent']).gte('created_at', cutoff)
+    if ((recent ?? []).some((r: { body: string | null }) => (r.body ?? '').trim() === text)) return
+
+    await supabaseAdmin.from('bot_messages').insert({
+      conversation_id: conv.id, role: 'agent', body: text,
+      meta: { via: 'instagram_app', ...(mid ? { mid } : {}) },
+    })
+    const patch: Record<string, unknown> = {
+      last_sender: 'agent', last_message_at: new Date().toISOString(),
+      next_bot_reply_at: null, next_followup_at: null,
+    }
+    if (conv.status === 'bot' || conv.status === 'needs_human') {
+      Object.assign(patch, { status: 'human', taken_at: new Date().toISOString() })
+    }
+    await supabaseAdmin.from('bot_conversations').update(patch).eq('id', conv.id)
+    console.log('[webhook] respuesta desde la app de IG registrada', conv.id, '→', text.slice(0, 60))
+  } catch (err) {
+    console.error('[webhook] ingestIgEcho', String(err))
   }
 }
 

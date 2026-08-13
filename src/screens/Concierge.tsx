@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { Bot, MessageCircle, Camera, Send, Power, X, Plus, Hand, Undo2, CheckCircle2, FlaskConical, TrendingUp, Inbox, Shell, ChevronLeft, ChevronRight, Music, Search, Star } from 'lucide-react'
+import { Bot, MessageCircle, Camera, Send, Power, X, Plus, Hand, Undo2, CheckCircle2, FlaskConical, TrendingUp, Inbox, Shell, ChevronLeft, ChevronRight, Music, Search, Star, Briefcase } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import { notifySlack } from '../hooks/useSlack'
@@ -37,7 +37,7 @@ interface Message {
   conversation_id: string
   role: 'guest' | 'bot' | 'agent' | 'system'
   body: string | null
-  meta: { image_url?: string } | null
+  meta: { image_url?: string; via?: string } | null
   created_at: string
 }
 interface VenueConfig {
@@ -139,6 +139,7 @@ export function Concierge({ userId, userRole, caps }: { userId?: string; userRol
         { id: 'inbox',    label: 'Bandeja' },
         { id: 'clientes', label: 'Clientes' },
         ...(isOpsPlus ? [{ id: 'talento', label: 'Talento' }] : []),   // fees = dato sensible: Ops/Master
+        ...(isMaster ? [{ id: 'reclutamiento', label: 'Reclutamiento' }] : []),   // bolsa de trabajo: solo Master
         ...(canSeeSummary ? [{ id: 'summary', label: 'Resumen' }] : []),
         ...(isMaster ? [{ id: 'config', label: 'Config' }] : []),
       ]
@@ -177,6 +178,7 @@ export function Concierge({ userId, userRole, caps }: { userId?: string; userRol
             {tab === 'hoy' && <HoyTab buList={buList} userId={userId} isMobile={isMobile} onGoReservas={() => setTab('reservas')} />}
             {tab === 'inbox' && <InboxTab buList={buList} userId={userId} isMobile={isMobile} isMaster={isMaster} />}
             {isOpsPlus && tab === 'talento' && <TalentoTab buList={buList} userId={userId} isMobile={isMobile} />}
+            {isMaster && tab === 'reclutamiento' && <ReclutamientoTab buList={buList} isMobile={isMobile} />}
             {canSeeSummary && tab === 'summary' && <SummaryTab buList={buList} />}
             {isMaster && tab === 'config' && <ConfigTab buList={buList} />}
           </div>
@@ -268,6 +270,10 @@ function HoyTab({ buList, userId, isMobile, onGoReservas }: {
           if (sendErr || data?.error) showToast('Confirmada, pero el aviso al cliente falló — mándaselo desde la Bandeja', 'error')
         }
       }
+    } else {
+      // Reserva que no nació en el bot (web/manual): confirmación automática
+      // por WhatsApp vía reservation-notify (plantilla aprobada). Silencioso.
+      supabase.functions.invoke('reservation-notify', { body: { reservationId: r.id } })
     }
     setBusyRes(null)
     showToast('Reserva confirmada y cliente avisado ✅', 'success')
@@ -826,7 +832,7 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
           {messages.map(m => (
             <div key={m.id} style={roleStyle(m.role)}>
               <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)', marginBottom: 2 }}>
-                {m.role === 'guest' ? 'Cliente' : m.role === 'bot' ? 'Bot' : m.role === 'agent' ? 'Equipo' : 'Sistema'}
+                {m.role === 'guest' ? 'Cliente' : m.role === 'bot' ? 'Bot' : m.role === 'agent' ? (m.meta?.via === 'instagram_app' ? 'Equipo · app de Instagram' : m.meta?.via === 'auto_confirm' ? 'Equipo · confirmación automática' : 'Equipo') : 'Sistema'}
               </div>
               {/* Imágenes (comprobantes de depósito, fotos): tap → abre completa */}
               {m.meta?.image_url && (
@@ -1572,6 +1578,199 @@ const talBtn: React.CSSProperties = {
   width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
   background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)',
   color: 'var(--text-secondary)', cursor: 'pointer',
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// RECLUTAMIENTO (solo Master) — bolsa de trabajo del grupo: candidatos que el
+// Concierge registra cuando alguien escribe buscando empleo, + altas manuales.
+// ═════════════════════════════════════════════════════════════════════════════
+interface Candidate {
+  id: string; created_at: string; bu_id: string | null; conversation_id: string | null
+  source: string; channel: string | null; full_name: string; phone: string | null
+  ig_handle: string | null; area: string | null; experience: string | null
+  city: string | null; links: string | null; notes: string | null; status: string
+}
+const CAND_STATUS: Record<string, { label: string; tone: StatusTone }> = {
+  nuevo:      { label: 'Nuevo',      tone: 'accent' },
+  contactado: { label: 'Contactado', tone: 'attention' },
+  entrevista: { label: 'Entrevista', tone: 'attention' },
+  contratado: { label: 'Contratado', tone: 'healthy' },
+  descartado: { label: 'Descartado', tone: 'neutral' },
+}
+
+function ReclutamientoTab({ buList, isMobile }: { buList: BU[]; isMobile: boolean }) {
+  const [rows, setRows] = useState<Candidate[]>([])
+  const [chip, setChip] = useState('activos')
+  const [search, setSearch] = useState('')
+  const [editing, setEditing] = useState<Candidate | 'new' | null>(null)
+  const [tableMissing, setTableMissing] = useState(false)
+
+  const load = useCallback(async () => {
+    const { data, error } = await supabase.from('job_candidates').select('*').order('created_at', { ascending: false })
+    if (error) { setTableMissing(true); return }
+    setRows((data ?? []) as Candidate[])
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const buMapR = useMemo(() => Object.fromEntries(buList.map(b => [b.id, b.code])), [buList])
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return rows
+      .filter(r => chip === 'activos' ? !['contratado', 'descartado'].includes(r.status) : chip === 'todos' ? true : r.status === chip)
+      .filter(r => !q || [r.full_name, r.area, r.city, r.ig_handle].some(v => (v ?? '').toLowerCase().includes(q)))
+  }, [rows, chip, search])
+
+  if (tableMissing) {
+    return <p style={{ fontSize: 12, color: 'var(--status-attention)' }}>Falta correr el SQL de reclutamiento (job_candidates) en Supabase para activar esta sección.</p>
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+        <KPITile label="Nuevos" value={String(rows.filter(r => r.status === 'nuevo').length)} color="var(--accent)" />
+        <KPITile label="En proceso" value={String(rows.filter(r => ['contactado', 'entrevista'].includes(r.status)).length)} />
+        <KPITile label="Contratados" value={String(rows.filter(r => r.status === 'contratado').length)} color="var(--status-healthy)" />
+        <KPITile label="Total" value={String(rows.length)} />
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <FilterChips active={chip} onChange={setChip} options={[
+          { id: 'activos', label: 'Activos' }, { id: 'nuevo', label: 'Nuevos' },
+          { id: 'contratado', label: 'Contratados' }, { id: 'descartado', label: 'Descartados' }, { id: 'todos', label: 'Todos' },
+        ]} />
+        <button onClick={() => setEditing('new')}
+          style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 40, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+          <Plus size={13} /> Candidato
+        </button>
+      </div>
+      <div style={{ position: 'relative' }}>
+        <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, puesto o ciudad…"
+          style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 12px 0 32px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {filtered.length === 0 ? (
+          <EmptyStateV2 icon={<Briefcase size={26} />} title="Sin candidatos aún. El Concierge registra solo a quien escriba buscando trabajo — o da de alta uno manual." actionLabel="+ Candidato" onAction={() => setEditing('new')} />
+        ) : filtered.map(c => (
+          <button key={c.id} onClick={() => setEditing(c)}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', background: 'var(--bg-surface)', border: 'none', borderRadius: 'var(--radius-md)', padding: '10px 12px', cursor: 'pointer', minHeight: 44, opacity: c.status === 'descartado' ? 0.55 : 1 }}>
+            <Briefcase size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{c.full_name}</span>
+                <StatusBadgeV2 tone={CAND_STATUS[c.status]?.tone ?? 'neutral'} label={CAND_STATUS[c.status]?.label ?? c.status} />
+                {c.source === 'concierge' && <StatusBadgeV2 tone="accent" label="vía Concierge" />}
+                {c.bu_id && buMapR[c.bu_id] && <BUChip code={buMapR[c.bu_id]} size="sm" />}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {[c.area, c.city, c.phone, c.ig_handle ? `@${c.ig_handle}` : null].filter(Boolean).join(' · ') || 'Sin datos aún'}
+              </div>
+            </div>
+            <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0 }}>{timeAgo(c.created_at)}</span>
+          </button>
+        ))}
+      </div>
+
+      {editing && (
+        <CandidateSheet cand={editing === 'new' ? null : editing} buList={buList} isMobile={isMobile}
+          onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />
+      )}
+    </div>
+  )
+}
+
+// ─── Ficha del candidato: datos + estado del proceso + contacto directo ──────
+function CandidateSheet({ cand, buList, isMobile, onClose, onSaved }: {
+  cand: Candidate | null; buList: BU[]; isMobile: boolean; onClose: () => void; onSaved: () => void
+}) {
+  const [form, setForm] = useState({
+    full_name: cand?.full_name ?? '', phone: cand?.phone ?? '', area: cand?.area ?? '',
+    city: cand?.city ?? '', ig_handle: cand?.ig_handle ?? '', experience: cand?.experience ?? '',
+    links: cand?.links ?? '', notes: cand?.notes ?? '', status: cand?.status ?? 'nuevo',
+    bu_id: cand?.bu_id ?? '',
+  })
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!form.full_name.trim()) { showToast('El nombre es obligatorio.', 'error'); return }
+    setSaving(true)
+    const row = {
+      full_name: form.full_name.trim(), phone: form.phone.trim() || null, area: form.area.trim() || null,
+      city: form.city.trim() || null, ig_handle: form.ig_handle.trim().replace(/^@/, '') || null,
+      experience: form.experience.trim() || null, links: form.links.trim() || null,
+      notes: form.notes.trim() || null, status: form.status, bu_id: form.bu_id || null,
+      updated_at: new Date().toISOString(),
+    }
+    const { error } = cand
+      ? await supabase.from('job_candidates').update(row).eq('id', cand.id)
+      : await supabase.from('job_candidates').insert({ ...row, source: 'manual' })
+    setSaving(false)
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    logActivity(cand ? 'candidate_updated' : 'candidate_created', 'job_candidate', cand?.id, { name: row.full_name, status: row.status })
+    showToast(cand ? 'Candidato actualizado.' : 'Candidato registrado.', 'success')
+    onSaved()
+  }
+
+  const digits = form.phone.replace(/\D/g, '')
+  const wa = digits ? `https://wa.me/${digits.length === 10 ? `52${digits}` : digits}` : null
+
+  const inp: React.CSSProperties = { width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }
+  const lb: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
+
+  return (
+    <Sheet open onClose={onClose} isMobile={isMobile} width={440}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-3) 0' }}>
+          <h2 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>{cand ? cand.full_name : 'Nuevo candidato'}</h2>
+          <button onClick={onClose} aria-label="Cerrar" style={{ width: 36, height: 36, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><label style={lb}>Nombre *</label><input value={form.full_name} autoFocus={!cand} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} style={inp} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div><label style={lb}>Teléfono</label><input value={form.phone} inputMode="tel" onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="num" style={inp} /></div>
+            <div><label style={lb}>Instagram</label><input value={form.ig_handle} placeholder="@usuario" onChange={e => setForm(f => ({ ...f, ig_handle: e.target.value }))} style={inp} /></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div><label style={lb}>Puesto / área</label><input value={form.area} placeholder="piso, barra, cocina…" onChange={e => setForm(f => ({ ...f, area: e.target.value }))} style={inp} /></div>
+            <div><label style={lb}>Ciudad</label><input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} style={inp} /></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div><label style={lb}>Estado</label>
+              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} style={{ ...inp, cursor: 'pointer' }}>
+                {Object.entries(CAND_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </div>
+            <div><label style={lb}>Venue de interés</label>
+              <select value={form.bu_id} onChange={e => setForm(f => ({ ...f, bu_id: e.target.value }))} style={{ ...inp, cursor: 'pointer' }}>
+                <option value="">Todo el grupo</option>
+                {buList.map(b => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div><label style={lb}>Experiencia</label>
+            <textarea value={form.experience} rows={3} onChange={e => setForm(f => ({ ...f, experience: e.target.value }))}
+              style={{ ...inp, minHeight: 68, padding: '8px 10px', resize: 'vertical', fontFamily: 'inherit' }} /></div>
+          <div><label style={lb}>Links (CV, portafolio)</label><input value={form.links} onChange={e => setForm(f => ({ ...f, links: e.target.value }))} style={inp} /></div>
+          <div><label style={lb}>Notas internas</label>
+            <textarea value={form.notes} rows={2} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              style={{ ...inp, minHeight: 52, padding: '8px 10px', resize: 'vertical', fontFamily: 'inherit' }} /></div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {wa && (
+              <a href={wa} target="_blank" rel="noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '0 14px', borderRadius: 999, background: '#1fa855', color: '#fff', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+                <MessageCircle size={14} /> WhatsApp
+              </a>
+            )}
+            <button onClick={save} disabled={saving}
+              style={{ flex: 1, minHeight: 44, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Sheet>
+  )
 }
 
 // ─── Alta/edición de DJ — lo esencial en 20 segundos, lo demás opcional ──────

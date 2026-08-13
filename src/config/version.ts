@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.69.1"
+export const APP_VERSION = "2.70.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.70.0",
+    date: "2026-08-13",
+    type: "MINOR",
+    changes: [
+      "CONFIRMACIÓN AUTOMÁTICA POR WHATSAPP: al confirmar (o crear confirmada) una reserva, el cliente recibe su confirmación solo — por el chat del concierge si la reserva nació ahí, o por plantilla aprobada de WhatsApp si no; nunca se manda dos veces (edge function reservation-notify)",
+      "BANDEJA — respuestas desde la app de Instagram: si alguien del equipo contesta un DM desde la propia app de IG, el mensaje ahora aparece en el hilo etiquetado 'Equipo · app de Instagram' y el bot se calla (la conversación pasa a Humano)",
+      "RECLUTAMIENTO (solo Master): bolsa de trabajo del grupo — el bot ya NO ofrece reserva a quien busca empleo: registra al candidato (nombre, puesto, experiencia, ciudad, teléfono) y el equipo lo ve en Concierge → Reclutamiento con estados nuevo/contactado/entrevista/contratado/descartado",
+    ]
+  },
   {
     version: "2.69.1",
     date: "2026-08-13",
