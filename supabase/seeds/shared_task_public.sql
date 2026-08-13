@@ -27,8 +27,13 @@ begin
       'id', t.id, 'title', t.title, 'description', t.description, 'area', t.area,
       'status', t.status, 'priority', t.priority, 'due_date', t.due_date,
       'estimated_hours', t.estimated_hours, 'deadline_type', t.deadline_type,
-      'proof_required', t.proof_required, 'bu_id', t.bu_id, 'assigned_to', t.assigned_to
+      'proof_required', t.proof_required, 'bu_id', t.bu_id, 'assigned_to', t.assigned_to,
+      -- Proyecto al que pertenece (si aplica): el botón "Abrir en HOG APP"
+      -- abre el proyecto y encima la tarea, para dar seguimiento en contexto.
+      'event_id', t.event_id
     ),
+    'project', (select jsonb_build_object('id', e.id, 'name', e.name)
+                from event_plans e where e.id = t.event_id),
     'bu', (select jsonb_build_object('code', b.code, 'name', b.name)
            from business_units b where b.id = t.bu_id),
     'assignee', (select coalesce(p.full_name, p.email)

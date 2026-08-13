@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.75.0"
+export const APP_VERSION = "2.76.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.76.0",
+    date: "2026-08-13",
+    type: "MINOR",
+    changes: [
+      "TAREA COMPARTIDA — 'Abrir en HOG APP' ahora te lleva a la tarea REAL: si pertenece a un proyecto abre Proyectos, el proyecto y encima la ventana de la tarea (contexto completo para dar seguimiento); si es una tarea suelta abre Tareas con su ventana",
+      "Al iniciar sesión desde la vista pública aterrizas directo en la tarea, ya no de regreso en la vista pública",
+      "La vista pública ahora muestra a qué proyecto pertenece la tarea",
+      "Los links con ?task= (notificaciones, Slack) también aterrizan en la pantalla donde vive la tarea, no en el dashboard",
+    ]
+  },
   {
     version: "2.75.0",
     date: "2026-08-13",

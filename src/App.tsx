@@ -58,6 +58,11 @@ const _sharedTaskId = _params.get('share')
 const _aviso = _params.get('aviso')
 const _reservar = _params.get('reservar')
 const _mireserva = _params.get('mireserva')
+// ?task=<id>[&project=<id>] — deep-link a una tarea (desde la vista pública,
+// notificaciones o Slack). Con proyecto, la app aterriza en Proyectos, abre el
+// proyecto y encima la tarea; sin proyecto, aterriza en Tareas.
+const _deepProject = _params.get('project')
+if (_deepProject) localStorage.setItem('hog_pending_project', _deepProject)
 
 // Strip a query param from the URL bar without reloading (so an overlay doesn't reopen on refresh)
 function stripUrlParam(key: string) {
@@ -123,6 +128,10 @@ export default function App() {
   useEffect(() => {
     if (landedRef.current || !role) return
     landedRef.current = true
+    // Deep-link a una tarea: aterriza donde vive — en su proyecto si lo tiene,
+    // si no en Tareas — para que la ventana no abra sobre una pantalla ajena.
+    if (_deepProject) { setActiveView('events'); return }
+    if (_params.get('task')) { setActiveView('tasks'); return }
     // Team en tablet (host stand) aterriza en Concierge (Reservas); en teléfono, en Tareas.
     // HoH aterriza SIEMPRE en Reservas (la tablet vive en el host stand).
     const teamLanding = window.innerWidth >= 768 ? 'concierge' : 'tasks'
@@ -133,7 +142,9 @@ export default function App() {
 
   // Overlay panels — opened from notifications / Slack deep-links, sit ON TOP of the
   // current screen so you keep working where you were.
-  const [overlayTaskId, setOverlayTaskId] = useState<string | null>(() => _params.get('task'))
+  // Con proyecto, la tarea NO abre de inmediato: espera a que la ventana del
+  // proyecto se monte, para que quede apilada ENCIMA y no debajo.
+  const [overlayTaskId, setOverlayTaskId] = useState<string | null>(() => _deepProject ? null : _params.get('task'))
   const [overlayDealId, setOverlayDealId] = useState<string | null>(() => _params.get('deal'))
   const [overlayGuestId, setOverlayGuestId] = useState<string | null>(() => _params.get('guest'))
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -157,6 +168,20 @@ export default function App() {
       window.removeEventListener('hog:open-deal', openDeal)
     }
   })
+
+  // Deep-link con proyecto: la tarea se abre cuando Proyectos ya montó la
+  // ventana del proyecto (evento hog:project-opened), así queda encima. Si el
+  // proyecto no aparece (archivado o sin acceso), se abre igual tras un
+  // respiro — nunca dejar al usuario sin la tarea que venía a ver.
+  useEffect(() => {
+    const pending = _deepProject ? _params.get('task') : null
+    if (!pending || !role) return
+    let done = false
+    const open = () => { if (!done) { done = true; setOverlayTaskId(pending); stripUrlParam('project') } }
+    window.addEventListener('hog:project-opened', open)
+    const t = setTimeout(open, 4000)
+    return () => { window.removeEventListener('hog:project-opened', open); clearTimeout(t) }
+  }, [role])
 
   // ⌘K / Ctrl+K opens the command palette
   useEffect(() => {

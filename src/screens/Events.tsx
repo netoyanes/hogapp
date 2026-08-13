@@ -189,6 +189,9 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
     localStorage.removeItem('hog_pending_project')
     const r = rows.find(x => x.id === pending)
     if (r) setEditing(r)
+    // Avisa que la ventana del proyecto ya está montada: un deep-link con
+    // tarea la abre justo después, para que quede apilada encima.
+    window.dispatchEvent(new CustomEvent('hog:project-opened', { detail: pending }))
   }, [loading, rows])
 
   const buMap = useMemo(() => Object.fromEntries(buList.map(b => [b.id, b.code])), [buList])

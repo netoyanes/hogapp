@@ -21,7 +21,9 @@ interface SharedData {
     id: string; title: string; description: string | null; area: TaskArea | null
     status: string; priority: string; due_date: string | null
     estimated_hours: number | null; deadline_type: string; proof_required: boolean
+    event_id: string | null
   }
+  project: { id: string; name: string } | null
   bu: { code: string; name: string } | null
   assignee: string | null
   proofs: { id: string; file_url: string; file_type: string; created_at: string }[]
@@ -81,7 +83,12 @@ export function SharedTask({ taskId }: Props) {
 
   async function signInWithGoogle() {
     setSigningIn(true)
-    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } })
+    // Al volver del login aterriza YA en la tarea dentro de la app (con su
+    // proyecto detrás si aplica), no de regreso en esta vista pública.
+    const back = data
+      ? `${window.location.origin}/?task=${data.task.id}${data.task.event_id ? `&project=${data.task.event_id}` : ''}`
+      : window.location.href
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: back } })
   }
 
   if (state === 'loading') {
@@ -120,9 +127,13 @@ export function SharedTask({ taskId }: Props) {
     )
   }
 
-  const { task, bu, assignee, proofs, links, comment_count } = data
+  const { task, project, bu, assignee, proofs, links, comment_count } = data
   const pColor = PRIORITY_COLORS[task.priority] ?? '#6B7280'
   const sColor = STATUS_COLORS[task.status] ?? '#6B7280'
+  // Deep-link a la tarea real: si pertenece a un proyecto, la app abre el
+  // proyecto y encima la tarea (contexto completo para dar seguimiento);
+  // si es suelta, abre Tareas con su ventana.
+  const appLink = `${window.location.origin}/?task=${task.id}${task.event_id ? `&project=${task.event_id}` : ''}`
 
   return (
     <div style={bgStyle}>
@@ -175,6 +186,7 @@ export function SharedTask({ taskId }: Props) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: proofs.length || links.length ? '20px' : '4px' }}>
             {bu && <MetaCell label="Venue" value={`${bu.code} · ${bu.name}`} />}
+            {project && <MetaCell label="Proyecto" value={project.name} />}
             {assignee && <MetaCell label="Asignada a" value={assignee} />}
             {task.due_date && <MetaCell label="Fecha límite" value={new Date(task.due_date + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })} />}
             {task.estimated_hours != null && <MetaCell label="Horas estimadas" value={`${task.estimated_hours} h`} />}
@@ -282,8 +294,12 @@ export function SharedTask({ taskId }: Props) {
           {session ? (
             <>
               <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 3px' }}>Ya tienes sesión iniciada</p>
-              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>Abre la tarea en HOG APP para comentar, subir evidencia y ver todo el proyecto.</p>
-              <a href={`${window.location.origin}/`}
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
+                {project
+                  ? `Abre la tarea dentro de ${project.name} para comentar, subir evidencia y dar seguimiento.`
+                  : 'Abre la tarea en HOG APP para comentar, subir evidencia y dar seguimiento.'}
+              </p>
+              <a href={appLink}
                 style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, padding: '0 20px', borderRadius: 999, background: 'var(--accent)', color: 'var(--on-accent)', fontSize: '13px', fontWeight: 700, textDecoration: 'none' }}>
                 Abrir en HOG APP <ArrowRight size={14} />
               </a>
