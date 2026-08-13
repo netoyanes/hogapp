@@ -49,7 +49,12 @@ export function PublicReservation({ code }: { code: string }) {
 
   const [nombre, setNombre] = useState('')
   const [telefono, setTelefono] = useState('')
-  const [fecha, setFecha] = useState('')
+  // Prellenada con HOY (hora local): en iPhone un date input vacío se ve roto
+  // y sin fecha no se cargan los horarios disponibles
+  const [fecha, setFecha] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
   const [horario, setHorario] = useState('21:00')
   const [pax, setPax] = useState('2')
   const [notas, setNotas] = useState('')
@@ -108,7 +113,11 @@ export function PublicReservation({ code }: { code: string }) {
       })
   }, [code])
 
-  const hoyISO = new Date().toISOString().slice(0, 10)
+  // Fecha local (no UTC: en Mazatlán toISOString brinca a "mañana" desde las ~5pm)
+  const hoyISO = (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })()
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -141,7 +150,7 @@ export function PublicReservation({ code }: { code: string }) {
   })
 
   const shell = (children: React.ReactNode) => isOC ? (
-    <div style={{ minHeight: '100vh', background: '#8bb8e6', color: '#231f20', padding: '34px 16px 40px', fontFamily: '"Inter",-apple-system,sans-serif', ...ocVars }}>
+    <div style={{ minHeight: '100vh', background: '#8bb8e6', color: '#231f20', padding: 'calc(34px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom))', fontFamily: '"Inter",-apple-system,sans-serif', ...ocVars }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
         {/* Portada — misma cabecera que la carta */}
         <div style={{ textAlign: 'center', marginBottom: 26 }}>
