@@ -629,9 +629,9 @@ const MENU = {
     {
       id: "happy-hour-ostiones",
       titulo: "Happy Hour de Ostiones",
-      texto: "Todos los días · 1 PM a 6 PM · Ostiones al natural $30 pza",
+      texto: "Todos los días · 3 PM a 6 PM · Ostiones al natural $30 pza",
       dias: [],
-      hora_inicio: "13:00",
+      hora_inicio: "15:00",
       hora_fin: "18:00",
       siempre_visible: true,
       estado: "activo"
@@ -696,7 +696,7 @@ const MENU = {
             { nombre: "Margarita",        precio: 230, volumen_ml: 110, estado: "activo" },
             { nombre: "Cosmopolitan",     precio: 250, volumen_ml: 120, estado: "activo" },
             { nombre: "Martini",          precio: 270, volumen_ml: 90,  estado: "activo" },
-            { nombre: "Espresso Martini", precio: 260, volumen_ml: 140, estado: "activo" },
+            { nombre: "Espresso Martini", precio: 260, volumen_ml: 120, estado: "activo" },
             { nombre: "Negroni",          precio: 260, volumen_ml: 90,  estado: "activo" },
             { nombre: "Mezcal Negroni",   precio: 260, volumen_ml: 110, estado: "activo" },
             { nombre: "Old Fashioned",    precio: 260, volumen_ml: 90,  estado: "activo" },
@@ -835,7 +835,8 @@ const MENU = {
             { nombre: "Freakshow Petit",       precio: 1790, estado: "activo" },
             { nombre: "Casa Madero Shiraz",    precio: 1200, precio_copa: 230, estado: "activo" },
             { nombre: "Edad Moderna Blanco",   precio: 1630, estado: "activo" },
-            { nombre: "Hito Rosé",             precio: 920,  precio_copa: 190, estado: "activo" }
+            { nombre: "Hito Rosé",             precio: 920,  precio_copa: 190, estado: "activo" },
+            { nombre: "L\u2019Ars Espumoso",       precio: 930,  estado: "activo" }
           ]
         },
 
@@ -903,7 +904,7 @@ const MENU = {
       subtitulo:
         "Selección viva del día según temporada y marea, servida sobre hielo. " +
         "Precio por pieza, excepto el callo de hacha.",
-      estado: "activo",
+      estado: "oculto",
       dias_visibles: null,
       grupos: [
 
@@ -1015,6 +1016,112 @@ const MENU = {
       }
     },
 
+
+    /* ====================================================================
+       ENTRADAS  (activa) — menú completo The Oyster Club
+       ==================================================================== */
+    {
+      id: "entradas",
+      nombre: "Entradas",
+      subtitulo: "Fríos y frescos, por pieza o por docena.",
+      estado: "activo",
+      dias_visibles: null,
+      grupos: [
+        {
+          nombre: "Fríos y frescos",
+          items: [
+            { nombre: "Ostiones", precio: 60, unidad: "pza", descripcion: "Docena $460 · Happy hour de 3 a 6 pm: $30 la pieza", etiquetas: ["crudo"], estado: "activo" },
+            { nombre: "Almeja chocolata", precio: 40, unidad: "pza", descripcion: "Docena $410", etiquetas: ["crudo"], estado: "activo" },
+            { nombre: "Almeja reina", precio: 120, unidad: "pza", etiquetas: ["crudo"], estado: "activo" }
+          ]
+        },
+        {
+          nombre: "Salsas",
+          nota: "Para acompañar las conchas.",
+          estilo: "lista",
+          items: [
+            { nombre: "Rasurado, salsas negras y pico de gallo", precio: null, estado: "activo" },
+            { nombre: "Aguachile verde — cremoso y picante", precio: null, estado: "activo" },
+            { nombre: "Aguachile rojo — potente, para paladares que disfrutan el picor", precio: null, estado: "activo" },
+            { nombre: "Maracuyá con habanero — fresco y agridulce, un balance perfecto", precio: null, estado: "activo" },
+            { nombre: "Mignonette — clásica preparación francesa de vinagre, echalote y vino tinto", precio: null, estado: "activo" },
+            { nombre: "Club Especial del Chef — hueva de salmón y copa de vino espumoso · $120 pza", precio: null, estado: "activo" }
+          ]
+        },
+        {
+          nombre: "Cócteles",
+          items: [
+            { nombre: "Coctel de camarón · 200 g", precio: 260, descripcion: "Con nuestra cátsup ahumada, pico de gallo y aguacate", estado: "activo" },
+            { nombre: "Campechano de camarón y ostión · 100 g + 100 g", precio: 280, descripcion: "Con nuestra cátsup ahumada, pico de gallo y aguacate", estado: "activo" },
+            { nombre: "Ceviche del día · 150 g", precio: 310, estado: "activo" }
+          ]
+        },
+        {
+          nombre: "Tostadas",
+          items: [
+            { nombre: "Tostada de callo · 50 g", precio: 180, descripcion: "Mayonesa, ceniza de habanero y salsa de limón amarillo", estado: "activo" },
+            { nombre: "Tostada de kampachi · 60 g", precio: 210, descripcion: "Guacamole asado, pepinillos encurtidos y un toque de aguachile verde", estado: "activo" },
+            { nombre: "Tostada de atún sellado · 60 g", precio: 180, descripcion: "Mayonesa de chipotle, cebollín y aguacate", estado: "activo" },
+            { nombre: "Tostada de camarón · 80 g", precio: 140, descripcion: "Guacamole asado y pico de gallo", estado: "activo" },
+            { nombre: "Tostada de jaiba suave · 100 g", precio: 230, descripcion: "Guacamole asado, col morada y mayonesa", estado: "activo" }
+          ]
+        },
+        {
+          nombre: "Crudos",
+          items: [
+            { nombre: "Crudo de kampachi · 100 g", precio: 310, descripcion: "Aguachile verde o rojo, aceite de oliva y cebolla morada", etiquetas: ["crudo"], estado: "activo" },
+            { nombre: "Crudo de callo · 80 g", precio: 220, descripcion: "Ceniza de habanero, salsa de limón amarillo y cebolla morada", etiquetas: ["crudo"], estado: "activo" },
+            { nombre: "Crudo de atún · 100 g", precio: 280, descripcion: "Salsa ponzu, cebollín y ajonjolí", etiquetas: ["crudo"], estado: "activo" }
+          ]
+        }
+      ]
+    },
+
+    /* ====================================================================
+       THE OYSTERS  (activa) — calientes y de la casa
+       ==================================================================== */
+    {
+      id: "the-oysters",
+      nombre: "The Oysters",
+      subtitulo: null,
+      estado: "activo",
+      dias_visibles: null,
+      grupos: [
+        {
+          nombre: null,
+          items: [
+            { nombre: "Ostiones Rockefeller · 8 pzas", precio: 360, descripcion: "Clásicos, gratinados con queso parmesano", estado: "activo" },
+            { nombre: "Camarones al ajillo · 200 g", precio: 390, descripcion: "Agridulces, con setas, mantequilla y aceite de oliva", estado: "activo" },
+            { nombre: "Sándwich de jaiba suave · 400 g", precio: 420, descripcion: "Coleslaw, mayonesa de chipotle y guacamole", estado: "activo" },
+            { nombre: "Sándwich de langosta · 300 g", precio: 470, descripcion: "Asada con mantequilla, mayonesa, toque de limón amarillo y hojas frescas", estado: "activo" },
+            { nombre: "Caldito Bichi", precio: 180, descripcion: "Consomé de camarón sin cáscara (80 g) con papa y zanahoria", estado: "activo" }
+          ]
+        }
+      ]
+    },
+
+    /* ====================================================================
+       ESPECIALES PARA COMPARTIR  (activa)
+       ==================================================================== */
+    {
+      id: "para-compartir",
+      nombre: "Especiales para Compartir",
+      subtitulo: null,
+      estado: "activo",
+      dias_visibles: null,
+      grupos: [
+        {
+          nombre: null,
+          items: [
+            { nombre: "Torre de mariscos Oyster Club", precio: 1420, descripcion: "Ostras 6 pzas, almeja 6 pzas, camarón cocido 120 g, callo de hacha 80 g, pulpo 100 g y crudo del día 100 g", etiquetas: ["para compartir"], estado: "activo" },
+            { nombre: "Camarones para pelar · 1 kg", precio: 790, descripcion: "Servidos con salsa de la casa, mayonesa y salsa coctel", etiquetas: ["para compartir"], estado: "activo" },
+            { nombre: "Pescado zarandeado · 1 kg", precio: "Precio de mercado", descripcion: "Solo fines de semana", etiquetas: ["para compartir"], estado: "activo" },
+            { nombre: "Almejas al vino blanco · 500 g", precio: 420, descripcion: "Clásica receta francesa con echalote y perejil, cocinada a fuego lento", etiquetas: ["para compartir"], estado: "activo" }
+          ]
+        }
+      ]
+    },
+
     /* ====================================================================
        SECCIONES FUTURAS — creadas desde el día uno.
        Activar = pegar sus `grupos`/`items` y cambiar `estado` a "activo".
@@ -1105,9 +1212,18 @@ const MENU = {
       id: "para-terminar",
       nombre: "Para Terminar",
       subtitulo: "Postres",
-      estado: "oculto",
+      estado: "activo",
       dias_visibles: null,
-      grupos: []
+      grupos: [
+        {
+          nombre: null,
+          items: [
+            { nombre: "Arroz con leche · 180 g", precio: 120, descripcion: "Clásico y cremoso", estado: "activo" },
+            { nombre: "Brownie con helado · 150 g", precio: 160, estado: "activo" },
+            { nombre: "Selección de helados artesanales · 120 g", precio: 80, estado: "activo" }
+          ]
+        }
+      ]
     }
   ]
 };
