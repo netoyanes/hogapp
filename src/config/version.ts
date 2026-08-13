@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.78.0"
+export const APP_VERSION = "2.79.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.79.0",
+    date: "2026-08-13",
+    type: "MINOR",
+    changes: [
+      "⚡SQL (solo Master) — botón flotante verde abajo a la derecha: pega el SQL que te propuso un agente de IA, PREVISUALIZA lo que crearía (proyectos, tareas, recursos y presupuesto, con venue, responsable, fechas y montos), edítalo si hace falta, y solo entonces FIRMA Y APLICA",
+      "El preview es exacto, no una interpretación: el SQL corre de verdad contra la base y se revierte — lo que ves es lo que quedaría",
+      "Si editas el SQL después de revisarlo, el botón de firmar se bloquea hasta volver a previsualizar: nadie firma algo que no vio",
+      "El servidor rechaza todo lo que no sea alta (DDL, UPDATE, DELETE) y las tablas de permisos, ajustes y finanzas; cada inyección aplicada queda en Actividad",
+      "Prompt para el equipo en docs/PROMPT_INYECTAR_SQL.md: cualquiera con Claude describe un evento o remodelación y te entrega el SQL listo",
+    ]
+  },
   {
     version: "2.78.0",
     date: "2026-08-13",

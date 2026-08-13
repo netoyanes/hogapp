@@ -29,6 +29,7 @@ import { PublicReservation } from './screens/PublicReservation'
 import { GuestReservation } from './screens/GuestReservation'
 import { AppLogoBadge } from './components/ui/AppLogo'
 import { TaskDetailPanel } from './components/ui/TaskDetailPanel'
+import { SqlInjector } from './components/ui/SqlInjector'
 import { DealOverlay } from './components/ui/DealOverlay'
 import { GuestOverlay } from './components/ui/GuestOverlay'
 import { Toaster } from './components/v2'
@@ -391,6 +392,10 @@ export default function App() {
           userRole={role}
         />
       )}
+
+      {/* ⚡SQL — inyección de proyectos/tareas propuestos por un agente de IA.
+          Solo Master, y la función del servidor lo vuelve a verificar. */}
+      {realRole === 'MASTER' && <SqlInjector />}
 
       <Toaster />
     </>
