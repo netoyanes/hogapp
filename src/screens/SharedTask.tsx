@@ -2,32 +2,28 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { HtmlFrame } from '../components/ui/HtmlFrame'
 import { AppLogoBadge } from '../components/ui/AppLogo'
-import type { Session } from '@supabase/supabase-js'
 import type { TaskArea } from '../types'
 import { TASK_AREA_LABELS } from '../lib/taskAreas'
 
-interface TaskData {
-  id: string
-  title: string
-  description: string | null
-  area: TaskArea | null
-  status: string
-  priority: string
-  due_date: string | null
-  estimated_hours: number | null
-  deadline_type: string
-  proof_required: boolean
-  is_private: boolean
-  bu_id: string | null
-  assigned_to: string | null
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// TAREA COMPARTIDA — vista PÚBLICA (?share=<id>): cualquiera con el link ve
+// todo el contenido, con o sin sesión. Los datos llegan por fn_shared_task
+// (security definer, ejecutable por anon): tarea + venue + asignado +
+// evidencias + links. Las tareas privadas nunca se exponen y el chat interno
+// no viaja — la vista queda registrada en Actividad ("anónimo" si no hay
+// sesión).
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface Proof {
-  id: string
-  file_url: string
-  file_type: string
-  created_at: string
-  archived: boolean
+interface SharedData {
+  task: {
+    id: string; title: string; description: string | null; area: TaskArea | null
+    status: string; priority: string; due_date: string | null
+    estimated_hours: number | null; deadline_type: string; proof_required: boolean
+  }
+  bu: { code: string; name: string } | null
+  assignee: string | null
+  proofs: { id: string; file_url: string; file_type: string; created_at: string }[]
+  links: { id: string; url: string; title: string | null }[]
 }
 
 const PRIORITY_COLORS: Record<string, string> = { HIGH: '#EF4444', MEDIUM: '#EAB308', LOW: '#22C55E' }
@@ -36,164 +32,74 @@ const STATUS_COLORS: Record<string, string> = {
   APPROVED: '#22C55E', REVISION: '#EF4444',
 }
 const STATUS_LABELS: Record<string, string> = {
-  OPEN: 'Open', IN_PROGRESS: 'In Progress', PROOF_SUBMITTED: 'Proof Submitted',
-  APPROVED: 'Approved', REVISION: 'Revision',
+  OPEN: 'Abierta', IN_PROGRESS: 'En progreso', PROOF_SUBMITTED: 'Evidencia enviada',
+  APPROVED: 'Aprobada', REVISION: 'En revisión',
 }
-
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-      <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
-      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-      <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-    </svg>
-  )
-}
+const PRIORITY_LABELS: Record<string, string> = { HIGH: 'Alta', MEDIUM: 'Media', LOW: 'Baja' }
 
 interface Props {
   taskId: string
 }
 
 export function SharedTask({ taskId }: Props) {
-  const [session, setSession] = useState<Session | null>(null)
-  const [authLoading, setAuthLoading] = useState(true)
-  const [task, setTask] = useState<TaskData | null>(null)
-  const [buName, setBuName] = useState('')
-  const [assigneeName, setAssigneeName] = useState('')
-  const [proofs, setProofs] = useState<Proof[]>([])
-  const [taskLoading, setTaskLoading] = useState(false)
-  const [notFound, setNotFound] = useState(false)
-  const [googleLoading, setGoogleLoading] = useState(false)
-  const [previewProof, setPreviewProof] = useState<Proof | null>(null)
+  const [data, setData] = useState<SharedData | null>(null)
+  const [state, setState] = useState<'loading' | 'ok' | 'notfound' | 'private'>('loading')
+  const [previewProof, setPreviewProof] = useState<SharedData['proofs'][number] | null>(null)
 
-  // Watch auth state
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setAuthLoading(false)
+    supabase.rpc('fn_shared_task', { p_task: taskId }).then(({ data: d, error }) => {
+      if (error || !d) { setState('notfound'); return }
+      if (d.private) { setState('private'); return }
+      setData(d as SharedData)
+      setState('ok')
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => {
-      setSession(s)
-      setAuthLoading(false)
-    })
-    return () => subscription.unsubscribe()
-  }, [])
+  }, [taskId])
 
-  // Load task once authenticated
-  useEffect(() => {
-    if (!session) return
-    const activeSession = session
-    async function load() {
-      setTaskLoading(true)
-      const { data: t } = await supabase.from('tasks').select('*').eq('id', taskId).single()
-      if (!t) { setNotFound(true); setTaskLoading(false); return }
-      setTask(t)
-
-      const [{ data: bu }, { data: assignee }, { data: proofRows }] = await Promise.all([
-        t.bu_id ? supabase.from('business_units').select('code, name').eq('id', t.bu_id).single() : Promise.resolve({ data: null }),
-        t.assigned_to ? supabase.from('profiles').select('full_name, email').eq('id', t.assigned_to).single() : Promise.resolve({ data: null }),
-        supabase.from('task_proofs').select('id, file_url, file_type, created_at, archived').eq('task_id', taskId).order('created_at'),
-      ])
-      if (bu) setBuName(`${bu.code} · ${bu.name}`)
-      if (assignee) setAssigneeName(assignee.full_name ?? assignee.email ?? '')
-      setProofs((proofRows ?? []).map(p => ({ ...p, archived: p.archived ?? false })).filter(p => !p.archived))
-
-      // Log view
-      await supabase.from('activity_log').insert({
-        user_id: activeSession.user.id,
-        action: 'task_viewed_externally',
-        entity_type: 'task',
-        entity_id: taskId,
-        details: { title: t.title, viewer_email: activeSession.user.email },
-      })
-      setTaskLoading(false)
-    }
-    load()
-  }, [session, taskId])
-
-  async function signInWithGoogle() {
-    setGoogleLoading(true)
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.href },
-    })
-  }
-
-  // ── Loading ──────────────────────────────────────────
-  if (authLoading) {
+  if (state === 'loading') {
     return (
       <div style={bgStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
           <AppLogoBadge size={32} radius={8} />
-          <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>Loading…</span>
+          <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>Cargando…</span>
         </div>
       </div>
     )
   }
 
-  // ── Not authenticated → sign-in gate ─────────────────
-  if (!session) {
+  if (state === 'private') {
     return (
       <div style={bgStyle}>
         <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-            <AppLogoBadge size={32} radius={7} />
-            <div>
-              <div style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '14px' }}>HOG APP</div>
-              <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>Shared Task</div>
-            </div>
-          </div>
-
-          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>Sign in to view this task</p>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: 1.5 }}>
-            A team member shared a task with you. Sign in with Google so we know who's viewing it.
-          </p>
-
-          <button
-            onClick={signInWithGoogle}
-            disabled={googleLoading}
-            style={{ width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-default)', borderRadius: '8px', padding: '11px', fontSize: '14px', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontFamily: 'var(--font-ui)', fontWeight: 500 }}
-          >
-            <GoogleIcon />
-            {googleLoading ? 'Redirecting…' : 'Continue with Google'}
-          </button>
+          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>Esta tarea es privada</p>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Quien la compartió debe ponerla como pública (candado de la tarea) para poder verla por link.</p>
         </div>
       </div>
     )
   }
 
-  // ── Authenticated → show task ─────────────────────────
-  if (taskLoading) {
-    return (
-      <div style={bgStyle}>
-        <div style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>Loading task…</div>
-      </div>
-    )
-  }
-
-  if (notFound || !task) {
+  if (state === 'notfound' || !data) {
     return (
       <div style={bgStyle}>
         <div style={cardStyle}>
-          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>Task not found</p>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>This task may have been deleted or the link is invalid.</p>
+          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>Tarea no encontrada</p>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Puede que la tarea ya no exista o el link sea inválido.</p>
         </div>
       </div>
     )
   }
 
+  const { task, bu, assignee, proofs, links } = data
   const pColor = PRIORITY_COLORS[task.priority] ?? '#6B7280'
   const sColor = STATUS_COLORS[task.status] ?? '#6B7280'
 
   return (
     <div style={bgStyle}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', width: '100%', maxWidth: '480px' }}>
         <AppLogoBadge size={30} radius={7} />
         <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '13px' }}>HOG APP</span>
         <span style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--text-tertiary)', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '4px', padding: '2px 8px', fontFamily: 'var(--font-mono)' }}>
-          Shared Task
+          Tarea compartida
         </span>
       </div>
 
@@ -211,30 +117,47 @@ export function SharedTask({ taskId }: Props) {
             {STATUS_LABELS[task.status] ?? task.status}
           </span>
           <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '4px', padding: '2px 8px' }}>{task.area ? TASK_AREA_LABELS[task.area] : '—'}</span>
-          <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: pColor, background: `${pColor}15`, border: `1px solid ${pColor}40`, borderRadius: '4px', padding: '2px 8px' }}>{task.priority}</span>
+          <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: pColor, background: `${pColor}15`, border: `1px solid ${pColor}40`, borderRadius: '4px', padding: '2px 8px' }}>{PRIORITY_LABELS[task.priority] ?? task.priority}</span>
         </div>
 
         {/* Description */}
         {task.description && (
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '16px', background: 'var(--bg-base)', borderRadius: '8px', padding: '12px' }}>{task.description}</p>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '16px', background: 'var(--bg-base)', borderRadius: '8px', padding: '12px', whiteSpace: 'pre-wrap' }}>{task.description}</p>
         )}
 
         {/* Meta grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: proofs.length ? '20px' : '4px' }}>
-          {buName && <MetaCell label="Business Unit" value={buName} />}
-          {assigneeName && <MetaCell label="Assigned to" value={assigneeName} />}
-          {task.due_date && <MetaCell label="Due date" value={new Date(task.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} />}
-          {task.estimated_hours && <MetaCell label="Est. hours" value={`${task.estimated_hours}h`} />}
-          <MetaCell label="Deadline type" value={task.deadline_type} />
-          {task.proof_required && <MetaCell label="Proof required" value="Yes" />}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: proofs.length || links.length ? '20px' : '4px' }}>
+          {bu && <MetaCell label="Venue" value={`${bu.code} · ${bu.name}`} />}
+          {assignee && <MetaCell label="Asignada a" value={assignee} />}
+          {task.due_date && <MetaCell label="Fecha límite" value={new Date(task.due_date + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })} />}
+          {task.estimated_hours != null && <MetaCell label="Horas estimadas" value={`${task.estimated_hours} h`} />}
+          {task.proof_required && <MetaCell label="Requiere evidencia" value="Sí" />}
         </div>
 
-        {/* Proofs */}
+        {/* Links */}
+        {links.length > 0 && (
+          <div style={{ marginBottom: proofs.length ? '20px' : '4px' }}>
+            <div style={sectionTitle}>Links · {links.length}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {links.map(l => {
+                let host = ''
+                try { host = new URL(l.url).hostname.replace(/^www\./, '') } catch { host = l.url }
+                return (
+                  <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer"
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '9px 12px', background: 'var(--bg-base)', textDecoration: 'none' }}>
+                    <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title || host}</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>{host} ↗</span>
+                  </a>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Evidencias */}
         {proofs.length > 0 && (
           <div>
-            <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px', fontFamily: 'var(--font-ui)' }}>
-              Proof · {proofs.length} file{proofs.length > 1 ? 's' : ''}
-            </div>
+            <div style={sectionTitle}>Evidencias · {proofs.length}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {proofs.map(p => {
                 const isImage = p.file_type.startsWith('image/')
@@ -250,19 +173,19 @@ export function SharedTask({ taskId }: Props) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px' }}>
                       <span style={{ background: `${extColor}20`, color: extColor, fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}>{ext}</span>
                       <span style={{ flex: 1, fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                        {new Date(p.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {new Date(p.created_at).toLocaleString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
                       <button onClick={() => setPreviewProof(p)} style={{ fontSize: '11px', color: 'var(--text-secondary)', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer' }}>
-                        Full screen
+                        Pantalla completa
                       </button>
                       <a href={p.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: 'var(--text-secondary)', textDecoration: 'none', border: '1px solid var(--border-subtle)', borderRadius: '5px', padding: '3px 8px' }}>
-                        Open ↗
+                        Abrir ↗
                       </a>
                     </div>
 
                     {/* Inline preview */}
                     {isImage && (
-                      <img src={p.file_url} alt="proof" onClick={() => setPreviewProof(p)}
+                      <img src={p.file_url} alt="evidencia" onClick={() => setPreviewProof(p)}
                         style={{ width: '100%', maxHeight: '320px', objectFit: 'cover', display: 'block', borderTop: '1px solid var(--border-subtle)', cursor: 'zoom-in' }} />
                     )}
                     {isVideo && (
@@ -272,7 +195,7 @@ export function SharedTask({ taskId }: Props) {
                       <iframe src={`${p.file_url}#toolbar=0`} title="PDF" style={{ width: '100%', height: '400px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block', background: '#fff' }} />
                     )}
                     {isHTML && (
-                      <HtmlFrame url={p.file_url} title="HTML preview" style={{ width: '100%', height: '360px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block', background: '#fff' }} />
+                      <HtmlFrame url={p.file_url} title="Vista HTML" style={{ width: '100%', height: '360px', border: 'none', borderTop: '1px solid var(--border-subtle)', display: 'block', background: '#fff' }} />
                     )}
                   </div>
                 )
@@ -284,7 +207,7 @@ export function SharedTask({ taskId }: Props) {
 
       {/* Footer */}
       <p style={{ marginTop: '16px', fontSize: '11px', color: 'var(--text-tertiary)', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-        Viewing as {session.user.email}
+        Vista pública de solo lectura · HOG APP
       </p>
 
       {/* Fullscreen preview */}
@@ -293,11 +216,11 @@ export function SharedTask({ taskId }: Props) {
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
           <button onClick={() => setPreviewProof(null)}
             style={{ position: 'absolute', top: '16px', right: '20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', color: '#fff', fontSize: '13px', zIndex: 10 }}>
-            ✕ Close
+            ✕ Cerrar
           </button>
           <div onClick={e => e.stopPropagation()} style={{ maxWidth: '95vw', maxHeight: '92vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {previewProof.file_type.startsWith('image/') && (
-              <img src={previewProof.file_url} alt="proof" style={{ maxWidth: '95vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px' }} />
+              <img src={previewProof.file_url} alt="evidencia" style={{ maxWidth: '95vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px' }} />
             )}
             {previewProof.file_type.startsWith('video/') && (
               <video src={previewProof.file_url} controls autoPlay style={{ maxWidth: '95vw', maxHeight: '90vh', borderRadius: '8px' }} />
@@ -322,6 +245,11 @@ function MetaCell({ label, value }: { label: string; value: string }) {
       <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{value}</div>
     </div>
   )
+}
+
+const sectionTitle: React.CSSProperties = {
+  fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase',
+  letterSpacing: '0.05em', marginBottom: '10px', fontFamily: 'var(--font-ui)',
 }
 
 const bgStyle: React.CSSProperties = {
