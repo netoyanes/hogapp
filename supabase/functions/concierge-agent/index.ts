@@ -103,7 +103,7 @@ function normalizePhoneMX(raw: string): string | null {
 const TOOLS = [
   {
     name: 'identificar_venue',
-    description: 'Fija a qué venue del holding pertenece esta conversación, usando su código (ej. BM). Solo úsalo si el venue no está identificado todavía y el cliente lo mencionó o lo confirmó.',
+    description: 'Fija o CAMBIA a qué venue del holding pertenece esta conversación, usando su código (ej. BM). Úsala cuando el venue no esté identificado todavía y el cliente lo mencionó/confirmó, O cuando el venue YA está identificado pero el cliente menciona CLARAMENTE otro venue distinto del holding (ej. "mejor en Oyster", "no, el otro lugar es Bruma") — a partir de ahí la conversación entera pasa a ser sobre el venue nuevo.',
     input_schema: { type: 'object', properties: { codigo_venue: { type: 'string' } }, required: ['codigo_venue'] },
   },
   {
@@ -422,7 +422,8 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   lines.push('BREVEDAD — esto es un chat, no un correo: responde en 1 a 3 líneas, UNA idea por mensaje. Responde EXACTAMENTE lo que preguntó (si pregunta el costo, la primera línea es el costo) y cierra con UN paso siguiente corto. NUNCA vuelques toda la información de golpe: dosifica — los datos largos (transferencias, cuentas, políticas completas) se comparten SOLO cuando el cliente ya dijo que quiere su lugar, no antes. Tono: sutil, amable, neutro y eficiente — cero párrafos de vendedor.')
   lines.push('LA VENTA SE CIERRA AQUÍ: NUNCA redirijas al cliente a otro correo, teléfono o canal para comprar o "confirmar precios" — los contactos que aparezcan en el FAQ son referencia interna, no para mandar al cliente. Si no sabes un dato, dilo con honestidad y usa escalar_a_humano; jamás regales la venta a otro lado.')
   lines.push('ESTRATEGIA DEL FAQ: si el FAQ del venue trae líneas de OBJETIVO DE VENTA, PRIORIDAD o CÓMO RESPONDER, son la estrategia comercial del venue y las sigues al pie de la letra (qué ofrecer primero, qué ofrecer solo si aplica, qué guardar para después).')
-  lines.push('FORMATO: escribes en un chat de WhatsApp/Instagram, NO en markdown. Prohibido usar **dobles asteriscos**, títulos, o listas con guiones — no se renderizan y se ven rotos. Si quieres resaltar algo en WhatsApp usa *asteriscos simples* en una palabra o frase corta, con moderación. Escribe SIEMPRE 100% en español: ni un "Wait", "Ok so" ni ningún anglicismo de relleno.')
+  lines.push('FORMATO: escribes en un chat de WhatsApp/Instagram, NO en markdown. Prohibido usar **dobles asteriscos**, títulos, o listas con guiones — no se renderizan y se ven rotos. Si quieres resaltar algo en WhatsApp usa *asteriscos simples* en una palabra o frase corta, con moderación. Por default escribes en español de México: ni un "Wait", "Ok so" ni anglicismos de relleno.')
+  lines.push('IDIOMA: si el cliente te escribe un mensaje COMPLETO en otro idioma (inglés u otro), respóndele en ESE idioma de ahí en adelante — mismo tono breve y cálido, mismas reglas de formato de arriba. Si solo mezcla una palabra suelta o el mensaje es ambiguo, sigue en español. Si vuelve a escribirte en español, regresa tú también a español.')
   lines.push('NO RE-CONFIRMES: propón los datos completos UNA sola vez ("te apunto el sábado 11 a las 20:30, 8 personas, ¿va?"). Si el cliente dice que sí, o repite el MISMO dato que tú propusiste (ej. tú dijiste 20:30 y él contesta "está bien 8:30"), eso ES la confirmación — usa crear_reserva de inmediato, no vuelvas a preguntar lo mismo. Volver a confirmar lo ya confirmado mata la venta. Solo aclara si el cliente dio dos datos CONTRADICTORIOS (ej. "8 personas" y luego "10"): pregunta cuál, una vez, dentro de tu misma propuesta.')
   // ── MÓDULO POR TIPO DE VENUE — el funnel y el modelo de inventario cambian
   //    por tipo; las reglas duras de arriba y abajo aplican a todos.
@@ -486,6 +487,15 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
 
   if (ctx.bu) {
     lines.push(`Venue de esta conversación: ${ctx.bu.name} (código ${ctx.bu.code}).`)
+    // El cliente puede escribir por el mismo canal para una marca distinta a la
+    // que se identificó antes (WhatsApp es un solo número para todo el holding).
+    // Le damos al modelo el catálogo para que reconozca el cambio y use la
+    // herramienta — sin esto, la conversación queda "pegada" al primer venue.
+    const otrosVenues = venues.filter((v: { bu_id: string }) => v.bu_id !== ctx.bu.id)
+    if (otrosVenues.length) {
+      const listaOtros = otrosVenues.map((v: { business_units: { code: string; name: string } }) => `${v.business_units?.name} (${v.business_units?.code})`).join(', ')
+      lines.push(`CAMBIO DE VENUE: si el cliente menciona CLARAMENTE otro venue del holding — ${listaOtros} — usa identificar_venue con su código y sigue la conversación sobre ESE venue desde ahí (olvídate del anterior). Si hay ambigüedad (dice "el otro lugar" sin decir cuál, o no estás seguro), pregúntale primero a cuál se refiere — no cambies de venue a ciegas.`)
+    }
     if (ctx.cfg?.persona_note) lines.push(`Voz de este venue: ${ctx.cfg.persona_note}`)
     const maxPax = ctx.cfg?.escalate_over_pax ?? 12
     lines.push(`Grupos mayores a ${maxPax} personas: usa escalar_a_humano SIN crear reserva — eventos de ese tamaño los arma el equipo directamente.`)

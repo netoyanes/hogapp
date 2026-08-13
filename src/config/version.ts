@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.71.0"
+export const APP_VERSION = "2.72.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.72.0",
+    date: "2026-08-13",
+    type: "MINOR",
+    changes: [
+      "BOT — cambio de venue en la misma conversación: si el cliente ya identificado en un venue pregunta por otra marca del holding, el bot ya no se queda 'pegado' — reconoce el cambio y sigue la charla sobre el venue nuevo",
+      "BOT — responde en el idioma del cliente: si escribe un mensaje completo en otro idioma, el bot le contesta en ese idioma de ahí en adelante (antes forzaba español siempre)",
+      "Concierge → Config: LINK DIRECTO por marca — con el mismo WhatsApp del holding, cada venue tiene su link (wa.me) con el mensaje prellenado mencionando su nombre, para pegar en bio/stories/anuncios; el cliente llega identificando el venue solo, sin preguntas",
+    ]
+  },
   {
     version: "2.71.0",
     date: "2026-08-13",
