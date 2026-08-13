@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.74.0"
+export const APP_VERSION = "2.75.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.75.0",
+    date: "2026-08-13",
+    type: "MINOR",
+    changes: [
+      "MI RESUMEN — la lista de tareas ahora incluye también las tareas donde estás RELACIONADO (no solo las asignadas a ti), marcadas con un ojo",
+      "Orden nuevo: lo más vencido primero, y dentro del mismo día lo tuyo antes que lo relacionado, por prioridad",
+      "Sistema de color por fase en el borde izquierdo de cada tarea (gris abierta · azul en progreso · ámbar evidencia · rojo revisión · verde aprobada) + mini funnel ·—·—·—· que muestra de un vistazo qué tan avanzada va, con leyenda al pie",
+    ]
+  },
   {
     version: "2.74.0",
     date: "2026-08-13",

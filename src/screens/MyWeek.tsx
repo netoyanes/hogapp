@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckSquare, Clock, MessageCircle, CalendarDays, Handshake, Banknote, Timer, MailOpen, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { CheckSquare, Clock, MessageCircle, CalendarDays, Handshake, Banknote, Timer, MailOpen, TrendingUp, TrendingDown, Minus, Eye } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { BUChip, KPITile } from '../components/v2'
@@ -16,6 +16,8 @@ import { BUChip, KPITile } from '../components/v2'
 interface MyTask {
   id: string; title: string; status: string; priority: string
   due_date: string | null; estimated_hours: number | null; bu_id: string | null
+  assigned_to: string | null
+  mine?: boolean // asignada a mí (vs. solo relacionado/seguidor)
 }
 interface UnreadRow { scope: 'task' | 'event' | 'deal'; entity_id: string; title: string; unread: number; last_at: string }
 interface MyPlan { id: string; name: string; date: string | null; end_date: string | null; bu_id: string; status: string }
@@ -38,6 +40,41 @@ const CMT_CFG: Record<string, { table: string; author: string }> = {
   task:  { table: 'task_comments',  author: 'author_id' },
   event: { table: 'event_comments', author: 'author_id' },
   deal:  { table: 'crm_activities', author: 'created_by' },
+}
+
+// ── Fases de la tarea: color a la izquierda + funnel de 4 pasos ──────────────
+// El funnel dibuja  ·—·—·—·  y se llena hasta la fase actual. REVISION cae en
+// el paso de evidencia (regresó de ahí), pintado en rojo.
+const PHASE: Record<string, { step: number; color: string; label: string }> = {
+  OPEN:            { step: 0, color: '#8A8A8A', label: 'Abierta' },
+  IN_PROGRESS:     { step: 1, color: '#3B82F6', label: 'En progreso' },
+  PROOF_SUBMITTED: { step: 2, color: '#EAB308', label: 'Evidencia enviada' },
+  REVISION:        { step: 2, color: '#EF4444', label: 'En revisión' },
+  APPROVED:        { step: 3, color: '#22C55E', label: 'Aprobada' },
+}
+const PRIO_RANK: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
+
+function FunnelBar({ status }: { status: string }) {
+  const p = PHASE[status] ?? PHASE.OPEN
+  return (
+    <span title={p.label} aria-label={p.label}
+      style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+      {[0, 1, 2, 3].map(i => {
+        const on = i <= p.step
+        const isNow = i === p.step
+        return (
+          <Fragment key={i}>
+            {i > 0 && <span style={{ width: 9, height: 1.5, background: on ? p.color : 'var(--border-default)', opacity: on ? 0.7 : 1 }} />}
+            <span style={{
+              width: isNow ? 6 : 4, height: isNow ? 6 : 4, borderRadius: '50%',
+              background: on ? p.color : 'var(--border-default)',
+              boxShadow: isNow ? `0 0 0 2.5px color-mix(in srgb, ${p.color} 22%, transparent)` : undefined,
+            }} />
+          </Fragment>
+        )
+      })}
+    </span>
+  )
 }
 
 const fmtMoney = (n: number) =>
@@ -105,9 +142,16 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
 
   const load = useCallback(async () => {
     if (!userId) return
+    // Tareas donde estoy relacionado (seguidor), además de las asignadas a mí
+    const { data: fw } = await supabase.from('task_followers').select('task_id').eq('user_id', userId)
+    const followerIds = [...new Set((fw ?? []).map(f => f.task_id as string))]
+    const taskFilter = followerIds.length
+      ? `assigned_to.eq.${userId},id.in.(${followerIds.join(',')})`
+      : `assigned_to.eq.${userId}`
+
     const [{ data: tk }, { data: pl }, { data: bus }, rpc, { data: myActs }, { data: allDeals }, { data: doneTasks }, { data: reads }] = await Promise.all([
-      supabase.from('tasks').select('id, title, status, priority, due_date, estimated_hours, bu_id')
-        .eq('assigned_to', userId).eq('archived', false).neq('status', 'APPROVED').order('due_date', { ascending: true, nullsFirst: false }),
+      supabase.from('tasks').select('id, title, status, priority, due_date, estimated_hours, bu_id, assigned_to')
+        .or(taskFilter).eq('archived', false).neq('status', 'APPROVED').order('due_date', { ascending: true, nullsFirst: false }),
       supabase.from('event_plans').select('id, name, date, end_date, bu_id, status')
         .or(`responsible.eq.${userId},created_by.eq.${userId}`).neq('status', 'cancelled').order('date', { ascending: true, nullsFirst: false }),
       supabase.from('business_units').select('id, code'),
@@ -122,7 +166,7 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
       supabase.from('comment_reads').select('scope, comment_id, read_at').eq('user_id', userId)
         .gte('read_at', prevMonthStart + 'T00:00:00').order('read_at', { ascending: false }).limit(600),
     ])
-    setTasks((tk ?? []) as MyTask[])
+    setTasks(((tk ?? []) as MyTask[]).map(t => ({ ...t, mine: t.assigned_to === userId })))
     setPlans(((pl ?? []) as MyPlan[]).filter(p => p.date && (p.end_date ?? p.date)! >= todayISO).slice(0, 6))
     setBuList(bus ?? [])
     setUnread(((rpc.data ?? []) as UnreadRow[]))
@@ -198,11 +242,18 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
   const buCode = useMemo(() => Object.fromEntries(buList.map(b => [b.id, b.code])), [buList])
   const unreadByEntity = useMemo(() => Object.fromEntries(unread.map(u => [`${u.scope}:${u.entity_id}`, u.unread])), [unread])
 
-  // Tareas de la semana: con fecha dentro de la semana o ya vencidas
+  // Tareas de la semana (con fecha dentro de la semana o ya vencidas), en el
+  // orden en que conviene atacarlas: lo más vencido primero, y dentro del
+  // mismo día lo tuyo antes que donde solo estás relacionado, por prioridad.
   const weekTasks = useMemo(() =>
     tasks.filter(t => t.due_date && t.due_date <= sunday)
-      .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? '')),
+      .sort((a, b) =>
+        (a.due_date ?? '').localeCompare(b.due_date ?? '')
+        || (a.mine === b.mine ? 0 : a.mine ? -1 : 1)
+        || (PRIO_RANK[a.priority] ?? 3) - (PRIO_RANK[b.priority] ?? 3)
+        || (PHASE[b.status]?.step ?? 0) - (PHASE[a.status]?.step ?? 0)),
     [tasks, sunday])
+  const relatedCount = weekTasks.filter(t => !t.mine).length
   const totalUnread = unread.reduce((s, u) => s + Number(u.unread), 0)
 
   // Deltas del mes: en deals/$ subir es bueno; en tiempos, bajar es bueno
@@ -254,7 +305,7 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
 
         {/* HOY — lo accionable ahora mismo */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <KPITile label="Tareas esta semana" value={loading ? '…' : String(weekTasks.length)} hint={`${tasks.length} abiertas en total`} icon={<CheckSquare size={12} style={{ color: 'var(--accent)' }} />} />
+          <KPITile label="Tareas esta semana" value={loading ? '…' : String(weekTasks.length)} hint={`Asignadas a ti y donde estás relacionado · ${tasks.length} abiertas en total`} icon={<CheckSquare size={12} style={{ color: 'var(--accent)' }} />} />
           <KPITile label="Mensajes sin leer" value={loading ? '…' : String(totalUnread)} color={totalUnread > 0 ? 'var(--accent)' : undefined} hint="En tareas, proyectos y deals donde estás relacionado" icon={<MessageCircle size={12} style={{ color: totalUnread > 0 ? 'var(--accent)' : 'var(--text-tertiary)' }} />} />
         </div>
 
@@ -297,30 +348,50 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
           )}
         </div>
 
-        {/* Mis tareas de la semana */}
+        {/* Tareas de la semana — asignadas a mí + donde estoy relacionado */}
         <div style={card}>
-          <p style={secTitle}><CheckSquare size={12} /> Mis tareas de la semana {weekTasks.length > 0 && `· ${weekTasks.length}`}</p>
+          <p style={secTitle}>
+            <CheckSquare size={12} /> Mis tareas de la semana {weekTasks.length > 0 && `· ${weekTasks.length}`}
+            {relatedCount > 0 && (
+              <span style={{ fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'none', letterSpacing: 0 }}>
+                ({relatedCount} relacionada{relatedCount === 1 ? '' : 's'})
+              </span>
+            )}
+          </p>
           {weekTasks.length === 0 ? (
             <p style={{ color: 'var(--text-tertiary)', fontSize: 12, margin: 0 }}>Sin tareas con fecha esta semana.{tasks.length > 0 ? ` Tienes ${tasks.length} abiertas sin fecha próxima.` : ''}</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {weekTasks.map(t => {
                 const overdue = t.due_date! < todayISO
+                const phase = PHASE[t.status] ?? PHASE.OPEN
                 return (
                   <button key={t.id} onClick={() => onOpenTask(t.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left' }}>
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${phase.color}`, borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left' }}>
                     <span className="num" style={{ fontSize: 10, fontWeight: overdue ? 800 : 600, fontFamily: 'var(--font-mono)', color: overdue ? 'var(--status-risk)' : 'var(--text-tertiary)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                       <CalendarDays size={10} /> {fmtDay(t.due_date!)}
                     </span>
-                    <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                    {!t.mine && <Eye size={11} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} aria-label="Estás relacionado" />}
+                    <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', fontWeight: t.mine ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
                     {t.estimated_hours != null && (
                       <span className="num" style={{ fontSize: 10, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0 }}><Clock size={10} /> {t.estimated_hours}h</span>
                     )}
                     {t.bu_id && buCode[t.bu_id] && <BUChip code={buCode[t.bu_id]} size="sm" />}
-                    <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', flexShrink: 0 }}>{t.status}</span>
+                    <FunnelBar status={t.status} />
                   </button>
                 )
               })}
+            </div>
+          )}
+          {/* Leyenda del funnel — una línea, al pie */}
+          {weekTasks.length > 0 && (
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10, paddingTop: 9, borderTop: '1px solid var(--border-subtle)' }}>
+              {(['OPEN', 'IN_PROGRESS', 'PROOF_SUBMITTED', 'REVISION', 'APPROVED'] as const).map(s => (
+                <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: PHASE[s].color, flexShrink: 0 }} />
+                  {PHASE[s].label}
+                </span>
+              ))}
             </div>
           )}
         </div>
