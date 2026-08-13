@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.73.0"
+export const APP_VERSION = "2.73.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.73.1",
+    date: "2026-08-13",
+    type: "PATCH",
+    changes: [
+      "TAREA COMPARTIDA (?share=) ahora es PÚBLICA: cualquiera con el link ve todo el contenido — descripción, venue, asignado, links y evidencias — sin necesidad de iniciar sesión (antes pedía login con Google)",
+      "Las tareas PRIVADAS nunca se exponen por link, el chat interno del equipo no viaja, y cada vista queda registrada en Actividad ('anónimo' si no hay sesión); copy de la vista ahora en español",
+    ]
+  },
   {
     version: "2.73.0",
     date: "2026-08-13",
