@@ -649,7 +649,9 @@ const MENU = {
     {
       id: "bebidas",
       nombre: "Bebidas",
-      subtitulo: null,
+      subtitulo:
+        "Destilados y licores se sirven de 45 ml. Precios en pesos mexicanos, " +
+        "IVA incluido. La propina no es obligatoria.",
       estado: "activo",
       dias_visibles: null,
       grupos: [
@@ -722,10 +724,10 @@ const MENU = {
           estilo: "display",
           alineacion: "izquierda",
           items: [
-            { nombre: "400 Conejos",    precio: 220, unidad: "copa", estado: "activo" },
-            { nombre: "Amarás Espadín", precio: 260, unidad: "copa", estado: "activo" },
-            { nombre: "Montelobos",     precio: 260, unidad: "copa", estado: "activo" },
-            { nombre: "Ojo de Tigre",   precio: 230, unidad: "copa", estado: "activo" }
+            { nombre: "400 Conejos",    precio: 220, volumen_ml: 45, estado: "activo" },
+            { nombre: "Amarás Espadín", precio: 260, volumen_ml: 45, estado: "activo" },
+            { nombre: "Montelobos",     precio: 260, volumen_ml: 45, estado: "activo" },
+            { nombre: "Ojo de Tigre",   precio: 230, volumen_ml: 45, estado: "activo" }
           ]
         },
         {
@@ -733,14 +735,14 @@ const MENU = {
           estilo: "display",
           alineacion: "derecha",
           items: [
-            { nombre: "Dobel Diamante",    precio: 220, unidad: "copa", estado: "activo" },
-            { nombre: "Don Julio 70",      precio: 270, unidad: "copa", estado: "activo" },
-            { nombre: "7 Leguas Blanco",   precio: 190, unidad: "copa", estado: "activo" },
-            { nombre: "7 Leguas Reposado", precio: 210, unidad: "copa", estado: "activo" },
-            { nombre: "Tequileño",         precio: 190, unidad: "copa", estado: "activo" },
-            { nombre: "1800 Cristalino",   precio: 220, unidad: "copa", estado: "activo" },
-            { nombre: "Siete Machos",      precio: 190, unidad: "copa", estado: "activo" },
-            { nombre: "Velvique",          precio: 290, unidad: "copa", estado: "activo" }
+            { nombre: "Dobel Diamante",    precio: 220, volumen_ml: 45, estado: "activo" },
+            { nombre: "Don Julio 70",      precio: 270, volumen_ml: 45, estado: "activo" },
+            { nombre: "7 Leguas Blanco",   precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "7 Leguas Reposado", precio: 210, volumen_ml: 45, estado: "activo" },
+            { nombre: "Tequileño",         precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "1800 Cristalino",   precio: 220, volumen_ml: 45, estado: "activo" },
+            { nombre: "Siete Machos",      precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "Velvique",          precio: 290, volumen_ml: 45, estado: "activo" }
           ]
         },
 
@@ -752,10 +754,10 @@ const MENU = {
           estilo: "display",
           alineacion: "izquierda",
           items: [
-            { nombre: "Bacardí Blanco",    precio: 160, unidad: "copa", estado: "activo" },
-            { nombre: "Matusalem Platino", precio: 170, unidad: "copa", estado: "activo" },
-            { nombre: "Havana 7",          precio: 190, unidad: "copa", estado: "activo" },
-            { nombre: "Zacapa 23",         precio: 240, unidad: "copa", estado: "activo" }
+            { nombre: "Bacardí Blanco",    precio: 160, volumen_ml: 45, estado: "activo" },
+            { nombre: "Matusalem Platino", precio: 170, volumen_ml: 45, estado: "activo" },
+            { nombre: "Havana 7",          precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "Zacapa 23",         precio: 240, volumen_ml: 45, estado: "activo" }
           ]
         },
 
@@ -767,9 +769,9 @@ const MENU = {
           estilo: "display",
           alineacion: "derecha",
           items: [
-            { nombre: "Bombay Sapphire", precio: 190, unidad: "copa", estado: "activo" },
-            { nombre: "Tanqueray",       precio: 210, unidad: "copa", estado: "activo" },
-            { nombre: "Hendrick's",      precio: 240, unidad: "copa", estado: "activo" }
+            { nombre: "Bombay Sapphire", precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "Tanqueray",       precio: 210, volumen_ml: 45, estado: "activo" },
+            { nombre: "Hendrick's",      precio: 240, volumen_ml: 45, estado: "activo" }
           ]
         },
 
@@ -781,10 +783,10 @@ const MENU = {
           estilo: "display",
           alineacion: "izquierda",
           items: [
-            { nombre: "Johnnie Walker Black Label", precio: 230, unidad: "copa", estado: "activo" },
-            { nombre: "Bulleit",                    precio: 200, unidad: "copa", estado: "activo" },
-            { nombre: "Jack Daniel's",              precio: 210, unidad: "copa", estado: "activo" },
-            { nombre: "Chivas 12",                  precio: 230, unidad: "copa", estado: "activo" }
+            { nombre: "Johnnie Walker Black Label", precio: 230, volumen_ml: 45, estado: "activo" },
+            { nombre: "Bulleit",                    precio: 200, volumen_ml: 45, estado: "activo" },
+            { nombre: "Jack Daniel's",              precio: 210, volumen_ml: 45, estado: "activo" },
+            { nombre: "Chivas 12",                  precio: 230, volumen_ml: 45, estado: "activo" }
           ]
         },
 
@@ -796,8 +798,8 @@ const MENU = {
           estilo: "display",
           alineacion: "derecha",
           items: [
-            { nombre: "Stoli",      precio: 170, unidad: "copa", estado: "activo" },
-            { nombre: "Grey Goose", precio: 220, unidad: "copa", estado: "activo" }
+            { nombre: "Stoli",      precio: 170, volumen_ml: 45, estado: "activo" },
+            { nombre: "Grey Goose", precio: 220, volumen_ml: 45, estado: "activo" }
           ]
         },
 
@@ -809,13 +811,13 @@ const MENU = {
           estilo: "display",
           alineacion: "izquierda",
           items: [
-            { nombre: "Fernet Branca", precio: 180, unidad: "copa", estado: "activo" },
-            { nombre: "Licor 43",      precio: 180, unidad: "copa", estado: "activo" },
-            { nombre: "Baileys",       precio: 180, unidad: "copa", estado: "activo" },
-            { nombre: "Sambuca Negro", precio: 180, unidad: "copa", estado: "activo" },
-            { nombre: "Strega",        precio: 190, unidad: "copa", estado: "activo" },
-            { nombre: "Campari",       precio: 170, unidad: "copa", estado: "activo" },
-            { nombre: "Aperol",        precio: 170, unidad: "copa", estado: "activo" }
+            { nombre: "Fernet Branca", precio: 180, volumen_ml: 45, estado: "activo" },
+            { nombre: "Licor 43",      precio: 180, volumen_ml: 45, estado: "activo" },
+            { nombre: "Baileys",       precio: 180, volumen_ml: 45, estado: "activo" },
+            { nombre: "Sambuca Negro", precio: 180, volumen_ml: 45, estado: "activo" },
+            { nombre: "Strega",        precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "Campari",       precio: 170, volumen_ml: 45, estado: "activo" },
+            { nombre: "Aperol",        precio: 170, volumen_ml: 45, estado: "activo" }
           ]
         },
 
@@ -1362,14 +1364,18 @@ if (typeof module !== "undefined" && module.exports) {
     const li = crear("li", "item item--display");
     li.appendChild(crear("span", "display__nombre", item.nombre));
     if (item.descripcion) li.appendChild(crear("p", "display__desc", item.descripcion));
-    if (item.precio != null) li.appendChild(crear("span", "display__precio", lineaPrecio(item)));
+    if (item.precio != null) {
+      const detalle = detalleServicio(item);
+      li.appendChild(crear("span", "display__precio", lineaPrecio(item) + (detalle ? " · " + detalle : "")));
+    }
     return li;
   }
 
   // Estilo "leader": renglón compacto con línea corrida hasta el precio.
   function renderItemLeader(item) {
     const li = crear("li", "item item--leader");
-    li.appendChild(crear("span", "leader__nombre", item.nombre));
+    const detalle = detalleServicio(item);
+    li.appendChild(crear("span", "leader__nombre", item.nombre + (detalle ? " · " + detalle : "")));
     li.appendChild(crear("span", "leader__linea"));
     if (item.precio != null) li.appendChild(crear("span", "leader__precio", lineaPrecio(item)));
     return li;
