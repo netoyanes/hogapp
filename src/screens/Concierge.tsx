@@ -1010,6 +1010,7 @@ function ConfigTab({ buList }: { buList: BU[] }) {
           pay={payments.find(p => p.bu_id === bu.id) ?? null}
           info={infos.find(i => i.bu_id === bu.id) ?? null}
           health={health} botEnabled={botEnabled} faqTableMissing={faqTableMissing}
+          waNumber={waNumber}
           onReload={load} />
       ))}
     </div>
@@ -1017,7 +1018,7 @@ function ConfigTab({ buList }: { buList: BU[] }) {
 }
 
 // ─── Caja de venue: header slim + bullets expandibles ────────────────────────
-function VenueBox({ bu, cfgs, pay, info, health, botEnabled, faqTableMissing, onReload }: {
+function VenueBox({ bu, cfgs, pay, info, health, botEnabled, faqTableMissing, waNumber, onReload }: {
   bu: BU
   cfgs: VenueConfig[]
   pay: PaymentConfig | null
@@ -1025,6 +1026,7 @@ function VenueBox({ bu, cfgs, pay, info, health, botEnabled, faqTableMissing, on
   health: Record<string, ChanHealth>
   botEnabled: boolean
   faqTableMissing: boolean
+  waNumber: string
   onReload: () => void
 }) {
   const [open, setOpen] = useState<Set<string>>(new Set())
@@ -1033,6 +1035,7 @@ function VenueBox({ bu, cfgs, pay, info, health, botEnabled, faqTableMissing, on
   const [ritmo, setRitmo] = useState({ delay: 45, followup: 5, escalate: 12, winStart: '11:00', winEnd: '23:00' })
   const [faq, setFaq] = useState('')
   const [saving, setSaving] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   useEffect(() => {
     setVoz(cfgs.find(c => c.persona_note)?.persona_note ?? '')
@@ -1127,6 +1130,18 @@ function VenueBox({ bu, cfgs, pay, info, health, botEnabled, faqTableMissing, on
     onReload()
   }
 
+  // Link directo por marca: mismo número del holding, pero el texto prefilled
+  // menciona el venue — el bot lo identifica al instante sin preguntar a cuál
+  // se refiere. Útil para pegar en bio/stories/anuncios de cada cuenta.
+  const waDigits = waNumber.replace(/\D/g, '')
+  const waLink = waDigits ? `https://wa.me/${waDigits}?text=${encodeURIComponent(`Hola! Quiero reservar en ${bu.name} 🙌`)}` : null
+  function copyWaLink() {
+    if (!waLink) return
+    navigator.clipboard.writeText(waLink)
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 2000)
+  }
+
   const inp: React.CSSProperties = { width: '100%', minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
   const okLine = (txt: string) => (
@@ -1184,6 +1199,25 @@ function VenueBox({ bu, cfgs, pay, info, health, botEnabled, faqTableMissing, on
                     <label style={lbl}>Cuenta conectada (IG account id)</label>
                     <input defaultValue={cfg.external_account ?? ''} placeholder="Se llena al conectar Meta" className="num"
                       onBlur={e => saveAccount(cfg, e.target.value)} style={inp} />
+                  </div>
+                )}
+                {cfg?.enabled && ch === 'whatsapp' && (
+                  <div style={{ paddingLeft: 22 }}>
+                    {waLink ? (
+                      <>
+                        <label style={lbl}>Link directo de {bu.code} — el cliente ya llega identificando el venue</label>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input readOnly value={waLink} onFocus={e => e.target.select()} className="num" style={{ ...inp, color: 'var(--text-secondary)' }} />
+                          <button onClick={copyWaLink}
+                            style={{ minHeight: 40, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: 'none', background: linkCopied ? 'color-mix(in srgb, var(--status-healthy) 15%, transparent)' : 'var(--bg-base)', color: linkCopied ? 'var(--status-healthy)' : 'var(--text-secondary)', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                            {linkCopied ? 'Copiado' : 'Copiar'}
+                          </button>
+                        </div>
+                        <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '5px 0 0' }}>Pégalo en la bio, stories o anuncios de {bu.name} — un solo número para todo el holding, pero cada marca abre la conversación identificándose sola.</p>
+                      </>
+                    ) : (
+                      <p style={{ fontSize: 11, color: 'var(--status-attention)', margin: 0 }}>Falta guardar el "WhatsApp del holding" arriba para generar este link.</p>
+                    )}
                   </div>
                 )}
               </div>
