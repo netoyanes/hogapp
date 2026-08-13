@@ -86,6 +86,21 @@ export function PublicReservation({ code }: { code: string }) {
     } catch { /* sin cuerpo legible — cae al genérico */ }
     return { errMsg: 'No se pudo enviar. Intenta de nuevo.' }
   }
+  // Si la fecha es HOY, fuera los horarios que ya pasaron (más 15 min de
+  // margen para llegar). Madrugada (<6:00) cuenta como la misma noche.
+  const sinPasados = (list: string[], f: string) => {
+    if (f !== hoyISO) return list
+    const now = new Date()
+    let nowMin = now.getHours() * 60 + now.getMinutes()
+    if (nowMin < 360) nowMin += 1440
+    return list.filter(s => {
+      const [h, m] = s.split(':').map(Number)
+      let v = h * 60 + (m || 0)
+      if (v < 360) v += 1440
+      return v >= nowMin + 15
+    })
+  }
+
   useEffect(() => {
     if (!fecha || !(parseInt(pax, 10) > 0) || !info?.supported) { setSlots(null); setSlotsMode('free'); return }
     setSlotsLoading(true)
@@ -94,7 +109,7 @@ export function PublicReservation({ code }: { code: string }) {
         .then(({ data, error }) => {
           // Function viejo sin 'slots' o modo libre → hora libre (degrada bien)
           if (error || !data || data.mode === 'free') { setSlots(null); setSlotsMode('free'); setSlotsLoading(false); return }
-          const list = (data.slots ?? []) as string[]
+          const list = sinPasados((data.slots ?? []) as string[], fecha)
           setSlotsMode('slots')
           setSlots(list)
           setSlotsLoading(false)
@@ -228,15 +243,29 @@ export function PublicReservation({ code }: { code: string }) {
           <div><span style={lbl}>WhatsApp</span>
             <input value={telefono} onChange={e => setTelefono(e.target.value)} inputMode="tel" placeholder="10 dígitos" style={inp} required /></div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}><span style={lbl}>Fecha</span>
-              <input type="date" value={fecha} min={hoyISO} onChange={e => setFecha(e.target.value)} style={inp} required /></div>
+            {/* minWidth 0 + appearance none: el date input de iOS ignora width
+                y se sale del margen si no se resetea su apariencia nativa */}
+            <div style={{ flex: 1, minWidth: 0 }}><span style={lbl}>Fecha</span>
+              <input type="date" value={fecha} min={hoyISO} onChange={e => setFecha(e.target.value)}
+                style={{ ...inp, maxWidth: '100%', minWidth: 0, appearance: 'none', WebkitAppearance: 'none' }} required /></div>
             {!usePicker && (
-              <div style={{ flex: 1 }}><span style={lbl}>Hora de llegada</span>
-                <input type="time" value={horario} onChange={e => setHorario(e.target.value)} style={inp} required /></div>
+              <div style={{ flex: 1, minWidth: 0 }}><span style={lbl}>Hora de llegada</span>
+                <input type="time" value={horario} onChange={e => setHorario(e.target.value)}
+                  style={{ ...inp, maxWidth: '100%', minWidth: 0, appearance: 'none', WebkitAppearance: 'none' }} required /></div>
             )}
           </div>
           <div><span style={lbl}>Personas</span>
-            <input type="number" min={1} max={tableEngine ? (info?.online_max_pax ?? 40) : 40} value={pax} onChange={e => setPax(e.target.value)} style={inp} required />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button type="button" aria-label="Menos personas"
+                onClick={() => setPax(String(Math.max(1, (parseInt(pax, 10) || 2) - 1)))}
+                style={{ width: 52, height: 52, borderRadius: 14, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 24, fontWeight: 700, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>−</button>
+              <input type="number" min={1} max={tableEngine ? (info?.online_max_pax ?? 40) : 40} value={pax}
+                onChange={e => setPax(e.target.value)} inputMode="numeric"
+                style={{ ...inp, textAlign: 'center', fontWeight: 800, fontSize: 20, flex: 1, minWidth: 0 }} required />
+              <button type="button" aria-label="Más personas"
+                onClick={() => setPax(String(Math.min(tableEngine ? (info?.online_max_pax ?? 40) : 40, (parseInt(pax, 10) || 1) + 1)))}
+                style={{ width: 52, height: 52, borderRadius: 14, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 24, fontWeight: 700, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>+</button>
+            </div>
             {tableEngine && info?.online_max_pax && parseInt(pax, 10) > info.online_max_pax && (
               <p style={{ color: 'var(--status-attention)', fontSize: 12, margin: '6px 0 0' }}>
                 Para grupos de más de {info.online_max_pax} escríbenos por WhatsApp y el equipo te arma la mesa.
