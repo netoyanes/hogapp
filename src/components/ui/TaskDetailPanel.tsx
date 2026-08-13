@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check, Link2, Plus, Trash2, ExternalLink, Copy } from 'lucide-react'
+import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check, Link2, Plus, Trash2, ExternalLink, Copy, FolderKanban } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, proofUploadedMessage, taskAssignedMessage, notifyUserDM, taskLink } from '../../hooks/useSlack'
 import { changeTaskStatus } from '../../lib/taskActions'
 import { logActivity } from '../../hooks/useActivityLog'
 import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
-import { useSheetLayer } from '../v2'
+import { useSheetLayer, Sheet, showToast } from '../v2'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
 import { HtmlFrame } from './HtmlFrame'
@@ -193,6 +193,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
   const [dragOver, setDragOver] = useState(false)
   const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
   const [copied, setCopied] = useState(false)
+  const [convertOpen, setConvertOpen] = useState(false)
   const [approvedAt, setApprovedAt] = useState<string | null>(null)
   // Metadata collapses so comments + evidence get the vertical space (mobile-first)
   const [metaOpen, setMetaOpen] = useState(!isMobile)
@@ -568,6 +569,12 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
               )}
             </div>
             <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+              {!task.event_id && (
+                <button onClick={() => setConvertOpen(true)} title="Convertir en proyecto"
+                  style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', padding: '5px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <FolderKanban size={13} />
+                </button>
+              )}
               <button onClick={copyShareLink} title="Copy share link" style={{ color: copied ? 'var(--accent)' : 'var(--text-secondary)', background: copied ? 'var(--accent-bg)' : 'var(--bg-elevated)', border: `1px solid ${copied ? 'var(--accent-border)' : 'var(--border-default)'}`, padding: '5px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontFamily: 'var(--font-ui)' }}>
                 {copied ? <><Check size={12} /> Copied!</> : <Share2 size={13} />}
               </button>
@@ -1016,6 +1023,148 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
           </a>
         </div>
       )}
+
+      {/* Convertir en proyecto — la tarea y su gente se trasladan a Proyectos */}
+      {convertOpen && (
+        <ConvertToProjectSheet
+          task={task} buList={buList} teamMembers={teamMembers} followers={followers} isMobile={isMobile}
+          onClose={() => setConvertOpen(false)}
+          onConverted={() => { setConvertOpen(false); notifyUpdated(); onClose() }}
+        />
+      )}
     </>
+  )
+}
+
+// ─── Convertir la tarea en proyecto (Proyectos) ──────────────────────────────
+// Traslado completo: se crea el proyecto con los datos de la tarea, la tarea
+// queda ligada como su primera tarea, y las personas relacionadas que elijas
+// viajan con ella (siguen la tarea y quedan como colaboradores del proyecto).
+function ConvertToProjectSheet({ task, buList, teamMembers, followers, isMobile, onClose, onConverted }: {
+  task: Task
+  buList: { id: string; code: string; name: string }[]
+  teamMembers: { id: string; full_name: string | null; email: string | null }[]
+  followers: { userId: string; name: string }[]
+  isMobile: boolean
+  onClose: () => void
+  onConverted: () => void
+}) {
+  const KINDS = [
+    { id: 'otro', label: 'Proyecto' }, { id: 'evento', label: 'Evento' }, { id: 'adecuacion', label: 'Adecuación' },
+    { id: 'remodelacion', label: 'Remodelación' }, { id: 'apertura', label: 'Apertura' }, { id: 'mantenimiento', label: 'Mantenimiento' },
+  ]
+  const [name, setName] = useState(task.title)
+  const [buId, setBuId] = useState(task.bu_id ?? '')
+  const [kind, setKind] = useState('otro')
+  const [endDate, setEndDate] = useState(task.due_date ?? '')
+  const [responsible, setResponsible] = useState(task.assigned_to ?? '')
+  // Personas relacionadas: arranca con las que ya siguen la tarea; aquí se
+  // agregan/quitan y TODAS se trasladan al proyecto.
+  const [people, setPeople] = useState<Set<string>>(() => new Set(followers.map(f => f.userId)))
+  const [saving, setSaving] = useState(false)
+
+  const nameOf = (id: string) => {
+    const m = teamMembers.find(x => x.id === id)
+    return m?.full_name ?? m?.email ?? ''
+  }
+  const togglePerson = (id: string) => setPeople(p => {
+    const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n
+  })
+
+  async function convert() {
+    if (!name.trim()) { showToast('Ponle nombre al proyecto.', 'error'); return }
+    if (!buId) { showToast('Elige el venue del proyecto.', 'error'); return }
+    setSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const hoy = new Date()
+    const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`
+    const colaboradores = [...people].map(nameOf).filter(Boolean).join(', ')
+    const { data: plan, error } = await supabase.from('event_plans').insert({
+      bu_id: buId, name: name.trim(), description: task.description, kind,
+      date: hoyISO, end_date: endDate || null, event_type: 'otro', status: 'planning',
+      responsible: responsible || null, collaborators: colaboradores || null,
+      created_by: user?.id ?? null,
+    }).select('id').single()
+    if (error || !plan) { setSaving(false); showToast(`No se pudo crear el proyecto: ${error?.message}`, 'error'); return }
+
+    // La tarea se traslada: queda como la primera tarea del proyecto
+    const { error: linkErr } = await supabase.from('tasks').update({ event_id: plan.id }).eq('id', task.id)
+    if (linkErr) showToast(`Proyecto creado, pero la tarea no se pudo ligar: ${linkErr.message}`, 'error')
+
+    // Las personas elegidas que aún no seguían la tarea, ahora la siguen
+    const nuevos = [...people].filter(id => !followers.some(f => f.userId === id))
+    if (nuevos.length) {
+      await supabase.from('task_followers').insert(nuevos.map(uid => ({ task_id: task.id, user_id: uid })))
+    }
+
+    logActivity('task_converted_to_project', 'event', plan.id, { task: task.title, name: name.trim(), personas: people.size })
+    setSaving(false)
+    showToast('Proyecto creado — la tarea y su gente se trasladaron.', 'success')
+    // Abrir el proyecto recién creado en Proyectos
+    localStorage.setItem('hog_pending_project', plan.id)
+    window.dispatchEvent(new CustomEvent('hog:goto-projects'))
+    onConverted()
+  }
+
+  const inp: React.CSSProperties = { width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }
+  const lb: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
+
+  return (
+    <Sheet open onClose={onClose} isMobile={isMobile} width={440}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-3) 0' }}>
+          <h2 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FolderKanban size={16} style={{ color: 'var(--accent)' }} /> Convertir en proyecto
+          </h2>
+          <button onClick={onClose} aria-label="Cerrar" style={{ width: 36, height: 36, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 14px', lineHeight: 1.5 }}>
+          La tarea se traslada a Proyectos: queda como la primera tarea del proyecto nuevo, con su chat e historial intactos, y las personas que elijas viajan con ella.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><label style={lb}>Nombre del proyecto *</label><input value={name} onChange={e => setName(e.target.value)} style={inp} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div><label style={lb}>Venue *</label>
+              <select value={buId} onChange={e => setBuId(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                <option value="">Elegir…</option>
+                {buList.map(b => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
+              </select>
+            </div>
+            <div><label style={lb}>Tipo</label>
+              <select value={kind} onChange={e => setKind(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                {KINDS.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div><label style={lb}>Fecha objetivo</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="num" style={inp} /></div>
+            <div><label style={lb}>Responsable</label>
+              <select value={responsible} onChange={e => setResponsible(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                <option value="">Sin responsable</option>
+                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style={lb}>Personas relacionadas — se trasladan al proyecto {people.size > 0 && `· ${people.size}`}</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {teamMembers.map(m => {
+                const on = people.has(m.id)
+                return (
+                  <button key={m.id} onClick={() => togglePerson(m.id)}
+                    style={{ minHeight: 34, padding: '0 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: on ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${on ? 'var(--accent-border)' : 'var(--border-default)'}`, color: on ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                    {on ? '✓ ' : ''}{m.full_name ?? m.email}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <button onClick={convert} disabled={saving}
+            style={{ minHeight: 46, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Convirtiendo…' : 'Crear proyecto y trasladar'}
+          </button>
+        </div>
+      </div>
+    </Sheet>
   )
 }

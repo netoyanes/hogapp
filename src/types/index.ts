@@ -112,6 +112,8 @@ export interface Task {
   completed_at: string | null
   archived: boolean
   is_private: boolean
+  // Proyecto (event_plans) al que pertenece — null si es tarea suelta
+  event_id?: string | null
   created_at: string
   updated_at: string
 }

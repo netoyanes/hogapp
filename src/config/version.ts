@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.70.1"
+export const APP_VERSION = "2.71.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.71.0",
+    date: "2026-08-13",
+    type: "MINOR",
+    changes: [
+      "CONVERTIR TAREA EN PROYECTO: nuevo botón en la ficha de la tarea — crea el proyecto en Proyectos con los datos de la tarea (nombre, descripción, venue, fecha, responsable), la tarea se traslada como su primera tarea (chat e historial intactos) y ahí mismo eliges a las personas relacionadas, que viajan con ella (siguen la tarea y quedan como colaboradores del proyecto); al terminar te abre el proyecto nuevo",
+    ]
+  },
   {
     version: "2.70.1",
     date: "2026-08-13",
