@@ -349,12 +349,27 @@ export function Reservations({ userRole, userId }: Props) {
     window.dispatchEvent(new CustomEvent('hog:open-deal', { detail: deal.id }))
   }
 
-  async function setStatus(res: Reservation, status: ResStatus, reason?: string) {
+  // Confirmación automática por WhatsApp: el servidor (reservation-notify)
+  // decide la vía — chat del concierge (24 h) o plantilla aprobada — y hace
+  // dedup con confirm_sent_at. Devuelve si logró enviar.
+  async function autoNotify(resId: string, quiet = false): Promise<boolean> {
+    const { data, error } = await supabase.functions.invoke('reservation-notify', { body: { reservationId: resId } })
+    if (error) { if (!quiet) showToast('El aviso automático falló — usa el botón de WhatsApp.', 'error'); return false }
+    if (data?.ok) {
+      showToast(data.method === 'chat' ? 'Confirmación enviada por el chat del concierge ✅' : 'Confirmación enviada por WhatsApp ✅', 'success')
+      return true
+    }
+    if (data?.error && !quiet) showToast(`Aviso automático no salió: ${data.error}`, 'error')
+    return false
+  }
+
+  async function setStatus(res: Reservation, status: ResStatus, reason?: string, opts?: { notify?: boolean }) {
     const prev = res.status
     setReservations(rs => rs.map(r => r.id === res.id ? { ...r, status } : r))
     setMenuRes(null)
     const patch: Record<string, unknown> = { status, status_changed_by: userId ?? null }
     if (status === 'cancelled' && reason?.trim()) patch.cancel_reason = reason.trim()
+    if (status === 'confirmed') patch.confirmed_at = new Date().toISOString()
     const { error } = await supabase.from('reservations').update(patch).eq('id', res.id)
     if (error) {
       setReservations(rs => rs.map(r => r.id === res.id ? { ...r, status: prev } : r))
@@ -369,6 +384,9 @@ export function Reservations({ userRole, userId }: Props) {
     }
     if (status === 'completed') showToast('Reserva completada — visita registrada.', 'success')
     else showToast(`Reserva ${STATUS_META[status].label.toLowerCase()}.`, 'success')
+    // Al confirmar, el cliente recibe su confirmación solo (salvo que el
+    // llamador la mande él mismo, como el botón manual de WhatsApp).
+    if (status === 'confirmed' && (opts?.notify ?? true)) autoNotify(res.id, true)
   }
 
   // Confirmación por WhatsApp: confirma la reserva y envía el mensaje con el
@@ -383,7 +401,11 @@ export function Reservations({ userRole, userId }: Props) {
       const { error } = await supabase.from('reservations').update({ manage_token: token }).eq('id', res.id)
       if (error) { showToast(`No se pudo generar el link: ${error.message}`, 'error'); return }
     }
-    if (res.status === 'requested') await setStatus(res, 'confirmed')
+    if (res.status === 'requested') await setStatus(res, 'confirmed', undefined, { notify: false })
+    // Primero la vía automática (chat del concierge o plantilla); si el
+    // servidor no pudo (sin plantilla aprobada, ya enviada, etc.), cae al
+    // WhatsApp manual con el mensaje listo — este botón siempre resuelve.
+    if (await autoNotify(res.id, true)) return
     const venueName = buList.find(b => b.id === res.bu_id)?.name ?? buMap[res.bu_id] ?? ''
     const fechaTxt = new Date(res.date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
     const link = `${window.location.origin}/?mireserva=${token}`
@@ -1218,6 +1240,14 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
     notifySlack(reservationCreatedMessage(guest.full_name, buCode ?? '', date, time, pax))
     if (overbooking) logActivity('reservation_overbooked', 'reservation', data.id, { guest: guest.full_name, bu: buCode, time, pax })
     showToast(assigned ? `Reserva creada · ${assigned.nombre}.` : overbooking || (tableEngine && !assigned) ? 'Reserva creada con sobrecupo autorizado.' : 'Reserva creada.', 'success')
+    // Confirmación automática al cliente por WhatsApp (el servidor decide la
+    // vía: chat del concierge o plantilla; nunca duplica). Fire-and-forget.
+    if (confirmNow) {
+      supabase.functions.invoke('reservation-notify', { body: { reservationId: data.id } }).then(({ data: n }) => {
+        if (n?.ok) showToast(n.method === 'chat' ? 'Confirmación enviada por el chat del concierge ✅' : 'Confirmación enviada por WhatsApp ✅', 'success')
+        else if (n?.error) showToast(`Aviso automático no salió: ${n.error}`, 'error')
+      })
+    }
     onCreated()
   }
 

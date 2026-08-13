@@ -199,6 +199,22 @@ const TOOLS = [
     },
   },
   {
+    name: 'registrar_candidato',
+    description: 'Registra en la bolsa de trabajo del grupo a una persona que busca EMPLEO (vacantes, trabajo, "¿están contratando?"). Úsala cuando quien escribe busque trabajo y ya tengas al menos su nombre; pasa todo lo que haya compartido. Funciona aunque el venue no esté identificado.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        nombre: { type: 'string', description: 'Nombre completo' },
+        telefono: { type: 'string' },
+        puesto: { type: 'string', description: 'Puesto o área de interés (piso, barra, cocina, host, seguridad, marketing…)' },
+        experiencia: { type: 'string', description: 'Resumen breve de su experiencia, tal como la contó' },
+        ciudad: { type: 'string' },
+        instagram: { type: 'string', description: 'Su usuario de IG si escribe por ahí o lo compartió' },
+      },
+      required: ['nombre'],
+    },
+  },
+  {
     name: 'registrar_proveedor',
     description: 'Registra en el directorio comercial a una empresa o persona que escribe OFRECIENDO productos o servicios (uniformes, insumos, publicidad, software, etc.). Úsala cuando el mensaje sea claramente una oferta B2B, con los datos que ya haya compartido.',
     input_schema: {
@@ -386,8 +402,14 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
 // deno-lint-ignore no-explicit-any
 async function sendIfAny(ctx: any, text: string) {
   if (!text) return
-  await ctx.supabaseAdmin.from('bot_messages').insert({ conversation_id: ctx.conv.id, role: 'bot', body: text })
-  await sendChannelMessage(ctx.conv.channel, ctx.conv.external_id, text)
+  // Se inserta ANTES de enviar (así el eco del canal ya encuentra el texto en
+  // el hilo) y el mid del envío se guarda después: es la huella con la que el
+  // webhook distingue nuestros propios ecos de IG de respuestas del equipo
+  // escritas desde la app de Instagram.
+  const { data: row } = await ctx.supabaseAdmin.from('bot_messages').insert({ conversation_id: ctx.conv.id, role: 'bot', body: text }).select('id').single()
+  const sent = await sendChannelMessage(ctx.conv.channel, ctx.conv.external_id, text)
+  const mid = sent?.messages?.[0]?.id ?? sent?.message_id ?? null
+  if (row?.id && mid) await ctx.supabaseAdmin.from('bot_messages').update({ meta: { mid } }).eq('id', row.id)
   console.log('[agent] respuesta enviada por', ctx.conv.channel, '→', String(text).slice(0, 60))
 }
 
@@ -457,6 +479,7 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
     lines.push('DJ QUE QUIERE TOCAR: si quien escribe es un DJ/artista ofreciendo sus servicios, cambia a modo reclutador amable — captura (una o dos preguntas por mensaje): nombre artístico, géneros, ciudad, fee aproximado, links de mixes/IG y teléfono. Con lo que tengas usa registrar_dj, dile que el booker escuchará su material y le responde por aquí, y cierra con escalar_a_humano ("DJ interesado: [nombre]"). NUNCA negocies fees, NUNCA prometas fechas — eso es del booker.')
   }
   lines.push('IMÁGENES: si el historial muestra "[📎 El cliente envió una imagen]" en el contexto de un apartado, es casi seguro su comprobante de depósito: agradécele, dile que el equipo lo valida y confirma, y usa escalar_a_humano con motivo "Comprobante de apartado recibido — validar" si la conversación no está ya escalada.')
+  lines.push('BOLSA DE TRABAJO: si quien escribe busca EMPLEO o pregunta por vacantes ("¿están contratando?", "busco trabajo"), NO es un cliente — JAMÁS le ofrezcas una reserva ni lo regreses al funnel de venta. Cambia a modo reclutador cálido: dile que al grupo siempre le interesa conocer talento y captura (una o dos preguntas por mensaje): nombre completo, teléfono, puesto o área que le interesa (piso, barra, cocina, host, seguridad, marketing…), experiencia breve y ciudad. Con lo que tengas usa registrar_candidato — funciona aunque el venue no esté identificado — y dile que el equipo revisa los perfiles y le responde por este mismo canal si hay una vacante que encaje, sin prometer empleo ni entrevista.')
   lines.push('PROVEEDORES: si quien escribe es una empresa o persona OFRECIENDO productos o servicios (uniformes, insumos, publicidad, software, distribuidores…), NO lo despaches ni lo trates como cliente de reservas. Agradece su interés y captura sus datos — muchos mandan TODO en un solo mensaje (empresa, nombre, servicio, teléfono, correo, ciudad): tómalo de ahí, NO re-preguntes lo que ya dieron. Usa registrar_proveedor con esos datos, dile que el equipo de compras y alianzas revisa las propuestas y le responde por este mismo canal si hay interés, y cierra con escalar_a_humano ("Proveedor registrado: [empresa] — [servicio]"). NUNCA compres, agendes reuniones ni compartas correos del equipo.')
   lines.push('EVENTOS: si el cliente quiere un evento (cumpleaños grande, despedida, corporativo, renta del lugar), NO lo despaches directo — captura primero esta información, una pregunta a la vez: (1) ¿qué fecha tienen en mente?, (2) ¿aproximadamente cuántas personas serían?, (3) ¿qué tipo de evento u ocasión es?, (4) ¿buscan un área reservada o el lugar completo?, y su nombre y teléfono si aún no los tienes. Ya con eso, usa escalar_a_humano con TODO el resumen en el motivo ("Evento: cumpleaños, ~40 pax, 26 de julio, área reservada — María, tel registrado") — así el equipo llega a cerrar la venta, no a re-preguntar.')
   if (publicUrl) lines.push(`Cuando pidas el teléfono por primera vez, comparte una sola vez este enlace de aviso de privacidad: ${publicUrl}/?aviso=1 — así el cliente sabe cómo cuidamos su dato antes de dártelo. No lo repitas en cada mensaje.`)
@@ -704,6 +727,25 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
       })
       await notifySlackFromEdge(supabaseAdmin, `🎧 *DJ interesado vía Concierge* — ${ctx.bu?.name ?? 'venue'}\n${nombre}${input.generos ? ` · ${input.generos}` : ''}${input.ciudad ? ` · ${input.ciudad}` : ''}${input.fee_aproximado ? ` · ~$${input.fee_aproximado} MXN` : ''}${input.links ? `\n${input.links}` : ''}`)
       return { ok: true, dj_id: djId, ya_existia: !!existente, instruccion: 'Dile que el booker va a escuchar su material y le responde por este mismo canal. NO prometas fechas ni negocies fee — usa escalar_a_humano con motivo "DJ interesado: [nombre]" para cerrar tu parte.' }
+    }
+
+    case 'registrar_candidato': {
+      // Bolsa de trabajo del grupo: el bot registra y agradece — nunca promete
+      // empleo, entrevista ni sueldo. La revisión es del equipo (Reclutamiento).
+      const nombreCand = String(input.nombre ?? '').trim()
+      if (!nombreCand) return { error: 'Falta el nombre.' }
+      const telCand = input.telefono ? normalizePhoneMX(String(input.telefono)) : null
+      const { error: candErr } = await supabaseAdmin.from('job_candidates').insert({
+        bu_id: ctx.conv.bu_id ?? null, conversation_id: ctx.conv.id, channel: ctx.conv.channel, source: 'concierge',
+        full_name: nombreCand, phone: telCand,
+        area: input.puesto ? String(input.puesto).trim() : null,
+        experience: input.experiencia ? String(input.experiencia).trim() : null,
+        city: input.ciudad ? String(input.ciudad).trim() : null,
+        ig_handle: input.instagram ? String(input.instagram).trim().replace(/^@/, '') : null,
+      })
+      if (candErr) return { error: 'No se pudo registrar: ' + candErr.message }
+      await notifySlackFromEdge(supabaseAdmin, `🧑‍🍳 *Candidato vía Concierge* — ${ctx.bu?.name ?? 'grupo'}\n${nombreCand}${input.puesto ? ` · ${input.puesto}` : ''}${input.ciudad ? ` · ${input.ciudad}` : ''}${telCand ? ` · ${telCand}` : ''}`)
+      return { ok: true, instruccion: 'Dile que el equipo revisa los perfiles y le responde por este mismo canal si hay una vacante que encaje — SIN prometer empleo ni entrevista, y SIN ofrecerle una reserva.' }
     }
 
     case 'registrar_proveedor': {

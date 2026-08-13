@@ -61,16 +61,19 @@ Deno.serve(async (req: Request) => {
     if (!conv) return new Response(JSON.stringify({ error: 'Conversación no encontrada' }), { status: 404, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
     // Enviar al canal real (las simuladas nunca tocan Meta)
+    let mid: string | null = null
     if (!conv.is_simulated) {
       const sent = await sendChannelMessage(conv.channel, conv.external_id, body.trim())
       if (!sent.ok) {
         console.error('[concierge-send] envío falló', JSON.stringify(sent.data))
         return new Response(JSON.stringify({ error: sent.data?.error?.message ?? 'Meta rechazó el envío' }), { status: 502, headers: { ...CORS, 'Content-Type': 'application/json' } })
       }
+      // mid del envío: huella para que el webhook reconozca nuestro propio eco de IG
+      mid = sent.data?.messages?.[0]?.id ?? sent.data?.message_id ?? null
     }
 
     // Guardar y tomar la conversación: responder como humano calla al bot
-    await supabaseAdmin.from('bot_messages').insert({ conversation_id: conversationId, role: 'agent', body: body.trim() })
+    await supabaseAdmin.from('bot_messages').insert({ conversation_id: conversationId, role: 'agent', body: body.trim(), meta: mid ? { mid } : null })
     const patch: Record<string, unknown> = { last_sender: 'agent', last_message_at: new Date().toISOString(), next_bot_reply_at: null, next_followup_at: null }
     if (conv.status !== 'human') Object.assign(patch, { status: 'human', assigned_to: conv.assigned_to ?? user.id, taken_at: new Date().toISOString() })
     await supabaseAdmin.from('bot_conversations').update(patch).eq('id', conversationId)
