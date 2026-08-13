@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { Fragment, useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { Plus, X, Search, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save, Clock, CalendarDays, UserPlus, MessageCircle, Trash2, Copy, Archive, ArchiveRestore, Pencil, Link2, Unlink } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
@@ -6,6 +6,7 @@ import { notifySlack, notifyUserDM } from '../hooks/useSlack'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { EntityChat } from '../components/ui/EntityChat'
 import { useContextMenu, type CtxItem } from '../components/ui/ContextMenu'
+import { phaseOf, FunnelBar, PhaseLegend } from '../components/ui/TaskPhase'
 import { BUChip, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ interface TaskLite {
   id: string; title: string; status: string
   assigned_to?: string | null; due_date?: string | null; estimated_hours?: number | null
 }
-interface PlanTask { title: string; status: string; due_date: string | null }
+interface PlanTask { id: string; title: string; status: string; due_date: string | null; assigned_to?: string | null }
 interface Resource { id: string; name: string; qty: number; unit_cost: number | null; notes: string | null }
 interface BudgetItem { id: string; concept: string; amount: number; actual_amount: number | null; is_income: boolean; deal_id: string | null }
 interface Approval { id: string; action: 'submitted' | 'approved' | 'returned'; comment: string | null; actor: string | null; created_at: string }
@@ -155,7 +156,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
       supabase.from('event_plans').select('*').order('date', { ascending: true, nullsFirst: false }),
       supabase.from('business_units').select('id, code, name').order('name'),
       supabase.from('profiles').select('id, full_name').order('full_name'),
-      supabase.from('tasks').select('event_id, status, title, due_date').not('event_id', 'is', null),
+      supabase.from('tasks').select('id, event_id, status, title, due_date, assigned_to').not('event_id', 'is', null),
       supabase.from('project_templates').select('*').order('name'),
     ])
     setTemplates((tpl ?? []) as Template[])
@@ -168,7 +169,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
       const p = (pm[t.event_id] = pm[t.event_id] ?? { done: 0, total: 0 })
       p.total++
       if (t.status === 'APPROVED') p.done++ // estado terminal real de tasks
-      ;(tm[t.event_id] = tm[t.event_id] ?? []).push({ title: t.title, status: t.status, due_date: t.due_date })
+      ;(tm[t.event_id] = tm[t.event_id] ?? []).push({ id: t.id, title: t.title, status: t.status, due_date: t.due_date, assigned_to: t.assigned_to })
     }
     setProgress(pm)
     setPlanTasks(tm)
@@ -376,7 +377,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
           </div>
         ) : view === 'timeline' ? (
           <div style={{ padding: isMobile ? '0' : 16 }}>
-            <TimelineView rows={filteredBase} buMap={buMap} progress={progress} planTasks={planTasks} onOpen={ev => setEditing(ev)} isMobile={isMobile} />
+            <TimelineView rows={filteredBase} buMap={buMap} progress={progress} planTasks={planTasks} onOpen={ev => setEditing(ev)} onOpenTask={onOpenTask} isMobile={isMobile} />
           </div>
         ) : view === 'board' ? (
           <div style={{ padding: isMobile ? 0 : 16 }}>
@@ -700,14 +701,21 @@ function CalendarView({ rows, month, onMonth, onOpen, isMobile, buMap }: {
 // ── Timeline (Gantt): una barra por proyecto sobre una ventana de semanas, con
 // hitos de tareas (rombos por fecha límite), avance dentro de la barra y la
 // línea de HOY — el "general" para medir tiempos de un vistazo ────────────────
-function TimelineView({ rows, buMap, progress, planTasks, onOpen, isMobile }: {
+function TimelineView({ rows, buMap, progress, planTasks, onOpen, onOpenTask, isMobile }: {
   rows: EventPlan[]
   buMap: Record<string, string>
   progress: Record<string, { done: number; total: number }>
   planTasks: Record<string, PlanTask[]>
   onOpen: (ev: EventPlan) => void
+  onOpenTask?: (id: string) => void
   isMobile: boolean
 }) {
+  // Proyectos desplegados: al abrirlos, cada tarea baja como su propia fila
+  // del timeline — se ve QUÉ tiene el proyecto y CÓMO va, no solo el avance.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const toggleExpand = (id: string) => setExpanded(p => {
+    const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n
+  })
   const DAY = 86400000
   const toD = (s: string) => new Date(s + 'T00:00:00')
   const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -807,15 +815,27 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, isMobile }: {
                   arr.push(t); hitosByDate.set(t.due_date, arr)
                 }
               }
+              const tareas = planTasks[ev.id] ?? []
+              const isOpen = expanded.has(ev.id)
               return (
-                <div key={ev.id} className="hover:bg-[var(--bg-base)]" style={{ display: 'flex', minHeight: rowH, borderBottom: '1px solid var(--border-subtle)', alignItems: 'stretch' }}>
-                  <button onClick={() => onOpen(ev)} style={{ width: labelW, flexShrink: 0, padding: '6px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', overflow: 'hidden' }}>
-                    <div style={{ fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }}>
-                      <BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" />
-                      <span className="num" style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{durDays} d · {resta}</span>
-                    </div>
-                  </button>
+                <Fragment key={ev.id}>
+                <div className="hover:bg-[var(--bg-base)]" style={{ display: 'flex', minHeight: rowH, borderBottom: '1px solid var(--border-subtle)', alignItems: 'stretch' }}>
+                  <div style={{ width: labelW, flexShrink: 0, display: 'flex', alignItems: 'stretch', overflow: 'hidden' }}>
+                    {tareas.length > 0 && (
+                      <button onClick={() => toggleExpand(ev.id)} aria-expanded={isOpen}
+                        title={isOpen ? 'Ocultar tareas' : `Ver sus ${tareas.length} tareas en el timeline`}
+                        style={{ width: 20, flexShrink: 0, border: 'none', background: 'none', color: isOpen ? 'var(--accent)' : 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                        <ChevronRight size={13} style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
+                      </button>
+                    )}
+                    <button onClick={() => onOpen(ev)} style={{ flex: 1, minWidth: 0, padding: tareas.length ? '6px 8px 6px 2px' : '6px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', overflow: 'hidden' }}>
+                      <div style={{ fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }}>
+                        <BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" />
+                        <span className="num" style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{durDays} d · {resta}</span>
+                      </div>
+                    </button>
+                  </div>
                   <div style={{ flex: 1, position: 'relative' }}>
                     <button onClick={() => onOpen(ev)} title={`${ev.name} · ${fechaLabel(ev)}${pg ? ` · ${pg.done}/${pg.total} tareas` : ''}`}
                       style={{ position: 'absolute', left: `${leftPct}%`, width: `${widthPct}%`, top: '50%', transform: 'translateY(-50%)', height: isMobile ? 22 : 24, borderRadius: 6, border: `1px solid ${color}`, background: `color-mix(in srgb, ${color} 22%, transparent)`, cursor: 'pointer', overflow: 'hidden', padding: 0, zIndex: 1, display: 'flex', alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>
@@ -847,14 +867,47 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, isMobile }: {
                     })}
                   </div>
                 </div>
+
+                {/* Timeline POR TAREAS: cada tarea, su fase y su fecha */}
+                {isOpen && tareas.map(t => {
+                  const ph = phaseOf(t.status)
+                  const enVentana = !!t.due_date && t.due_date >= start && t.due_date <= endISO
+                  const vencida = !!t.due_date && t.due_date < todayISO && t.status !== 'APPROVED'
+                  return (
+                    <div key={t.id} style={{ display: 'flex', minHeight: 32, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-base)', alignItems: 'stretch' }}>
+                      <button onClick={() => onOpenTask?.(t.id)} title={`${t.title} · ${ph.label}${t.due_date ? ` · vence ${t.due_date.slice(5)}` : ' · sin fecha'}`}
+                        style={{ width: labelW, flexShrink: 0, padding: '4px 8px 4px 26px', background: 'none', border: 'none', textAlign: 'left', overflow: 'hidden', cursor: onOpenTask ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: ph.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: isMobile ? 10 : 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                      </button>
+                      <div style={{ flex: 1, position: 'relative' }}>
+                        {enVentana ? (
+                          <button onClick={() => onOpenTask?.(t.id)} title={`${t.title} · ${ph.label} · vence ${t.due_date!.slice(5)}`}
+                            style={{ position: 'absolute', left: `calc(${pctOf(t.due_date!, true)}% - 7px)`, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, borderRadius: '50%', background: ph.color, border: `1.5px solid ${vencida ? 'var(--status-risk)' : 'var(--bg-surface)'}`, cursor: onOpenTask ? 'pointer' : 'default', padding: 0, zIndex: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
+                        ) : t.due_date ? (
+                          // Fuera de la ventana: flecha al borde por donde queda
+                          <span className="num" title={`Vence ${t.due_date}`} style={{ position: 'absolute', [t.due_date < start ? 'left' : 'right']: 4, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: ph.color, fontFamily: 'var(--font-mono)', opacity: 0.75 }}>
+                            {t.due_date < start ? '‹' : '›'} {t.due_date.slice(5)}
+                          </span>
+                        ) : (
+                          <span className="num" style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>sin fecha</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+                </Fragment>
               )
             })}
           </div>
         </div>
       )}
-      <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 8 }}>
-        ◆ ámbar = tarea con fecha límite pendiente · ◆ verde = aprobada · la línea roja es hoy · toca la barra para abrir el proyecto.
-      </p>
+      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <PhaseLegend />
+        <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: 0 }}>
+          ◆ hitos sobre la barra del proyecto · la línea roja es hoy · abre ▸ para ver sus tareas en el timeline (el punto marca su fecha límite, con borde rojo si va tarde).
+        </p>
+      </div>
     </div>
   )
 }
@@ -1796,12 +1849,13 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 const dueColor = done || dueDays === null ? 'var(--text-tertiary)'
                   : dueDays < 0 ? 'var(--status-risk)' : dueDays <= 2 ? '#E8A33D' : 'var(--text-tertiary)'
                 const dueLabel = t.due_date ? new Date(t.due_date + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : null
+                const ph = phaseOf(t.status)
                 return (
                   <button key={t.id} onClick={() => onOpenTask?.(t.id)}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 5, width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left', minHeight: 44, marginBottom: 6 }}>
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 5, width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${ph.color}`, borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left', minHeight: 44, marginBottom: 6 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }}>{t.title}</span>
-                      <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', flexShrink: 0 }}>{t.status}</span>
+                      <FunnelBar status={t.status} />
                       {event && (
                         <span role="button" title="Desvincular del proyecto (la tarea sigue viva en Tareas)"
                           onClick={e => { e.stopPropagation(); unlinkTask(t.id) }}

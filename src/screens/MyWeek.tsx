@@ -1,9 +1,10 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckSquare, Clock, MessageCircle, CalendarDays, Handshake, Banknote, Timer, MailOpen, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { BUChip, KPITile } from '../components/v2'
 import { Avatar } from '../components/ui/Avatar'
+import { TASK_PHASE as PHASE, phaseOf, FunnelBar, PhaseLegend } from '../components/ui/TaskPhase'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MI RESUMEN — el dashboard personal orientado a PRODUCTIVIDAD.
@@ -43,40 +44,7 @@ const CMT_CFG: Record<string, { table: string; author: string }> = {
   deal:  { table: 'crm_activities', author: 'created_by' },
 }
 
-// ── Fases de la tarea: color a la izquierda + funnel de 4 pasos ──────────────
-// El funnel dibuja  ·—·—·—·  y se llena hasta la fase actual. REVISION cae en
-// el paso de evidencia (regresó de ahí), pintado en rojo.
-const PHASE: Record<string, { step: number; color: string; label: string }> = {
-  OPEN:            { step: 0, color: '#8A8A8A', label: 'Abierta' },
-  IN_PROGRESS:     { step: 1, color: '#3B82F6', label: 'En progreso' },
-  PROOF_SUBMITTED: { step: 2, color: '#EAB308', label: 'Evidencia enviada' },
-  REVISION:        { step: 2, color: '#EF4444', label: 'En revisión' },
-  APPROVED:        { step: 3, color: '#22C55E', label: 'Aprobada' },
-}
 const PRIO_RANK: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
-
-function FunnelBar({ status }: { status: string }) {
-  const p = PHASE[status] ?? PHASE.OPEN
-  return (
-    <span title={p.label} aria-label={p.label}
-      style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
-      {[0, 1, 2, 3].map(i => {
-        const on = i <= p.step
-        const isNow = i === p.step
-        return (
-          <Fragment key={i}>
-            {i > 0 && <span style={{ width: 9, height: 1.5, background: on ? p.color : 'var(--border-default)', opacity: on ? 0.7 : 1 }} />}
-            <span style={{
-              width: isNow ? 6 : 4, height: isNow ? 6 : 4, borderRadius: '50%',
-              background: on ? p.color : 'var(--border-default)',
-              boxShadow: isNow ? `0 0 0 2.5px color-mix(in srgb, ${p.color} 22%, transparent)` : undefined,
-            }} />
-          </Fragment>
-        )
-      })}
-    </span>
-  )
-}
 
 // ── Quién responde y quién está involucrado ─────────────────────────────────
 // El RESPONSABLE va primero y destacado (anillo de acento; "TÚ" si eres tú),
@@ -423,7 +391,7 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {weekTasks.map(t => {
                 const overdue = t.due_date! < todayISO
-                const phase = PHASE[t.status] ?? PHASE.OPEN
+                const phase = phaseOf(t.status)
                 return (
                   <button key={t.id} onClick={() => onOpenTask(t.id)}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${phase.color}`, borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left' }}>
@@ -445,14 +413,7 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
           {/* Leyenda: fases del funnel + cómo leer las personas */}
           {weekTasks.length > 0 && (
             <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {(['OPEN', 'IN_PROGRESS', 'PROOF_SUBMITTED', 'REVISION', 'APPROVED'] as const).map(s => (
-                  <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: PHASE[s].color, flexShrink: 0 }} />
-                    {PHASE[s].label}
-                  </span>
-                ))}
-              </div>
+              <PhaseLegend />
               <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.4 }}>
                 El círculo con anillo es el responsable (TÚ si es tuya); los de atrás, los involucrados. Pasa el cursor para ver los nombres.
               </p>

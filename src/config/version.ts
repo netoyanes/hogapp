@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.77.0"
+export const APP_VERSION = "2.78.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.78.0",
+    date: "2026-08-13",
+    type: "MINOR",
+    changes: [
+      "PROYECTOS · TIMELINE POR TAREAS: cada proyecto se despliega con ▸ y sus tareas bajan como filas propias del timeline — el punto marca su fecha límite, pintado con el color de su fase y con borde rojo si va tarde; las que caen fuera de la ventana se señalan con ‹ › y las que no tienen fecha se marcan como tal. Un clic abre la tarea",
+      "La lista de tareas dentro del proyecto usa el mismo lenguaje visual: barra de color por fase a la izquierda y mini funnel ·—·—·—· en lugar del estado en texto",
+      "El sistema de fases vive ahora en un solo lugar (mismo color = mismo significado en Mi Resumen y en Proyectos)",
+    ]
+  },
   {
     version: "2.77.0",
     date: "2026-08-13",
