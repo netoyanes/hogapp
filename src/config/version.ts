@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.72.0"
+export const APP_VERSION = "2.73.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.73.0",
+    date: "2026-08-13",
+    type: "MINOR",
+    changes: [
+      "MI RESUMEN rediseñado hacia productividad: fuera las horas (son el indicador del Master para medir al equipo, no de autogestión)",
+      "Nuevos KPIs mensuales con variación vs mes anterior (▲/▼): DEALS ACTIVOS y $ EN JUEGO (los que creaste o donde participas), TIEMPO DE RESPUESTA A ACTIVIDADES (de creada a cerrada) y A MENSAJES (de recibido a leído, medido con las ✓✓)",
+      "El color del indicador premia la dirección correcta: más deals/$ en verde, tiempos de respuesta a la baja en verde",
+    ]
+  },
   {
     version: "2.72.0",
     date: "2026-08-13",
