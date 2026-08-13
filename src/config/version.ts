@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.70.0"
+export const APP_VERSION = "2.70.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.70.1",
+    date: "2026-08-13",
+    type: "PATCH",
+    changes: [
+      "FIX: el mensaje manual de confirmación por WhatsApp (wa.me) ahora va en texto plano sin emojis — en algunos teléfonos el prefill los corrompía (�) y llegaba a romper el link de 'mi reserva'",
+    ]
+  },
   {
     version: "2.70.0",
     date: "2026-08-13",
