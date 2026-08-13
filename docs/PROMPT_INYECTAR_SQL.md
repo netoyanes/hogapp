@@ -5,9 +5,17 @@
 > 2. Debajo, describe en lenguaje natural el evento, proyecto, remodelación o
 >    tareas que quieres crear.
 > 3. La IA te devuelve **un solo bloque de SQL**.
-> 4. Mándaselo al Master. Él lo revisa y lo ejecuta en Supabase.
+> 4. Mándaselo al Master **tal cual, sin editarlo tú** (copia completa, del
+>    `begin;` al `commit;` con los comentarios de RESUMEN al final).
 >
-> El Master es el único que ejecuta. Tú solo entregas el SQL propuesto.
+> **El Master lo aplica desde la propia app — ya no hace falta entrar a
+> Supabase.** En HOG APP, abajo a la derecha, hay un botón verde **⚡SQL**
+> (solo él lo ve). Ahí pega el SQL, la app le muestra EXACTAMENTE qué se
+> crearía — proyectos, tareas, recursos, presupuesto, con venue, responsable,
+> fechas y montos ya resueltos, no el texto crudo — y solo si lo firma se
+> guarda. Nada se aplica sin ese paso.
+>
+> Tú solo entregas el SQL propuesto. Nunca lo ejecutas tú.
 
 ---
 
@@ -15,7 +23,9 @@
 
 Eres un generador de SQL para **HOG APP**, la app de operación de un holding de
 hospitalidad en México (PostgreSQL / Supabase). Tu única salida es SQL listo
-para ejecutar en el SQL Editor de Supabase.
+para pegarse en el botón ⚡SQL de la app (que lo revisa y lo aplica con
+`fn_sql_inject`) — el mismo texto también sirve si alguien lo corre a mano en
+el SQL Editor de Supabase, así que no cambies el formato por eso.
 
 ### Reglas duras
 
@@ -36,6 +46,9 @@ para ejecutar en el SQL Editor de Supabase.
    calcula la fecha real y escríbela explícita, mencionando qué día asumiste.
 7. Al final del SQL, agrega **un bloque de comentarios** con: qué se va a
    crear (conteos), qué supuestos tomaste y qué datos faltan.
+8. **Nunca insertes en `profiles`, `user_apps`, `app_settings`,
+   `finance_*` ni `invitations`.** Son permisos, ajustes globales o dinero —
+   quedan fuera de esta vía a propósito y el servidor los rechaza igual.
 
 ### Cómo referenciar cosas sin conocer los UUIDs
 
@@ -284,17 +297,32 @@ commit;
 
 ---
 
-## PARA EL MASTER (antes de ejecutar)
+## PARA EL MASTER — cómo aplicarlo (botón ⚡SQL en la app)
 
-1. **Léelo completo.** Confirma que solo hay `INSERT` y que el `begin/commit`
-   está presente.
-2. **Verifica los correos**: si un `(select id from profiles where email=…)` no
-   encuentra a nadie, ese campo queda en `null` silenciosamente — la tarea se
-   crea sin asignar. No falla, pero tampoco avisa.
-3. **Revisa el venue**: un código equivocado hace que el `insert` falle por
-   `bu_id` nulo en `event_plans` (es obligatorio). En `tasks` no falla, solo
-   queda sin venue.
-4. Ejecútalo en **Supabase → SQL Editor**. Si algo truena, la transacción se
-   revierte sola y no queda basura.
-5. Si te arrepientes después de ejecutar: en la app, **archiva** el proyecto o
-   las tareas (clic derecho → Archivar). No borres filas a mano.
+1. Abre HOG APP → botón verde **⚡SQL** (abajo a la derecha, solo tú lo ves).
+2. **Pega el SQL completo** tal como te lo mandaron, del `begin;` al final de
+   los comentarios de RESUMEN.
+3. Toca **Previsualizar**. La app corre el SQL de verdad contra la base y lo
+   revierte — el preview que ves es exacto, no una interpretación. Aparece
+   agrupado en Proyectos / Tareas / Recursos / Presupuesto, con los nombres
+   y montos ya resueltos (no los UUIDs ni el texto crudo).
+4. Revisa con cuidado dos cosas, porque el sistema NO las bloquea:
+   - **Tareas marcadas en ámbar** = quedarían sin asignar. Casi siempre es
+     porque el correo de esa persona no existe en HOG APP — revísalo antes
+     de firmar, o corrígelo ahí mismo en el textarea y vuelve a previsualizar.
+   - **El venue de cada proyecto/tarea** — un código de venue equivocado deja
+     el proyecto sin `bu_id` y falla al firmar (es obligatorio); en tareas
+     sueltas no falla, solo queda sin venue asignado.
+5. Si editas el SQL después de previsualizar, el botón de firmar se apaga
+   solo — vuelve a tocar Previsualizar antes de poder firmar.
+6. **Firmar y aplicar.** Ahí sí se guarda. Si algo truena a medio camino, la
+   transacción se revierte completa — no queda nada a medias.
+7. Queda registrado en Actividad con tu usuario y el SQL aplicado.
+8. Si te arrepientes después de firmar: en la app, **archiva** el proyecto o
+   las tareas (clic derecho → Archivar). No se borra nada por esta vía.
+
+### Alternativa (sin la app)
+
+El mismo SQL también se puede correr a mano en **Supabase → SQL Editor** — es
+el mismo texto, así que sigue siendo válido como respaldo si el botón no
+estuviera disponible por algún motivo.
