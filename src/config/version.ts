@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.83.0"
+export const APP_VERSION = "2.83.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.83.1",
+    date: "2026-08-14",
+    type: "PATCH",
+    changes: [
+      "FIX importante: cuando la confirmación automática por WhatsApp fallaba, la app NO avisaba — quedabas creyendo que al cliente se le había avisado. Ahora el error siempre se muestra y dice qué revisar",
+      "Los casos de 'no aplica' (walk-in, confirmación ya enviada, reserva sin confirmar) ahora se explican en vez de quedarse callados",
+    ]
+  },
   {
     version: "2.83.0",
     date: "2026-08-14",
