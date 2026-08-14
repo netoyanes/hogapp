@@ -104,6 +104,27 @@ async function handleWhatsApp(supabaseAdmin: any, body: any) {
     for (const change of entry.changes ?? []) {
       const value = change.value
       const phoneNumberId = value?.metadata?.phone_number_id
+
+      // ── Reportes de ENTREGA ──────────────────────────────────────────────
+      // Meta responde 200 al ACEPTAR un envío; si la entrega falla después
+      // (número que no está en WhatsApp, usuario que bloqueó, plantilla
+      // pausada por calidad), lo avisa aquí. Ignorar esto convertía cada
+      // envío en una caja negra: la app decía "enviado" y nadie sabía que
+      // nunca llegó.
+      for (const st of value?.statuses ?? []) {
+        if (st.status === 'failed') {
+          const err = st.errors?.[0] ?? {}
+          const detalle = [err.title, err.message, err.error_data?.details].filter(Boolean).join(' — ')
+          console.error('[webhook] ENTREGA FALLIDA', st.recipient_id, '| código', err.code, '|', detalle, '| wamid', st.id)
+          await supabaseAdmin.from('activity_log').insert({
+            user_id: null, action: 'wa_delivery_failed', entity_type: 'whatsapp', entity_id: null,
+            details: { actor: 'WhatsApp', destinatario: st.recipient_id, codigo: err.code ?? null, motivo: detalle || 'sin detalle', wamid: st.id ?? null },
+          })
+        } else {
+          console.log('[webhook] entrega', st.status, st.recipient_id, st.id)
+        }
+      }
+
       for (const msg of value?.messages ?? []) {
         const from = msg.from as string
         const contactName = value.contacts?.[0]?.profile?.name ?? null
