@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.82.1"
+export const APP_VERSION = "2.83.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.83.0",
+    date: "2026-08-14",
+    type: "MINOR",
+    changes: [
+      "MI RESUMEN — 'Mis proyectos próximos' ahora trae TIMELINE, con el mismo lenguaje visual que las tareas: barra de color por fase a la izquierda (idea · en marcha · en revisión · aprobado · terminado) y una mini barra de avance",
+      "La mini barra dice de un vistazo si el proyecto va a tiempo: el relleno son las tareas terminadas y la línea vertical es HOY. Si HOY va adelante del relleno, el proyecto viene atrasado y la barra se pinta en rojo",
+      "Cada proyecto muestra también su avance en tareas (3/8) y su leyenda al pie",
+    ]
+  },
   {
     version: "2.82.1",
     date: "2026-08-14",

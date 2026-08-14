@@ -46,6 +46,46 @@ const CMT_CFG: Record<string, { table: string; author: string }> = {
 
 const PRIO_RANK: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
 
+// ── Fase del proyecto — mismo criterio de color que las tareas ───────────────
+const PLAN_PHASE: Record<string, { label: string; color: string }> = {
+  idea:     { label: 'Idea',        color: '#8A8A8A' },
+  planning: { label: 'En marcha',   color: '#E8A33D' },
+  review:   { label: 'En revisión', color: '#EF4444' },
+  approved: { label: 'Aprobado',    color: '#3B82F6' },
+  done:     { label: 'Terminado',   color: '#22C55E' },
+}
+const planPhase = (s: string) => PLAN_PHASE[s] ?? PLAN_PHASE.idea
+
+// Mini timeline del proyecto: la barra es su duración, el relleno es el avance
+// real de tareas y la línea vertical es HOY. Si la línea va más adelante que el
+// relleno, el proyecto viene atrasado — eso es lo que se lee de un vistazo.
+function PlanTimeline({ start, end, done, total, color }: {
+  start: string; end: string; done: number; total: number; color: string
+}) {
+  const DAY = 86400000
+  const t0 = new Date(start + 'T00:00:00').getTime()
+  const t1 = new Date(end + 'T00:00:00').getTime() + DAY   // el último día cuenta completo
+  const span = Math.max(t1 - t0, DAY)
+  const elapsed = Math.min(Math.max((Date.now() - t0) / span, 0), 1)
+  const progress = total ? done / total : 0
+  // Atrasado = ya se consumió más tiempo del trabajo que se ha hecho
+  const atrasado = total > 0 && elapsed > progress + 0.15 && progress < 1
+  const tono = progress >= 1 ? 'var(--status-healthy)' : atrasado ? 'var(--status-risk)' : color
+
+  return (
+    <span
+      title={total
+        ? `${done}/${total} tareas · ${Math.round(elapsed * 100)}% del tiempo transcurrido${atrasado ? ' · viene atrasado' : ''}`
+        : `${Math.round(elapsed * 100)}% del tiempo transcurrido · sin tareas`}
+      style={{ position: 'relative', flex: 1, minWidth: 44, maxWidth: 130, height: 6, background: 'var(--bg-base)', borderRadius: 3, overflow: 'hidden', flexShrink: 0 }}>
+      <span style={{ position: 'absolute', inset: 0, width: `${progress * 100}%`, background: `color-mix(in srgb, ${tono} 70%, transparent)`, borderRadius: 3 }} />
+      {elapsed > 0 && elapsed < 1 && (
+        <span style={{ position: 'absolute', left: `calc(${elapsed * 100}% - 1px)`, top: -1, bottom: -1, width: 2, background: 'var(--text-primary)', opacity: 0.75 }} />
+      )}
+    </span>
+  )
+}
+
 // ── Quién responde y quién está involucrado ─────────────────────────────────
 // El RESPONSABLE va primero y destacado (anillo de acento; "TÚ" si eres tú),
 // y detrás los involucrados en círculos más chicos y encimados. Así sabes de
@@ -137,6 +177,7 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
   const [metrics, setMetrics] = useState<MonthMetrics | null>(null)
   const [people, setPeople] = useState<Record<string, string>>({})            // userId → nombre
   const [taskPeople, setTaskPeople] = useState<Record<string, string[]>>({})  // taskId → seguidores
+  const [planProgress, setPlanProgress] = useState<Record<string, { done: number; total: number }>>({})
   const [loading, setLoading] = useState(true)
 
   // Semana actual (lun-dom) + fronteras de mes actual y anterior
@@ -185,10 +226,25 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
       supabase.from('profiles').select('id, full_name, email'),
     ])
     setTasks(((tk ?? []) as MyTask[]).map(t => ({ ...t, mine: t.assigned_to === userId })))
-    setPlans(((pl ?? []) as MyPlan[]).filter(p => p.date && (p.end_date ?? p.date)! >= todayISO).slice(0, 6))
+    const misPlanes = ((pl ?? []) as MyPlan[]).filter(p => p.date && (p.end_date ?? p.date)! >= todayISO).slice(0, 6)
+    setPlans(misPlanes)
     setBuList(bus ?? [])
     setUnread(((rpc.data ?? []) as UnreadRow[]))
     setPeople(Object.fromEntries((profs ?? []).map(p => [p.id, p.full_name ?? p.email ?? 'Sin nombre'])))
+
+    // Avance de cada proyecto: cuántas de sus tareas están aprobadas
+    if (misPlanes.length) {
+      const { data: pt } = await supabase.from('tasks').select('event_id, status')
+        .in('event_id', misPlanes.map(p => p.id)).eq('archived', false)
+      const pp: Record<string, { done: number; total: number }> = {}
+      for (const t of pt ?? []) {
+        const k = t.event_id as string
+        pp[k] = pp[k] ?? { done: 0, total: 0 }
+        pp[k].total++
+        if (t.status === 'APPROVED') pp[k].done++
+      }
+      setPlanProgress(pp)
+    } else setPlanProgress({})
 
     // Quién más está involucrado en cada tarea que se va a mostrar
     const shownIds = (tk ?? []).map(t => t.id)
@@ -432,18 +488,41 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {plans.map(p => {
                 const msgs = unreadByEntity[`event:${p.id}`]
+                const ph = planPhase(p.status)
+                const pg = planProgress[p.id] ?? { done: 0, total: 0 }
+                const fin = p.end_date ?? p.date!
+                const arrancado = p.date! <= todayISO
                 return (
                   <button key={p.id} onClick={() => openPlan(p.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left' }}>
-                    <span className="num" style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', flexShrink: 0 }}>
-                      {p.date ? fmtDay(p.date) : '—'}{p.end_date && p.end_date !== p.date ? ` – ${fmtDay(p.end_date)}` : ''}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${ph.color}`, borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left' }}>
+                    <span className="num" title={ph.label} style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: arrancado ? 'var(--text-secondary)' : 'var(--text-tertiary)', flexShrink: 0, width: isMobile ? 58 : 96 }}>
+                      {p.date ? fmtDay(p.date) : '—'}{p.end_date && p.end_date !== p.date && !isMobile ? ` – ${fmtDay(p.end_date)}` : ''}
                     </span>
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                    {buCode[p.bu_id] && <BUChip code={buCode[p.bu_id]} size="sm" />}
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                    {pg.total > 0 && !isMobile && (
+                      <span className="num" style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>{pg.done}/{pg.total}</span>
+                    )}
+                    <PlanTimeline start={p.date!} end={fin} done={pg.done} total={pg.total} color={ph.color} />
+                    {buCode[p.bu_id] && !isMobile && <BUChip code={buCode[p.bu_id]} size="sm" />}
                     {msgs && <span className="num" style={{ minWidth: 20, height: 20, borderRadius: 10, background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px', flexShrink: 0 }}>{msgs}</span>}
                   </button>
                 )
               })}
+            </div>
+          )}
+          {plans.length > 0 && (
+            <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {(['idea', 'planning', 'review', 'approved', 'done'] as const).map(s => (
+                  <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: PLAN_PHASE[s].color, flexShrink: 0 }} />
+                    {PLAN_PHASE[s].label}
+                  </span>
+                ))}
+              </div>
+              <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.4 }}>
+                En la barra, el relleno son las tareas terminadas y la línea vertical es HOY. Si la línea va adelante del relleno, el proyecto viene atrasado y la barra se pinta en rojo.
+              </p>
             </div>
           )}
         </div>
