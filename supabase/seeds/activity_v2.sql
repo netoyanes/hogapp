@@ -85,7 +85,9 @@ as $$
 $$;
 
 -- ── 4. Quién no está usando la app ──────────────────────────────────────────
--- Usuarios activos con su última acción (o nunca). Ordenados por más olvidados.
+-- Cada perfil con su última acción (o nunca). Ordenados por más olvidados.
+-- No se filtra por "activo" porque profiles no lleva esa bandera: una cuenta
+-- que nunca se usó también es información — o sobra, o alguien no entró nunca.
 create or replace function public.fn_activity_idle_users(p_dias int default 14)
 returns table(user_id uuid, nombre text, rol text, ultima timestamptz, dias_sin_usar int)
 language sql
@@ -93,14 +95,13 @@ security definer
 set search_path = public
 as $$
   select p.id,
-         coalesce(p.full_name, p.email),
-         p.role,
+         coalesce(p.full_name, p.email, 'Sin nombre'),
+         coalesce(p.role, '—'),
          max(a.created_at),
          case when max(a.created_at) is null then 9999
               else extract(day from now() - max(a.created_at))::int end
   from profiles p
   left join activity_log a on a.user_id = p.id
-  where coalesce(p.active, true) = true
   group by p.id, p.full_name, p.email, p.role
   having max(a.created_at) is null
       or max(a.created_at) < now() - make_interval(days => p_dias)
