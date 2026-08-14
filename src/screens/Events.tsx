@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { Plus, X, Search, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save, Clock, CalendarDays, UserPlus, MessageCircle, Trash2, Copy, Archive, ArchiveRestore, Pencil, Link2, Unlink } from 'lucide-react'
+import { Plus, X, Search, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save, Clock, CalendarDays, UserPlus, MessageCircle, Trash2, Copy, Archive, ArchiveRestore, Pencil, Link2, Unlink, Paperclip, Settings, ShieldCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import { notifySlack, notifyUserDM } from '../hooks/useSlack'
@@ -50,8 +50,24 @@ interface TaskLite {
   assigned_to?: string | null; due_date?: string | null; estimated_hours?: number | null
 }
 interface PlanTask { id: string; title: string; status: string; due_date: string | null; assigned_to?: string | null }
-interface Resource { id: string; name: string; qty: number; unit_cost: number | null; notes: string | null }
-interface BudgetItem { id: string; concept: string; amount: number; actual_amount: number | null; is_income: boolean; deal_id: string | null }
+interface BudgetItem {
+  id: string; concept: string; amount: number; actual_amount: number | null
+  is_income: boolean; deal_id: string | null
+  category: string; area: string | null; qty: number; unit_cost: number | null
+  quote_url: string | null; quote_type: string | null; responsible: string | null
+}
+// Tipo de gasto — permite leer el presupuesto por naturaleza (cuánto es gente,
+// cuánto es mobiliario) y no solo como una lista plana de conceptos.
+const CATEGORIAS: { id: string; label: string; color: string }[] = [
+  { id: 'personal',   label: 'Personal',    color: '#A855F7' },
+  { id: 'mobiliario', label: 'Mobiliario',  color: '#E8A33D' },
+  { id: 'materiales', label: 'Materiales',  color: '#06B6D4' },
+  { id: 'equipo',     label: 'Equipo',      color: '#3B82F6' },
+  { id: 'servicios',  label: 'Servicios',   color: '#5FBF7A' },
+  { id: 'marketing',  label: 'Marketing',   color: '#EC4899' },
+  { id: 'operacion',  label: 'Operación',   color: '#F97316' },
+  { id: 'otro',       label: 'Otro',        color: '#8A8A8A' },
+]
 interface Approval { id: string; action: 'submitted' | 'approved' | 'returned'; comment: string | null; actor: string | null; created_at: string }
 interface Template {
   id: string; name: string; kind: PlanKind; event_type: EventType
@@ -137,6 +153,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
   const [showArchived, setShowArchived] = useState(false)
   const [editing, setEditing] = useState<EventPlan | null>(null)
   const [creating, setCreating] = useState(false)
+  const [configOpen, setConfigOpen] = useState(false)
   // Vistas del planeador: tabla, board, timeline, calendario y (aprobadores) su cabina
   const [view, setView] = useState<'table' | 'board' | 'timeline' | 'calendar' | 'approvals'>(() =>
     (localStorage.getItem('hog_projects_view') as 'table' | 'board' | 'timeline' | 'calendar' | 'approvals') || 'table')
@@ -347,6 +364,12 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
             style={{ display: 'flex', alignItems: 'center', gap: 5, minHeight: 40, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: showArchived ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${showArchived ? 'var(--accent)' : 'var(--border-default)'}`, color: showArchived ? 'var(--accent)' : 'var(--text-secondary)' }}>
             <Archive size={12} /> {showArchived ? 'Archivados' : !isMobile ? 'Archivados' : ''}
           </button>
+          {userRole === 'MASTER' && (
+            <button onClick={() => setConfigOpen(true)} title="Configurar quién aprueba los presupuestos"
+              style={{ display: 'flex', alignItems: 'center', gap: 5, minHeight: 40, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: 'transparent', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
+              <Settings size={12} /> {!isMobile && 'Aprobadores'}
+            </button>
+          )}
           <div style={{ position: 'relative', flex: 1, minWidth: 140 }}>
             <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar evento…"
@@ -538,7 +561,82 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
           onSaved={() => { setCreating(false); setEditing(null); load() }}
         />
       )}
+      {configOpen && <ApproversConfigSheet people={people} userId={userId} isMobile={isMobile} onClose={() => setConfigOpen(false)} />}
     </div>
+  )
+}
+
+// ── Quién aprueba los presupuestos ──────────────────────────────────────────
+// Solo Master. Otorga o retira la función 'aprobador' — la misma que ya lee
+// canApprove, así que a quien se le marca aquí le aparece la pestaña de
+// Aprobación y le llega la notificación al enviar un presupuesto.
+function ApproversConfigSheet({ people, userId, isMobile, onClose }: {
+  people: { id: string; full_name: string | null }[]; userId?: string; isMobile: boolean; onClose: () => void
+}) {
+  const [aprobadores, setAprobadores] = useState<string[]>([])
+  const [masters, setMasters] = useState<string[]>([])
+  const [cargando, setCargando] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('user_capabilities').select('user_id').eq('capability', 'aprobador'),
+      supabase.from('profiles').select('id').eq('role', 'MASTER'),
+    ]).then(([a, m]) => {
+      setAprobadores((a.data ?? []).map(r => r.user_id as string))
+      setMasters((m.data ?? []).map(r => r.id as string))
+      setCargando(false)
+    })
+  }, [])
+
+  async function toggle(uid: string) {
+    const on = aprobadores.includes(uid)
+    setAprobadores(prev => on ? prev.filter(x => x !== uid) : [...prev, uid])
+    const { error } = on
+      ? await supabase.from('user_capabilities').delete().eq('user_id', uid).eq('capability', 'aprobador')
+      : await supabase.from('user_capabilities').insert({ user_id: uid, capability: 'aprobador', granted_by: userId ?? null })
+    if (error) {
+      setAprobadores(prev => on ? [...prev, uid] : prev.filter(x => x !== uid))
+      showToast(`No se pudo guardar: ${error.message}`, 'error'); return
+    }
+    logActivity(on ? 'capability_revoked' : 'capability_granted', 'user', uid, {
+      member: people.find(p => p.id === uid)?.full_name ?? '—', capability: 'aprobador',
+    })
+  }
+
+  return (
+    <Sheet open onClose={onClose} isMobile={isMobile} width={440}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 'var(--space-3) 0' }}>
+          <ShieldCheck size={16} style={{ color: 'var(--accent)' }} />
+          <h2 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0, flex: 1 }}>Quién aprueba los presupuestos</h2>
+          <button onClick={onClose} aria-label="Cerrar" style={{ width: 36, height: 36, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 14px', lineHeight: 1.55 }}>
+          A quien marques aquí le aparece la pestaña de Aprobación y le llega el aviso cuando alguien manda un presupuesto a revisión.
+        </p>
+        {cargando ? (
+          <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Cargando…</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {people.map(p => {
+              const esMaster = masters.includes(p.id)
+              const on = esMaster || aprobadores.includes(p.id)
+              return (
+                <button key={p.id} onClick={() => !esMaster && toggle(p.id)} disabled={esMaster}
+                  title={esMaster ? 'El Master siempre puede aprobar' : undefined}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 46, background: 'var(--bg-elevated)', border: `1px solid ${on ? 'var(--accent-border)' : 'var(--border-subtle)'}`, borderRadius: 'var(--radius-sm)', padding: '8px 12px', cursor: esMaster ? 'default' : 'pointer', textAlign: 'left', opacity: esMaster ? 0.75 : 1 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: 6, border: `1px solid ${on ? 'var(--accent)' : 'var(--border-strong)'}`, background: on ? 'var(--accent)' : 'transparent', color: 'var(--on-accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 11, fontWeight: 800 }}>
+                    {on ? '✓' : ''}
+                  </span>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{p.full_name ?? '—'}</span>
+                  {esMaster && <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>MASTER · siempre</span>}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </Sheet>
   )
 }
 
@@ -1057,15 +1155,14 @@ function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, 
   useEffect(() => {
     supabase.from('project_approvals').select('*').eq('event_id', event.id).order('created_at')
       .then(({ data }) => setHistory((data ?? []) as Approval[]))
-    Promise.all([
-      supabase.from('project_resources').select('qty, unit_cost').eq('event_id', event.id),
-      supabase.from('project_budget_items').select('amount, is_income').eq('event_id', event.id),
-    ]).then(([{ data: res }, { data: bud }]) => {
-      const recursos = (res ?? []).reduce((s, r) => s + (r.unit_cost ?? 0) * r.qty, 0)
-      const gastos = (bud ?? []).filter(b => !b.is_income).reduce((s, b) => s + b.amount, 0)
-      const patroc = (bud ?? []).filter(b => b.is_income).reduce((s, b) => s + b.amount, 0)
-      setFin({ recursos, gastos, patroc, neto: gastos + recursos - patroc })
-    })
+    // Presupuesto unificado: todo (personal, mobiliario, servicios…) vive en
+    // project_budget_items, así que el neto ya no suma recursos por separado.
+    supabase.from('project_budget_items').select('amount, is_income').eq('event_id', event.id)
+      .then(({ data: bud }) => {
+        const gastos = (bud ?? []).filter(b => !b.is_income).reduce((s, b) => s + b.amount, 0)
+        const patroc = (bud ?? []).filter(b => b.is_income).reduce((s, b) => s + b.amount, 0)
+        setFin({ recursos: 0, gastos, patroc, neto: gastos - patroc })
+      })
   }, [event.id])
 
   // Planner → Aprobador: cambia a 'review' y notifica (campana + Slack DM)
@@ -1144,7 +1241,7 @@ function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, 
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Aprobación</span>
         {fin && (
           <span className="num" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
-            Gastos {mxn(fin.gastos + fin.recursos)} · Patrocinios <span style={{ color: 'var(--status-healthy)' }}>{mxn(fin.patroc)}</span> · Neto <strong style={{ color: 'var(--text-primary)' }}>{mxn(fin.neto)}</strong>
+            Gastos {mxn(fin.gastos)} · Patrocinios <span style={{ color: 'var(--status-healthy)' }}>{mxn(fin.patroc)}</span> · Neto <strong style={{ color: 'var(--text-primary)' }}>{mxn(fin.neto)}</strong>
           </span>
         )}
       </div>
@@ -1153,7 +1250,7 @@ function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, 
       {['idea', 'planning'].includes(status) && canWrite && (
         <button onClick={submitForApproval} disabled={busy}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 46, borderRadius: 999, border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-          📤 Enviar a aprobación
+          📤 Enviar presupuesto a aprobación
         </button>
       )}
       {status === 'review' && !canApprove && (
@@ -1393,81 +1490,65 @@ function ProgramSection({ eventId, defaultDate, canWrite, userId, onOpenTask }: 
   )
 }
 
-// ── Recursos requeridos: 1 bartender, 2 meseros, 1 guardia, equipo… ──────────
-function ResourcesSection({ eventId, canWrite }: { eventId: string; canWrite: boolean }) {
-  const [items, setItems] = useState<Resource[]>([])
-  const [nName, setNName] = useState('')
-  const [nQty, setNQty] = useState('1')
-  const [nCost, setNCost] = useState('')
-
-  useEffect(() => {
-    supabase.from('project_resources').select('id, name, qty, unit_cost, notes').eq('event_id', eventId).order('created_at')
-      .then(({ data }) => setItems((data ?? []) as Resource[]))
-  }, [eventId])
-
-  async function add() {
-    if (!nName.trim()) return
-    const { data, error } = await supabase.from('project_resources').insert({
-      event_id: eventId, name: nName.trim(), qty: Math.max(1, Number(nQty) || 1),
-      unit_cost: nCost !== '' ? Number(nCost) : null,
-    }).select('id, name, qty, unit_cost, notes').single()
-    if (error || !data) { showToast(`No se pudo agregar: ${error?.message}`, 'error'); return }
-    setItems(prev => [...prev, data as Resource])
-    setNName(''); setNQty('1'); setNCost('')
-  }
-  async function remove(id: string) {
-    await supabase.from('project_resources').delete().eq('id', id)
-    setItems(prev => prev.filter(i => i.id !== id))
-  }
-
-  const total = items.reduce((s, i) => s + (i.unit_cost ?? 0) * i.qty, 0)
-  const inp: React.CSSProperties = {
-    background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
-    color: 'var(--text-primary)', padding: '0 10px', fontSize: 13, outline: 'none', minHeight: 40, boxSizing: 'border-box',
-  }
-  return (
-    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Recursos requeridos{items.length ? ` (${items.length})` : ''}</span>
-        {total > 0 && <span className="num" style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{mxn(total)}</span>}
-      </div>
-      {items.map(i => (
-        <div key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-          <span className="num" style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', fontFamily: 'var(--font-mono)', width: 28, textAlign: 'center' }}>{i.qty}×</span>
-          <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{i.name}</span>
-          {i.unit_cost != null && <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{mxn(i.unit_cost)} c/u</span>}
-          {canWrite && (
-            <button onClick={() => remove(i.id)} aria-label="Quitar recurso" style={{ width: 32, height: 32, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Trash2 size={12} /></button>
-          )}
-        </div>
-      ))}
-      {canWrite && (
-        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-          <input type="number" inputMode="numeric" min={1} value={nQty} onChange={e => setNQty(e.target.value)} className="num" style={{ ...inp, width: 52, textAlign: 'center' }} aria-label="Cantidad" />
-          <input value={nName} onChange={e => setNName(e.target.value)} placeholder="Bartender, mesero, guardia, proyector…"
-            onKeyDown={e => { if (e.key === 'Enter') add() }} style={{ ...inp, flex: 1 }} />
-          <input type="number" inputMode="numeric" min={0} value={nCost} onChange={e => setNCost(e.target.value)} placeholder="$ c/u" className="num" style={{ ...inp, width: 76 }} aria-label="Costo unitario" />
-          <button onClick={add} disabled={!nName.trim()}
-            style={{ minHeight: 40, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: nName.trim() ? 'var(--accent)' : 'var(--bg-base)', color: nName.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', cursor: nName.trim() ? 'pointer' : 'not-allowed', fontWeight: 700 }}>
-            <Plus size={14} />
-          </button>
-        </div>
-      )}
-    </div>
-  )
+// ── PRESUPUESTO DEL PROYECTO — una sola lista para todo lo que cuesta ────────
+// Un bartender y una maceta son partidas de gasto por igual: se capturan con
+// tipo, zona, cantidad y costo unitario, y cada una puede traer su cotización
+// (imagen o PDF) y su responsable. Los patrocinios entran como ingreso.
+const SEL: React.CSSProperties = {
+  background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
+  color: 'var(--text-primary)', padding: '0 8px', fontSize: 12, outline: 'none', minHeight: 40, cursor: 'pointer', boxSizing: 'border-box',
 }
 
-// ── Presupuesto por partidas: gastos + patrocinios (ligados al CRM) ──────────
-function BudgetSection({ event, buCode, canWrite, userId, showCorte = false }: { event: EventPlan; buCode: string; canWrite: boolean; userId?: string; showCorte?: boolean }) {
+function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = false }: {
+  event: EventPlan; buCode: string; canWrite: boolean; userId?: string
+  people: { id: string; full_name: string | null }[]; showCorte?: boolean
+}) {
   const [items, setItems] = useState<BudgetItem[]>([])
+  const [tableMissing, setTableMissing] = useState(false)
   const [nConcept, setNConcept] = useState('')
   const [nAmount, setNAmount] = useState('')
   const [nIncome, setNIncome] = useState(false)
+  const [nCat, setNCat] = useState('materiales')
+  const [nArea, setNArea] = useState('')
+  const [nQty, setNQty] = useState('1')
+  const [subiendo, setSubiendo] = useState<string | null>(null)
+  const quoteRef = useRef<HTMLInputElement>(null)
+  const [quoteFor, setQuoteFor] = useState<string | null>(null)
 
-  useEffect(() => {
-    supabase.from('project_budget_items').select('id, concept, amount, actual_amount, is_income, deal_id').eq('event_id', event.id).order('created_at')
-      .then(({ data }) => setItems((data ?? []) as BudgetItem[]))
+  const load = useCallback(() => {
+    supabase.from('project_budget_items')
+      .select('id, concept, amount, actual_amount, is_income, deal_id, category, area, qty, unit_cost, quote_url, quote_type, responsible')
+      .eq('event_id', event.id).order('category').order('created_at')
+      .then(({ data, error }) => {
+        if (error) { setTableMissing(true); return }
+        setTableMissing(false); setItems((data ?? []) as BudgetItem[])
+      })
   }, [event.id])
+  useEffect(() => { load() }, [load])
+
+  // Cotización: imagen o PDF al bucket 'proofs', ligada a la partida
+  async function subirCotizacion(file: File) {
+    const itemId = quoteFor
+    if (!itemId) return
+    setSubiendo(itemId)
+    const ext = file.name.split('.').pop()
+    const path = `cotizaciones/${event.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+    const { error: upErr } = await supabase.storage.from('proofs').upload(path, file, { contentType: file.type || 'application/octet-stream' })
+    if (upErr) { setSubiendo(null); showToast(`No se pudo subir: ${upErr.message}`, 'error'); return }
+    const { data: pub } = supabase.storage.from('proofs').getPublicUrl(path)
+    const { error } = await supabase.from('project_budget_items')
+      .update({ quote_url: pub.publicUrl, quote_type: file.type }).eq('id', itemId)
+    setSubiendo(null); setQuoteFor(null)
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, quote_url: pub.publicUrl, quote_type: file.type } : i))
+    showToast('Cotización adjuntada.', 'success')
+  }
+
+  async function setCampo(id: string, patch: Partial<BudgetItem>) {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i))
+    const { error } = await supabase.from('project_budget_items').update(patch).eq('id', id)
+    if (error) showToast(`No se pudo guardar: ${error.message}`, 'error')
+  }
 
   // Corte: capturar el monto REAL de una partida (Δ contra presupuesto)
   async function setActual(item: BudgetItem, raw: string) {
@@ -1478,14 +1559,20 @@ function BudgetSection({ event, buCode, canWrite, userId, showCorte = false }: {
     if (error) showToast(`No se pudo guardar el real: ${error.message}`, 'error')
   }
 
+  // El monto se calcula cantidad × unitario; así "2 bartenders a $1,800" y
+  // "renta de sonido $35,000" conviven en la misma lista sin cuentas aparte.
   async function add() {
     if (!nConcept.trim() || nAmount === '') return
-    const { data, error } = await supabase.from('project_budget_items').insert({
-      event_id: event.id, concept: nConcept.trim(), amount: Number(nAmount), is_income: nIncome,
-    }).select('id, concept, amount, is_income, deal_id').single()
-    if (error || !data) { showToast(`No se pudo agregar: ${error?.message}`, 'error'); return }
-    setItems(prev => [...prev, data as BudgetItem])
-    setNConcept(''); setNAmount(''); setNIncome(false)
+    const qty = Math.max(1, Number(nQty) || 1)
+    const unit = Number(nAmount)
+    const { error } = await supabase.from('project_budget_items').insert({
+      event_id: event.id, concept: nConcept.trim(), amount: unit * qty, is_income: nIncome,
+      category: nIncome ? 'otro' : nCat, area: nArea.trim() || null,
+      qty, unit_cost: unit, created_by: userId ?? null,
+    })
+    if (error) { showToast(`No se pudo agregar: ${error.message}`, 'error'); return }
+    setNConcept(''); setNAmount(''); setNIncome(false); setNQty('1')
+    load()
   }
   async function remove(id: string) {
     await supabase.from('project_budget_items').delete().eq('id', id)
@@ -1520,10 +1607,84 @@ function BudgetSection({ event, buCode, canWrite, userId, showCorte = false }: {
     background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
     color: 'var(--text-primary)', padding: '0 10px', fontSize: 13, outline: 'none', minHeight: 40, boxSizing: 'border-box',
   }
+  // Agrupado por tipo de gasto: se lee de qué está hecho el presupuesto
+  const porCategoria = useMemo(() => {
+    const m = new Map<string, BudgetItem[]>()
+    for (const i of items.filter(x => !x.is_income)) {
+      const arr = m.get(i.category) ?? []; arr.push(i); m.set(i.category, arr)
+    }
+    return CATEGORIAS.filter(c => m.has(c.id)).map(c => ({ cat: c, rows: m.get(c.id)! }))
+  }, [items])
+  const patrocinios = items.filter(i => i.is_income)
+
+  if (tableMissing) return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+      <p style={{ fontSize: 12, color: 'var(--status-attention)', margin: 0 }}>Falta correr el SQL del presupuesto unificado (project_budget_v2.sql) en Supabase.</p>
+    </div>
+  )
+
+  const fila = (i: BudgetItem) => (
+    <div key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
+      {i.qty > 1 && <span className="num" style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>{i.qty}×</span>}
+      <span style={{ flex: 1, minWidth: 120, fontSize: 13, color: 'var(--text-primary)' }}>
+        {i.concept}
+        {i.area && <span style={{ fontSize: 10, color: 'var(--text-tertiary)', marginLeft: 6, fontFamily: 'var(--font-mono)' }}>· {i.area}</span>}
+        {i.unit_cost != null && i.qty > 1 && <span className="num" style={{ fontSize: 10, color: 'var(--text-tertiary)', marginLeft: 6, fontFamily: 'var(--font-mono)' }}>({mxn(i.unit_cost)} c/u)</span>}
+      </span>
+
+      {/* Responsable de la partida */}
+      {canWrite ? (
+        <select value={i.responsible ?? ''} onChange={e => setCampo(i.id, { responsible: e.target.value || null })}
+          title="Responsable de esta partida"
+          style={{ ...SEL, minHeight: 30, fontSize: 10.5, maxWidth: 110, color: i.responsible ? 'var(--text-secondary)' : 'var(--text-tertiary)' }}>
+          <option value="">sin dueño</option>
+          {people.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+        </select>
+      ) : i.responsible && (
+        <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{people.find(p => p.id === i.responsible)?.full_name}</span>
+      )}
+
+      {/* Cotización */}
+      {i.quote_url ? (
+        <a href={i.quote_url} target="_blank" rel="noreferrer" title="Ver cotización"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--status-healthy)', border: '1px solid color-mix(in srgb, var(--status-healthy) 40%, transparent)', borderRadius: 999, padding: '3px 8px', textDecoration: 'none', flexShrink: 0 }}>
+          <Paperclip size={10} /> cotización
+        </a>
+      ) : canWrite && (
+        <button onClick={() => { setQuoteFor(i.id); quoteRef.current?.click() }} title="Adjuntar cotización (imagen o PDF)"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--text-tertiary)', border: '1px dashed var(--border-default)', borderRadius: 999, padding: '3px 8px', background: 'none', cursor: 'pointer', flexShrink: 0 }}>
+          <Paperclip size={10} /> {subiendo === i.id ? 'subiendo…' : 'cotización'}
+        </button>
+      )}
+
+      {i.is_income && (
+        <button onClick={() => canWrite && toDeal(i)} title={i.deal_id ? 'Abrir deal en Comercial' : 'Crear deal de patrocinio en Comercial'}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 28, padding: '0 8px', borderRadius: 999, border: `1px solid ${i.deal_id ? 'var(--status-healthy)' : 'var(--accent-border)'}`, background: 'none', color: i.deal_id ? 'var(--status-healthy)' : 'var(--accent)', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+          🤝 {i.deal_id ? 'Deal ligado' : 'Crear deal'}
+        </button>
+      )}
+      <span className="num" style={{ fontSize: 12.5, fontWeight: 700, fontFamily: 'var(--font-mono)', color: i.is_income ? 'var(--status-healthy)' : 'var(--text-secondary)', flexShrink: 0 }}>
+        {i.is_income ? '+' : '−'}{mxn(i.amount)}
+      </span>
+      {showCorte && (
+        <input type="number" inputMode="numeric" min={0} defaultValue={i.actual_amount ?? ''} placeholder="real $"
+          disabled={!canWrite} onBlur={e => setActual(i, e.target.value)} className="num"
+          title="Monto real gastado/recibido (corte)"
+          style={{ width: 78, minHeight: 32, background: 'var(--bg-base)', border: `1px solid ${i.actual_amount != null ? (i.is_income ? 'var(--status-healthy)' : i.actual_amount > i.amount ? 'var(--status-risk)' : 'var(--status-healthy)') : 'var(--border-subtle)'}`, borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 12, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--font-mono)', flexShrink: 0 }} />
+      )}
+      {canWrite && (
+        <button onClick={() => remove(i.id)} aria-label="Quitar partida" style={{ width: 30, height: 30, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0 }}><Trash2 size={12} /></button>
+      )}
+    </div>
+  )
+
   return (
     <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Presupuesto por partidas</span>
+      <input ref={quoteRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) subirCotizacion(f); e.target.value = '' }} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Presupuesto del proyecto</span>
         {(gastos > 0 || ingresos > 0) && (
           <span className="num" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
             Gastos {mxn(gastos)}{ingresos > 0 && <> · Patrocinios <span style={{ color: 'var(--status-healthy)' }}>{mxn(ingresos)}</span> · Neto {mxn(gastos - ingresos)}</>}
@@ -1533,34 +1694,55 @@ function BudgetSection({ event, buCode, canWrite, userId, showCorte = false }: {
           </span>
         )}
       </div>
-      {items.map(i => (
-        <div key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-          <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{i.concept}</span>
-          {i.is_income && (
-            <button onClick={() => canWrite && toDeal(i)} title={i.deal_id ? 'Abrir deal en Comercial' : 'Crear deal de patrocinio en Comercial'}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 30, padding: '0 8px', borderRadius: 999, border: `1px solid ${i.deal_id ? 'var(--status-healthy)' : 'var(--accent-border)'}`, background: 'none', color: i.deal_id ? 'var(--status-healthy)' : 'var(--accent)', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-              🤝 {i.deal_id ? 'Deal ligado' : 'Crear deal'}
-            </button>
-          )}
-          <span className="num" style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: i.is_income ? 'var(--status-healthy)' : 'var(--text-secondary)' }}>
-            {i.is_income ? '+' : '−'}{mxn(i.amount)}
-          </span>
-          {showCorte && (
-            <input type="number" inputMode="numeric" min={0} defaultValue={i.actual_amount ?? ''} placeholder="real $"
-              disabled={!canWrite} onBlur={e => setActual(i, e.target.value)} className="num"
-              title="Monto real gastado/recibido (corte)"
-              style={{ width: 78, minHeight: 34, background: 'var(--bg-base)', border: `1px solid ${i.actual_amount != null ? (i.is_income ? 'var(--status-healthy)' : i.actual_amount > i.amount ? 'var(--status-risk)' : 'var(--status-healthy)') : 'var(--border-subtle)'}`, borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 12, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--font-mono)' }} />
-          )}
-          {canWrite && (
-            <button onClick={() => remove(i.id)} aria-label="Quitar partida" style={{ width: 32, height: 32, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Trash2 size={12} /></button>
-          )}
+
+      {items.length === 0 && (
+        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 10px' }}>
+          Sin partidas aún. Aquí va TODO lo que cuesta el proyecto — desde 2 bartenders hasta 8 macetas —, con su tipo, su cotización y su responsable.
+        </p>
+      )}
+
+      {porCategoria.map(({ cat, rows }) => {
+        const sub = rows.reduce((s, r) => s + r.amount, 0)
+        return (
+          <div key={cat.id} style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '8px 0 2px' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: cat.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>{cat.label}</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+              <span className="num" style={{ fontSize: 10.5, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{mxn(sub)}</span>
+            </div>
+            {rows.map(fila)}
+          </div>
+        )
+      })}
+
+      {patrocinios.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '8px 0 2px' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-healthy)', flexShrink: 0 }} />
+            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--status-healthy)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>Patrocinios / ingresos</span>
+            <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+            <span className="num" style={{ fontSize: 10.5, fontFamily: 'var(--font-mono)', color: 'var(--status-healthy)' }}>{mxn(ingresos)}</span>
+          </div>
+          {patrocinios.map(fila)}
         </div>
-      ))}
+      )}
+
       {canWrite && (
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-          <input value={nConcept} onChange={e => setNConcept(e.target.value)} placeholder="Sombreros, vasos especiales, patrocinio X…"
-            onKeyDown={e => { if (e.key === 'Enter') add() }} style={{ ...inp, flex: 1, minWidth: 150 }} />
-          <input type="number" inputMode="numeric" min={0} value={nAmount} onChange={e => setNAmount(e.target.value)} placeholder="$" className="num" style={{ ...inp, width: 88 }} />
+        <div style={{ display: 'flex', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-default)', flexWrap: 'wrap' }}>
+          <input type="number" inputMode="numeric" min={1} value={nQty} onChange={e => setNQty(e.target.value)}
+            className="num" style={{ ...inp, width: 52, textAlign: 'center' }} aria-label="Cantidad" title="Cantidad" />
+          <input value={nConcept} onChange={e => setNConcept(e.target.value)} placeholder="Bartender, maceta, proyector, renta de sonido…"
+            onKeyDown={e => { if (e.key === 'Enter') add() }} style={{ ...inp, flex: 1, minWidth: 160 }} />
+          {!nIncome && (
+            <select value={nCat} onChange={e => setNCat(e.target.value)} style={{ ...SEL, width: 118 }} title="Tipo de gasto">
+              {CATEGORIAS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          )}
+          <input value={nArea} onChange={e => setNArea(e.target.value)} placeholder="Zona" title="Zona o área (bar, cocina, terraza…)"
+            style={{ ...inp, width: 90 }} />
+          <input type="number" inputMode="numeric" min={0} value={nAmount} onChange={e => setNAmount(e.target.value)}
+            placeholder="$ c/u" className="num" style={{ ...inp, width: 88 }} title="Costo unitario" />
           <button onClick={() => setNIncome(v => !v)} title="Gasto o patrocinio (ingreso)"
             style={{ minHeight: 40, padding: '0 10px', borderRadius: 999, border: `1px solid ${nIncome ? 'var(--status-healthy)' : 'var(--border-default)'}`, background: nIncome ? 'color-mix(in srgb, var(--status-healthy) 12%, transparent)' : 'none', color: nIncome ? 'var(--status-healthy)' : 'var(--text-tertiary)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
             {nIncome ? 'Patrocinio' : 'Gasto'}
@@ -1610,12 +1792,17 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const [status, setStatus] = useState<EventStatus>(event?.status ?? 'idea')
   const [saving, setSaving] = useState(false)
   const [tasks, setTasks] = useState<TaskLite[]>([])
+  const [related, setRelated] = useState<string[]>([])
   const [taskFollowers, setTaskFollowers] = useState<Record<string, string[]>>({})
   const [bulkTasks, setBulkTasks] = useState('')
   const [templateId, setTemplateId] = useState('')
   const [reqTaskId, setReqTaskId] = useState(event?.requisition_task_id ?? null)
   const canDelete = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '')
   const buCode = buList.find(b => b.id === (event?.bu_id ?? buId))?.code ?? ''
+  // La ventana crece con la pantalla: en un monitor grande el proyecto tiene
+  // presupuesto, programa y tareas — apretarlo a 520px lo vuelve un túnel.
+  const anchoVentana = typeof window !== 'undefined' && window.innerWidth >= 1500 ? 860
+    : typeof window !== 'undefined' && window.innerWidth >= 1200 ? 720 : 560
   // Corte post-evento: se abre cuando el plan terminó (Realizado o fecha pasada)
   const todayISO = new Date().toISOString().slice(0, 10)
   const showCorte = !!event && (status === 'done' || !!((event.end_date ?? event.date) && (event.end_date ?? event.date)! < todayISO))
@@ -1705,6 +1892,25 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
     window.addEventListener('hog:task-updated', loadTasks)
     return () => window.removeEventListener('hog:task-updated', loadTasks)
   }, [loadTasks])
+
+  // Relacionados del equipo — se guardan al instante, sin esperar a Guardar
+  useEffect(() => {
+    if (!event) return
+    supabase.from('project_collaborators').select('user_id').eq('event_id', event.id)
+      .then(({ data }) => setRelated((data ?? []).map(r => r.user_id as string)))
+  }, [event])
+  async function toggleRelated(uid: string) {
+    if (!event) return
+    const on = related.includes(uid)
+    setRelated(prev => on ? prev.filter(x => x !== uid) : [...prev, uid])
+    const { error } = on
+      ? await supabase.from('project_collaborators').delete().eq('event_id', event.id).eq('user_id', uid)
+      : await supabase.from('project_collaborators').insert({ event_id: event.id, user_id: uid })
+    if (error) {
+      setRelated(prev => on ? [...prev, uid] : prev.filter(x => x !== uid))
+      showToast(`No se pudo guardar: ${error.message}`, 'error')
+    }
+  }
 
   // Vincular tareas EXISTENTES del Task Manager al proyecto (y desvincular)
   const [linkQ, setLinkQ] = useState('')
@@ -1821,14 +2027,44 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const bulkPending = parseBullets(bulkTasks).length
 
   return (
-    <Sheet open onClose={onClose} isMobile={isMobile} width={520}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-3) 0' }}>
-          <h2 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>{event ? 'Evento' : 'Nuevo evento'}</h2>
-          <button onClick={onClose} aria-label="Cerrar" style={{ width: 36, height: 36, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
+    // Ancho según pantalla: en monitores grandes el proyecto merece espacio —
+    // capturar presupuesto y programa en una columna de 520px era estrangularlo.
+    <Sheet open onClose={onClose} isMobile={isMobile} width={anchoVentana}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Barra de estado FIJA: al volver de una distracción se sabe de
+            inmediato en qué proyecto se está trabajando, quién responde y
+            en qué fase va — sin tener que scrollear hacia arriba. */}
+        <div style={{ flexShrink: 0, padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {event && <BUChip code={buCode} size="sm" />}
+            <h2 style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 800, margin: 0, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {event ? (name || event.name) : 'Nuevo proyecto'}
+            </h2>
+            <button onClick={onClose} aria-label="Cerrar" style={{ width: 34, height: 34, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', flexShrink: 0 }}><X size={16} /></button>
+          </div>
+          {event && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
+              <StatusBadgeV2 tone={STATUS_META[status]?.tone ?? 'neutral'} label={STATUS_META[status]?.label ?? status} />
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <UserPlus size={10} /> {people.find(p => p.id === responsible)?.full_name ?? 'sin responsable'}
+              </span>
+              {(date || endDate) && (
+                <span className="num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                  {date ? new Date(date + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '—'}
+                  {endDate && endDate !== date ? ` – ${new Date(endDate + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}` : ''}
+                </span>
+              )}
+              {tasks.length > 0 && (
+                <span className="num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>
+                  {tasks.filter(t => t.status === 'APPROVED').length}/{tasks.length} tareas
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 'var(--space-3)' }}>
           {/* Plantilla (solo al crear): pre-carga recursos, partidas y tareas */}
           {!event && templates.length > 0 && (
             <div>
@@ -1938,6 +2174,25 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             </div>
           </div>
 
+          {/* Relacionados: el equipo interno involucrado, además del responsable.
+              Distinto de "colaboradores / talento", que es gente externa. */}
+          {event && (
+            <div>
+              <label style={lbl}>Relacionados del equipo {related.length > 0 && `· ${related.length}`}</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {people.filter(p => p.id !== responsible).map(p => {
+                  const on = related.includes(p.id)
+                  return (
+                    <button key={p.id} onClick={() => canWrite && toggleRelated(p.id)} disabled={!canWrite}
+                      style={{ minHeight: 34, padding: '0 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: canWrite ? 'pointer' : 'default', background: on ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${on ? 'var(--accent-border)' : 'var(--border-default)'}`, color: on ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                      {on ? '✓ ' : ''}{p.full_name ?? '—'}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div>
               <label style={lbl}>Requerimientos</label>
@@ -2000,8 +2255,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 </div>
               )}
               <ProgramSection eventId={event.id} defaultDate={event.date} canWrite={canWrite} userId={userId} onOpenTask={onOpenTask} />
-              <ResourcesSection eventId={event.id} canWrite={canWrite} />
-              <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} showCorte={showCorte} />
+              <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} people={people} showCorte={showCorte} />
               {canWrite && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button onClick={sendRequisition}
@@ -2158,6 +2412,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             </div>
           )}
         </div>
+      </div>
       </div>
     </Sheet>
   )
