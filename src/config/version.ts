@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.81.0"
+export const APP_VERSION = "2.81.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.81.1",
+    date: "2026-08-14",
+    type: "PATCH",
+    changes: [
+      "FIX: los proyectos ARCHIVADOS seguían apareciendo en 'Mis proyectos próximos' del home — la lista filtraba cancelados pero no archivados",
+    ]
+  },
   {
     version: "2.81.0",
     date: "2026-08-14",

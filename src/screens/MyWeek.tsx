@@ -168,7 +168,9 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
       supabase.from('tasks').select('id, title, status, priority, due_date, estimated_hours, bu_id, assigned_to')
         .or(taskFilter).eq('archived', false).neq('status', 'APPROVED').order('due_date', { ascending: true, nullsFirst: false }),
       supabase.from('event_plans').select('id, name, date, end_date, bu_id, status')
-        .or(`responsible.eq.${userId},created_by.eq.${userId}`).neq('status', 'cancelled').order('date', { ascending: true, nullsFirst: false }),
+        .or(`responsible.eq.${userId},created_by.eq.${userId}`)
+        .eq('archived', false).neq('status', 'cancelled')
+        .order('date', { ascending: true, nullsFirst: false }),
       supabase.from('business_units').select('id, code'),
       supabase.rpc('fn_unread_messages', { p_user: userId }),
       // Deals "tuyos": los que creaste o donde ya participaste en la actividad
