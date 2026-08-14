@@ -244,6 +244,9 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
     navigator.clipboard.writeText(url)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+    // Queda registrado: así Actividad puede cruzar quién compartió qué contra
+    // las vistas externas que generó (task_viewed_externally).
+    logActivity('task_shared', 'task', taskId, { title: task?.title ?? '' })
   }
 
   useEffect(() => {

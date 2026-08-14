@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.79.0"
+export const APP_VERSION = "2.80.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,20 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.80.0",
+    date: "2026-08-14",
+    type: "MINOR",
+    changes: [
+      "ACTIVIDAD REDISEÑADA — ahora mide el uso real de cada área de HOG APP, no solo lista lo que pasó",
+      "USO POR ÁREA: acciones y PERSONAS DISTINTAS por módulo (mucha acción de una sola persona no es adopción), tendencia vs. periodo anterior, venues activos, mapa de calor de cuándo se usa la app, y las ÁREAS DORMIDAS — los módulos que nadie tocó",
+      "PERSONAS: ficha de cada quien separando 'qué trae encima' (tareas como responsable, dónde está relacionado, proyectos a cargo, vencidas) de 'qué hizo' (acciones, comentarios, reservas creadas, tareas compartidas y las vistas que generaron)",
+      "ALMACENAMIENTO: cuántos GB pesan los archivos adjuntos, por bucket, con barra de consumo",
+      "Cronología arreglada: las 42 acciones ahora se leen en español (antes 22 salían como task_archived o sql_injected), filtros por módulo y persona, búsqueda, entradas CLICKEABLES que abren la tarea/proyecto/deal, paginación real y export a CSV",
+      "FIX de fondo: los conteos salían de las 300 filas traídas al navegador — 'Total' era el tope de la consulta y 'Semana' mentía si había más. Ahora se calculan en el servidor sobre la tabla completa",
+      "Compartir una tarea por link ahora queda registrado, para cruzarlo contra las vistas externas que generó",
+    ]
+  },
   {
     version: "2.79.0",
     date: "2026-08-13",
