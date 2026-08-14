@@ -113,6 +113,26 @@ const mxn = (n: number) => `MX$${Number(n).toLocaleString('es-MX')}`
 // Bullets → títulos de tarea: quita viñetas (-, •, *) y líneas vacías
 const parseBullets = (text: string) => text.split('\n').map(l => l.replace(/^[-•*]\s*/, '').trim()).filter(Boolean)
 
+// Archivar el proyecto arrastra sus tareas: dejarlas sueltas las convertía en
+// pendientes fantasma en el board y en Mi Resumen de quien las tuviera.
+// Se marca cuáles se archivaron POR el proyecto (archived_with_event) para que
+// al restaurar no revivan las que ya estaban archivadas por su cuenta.
+// Se usa desde los dos lados: el clic derecho en la lista y el botón dentro de
+// la ventana del proyecto.
+async function archivarPlanConTareas(eventId: string, arch: boolean): Promise<{ error?: string; tareasError?: string; nTareas: number }> {
+  const { error } = await supabase.from('event_plans').update({ archived: arch }).eq('id', eventId)
+  if (error) return { error: error.message, nTareas: 0 }
+
+  const q = arch
+    ? supabase.from('tasks').update({ archived: true, archived_with_event: eventId }).eq('event_id', eventId).eq('archived', false)
+    : supabase.from('tasks').update({ archived: false, archived_with_event: null }).eq('archived_with_event', eventId)
+  const { data, error: tErr } = await q.select('id')
+  if (tErr) return { tareasError: tErr.message, nTareas: 0 }
+  return { nTareas: data?.length ?? 0 }
+}
+// "Archivado con 5 tareas" — el conteo importa: dice cuánto trabajo se llevó
+const sufijoTareas = (n: number) => n > 0 ? ` con ${n} ${n === 1 ? 'tarea' : 'tareas'}` : ''
+
 // ── Pills compartidas por las vistas Tabla / Board / Calendario ──────────────
 const typePill = (t: EventType) => (
   <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: TYPE_META[t].color, background: `color-mix(in srgb, ${TYPE_META[t].color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${TYPE_META[t].color} 40%, transparent)`, borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' }}>{TYPE_META[t].label}</span>
@@ -278,13 +298,16 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
     else { showToast('Duplicado — quedó en Idea.', 'success'); load() }
   }
   async function archivePlan(ev: EventPlan, arch: boolean) {
-    const { error } = await supabase.from('event_plans').update({ archived: arch }).eq('id', ev.id)
-    if (error) showToast(`No se pudo ${arch ? 'archivar' : 'restaurar'}: ${error.message}`, 'error')
-    else {
-      logActivity(arch ? 'event_archived' : 'event_restored', 'event', ev.id, { name: ev.name })
-      showToast(arch ? 'Archivado — lo encuentras con el filtro Archivados.' : 'Restaurado.', 'success')
-      load()
-    }
+    const r = await archivarPlanConTareas(ev.id, arch)
+    if (r.error) { showToast(`No se pudo ${arch ? 'archivar' : 'restaurar'}: ${r.error}`, 'error'); return }
+    if (r.tareasError) showToast(`Proyecto ${arch ? 'archivado' : 'restaurado'}, pero sus tareas no: ${r.tareasError}`, 'error')
+    else showToast(arch
+      ? `Archivado${sufijoTareas(r.nTareas)} — lo encuentras con el filtro Archivados.`
+      : `Restaurado${sufijoTareas(r.nTareas)}.`, 'success')
+
+    logActivity(arch ? 'event_archived' : 'event_restored', 'event', ev.id, { name: ev.name, tareas: r.nTareas })
+    load()
+    window.dispatchEvent(new CustomEvent('hog:task-updated'))
   }
   const planMenu = (ev: EventPlan): CtxItem[] => [
     { label: 'Editar', icon: <Pencil size={13} />, onClick: () => setEditing(ev) },
@@ -2009,13 +2032,18 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
     onSaved()
   }
 
-  // Nada se elimina: se archiva y se puede ver/restaurar con el filtro Archivados
+  // Nada se elimina: se archiva y se puede ver/restaurar con el filtro Archivados.
+  // Las tareas del proyecto se van con él — se avisa cuántas antes de confirmar.
   async function archiveEvent() {
     if (!event) return
-    if (!window.confirm(`¿Archivar "${event.name}"? No se borra nada — lo encuentras con el filtro Archivados y lo puedes restaurar.`)) return
-    await supabase.from('event_plans').update({ archived: true }).eq('id', event.id)
-    logActivity('event_archived', 'event', event.id, { name: event.name })
-    showToast('Archivado.', 'success')
+    const conTareas = tasks.length ? ` Sus ${tasks.length} ${tasks.length === 1 ? 'tarea se archiva' : 'tareas se archivan'} con él.` : ''
+    if (!window.confirm(`¿Archivar "${event.name}"?${conTareas} No se borra nada — lo encuentras con el filtro Archivados y lo puedes restaurar.`)) return
+    const r = await archivarPlanConTareas(event.id, true)
+    if (r.error) { showToast(`No se pudo archivar: ${r.error}`, 'error'); return }
+    if (r.tareasError) showToast(`Proyecto archivado, pero sus tareas no: ${r.tareasError}`, 'error')
+    else showToast(`Archivado${sufijoTareas(r.nTareas)}.`, 'success')
+    logActivity('event_archived', 'event', event.id, { name: event.name, tareas: r.nTareas })
+    window.dispatchEvent(new CustomEvent('hog:task-updated'))
     onSaved()
   }
 
