@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.86.0"
+export const APP_VERSION = "2.86.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.86.1",
+    date: "2026-08-14",
+    type: "PATCH",
+    changes: [
+      "ARCHIVAR UN PROYECTO ARCHIVA SUS TAREAS — antes las tareas quedaban sueltas y seguían apareciendo como pendientes en el board y en Mi Resumen de quien las tuviera, aunque el proyecto ya no existiera a la vista",
+      "Al RESTAURAR solo regresan las tareas que se archivaron CON el proyecto: las que alguien había archivado por su cuenta antes se quedan archivadas",
+      "El aviso dice cuántas se llevó ('Archivado con 5 tareas') y el botón dentro del proyecto lo advierte antes de confirmar",
+    ]
+  },
   {
     version: "2.86.0",
     date: "2026-08-14",
