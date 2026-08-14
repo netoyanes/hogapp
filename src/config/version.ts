@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.80.0"
+export const APP_VERSION = "2.81.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.81.0",
+    date: "2026-08-14",
+    type: "MINOR",
+    changes: [
+      "BOT — ahora se comporta como CONCIERGE, no como vendedor: si el cliente saluda, primero se le saluda y se le pregunta en qué ayudarle; la reserva viene después de atender, no antes",
+      "FIX grave: el bot decía 'no hay programación registrada en el sistema'. Ahora tiene PROHIBIDO exponer el sistema por dentro y prohibido cerrar con un 'no' pelón — siempre ofrece lo que SÍ hay",
+      "El bot ya revisa las DOS fuentes de programación antes de contestar qué hay una noche: la agenda de DJs y los temas fijos de cada día del FAQ (Ladies Night, Martini Tuesday…). Un día sin DJ agendado ya no es 'un día sin nada'",
+      "Si preguntan por HOY, contesta por hoy — antes brincaba a la agenda de mañana como si no hubiera escuchado",
+      "El bot reconoce la ocasión detrás del mensaje ('es nuestra última noche en Mazatlán', un cumpleaños) y arma su sugerencia alrededor de eso",
+      "JAMÁS menciona tiempos de permanencia ni horas de salida de la mesa, en ningún venue",
+    ]
+  },
   {
     version: "2.80.0",
     date: "2026-08-14",
