@@ -1159,7 +1159,7 @@ function ApprovalsDashboard({ rows, buMap, nameOf, onOpen }: {
 }
 
 // ── Aprobación (Gerente de Eficiencia): enviar → revisar → aprobar/regresar ──
-function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, status, onStatus }: {
+function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, status, totales, nPartidas, onStatus }: {
   event: EventPlan
   buCode: string
   canWrite: boolean
@@ -1167,29 +1167,42 @@ function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, 
   userId?: string
   people: { id: string; full_name: string | null }[]
   status: EventStatus
+  // Los totales llegan del presupuesto de abajo, no de una consulta propia:
+  // antes esta sección los leía UNA vez al abrir y se quedaba con la cifra
+  // vieja — agregabas una partida y arriba seguía diciendo otro número. Se
+  // enviaba a aprobar un monto que no era el del presupuesto.
+  totales: { gastos: number; ingresos: number } | null
+  nPartidas: number
   onStatus: (s: EventStatus) => void
 }) {
   const [history, setHistory] = useState<Approval[]>([])
-  const [fin, setFin] = useState<{ recursos: number; gastos: number; patroc: number; neto: number } | null>(null)
+  const [aprobadores, setAprobadores] = useState<string[]>([])
   const [feedback, setFeedback] = useState('')
   const [busy, setBusy] = useState(false)
   const nameOf = (id: string | null) => people.find(p => p.id === id)?.full_name ?? '—'
+  const fin = totales ? { gastos: totales.gastos, patroc: totales.ingresos, neto: totales.gastos - totales.ingresos } : null
 
   useEffect(() => {
     supabase.from('project_approvals').select('*').eq('event_id', event.id).order('created_at')
       .then(({ data }) => setHistory((data ?? []) as Approval[]))
-    // Presupuesto unificado: todo (personal, mobiliario, servicios…) vive en
-    // project_budget_items, así que el neto ya no suma recursos por separado.
-    supabase.from('project_budget_items').select('amount, is_income').eq('event_id', event.id)
-      .then(({ data: bud }) => {
-        const gastos = (bud ?? []).filter(b => !b.is_income).reduce((s, b) => s + b.amount, 0)
-        const patroc = (bud ?? []).filter(b => b.is_income).reduce((s, b) => s + b.amount, 0)
-        setFin({ recursos: 0, gastos, patroc, neto: gastos - patroc })
-      })
   }, [event.id])
+
+  // Quién va a recibirlo — se muestra ANTES de enviar: mandar un presupuesto
+  // sin saber a quién le llega es mandarlo al vacío.
+  useEffect(() => {
+    Promise.all([
+      supabase.from('user_capabilities').select('user_id').eq('capability', 'aprobador'),
+      supabase.from('profiles').select('id').eq('role', 'MASTER'),
+    ]).then(([{ data: apr }, { data: masters }]) => {
+      const ids = new Set<string>([...(apr ?? []).map(a => a.user_id), ...(masters ?? []).map(m => m.id)])
+      setAprobadores([...ids])
+    })
+  }, [])
 
   // Planner → Aprobador: cambia a 'review' y notifica (campana + Slack DM)
   async function submitForApproval() {
+    // Un presupuesto vacío no es una decisión que alguien pueda tomar
+    if (!nPartidas) { showToast('Agrega al menos una partida al presupuesto antes de enviarlo.', 'error'); return }
     setBusy(true)
     const { error } = await supabase.from('event_plans').update({ status: 'review' }).eq('id', event.id)
     if (error) { showToast(`No se pudo enviar: ${error.message}`, 'error'); setBusy(false); return }
@@ -1198,23 +1211,21 @@ function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, 
     }).select('*').single()
     if (row) setHistory(h => [...h, row as Approval])
     onStatus('review')
-    const [{ data: apr }, { data: masters }] = await Promise.all([
-      supabase.from('user_capabilities').select('user_id').eq('capability', 'aprobador'),
-      supabase.from('profiles').select('id').eq('role', 'MASTER'),
-    ])
-    const ids = new Set<string>([...(apr ?? []).map(a => a.user_id), ...(masters ?? []).map(m => m.id)])
+    const ids = new Set(aprobadores)
     if (userId) ids.delete(userId)
     if (ids.size) {
       await supabase.from('notifications').insert([...ids].map(uid => ({
         user_id: uid, title: 'Aprobación pendiente', body: `${event.name} (${buCode}) — presupuesto por revisar`,
         type: 'approval_requested', entity_id: event.id,
       })))
-      const f = fin ?? { recursos: 0, gastos: 0, patroc: 0, neto: 0 }
-      const msg = `🧮 *Aprobación pendiente* — ${event.name} (${buCode})\nGastos ${mxn(f.gastos)} + recursos ${mxn(f.recursos)} · Patrocinios ${mxn(f.patroc)} · *Neto ${mxn(f.neto)}*\n👉 HOG APP → Proyectos`
+      const f = fin ?? { gastos: 0, patroc: 0, neto: 0 }
+      const msg = `🧮 *Aprobación pendiente* — ${event.name} (${buCode})\nGastos ${mxn(f.gastos)} · Patrocinios ${mxn(f.patroc)} · *Neto ${mxn(f.neto)}* · ${nPartidas} partidas\n👉 HOG APP → Proyectos`
       ;[...ids].forEach(uid => notifyUserDM(uid, msg))
     }
-    logActivity('event_updated', 'event', event.id, { name: event.name, via: 'enviado_a_aprobacion' })
-    showToast('Enviado a aprobación — se notificó al Aprobador.', 'success')
+    logActivity('event_updated', 'event', event.id, { name: event.name, via: 'enviado_a_aprobacion', neto: fin?.neto })
+    showToast(ids.size
+      ? `Enviado a aprobación — se notificó a ${ids.size} ${ids.size === 1 ? 'aprobador' : 'aprobadores'}.`
+      : 'Enviado a aprobación — ojo: no hay nadie configurado como aprobador.', ids.size ? 'success' : 'error')
     setBusy(false)
   }
 
@@ -1258,27 +1269,76 @@ function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, 
     returned:  { icon: '↩️', label: 'Regresado con feedback' },
   } as const
 
+  // El flujo, dibujado: sin esto el botón "enviar" es un salto al vacío —
+  // nadie sabe qué pasa después ni de quién depende que avance.
+  const PASOS = [
+    { key: 'plan',   label: 'Armas presupuesto' },
+    { key: 'envio',  label: 'Envías' },
+    { key: 'decide', label: 'Aprobador decide' },
+    { key: 'listo',  label: 'Aprobado' },
+  ] as const
+  const pasoActual = status === 'approved' || status === 'done' ? 3 : status === 'review' ? 2 : nPartidas > 0 ? 1 : 0
+  const nombresAprob = aprobadores.filter(id => id !== userId).map(id => nameOf(id)).filter(n => n !== '—')
+  const sinPartidas = nPartidas === 0
+  const enFlujo = ['idea', 'planning'].includes(status) && canWrite
+
   return (
     <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: status === 'review' ? '1px solid color-mix(in srgb, var(--status-attention) 45%, transparent)' : undefined }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Aprobación</span>
-        {fin && (
+        {fin && (fin.gastos > 0 || fin.patroc > 0) && (
           <span className="num" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
             Gastos {mxn(fin.gastos)} · Patrocinios <span style={{ color: 'var(--status-healthy)' }}>{mxn(fin.patroc)}</span> · Neto <strong style={{ color: 'var(--text-primary)' }}>{mxn(fin.neto)}</strong>
           </span>
         )}
       </div>
 
+      {/* Riel del flujo — dónde va y qué falta */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 12 }}>
+        {PASOS.map((p, i) => {
+          const hecho = i < pasoActual
+          const activo = i === pasoActual
+          const color = hecho ? 'var(--status-healthy)' : activo ? 'var(--accent)' : 'var(--border-strong)'
+          return (
+            <div key={p.key} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                <div style={{ flex: 1, height: 2, background: i === 0 ? 'transparent' : (hecho || activo ? 'var(--status-healthy)' : 'var(--border-subtle)') }} />
+                <span style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0, border: `2px solid ${color}`, background: hecho ? 'var(--status-healthy)' : activo ? 'var(--accent-bg)' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 900, color: '#04210f' }}>
+                  {hecho ? '✓' : ''}
+                </span>
+                <div style={{ flex: 1, height: 2, background: i === PASOS.length - 1 ? 'transparent' : (hecho ? 'var(--status-healthy)' : 'var(--border-subtle)') }} />
+              </div>
+              <span style={{ fontSize: 9.5, textAlign: 'center', lineHeight: 1.25, color: activo ? 'var(--text-primary)' : hecho ? 'var(--text-secondary)' : 'var(--text-tertiary)', fontWeight: activo ? 800 : 600 }}>
+                {p.label}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
       {/* Estado actual del flujo */}
-      {['idea', 'planning'].includes(status) && canWrite && (
-        <button onClick={submitForApproval} disabled={busy}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 46, borderRadius: 999, border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-          📤 Enviar presupuesto a aprobación
-        </button>
+      {enFlujo && (
+        <>
+          <button onClick={submitForApproval} disabled={busy || sinPartidas}
+            title={sinPartidas ? 'Primero captura el presupuesto abajo' : `Se envía a ${nombresAprob.join(', ') || 'los aprobadores'}`}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 46, borderRadius: 999, border: `1px solid ${sinPartidas ? 'var(--border-default)' : 'var(--accent-border)'}`, background: sinPartidas ? 'transparent' : 'var(--accent-bg)', color: sinPartidas ? 'var(--text-tertiary)' : 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: sinPartidas ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+            📤 Enviar presupuesto a aprobación
+            {!sinPartidas && fin && <span className="num" style={{ fontFamily: 'var(--font-mono)', fontWeight: 800 }}>· {mxn(fin.neto)}</span>}
+          </button>
+          <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '7px 0 0', lineHeight: 1.45 }}>
+            {sinPartidas
+              ? 'Captura primero las partidas del presupuesto (abajo). Sin números no hay nada que aprobar.'
+              : <>Se congela el plan, pasa a <strong style={{ color: 'var(--status-attention)' }}>En aprobación</strong> y le llega
+                  campana + Slack a {nombresAprob.length
+                    ? <strong style={{ color: 'var(--text-secondary)' }}>{nombresAprob.slice(0, 3).join(', ')}{nombresAprob.length > 3 ? ` y ${nombresAprob.length - 3} más` : ''}</strong>
+                    : <strong style={{ color: 'var(--status-risk)' }}>nadie — no hay aprobadores configurados</strong>}.
+                  Si lo regresan con feedback, vuelve a Planeación y lo reenvías.</>}
+          </p>
+        </>
       )}
       {status === 'review' && !canApprove && (
         <p style={{ fontSize: 12, color: 'var(--status-attention)', fontWeight: 700, margin: 0 }}>
-          ⏳ En aprobación — esperando al Aprobador. El plan se congela hasta su decisión.
+          ⏳ En aprobación — esperando a {nombresAprob.slice(0, 2).join(', ') || 'el Aprobador'}. El plan se congela hasta su decisión.
         </p>
       )}
       {status === 'review' && canApprove && (
@@ -1522,9 +1582,12 @@ const SEL: React.CSSProperties = {
   color: 'var(--text-primary)', padding: '0 8px', fontSize: 12, outline: 'none', minHeight: 40, cursor: 'pointer', boxSizing: 'border-box',
 }
 
-function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = false }: {
+function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = false, onTotals }: {
   event: EventPlan; buCode: string; canWrite: boolean; userId?: string
   people: { id: string; full_name: string | null }[]; showCorte?: boolean
+  // La sección de Aprobación de arriba lee de aquí; así el monto que se aprueba
+  // es exactamente el que se ve en la lista, siempre.
+  onTotals?: (t: { gastos: number; ingresos: number; n: number }) => void
 }) {
   const [items, setItems] = useState<BudgetItem[]>([])
   const [tableMissing, setTableMissing] = useState(false)
@@ -1621,6 +1684,7 @@ function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = fa
 
   const gastos = items.filter(i => !i.is_income).reduce((s, i) => s + i.amount, 0)
   const ingresos = items.filter(i => i.is_income).reduce((s, i) => s + i.amount, 0)
+  useEffect(() => { onTotals?.({ gastos, ingresos, n: items.length }) }, [gastos, ingresos, items.length, onTotals])
   // Corte: totales reales (solo partidas con real capturado) y Δ vs presupuesto
   const conReal = items.filter(i => !i.is_income && i.actual_amount != null)
   const realGastos = conReal.reduce((s, i) => s + (i.actual_amount ?? 0), 0)
@@ -1661,7 +1725,7 @@ function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = fa
           title="Responsable de esta partida"
           style={{ ...SEL, minHeight: 30, fontSize: 10.5, maxWidth: 110, color: i.responsible ? 'var(--text-secondary)' : 'var(--text-tertiary)' }}>
           <option value="">sin dueño</option>
-          {people.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+          {people.filter(p => (p.full_name ?? '').trim()).map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
         </select>
       ) : i.responsible && (
         <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{people.find(p => p.id === i.responsible)?.full_name}</span>
@@ -1816,6 +1880,10 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const [saving, setSaving] = useState(false)
   const [tasks, setTasks] = useState<TaskLite[]>([])
   const [related, setRelated] = useState<string[]>([])
+  const [relQ, setRelQ] = useState('')
+  // Los totales viven aquí para que Aprobación y Presupuesto muestren SIEMPRE
+  // la misma cifra — antes cada uno consultaba por su cuenta y se desfasaban
+  const [totales, setTotales] = useState<{ gastos: number; ingresos: number; n: number } | null>(null)
   const [taskFollowers, setTaskFollowers] = useState<Record<string, string[]>>({})
   const [bulkTasks, setBulkTasks] = useState('')
   const [templateId, setTemplateId] = useState('')
@@ -2197,29 +2265,66 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
               <label style={lbl}>Responsable</label>
               <select value={responsible} onChange={e => setResponsible(e.target.value)} style={{ ...inp, cursor: 'pointer' }} disabled={!canWrite}>
                 <option value="">Sin responsable</option>
-                {people.map(p => <option key={p.id} value={p.id}>{p.full_name ?? '—'}</option>)}
+                {/* Los perfiles sin nombre salían como "—": imposible elegir a
+                    quién estás nombrando responsable de un presupuesto */}
+                {people.filter(p => (p.full_name ?? '').trim() || p.id === responsible)
+                  .map(p => <option key={p.id} value={p.id}>{p.full_name || 'Sin nombre'}</option>)}
               </select>
             </div>
           </div>
 
           {/* Relacionados: el equipo interno involucrado, además del responsable.
-              Distinto de "colaboradores / talento", que es gente externa. */}
-          {event && (
-            <div>
-              <label style={lbl}>Relacionados del equipo {related.length > 0 && `· ${related.length}`}</label>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {people.filter(p => p.id !== responsible).map(p => {
-                  const on = related.includes(p.id)
-                  return (
-                    <button key={p.id} onClick={() => canWrite && toggleRelated(p.id)} disabled={!canWrite}
-                      style={{ minHeight: 34, padding: '0 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: canWrite ? 'pointer' : 'default', background: on ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${on ? 'var(--accent-border)' : 'var(--border-default)'}`, color: on ? 'var(--accent)' : 'var(--text-secondary)' }}>
-                      {on ? '✓ ' : ''}{p.full_name ?? '—'}
-                    </button>
-                  )
-                })}
+              Distinto de "colaboradores / talento", que es gente externa.
+              Antes se listaba a TODO el directorio como chips — un muro de 25
+              botones donde los seleccionados se perdían entre los demás. Ahora
+              arriba van los elegidos y abajo se busca por nombre; la gente sin
+              nombre capturado (chips "—") ya no aparece: no se puede elegir a
+              alguien que no se puede identificar. */}
+          {event && (() => {
+            const elegibles = people.filter(p => p.id !== responsible && (p.full_name ?? '').trim())
+            const q = relQ.trim().toLowerCase()
+            const sugeridos = elegibles
+              .filter(p => !related.includes(p.id))
+              .filter(p => !q || (p.full_name ?? '').toLowerCase().includes(q))
+            const chip = (p: { id: string; full_name: string | null }, on: boolean) => (
+              <button key={p.id} onClick={() => canWrite && toggleRelated(p.id)} disabled={!canWrite}
+                title={on ? 'Quitar del equipo' : 'Agregar al equipo'}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 32, padding: on ? '0 8px 0 4px' : '0 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: canWrite ? 'pointer' : 'default', background: on ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${on ? 'var(--accent-border)' : 'var(--border-default)'}`, color: on ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                {on && <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', fontSize: 8.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initialsOf(p.full_name)}</span>}
+                {p.full_name}
+                {on && <X size={11} style={{ opacity: 0.7 }} />}
+              </button>
+            )
+            return (
+              <div>
+                <label style={lbl}>Relacionados del equipo {related.length > 0 && `· ${related.length}`}</label>
+                {related.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                    {related.map(id => elegibles.find(p => p.id === id)).filter(Boolean).map(p => chip(p!, true))}
+                  </div>
+                )}
+                {canWrite && (
+                  <>
+                    <input value={relQ} onChange={e => setRelQ(e.target.value)}
+                      placeholder={related.length ? 'Agregar a alguien más — busca por nombre…' : 'Busca por nombre para sumar a alguien…'}
+                      style={{ ...inp, minHeight: 40, fontSize: 12.5 }} />
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                      {/* Sin búsqueda se muestran unos cuantos, no el directorio entero */}
+                      {sugeridos.slice(0, q ? 12 : 6).map(p => chip(p, false))}
+                      {!q && sugeridos.length > 6 && (
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', alignSelf: 'center' }}>
+                          y {sugeridos.length - 6} más — búscalos por nombre
+                        </span>
+                      )}
+                      {q && sugeridos.length === 0 && (
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', alignSelf: 'center' }}>Nadie con ese nombre.</span>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div>
@@ -2255,7 +2360,8 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
           {/* Flujo de aprobación (Gerente de Eficiencia) */}
           {event && (
             <ApprovalSection event={event} buCode={buCode} canWrite={canWrite} canApprove={canApprove}
-              userId={userId} people={people} status={status} onStatus={setStatus} />
+              userId={userId} people={people} status={status}
+              totales={totales} nPartidas={totales?.n ?? 0} onStatus={setStatus} />
           )}
 
           {/* Recursos y presupuesto por partidas (requieren el plan guardado) */}
@@ -2283,11 +2389,15 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 </div>
               )}
               <ProgramSection eventId={event.id} defaultDate={event.date} canWrite={canWrite} userId={userId} onOpenTask={onOpenTask} />
-              <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} people={people} showCorte={showCorte} />
+              <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} people={people} showCorte={showCorte} onTotals={setTotales} />
               {canWrite && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button onClick={sendRequisition}
-                    style={{ flex: 1, minWidth: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, borderRadius: 999, border: `1px solid ${reqTaskId ? 'var(--status-healthy)' : 'var(--accent-border)'}`, background: reqTaskId ? 'color-mix(in srgb, var(--status-healthy) 10%, transparent)' : 'var(--accent-bg)', color: reqTaskId ? 'var(--status-healthy)' : 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  {/* Secundario a propósito: la acción principal del proyecto es
+                      enviar a aprobación (arriba). La requisición es otra cosa
+                      —le pasa la lista al gerente del venue como tarea— y en
+                      acento competía con ella como si fueran alternativas. */}
+                  <button onClick={sendRequisition} title="Crea una tarea en el Task Manager del venue con la lista de recursos, para que el gerente la ejecute"
+                    style={{ flex: 1, minWidth: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, borderRadius: 999, border: `1px solid ${reqTaskId ? 'var(--status-healthy)' : 'var(--border-default)'}`, background: reqTaskId ? 'color-mix(in srgb, var(--status-healthy) 10%, transparent)' : 'none', color: reqTaskId ? 'var(--status-healthy)' : 'var(--text-secondary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                     <ClipboardList size={15} /> {reqTaskId ? 'Requisición enviada — ver tarea' : 'Enviar requisición al gerente'}
                   </button>
                   <button onClick={saveAsTemplate}
