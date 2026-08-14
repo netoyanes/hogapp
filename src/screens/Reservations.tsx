@@ -352,14 +352,27 @@ export function Reservations({ userRole, userId }: Props) {
   // Confirmación automática por WhatsApp: el servidor (reservation-notify)
   // decide la vía — chat del concierge (24 h) o plantilla aprobada — y hace
   // dedup con confirm_sent_at. Devuelve si logró enviar.
+  // quiet solo silencia los "no aplica" (walk-in, ya enviada). Los ERRORES
+  // siempre se muestran: callarlos deja creyendo que al cliente se le avisó
+  // cuando nunca le llegó nada.
   async function autoNotify(resId: string, quiet = false): Promise<boolean> {
     const { data, error } = await supabase.functions.invoke('reservation-notify', { body: { reservationId: resId } })
-    if (error) { if (!quiet) showToast('El aviso automático falló — usa el botón de WhatsApp.', 'error'); return false }
+    if (error) {
+      showToast('No se pudo contactar al servicio de confirmación. Revisa que la función reservation-notify esté desplegada en Supabase.', 'error')
+      return false
+    }
     if (data?.ok) {
       showToast(data.method === 'chat' ? 'Confirmación enviada por el chat del concierge ✅' : 'Confirmación enviada por WhatsApp ✅', 'success')
       return true
     }
-    if (data?.error && !quiet) showToast(`Aviso automático no salió: ${data.error}`, 'error')
+    if (data?.error) { showToast(`No se envió la confirmación: ${data.error}`, 'error'); return false }
+    // Casos legítimos de "no aplica" — informativos, no errores
+    if (data?.skipped && !quiet) {
+      const motivo = data.skipped === 'ya enviada' ? 'Esta reserva ya tenía su confirmación enviada.'
+        : data.skipped === 'walk-in' ? 'Los walk-in no reciben confirmación.'
+        : 'La reserva aún no está confirmada.'
+      showToast(motivo, 'info')
+    }
     return false
   }
 
@@ -1245,9 +1258,10 @@ function CreateReservationSheet({ buId, buList, defaultDate, userId, userRole, o
     // Confirmación automática al cliente por WhatsApp (el servidor decide la
     // vía: chat del concierge o plantilla; nunca duplica). Fire-and-forget.
     if (confirmNow) {
-      supabase.functions.invoke('reservation-notify', { body: { reservationId: data.id } }).then(({ data: n }) => {
-        if (n?.ok) showToast(n.method === 'chat' ? 'Confirmación enviada por el chat del concierge ✅' : 'Confirmación enviada por WhatsApp ✅', 'success')
-        else if (n?.error) showToast(`Aviso automático no salió: ${n.error}`, 'error')
+      supabase.functions.invoke('reservation-notify', { body: { reservationId: data.id } }).then(({ data: n, error: nErr }) => {
+        if (nErr) showToast('No se pudo contactar al servicio de confirmación. Revisa que la función reservation-notify esté desplegada en Supabase.', 'error')
+        else if (n?.ok) showToast(n.method === 'chat' ? 'Confirmación enviada por el chat del concierge ✅' : 'Confirmación enviada por WhatsApp ✅', 'success')
+        else if (n?.error) showToast(`No se envió la confirmación: ${n.error}`, 'error')
       })
     }
     onCreated()
