@@ -138,7 +138,18 @@ Deno.serve(async (req: Request) => {
       const components: unknown[] = [{ type: 'body', parameters: bodyParams }]
       if (it.conBoton) components.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: token }] })
       sent = await graphSend({ to, type: 'template', template: { name: template, language: { code: it.lang }, components } })
-      if (sent.ok) { console.log('[reservation-notify] plantilla enviada', it.lang, it.conBoton ? 'con botón' : 'sin botón'); break }
+      if (sent.ok) {
+        // Meta responde 200 al ACEPTAR, no al entregar. En contacts[0].wa_id
+        // viene el número al que realmente lo va a mandar: si difiere del que
+        // enviamos, ahí está el problema (formato de número mexicano, típico).
+        // deno-lint-ignore no-explicit-any
+        const d: any = sent.data
+        console.log('[reservation-notify] plantilla ACEPTADA por Meta', it.lang, it.conBoton ? 'con botón' : 'sin botón',
+          '| enviado a:', to, '| wa_id resuelto:', d?.contacts?.[0]?.wa_id ?? 'NINGUNO',
+          '| wamid:', d?.messages?.[0]?.id ?? '—',
+          '| estado inicial:', d?.messages?.[0]?.message_status ?? '—')
+        break
+      }
       console.log('[reservation-notify] intento fallido', it.lang, it.conBoton ? 'con botón' : 'sin botón',
         JSON.stringify((sent.data as { error?: unknown })?.error ?? {}))
     }

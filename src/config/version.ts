@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.83.1"
+export const APP_VERSION = "2.84.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.84.0",
+    date: "2026-08-14",
+    type: "MINOR",
+    changes: [
+      "WHATSAPP — ahora se escuchan los REPORTES DE ENTREGA de Meta: hasta hoy la app decía 'enviado' cuando Meta solo lo había ACEPTADO, y si la entrega fallaba después nadie se enteraba. Cada falla queda registrada en Actividad con el destinatario, el motivo y el código de Meta",
+      "La confirmación de reserva registra en el log a qué número resolvió Meta el envío (wa_id), para cachar formatos de número mal guardados",
+    ]
+  },
   {
     version: "2.83.1",
     date: "2026-08-14",
