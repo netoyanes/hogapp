@@ -36,11 +36,19 @@ begin
     raise exception 'No mandaste ningún SQL.';
   end if;
 
-  -- El control de transacción lo lleva la función, no el texto pegado
+  -- El control de transacción lo lleva la función, no el texto pegado.
+  -- 'begin;' y 'commit;' se quitan como LÍNEA COMPLETA (flag 'n' = ^ y $
+  -- casan por línea) donde sea que aparezcan — no solo si 'commit;' es
+  -- literalmente lo último del texto, porque el SQL siempre trae comentarios
+  -- de RESUMEN después. Dejar un 'commit;' suelto revienta con "EXECUTE of
+  -- transaction commands is not implemented".
   v_sql := btrim(p_sql);
-  v_sql := regexp_replace(v_sql, '^\s*begin\s*;', '', 'i');
-  v_sql := regexp_replace(v_sql, 'commit\s*;\s*$', '', 'i');
+  v_sql := regexp_replace(v_sql, '^\s*begin\s*;\s*$', '', 'gin');
+  v_sql := regexp_replace(v_sql, '^\s*commit\s*;\s*$', '', 'gin');
   v_sql := btrim(v_sql);
+  if v_sql = '' then
+    raise exception 'Después de quitar begin;/commit; no quedó nada que ejecutar.';
+  end if;
 
   -- Texto para revisar: sin comentarios y sin literales de cadena
   v_check := regexp_replace(v_sql, '--[^\n]*', ' ', 'g');
