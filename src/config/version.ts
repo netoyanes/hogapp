@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.85.0"
+export const APP_VERSION = "2.85.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.85.1",
+    date: "2026-08-14",
+    type: "PATCH",
+    changes: [
+      "TAREAS — botón para COPIAR EL LINK de cualquier archivo adjunto (y de los links): para trasladarlo a otra tarea basta pegarlo ahí como link adjunto, sin volver a subir el archivo",
+    ]
+  },
   {
     version: "2.85.0",
     date: "2026-08-14",

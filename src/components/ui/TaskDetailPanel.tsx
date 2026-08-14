@@ -62,6 +62,20 @@ function SignatureBar({ verb, who, when }: { verb: string; who: string | null; w
   )
 }
 
+// Copiar la URL del archivo/link — para trasladarlo a otra tarea pegándolo
+// como link adjunto (el archivo vive en Storage; no hay que re-subirlo).
+function CopyUrlButton({ url, title = 'Copiar link del archivo — pégalo como link adjunto en otra tarea' }: { url: string; title?: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+      title={copied ? 'Copiado' : title}
+      style={{ background: copied ? 'var(--accent-bg)' : 'none', border: `1px solid ${copied ? 'var(--accent-border)' : 'var(--border-default)'}`, borderRadius: '5px', color: copied ? 'var(--accent)' : 'var(--text-secondary)', padding: '3px 8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+    </button>
+  )
+}
+
 interface ProofCardProps {
   proof: { id: string; file_url: string; file_type: string; created_at: string; archived: boolean; uploaded_by?: string | null }
   archived?: boolean
@@ -96,6 +110,7 @@ function ProofCard({ proof: p, archived, uploaderName, onPreview, onArchive, onU
         <a href={p.file_url} target="_blank" rel="noopener noreferrer" style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-secondary)', fontSize: '11px', padding: '3px 8px', textDecoration: 'none' }}>
           Open ↗
         </a>
+        <CopyUrlButton url={p.file_url} />
         {archived ? (
           <button onClick={onUnarchive} title="Restore" style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-tertiary)', fontSize: '11px', padding: '3px 8px', cursor: 'pointer' }}>
             Restore
@@ -162,6 +177,7 @@ function LinkCard({ link, adderName, onArchive }: { link: TaskLink; adderName?: 
         <a href={link.url} target="_blank" rel="noopener noreferrer" title="Abrir" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-default)', borderRadius: '5px', padding: '4px 7px', display: 'flex', alignItems: 'center' }}>
           <ExternalLink size={12} />
         </a>
+        <CopyUrlButton url={link.url} title="Copiar link — pégalo en otra tarea" />
         <button onClick={onArchive} title="Quitar" style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '5px', color: 'var(--text-tertiary)', padding: '4px 7px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
           <Trash2 size={12} />
         </button>
