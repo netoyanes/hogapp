@@ -250,6 +250,12 @@ export function useSheetLayer(open: boolean) {
   return { depth, behind, isTop, zBase: 60 + depth * 4 }
 }
 
+// Overlays que van SOBRE cualquier ventana apilada: visores a pantalla
+// completa, lightboxes. La pila de Sheets vive en 60 + depth*4 (y el panel en
+// +1), así que cualquier z-index fijo por debajo de eso queda ENTERRADO — es
+// exactamente el bug que tuvo el visor de evidencias con su z-60.
+export const Z_FULLSCREEN = 200
+
 // Estilo de "ventana detrás": atenuada, encogida y desplazada hacia arriba —
 // asoma tras la subventana activa, mostrando que están conectadas.
 const layerBehindFx = (behind: number, isMobile: boolean): CSSProperties => behind > 0

@@ -6,7 +6,7 @@ import { changeTaskStatus } from '../../lib/taskActions'
 import { logActivity } from '../../hooks/useActivityLog'
 import { notifyAdminsAndAssignee, sendTaskAssignmentEmail } from '../../lib/notifications'
 import { useIsMobile } from '../../hooks/useIsMobile'
-import { useSheetLayer, Sheet, showToast } from '../v2'
+import { useSheetLayer, Sheet, showToast, Z_FULLSCREEN } from '../v2'
 import { PriorityDot } from './PriorityDot'
 import { StatusBadge } from './StatusBadge'
 import { HtmlFrame } from './HtmlFrame'
@@ -1021,8 +1021,8 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
       {/* Fullscreen preview modal */}
       {previewProof && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-6"
-          style={{ background: 'rgba(0,0,0,0.92)' }}
+          className="fixed inset-0 flex items-center justify-center p-6"
+          style={{ background: 'rgba(0,0,0,0.92)', zIndex: Z_FULLSCREEN }}
           onClick={() => setPreviewProof(null)}
         >
           <button

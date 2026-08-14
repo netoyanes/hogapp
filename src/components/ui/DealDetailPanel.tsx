@@ -6,6 +6,7 @@ import type { CRMContact, CRMDeal } from '../../screens/CRM'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { Avatar } from './Avatar'
 import { ReactionBar } from './ReactionBar'
+import { useSheetLayer } from '../v2'
 import { notifySlack, dealStageChangedMessage, dealActivityMessage, dealCommentMessage, notifyUserDM, dealLink } from '../../hooks/useSlack'
 import { MentionArea, notifyMentions, useReadReceipts, ReadTicks, renderWithMentions, type Person } from './EntityChat'
 
@@ -73,6 +74,9 @@ interface Props {
 }
 
 export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, userRole }: Props) {
+  // Se apila sobre la ventana desde la que se abrió (p. ej. el presupuesto de
+  // un proyecto): con z fijo quedaba DETRÁS de esa ventana.
+  const { zBase } = useSheetLayer(true)
   const [deal, setDeal] = useState<CRMDeal | null>(null)
   const [creatorName, setCreatorName] = useState<string | null>(null)
   const [closerName, setCloserName] = useState<string | null>(null)
@@ -270,7 +274,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
   return (
     <>
       <div
-        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 40 }}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: zBase }}
         onClick={onClose}
       />
 
@@ -281,7 +285,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
           width: 'min(480px, 100vw)',
           background: 'var(--bg-surface)',
           borderLeft: '1px solid var(--border-subtle)',
-          zIndex: 45,
+          zIndex: zBase + 1,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -580,7 +584,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
 
       {/* Lost reason modal — reason is REQUIRED so every loss is explainable */}
       {lostModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: zBase + 5, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '360px' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>Marcar como perdido</h3>
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>Escribe el motivo — es obligatorio para poder aprender de cada pérdida.</p>
