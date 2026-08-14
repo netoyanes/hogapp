@@ -504,7 +504,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
             <div style={{ display: 'flex', gap: '6px' }}>
               <MentionArea value={actBody} onChange={setActBody} onSubmit={addActivity} people={people}
                 placeholder="Nota, llamada… usa @ para taggear" style={{ ...inputStyle, minHeight: 34 }} />
-              <button onClick={addActivity} disabled={!actBody.trim()} style={{ padding: '7px 12px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 600, opacity: actBody.trim() ? 1 : 0.4 }}>Add</button>
+              <button onClick={addActivity} disabled={!actBody.trim()} style={{ padding: '7px 12px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 600, opacity: actBody.trim() ? 1 : 0.4 }}>Add</button>
             </div>
 
             {/* Timeline */}

@@ -211,7 +211,7 @@ export function Social({ profile, userId }: Props) {
                     placeholder="Pega un link — YouTube, Instagram, TikTok, artículo…"
                     style={{ flex: 1, minWidth: 0, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '9px 12px', fontSize: '13px', color: 'var(--text-primary)', outline: 'none' }}
                   />
-                  <button onClick={attachLink} disabled={!linkInput.trim()} style={{ background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '10px', padding: '0 14px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, minHeight: '38px' }}>Añadir</button>
+                  <button onClick={attachLink} disabled={!linkInput.trim()} style={{ background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: '10px', padding: '0 14px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, minHeight: '38px' }}>Añadir</button>
                 </div>
               )}
 
@@ -239,7 +239,7 @@ export function Social({ profile, userId }: Props) {
                 <button
                   onClick={publish}
                   disabled={posting || !canPublish}
-                  style={{ marginLeft: 'auto', background: canPublish ? 'var(--accent)' : 'var(--bg-elevated)', color: canPublish ? '#000' : 'var(--text-tertiary)', border: 'none', borderRadius: '999px', padding: '0 18px', minHeight: '38px', cursor: canPublish ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700 }}
+                  style={{ marginLeft: 'auto', background: canPublish ? 'var(--accent)' : 'var(--bg-elevated)', color: canPublish ? 'var(--on-accent)' : 'var(--text-tertiary)', border: 'none', borderRadius: '999px', padding: '0 18px', minHeight: '38px', cursor: canPublish ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700 }}
                 >
                   <Send size={14} /> {posting ? '…' : 'Publicar'}
                 </button>

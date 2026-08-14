@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, CheckCheck, Send } from 'lucide-react'
+import { AtSign, Check, CheckCheck, MessageSquare, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifyUserDM, taskLink, dealLink } from '../../hooks/useSlack'
 import { logActivity } from '../../hooks/useActivityLog'
@@ -22,6 +22,9 @@ const CFG: Record<ChatScope, { table: string; fk: string; author: string; body: 
   event: { table: 'event_comments', fk: 'event_id', author: 'author_id',  body: 'content', reaction: 'event_comment' },
   deal:  { table: 'crm_activities', fk: 'deal_id',  author: 'created_by', body: 'body',    reaction: 'deal_activity' },
 }
+
+// Cómo se le llama a la cosa comentada, para el estado vacío
+const LABEL: Record<ChatScope, string> = { task: 'la tarea', event: 'el proyecto', deal: 'la oportunidad' }
 
 const scopeLink = (scope: ChatScope, id: string) =>
   scope === 'task' ? taskLink(id) : scope === 'deal' ? dealLink(id) : ''
@@ -154,13 +157,15 @@ export function ReadTicks({ readers, people, me }: { readers: string[]; people: 
 // ── El chat completo ─────────────────────────────────────────────────────────
 interface Msg { id: string; author_id: string | null; content: string; created_at: string }
 
-export function EntityChat({ scope, entityId, entityLabel, notifyUserIds = [], maxHeight = 280 }: {
+export function EntityChat({ scope, entityId, entityLabel, notifyUserIds = [], maxHeight = 280, fill = false }: {
   scope: ChatScope
   entityId: string
   entityLabel: string
   /** Además de los taggeados: gente a avisar de cada mensaje (asignado, responsable…) */
   notifyUserIds?: (string | null | undefined)[]
   maxHeight?: number
+  /** En un riel lateral el chat ocupa todo el alto disponible en vez de un tope fijo */
+  fill?: boolean
 }) {
   const cfg = CFG[scope]
   const [me, setMe] = useState<string | undefined>()
@@ -241,10 +246,22 @@ export function EntityChat({ scope, entityId, entityLabel, notifyUserIds = [], m
   const nameOf = (id: string | null) => people.find(p => p.id === id)?.full_name ?? '¿?'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div ref={listRef} style={{ maxHeight, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 2 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, ...(fill ? { flex: 1, minHeight: 0 } : null) }}>
+      <div ref={listRef} style={{ ...(fill ? { flex: 1, minHeight: 0 } : { maxHeight }), overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 2 }}>
+        {/* Estado vacío que ENSEÑA: un chat en blanco no dice qué se espera de
+            ti ahí. Aquí se ve para qué sirve y —lo importante— que puedes
+            jalar a alguien con @, que es la función que nadie descubre solo. */}
         {msgs.length === 0 && (
-          <p style={{ color: 'var(--text-tertiary)', fontSize: 12, margin: '4px 0' }}>Sin mensajes todavía — arranca la conversación.</p>
+          <div style={{ ...(fill ? { margin: 'auto 0' } : null), textAlign: 'center', padding: '18px 10px' }}>
+            <MessageSquare size={26} style={{ color: 'var(--text-tertiary)', opacity: 0.7 }} />
+            <p style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 700, margin: '8px 0 3px' }}>Arranca la conversación</p>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: 11.5, margin: 0, lineHeight: 1.5 }}>
+              Haz preguntas, deja el seguimiento por escrito y resuelve aquí en vez de por WhatsApp — queda pegado a {LABEL[scope]}.
+            </p>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, padding: '5px 10px', borderRadius: 999, background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', color: 'var(--accent)', fontSize: 11, fontWeight: 700 }}>
+              <AtSign size={11} /> menciona a alguien y le llega el aviso
+            </span>
+          </div>
         )}
         {msgs.map(m => {
           const mine = m.author_id === me

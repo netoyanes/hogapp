@@ -72,7 +72,7 @@ export function UserOnboarding({ profile, onComplete }: Props) {
             </p>
             <button
               onClick={() => setStep(2)}
-              style={{ background: 'var(--accent)', color: '#000', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: 'pointer', width: '100%' }}
+              style={{ background: 'var(--accent)', color: 'var(--on-accent)', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: 'pointer', width: '100%' }}
             >
               Get started
             </button>
@@ -113,7 +113,7 @@ export function UserOnboarding({ profile, onComplete }: Props) {
               <button onClick={() => setStep(1)} style={{ flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: '8px', padding: '11px', fontSize: '14px', cursor: 'pointer' }}>
                 Back
               </button>
-              <button onClick={() => setStep(3)} disabled={!fullName} style={{ flex: 1, background: fullName ? 'var(--accent)' : 'var(--bg-elevated)', color: fullName ? '#000' : 'var(--text-tertiary)', borderRadius: '8px', padding: '11px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: fullName ? 'pointer' : 'not-allowed' }}>
+              <button onClick={() => setStep(3)} disabled={!fullName} style={{ flex: 1, background: fullName ? 'var(--accent)' : 'var(--bg-elevated)', color: fullName ? 'var(--on-accent)' : 'var(--text-tertiary)', borderRadius: '8px', padding: '11px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: fullName ? 'pointer' : 'not-allowed' }}>
                 Continue
               </button>
             </div>
@@ -144,7 +144,7 @@ export function UserOnboarding({ profile, onComplete }: Props) {
               <button onClick={() => setStep(2)} style={{ flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: '8px', padding: '11px', fontSize: '14px', cursor: 'pointer' }}>
                 Back
               </button>
-              <button onClick={() => setStep(4)} style={{ flex: 1, background: 'var(--accent)', color: '#000', borderRadius: '8px', padding: '11px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+              <button onClick={() => setStep(4)} style={{ flex: 1, background: 'var(--accent)', color: 'var(--on-accent)', borderRadius: '8px', padding: '11px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
                 Continue
               </button>
             </div>
@@ -164,7 +164,7 @@ export function UserOnboarding({ profile, onComplete }: Props) {
             <button
               onClick={handleFinish}
               disabled={saving}
-              style={{ background: 'var(--accent)', color: '#000', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: saving ? 'not-allowed' : 'pointer', width: '100%' }}
+              style={{ background: 'var(--accent)', color: 'var(--on-accent)', borderRadius: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: saving ? 'not-allowed' : 'pointer', width: '100%' }}
             >
               {saving ? 'Saving…' : 'Enter HOG APP →'}
             </button>

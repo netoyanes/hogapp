@@ -16,7 +16,7 @@ export function EmptyState({ icon = '📭', title, description, action }: Props)
       {action && (
         <button
           onClick={action.onClick}
-          style={{ background: 'var(--accent)', color: '#000' }}
+          style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
           className="px-4 py-2 rounded-lg text-sm font-semibold"
         >
           {action.label}

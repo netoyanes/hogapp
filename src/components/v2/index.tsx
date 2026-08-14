@@ -270,8 +270,14 @@ const layerBehindFx = (behind: number, isMobile: boolean): CSSProperties => behi
 
 // ── Sheet — en escritorio: modal CENTRADO; en teléfono: bottom sheet. Las
 // subventanas se apilan al centro con la anterior visible detrás ─────────────
-export function Sheet({ open, onClose, isMobile, children, width = 480 }: {
-  open: boolean; onClose: () => void; isMobile: boolean; children: ReactNode; width?: number
+export function Sheet({ open, onClose, isMobile, children, width = 480, minWidth, tall = false }: {
+  open: boolean; onClose: () => void; isMobile: boolean; children: ReactNode
+  /** Ancho MÁXIMO en escritorio. La ventana crece con la pantalla hasta aquí. */
+  width?: number
+  /** Piso del ancho fluido; por defecto el 92% del máximo (nunca menos de 420) */
+  minWidth?: number
+  /** Ventanas de trabajo (proyecto, tarea): marco alto y estable, estilo Airtable */
+  tall?: boolean
 }) {
   const { behind, isTop, zBase } = useSheetLayer(open)
   useEffect(() => {
@@ -294,9 +300,19 @@ export function Sheet({ open, onClose, isMobile, children, width = 480 }: {
       }
     : {
         position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-        width, maxWidth: '94vw', maxHeight: 'min(86vh, 860px)', zIndex: zBase + 1,
+        // Ancho FLUIDO con techo: la ventana usa el espacio de la pantalla en
+        // vez de quedarse en un ancho fijo, pero nunca pasa de su máximo — una
+        // línea de texto de 1400px es ilegible, y una ventana pegada a los
+        // bordes deja de leerse como ventana.
+        width: `clamp(${Math.min(minWidth ?? Math.max(420, Math.round(width * 0.92)), width)}px, 92vw, ${width}px)`,
+        // Alto: las ventanas de trabajo reservan su marco desde el inicio para
+        // que el contenido no las haga crecer y encoger mientras se navega;
+        // las demás solo tienen techo. En ambos casos, más alto que antes.
+        maxHeight: 'min(92vh, 1040px)',
+        ...(tall ? { height: 'min(92vh, 1040px)' } : null),
+        zIndex: zBase + 1,
         background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
-        borderRadius: 'var(--radius-lg)', boxShadow: '0 24px 80px rgba(0,0,0,0.55)',
+        borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sheet)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         animation: 'sheet-pop var(--motion-sheet)',
         transition: 'transform .28s cubic-bezier(.2,.8,.2,1), filter .28s',
@@ -317,7 +333,7 @@ export function Sheet({ open, onClose, isMobile, children, width = 480 }: {
            largo empuja el panel y las zonas con overflow:auto nunca scrollean. */
         .hog-sheet-panel > * { min-height: 0 }
       `}</style>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: zBase > 60 ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.55)', zIndex: zBase }} />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: zBase > 60 ? 'var(--scrim-stacked)' : 'var(--scrim)', zIndex: zBase }} />
       <div role="dialog" aria-modal="true" className="hog-sheet-panel" style={panel}>
         {isMobile && (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-2) 0', flexShrink: 0 }}>

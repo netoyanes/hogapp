@@ -134,7 +134,7 @@ export function TaskTemplates({ userRole }: Props) {
           {canManage && (
             <button
               onClick={openCreate}
-              style={{ background: 'var(--accent)', color: '#000', borderRadius: '7px', padding: '8px 14px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer' }}
+              style={{ background: 'var(--accent)', color: 'var(--on-accent)', borderRadius: '7px', padding: '8px 14px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer' }}
             >
               + New Template
             </button>
@@ -342,7 +342,7 @@ export function TaskTemplates({ userRole }: Props) {
                 <button
                   onClick={save}
                   disabled={saving || !name.trim()}
-                  style={{ flex: 2, background: name.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: name.trim() ? '#000' : 'var(--text-tertiary)', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: name.trim() ? 'pointer' : 'not-allowed' }}
+                  style={{ flex: 2, background: name.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: name.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: name.trim() ? 'pointer' : 'not-allowed' }}
                 >
                   {saving ? 'Saving…' : editing ? 'Update Template' : 'Create Template'}
                 </button>

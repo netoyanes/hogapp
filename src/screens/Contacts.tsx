@@ -310,7 +310,7 @@ export function Contacts({ userRole, userId }: Props) {
           </Field>
           <div style={{ display: 'flex', gap: '8px', marginTop: '10px', justifyContent: 'flex-end' }}>
             <button onClick={() => { setCreating(false); resetForm() }} style={{ padding: '6px 14px', background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>Cancelar</button>
-            <button onClick={saveCreate} disabled={saving || !fName.trim()} style={{ padding: '6px 14px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, opacity: saving ? 0.6 : 1 }}>
+            <button onClick={saveCreate} disabled={saving || !fName.trim()} style={{ padding: '6px 14px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, opacity: saving ? 0.6 : 1 }}>
               {saving ? 'Guardando…' : 'Agregar contacto'}
             </button>
           </div>
@@ -364,7 +364,7 @@ export function Contacts({ userRole, userId }: Props) {
                   <button onClick={() => { setEditingId(null); resetForm() }} style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <X size={12} /> Cancel
                   </button>
-                  <button onClick={() => saveEdit(contact.id)} disabled={saving || !fName.trim()} style={{ padding: '5px 12px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', opacity: saving ? 0.6 : 1 }}>
+                  <button onClick={() => saveEdit(contact.id)} disabled={saving || !fName.trim()} style={{ padding: '5px 12px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', opacity: saving ? 0.6 : 1 }}>
                     <Check size={12} /> Guardar
                   </button>
                 </div>

@@ -70,7 +70,9 @@ export const ACTIONS: Record<string, ActionDef> = {
   // ── Proyectos ─────────────────────────────────────────────────────────────
   event_created:     { module: 'proyectos', icon: FolderKanban, color: '#22C55E', label: d => `creó el proyecto "${s(d?.name)}"` },
   event_updated:     { module: 'proyectos', icon: FolderKanban, color: '#E8A33D', label: d => `actualizó el proyecto "${s(d?.name)}"${via(d)}` },
-  event_archived:    { module: 'proyectos', icon: Archive,      color: '#EAB308', label: d => `archivó el proyecto "${s(d?.name)}"` },
+  event_archived:    { module: 'proyectos', icon: Archive,      color: '#EAB308', label: d => `archivó el proyecto "${s(d?.name)}"${d?.tareas ? ` con ${d.tareas} tareas` : ''}` },
+  event_restored:    { module: 'proyectos', icon: Archive,      color: '#22C55E', label: d => `restauró el proyecto "${s(d?.name)}"` },
+  event_shared:      { module: 'proyectos', icon: Link2,        color: '#06B6D4', label: d => `copió el link del proyecto "${s(d?.name)}"` },
   task_linked:       { module: 'proyectos', icon: Link2,        color: '#06B6D4', label: d => `ligó una tarea al proyecto "${s(d?.event)}"` },
   task_converted_to_project: { module: 'proyectos', icon: FolderKanban, color: '#22C55E', label: d => `convirtió la tarea "${s(d?.task)}" en el proyecto "${s(d?.name)}"` },
 

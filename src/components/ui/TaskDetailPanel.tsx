@@ -577,7 +577,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0" style={{ background: zBase > 60 ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.5)', zIndex: zBase }} onClick={onClose} />
+      <div className="fixed inset-0" style={{ background: zBase > 60 ? 'var(--scrim-stacked)' : 'var(--scrim)', zIndex: zBase }} onClick={onClose} />
 
       {/* Panel: centrado en escritorio, hoja completa en teléfono; si tiene
           subventanas encima se atenúa y asoma detrás (misma pila que Sheet) */}
@@ -592,9 +592,12 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
             ? { position: 'fixed' as const, top: 0, right: 0, bottom: 0, left: 0, width: '100%' }
             : {
                 position: 'fixed' as const, left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-                width: 480, maxWidth: '94vw', height: 'min(86vh, 860px)', maxHeight: '94vh',
+                // Mismo criterio que el Sheet: ancho fluido con techo y marco
+                // alto y estable, para que la tarea no cambie de tamaño según
+                // cuántas evidencias tenga cargadas
+                width: 'clamp(460px, 92vw, 600px)', height: 'min(92vh, 1040px)', maxHeight: '94vh',
                 border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)',
-                boxShadow: '0 24px 80px rgba(0,0,0,0.55)',
+                boxShadow: 'var(--shadow-sheet)',
                 animation: 'sheet-pop var(--motion-sheet)',
               }),
           ...(behind > 0
@@ -848,7 +851,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
                 <button onClick={() => setEditing(false)} style={{ flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: '7px', padding: '8px', fontSize: '12px', cursor: 'pointer' }}>
                   Cancel
                 </button>
-                <button onClick={saveEdits} disabled={saving} style={{ flex: 2, background: 'var(--accent)', color: '#000', borderRadius: '7px', padding: '8px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+                <button onClick={saveEdits} disabled={saving} style={{ flex: 2, background: 'var(--accent)', color: 'var(--on-accent)', borderRadius: '7px', padding: '8px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
                   {saving ? 'Saving…' : 'Save changes'}
                 </button>
               </div>

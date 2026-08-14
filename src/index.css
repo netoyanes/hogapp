@@ -75,9 +75,12 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
-/* Los pickers nativos de fecha/hora traen su icono en negro sobre fondo negro */
+/* Los pickers nativos de fecha/hora traen su icono en negro: sobre el tema
+   oscuro hay que aclararlo, sobre el claro ya se ve bien tal cual */
 input[type="date"]::-webkit-calendar-picker-indicator,
-input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; }
+:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg-surface); }

@@ -506,7 +506,7 @@ export function InviteUsers() {
                               ) : isDirty ? (
                                 <button
                                   onClick={() => saveSlackId(m.id)}
-                                  style={{ background: 'var(--accent)', border: 'none', borderRadius: '4px', color: '#000', fontSize: '9px', fontWeight: 700, padding: '2px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}
+                                  style={{ background: 'var(--accent)', border: 'none', borderRadius: '4px', color: 'var(--on-accent)', fontSize: '9px', fontWeight: 700, padding: '2px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}
                                 >
                                   <Save size={9} /> Save
                                 </button>
@@ -798,7 +798,7 @@ export function InviteUsers() {
               <button
                 type="submit"
                 disabled={sending || !email.trim()}
-                style={{ background: sent ? '#16A34A' : email.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: email.trim() ? '#000' : 'var(--text-tertiary)', borderRadius: '8px', padding: '11px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: email.trim() ? 'pointer' : 'not-allowed' }}
+                style={{ background: sent ? '#16A34A' : email.trim() ? 'var(--accent)' : 'var(--bg-elevated)', color: email.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', borderRadius: '8px', padding: '11px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: email.trim() ? 'pointer' : 'not-allowed' }}
               >
                 {sent ? '✓ Invitation sent!' : sending ? 'Sending…' : 'Send Invitation'}
               </button>
