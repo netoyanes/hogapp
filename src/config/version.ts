@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.81.1"
+export const APP_VERSION = "2.82.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.82.0",
+    date: "2026-08-14",
+    type: "MINOR",
+    changes: [
+      "PROGRAMA DEL EVENTO — nueva sección en cada proyecto para eventos de varios días: la agenda de lo que SUCEDE cada día, con horario de inicio y fin, lugar, quién la imparte y estado (planeada · confirmada · hecha · cancelada). Se lee agrupada por día, como el itinerario que se entrega al equipo",
+      "Las actividades son distintas de las tareas a propósito: una tarea se completa (trabajo previo, con fecha límite y responsable), una actividad ocurre (Yoga, miércoles 10:30–12:00)",
+      "Cada actividad puede generar sus propias TAREAS DE PREPARACIÓN ligadas a ella — así se gestiona individual sin sacarla del conjunto del evento, y se ve su avance (2/3 tareas) en la misma línea del programa",
+      "El prompt de inyección SQL ya sabe cargar un programa completo de golpe: tareas de planeación + agenda de varios días en un solo bloque",
+    ]
+  },
   {
     version: "2.81.1",
     date: "2026-08-14",

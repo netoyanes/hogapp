@@ -129,6 +129,31 @@ misma tabla; los distingue la columna `kind`.
 | `is_private` | boolean | default `false` |
 | `event_id` | uuid | **el proyecto al que pertenece** (null si es suelta) |
 
+### `project_activities` — el PROGRAMA del evento (agenda por día y hora)
+
+Para eventos que duran varios días. **No confundir con `tasks`**: una tarea es
+trabajo previo que alguien completa ("definir costos antes del 14 de agosto");
+una actividad es algo que **sucede** durante el evento, con día y horario
+("Yoga, miércoles 16, 10:30–12:00").
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `event_id` | uuid | **obligatorio** — el proyecto al que pertenece |
+| `date` | date | **obligatorio** — el día en que ocurre |
+| `start_time` / `end_time` | text | `'HH:MM'` en 24h; pueden cruzar medianoche (`'19:00'`→`'02:00'`) |
+| `title` | text | **obligatorio** — ej. `'Taller de ostiones'` |
+| `description` | text | |
+| `location` | text | sala, playa, terraza, dirección… |
+| `facilitator` | text | quién la imparte, en texto libre (puede ser externo) |
+| `responsible` | uuid | del equipo, si alguien la coordina |
+| `capacity` | int | cupo, si aplica |
+| `cost` | numeric | costo de esa actividad, si aplica |
+| `status` | text | `planeada` · `confirmada` · `hecha` · `cancelada` (default `planeada`) |
+| `sort` | int | orden dentro del mismo día y hora |
+
+Una tarea puede colgar de una actividad concreta con `tasks.activity_id`
+(preparar el taller), además de colgar del proyecto con `tasks.event_id`.
+
 ### `task_followers` — personas involucradas (además del asignado)
 
 `task_id` + `user_id`. Una fila por persona.
@@ -303,6 +328,70 @@ commit;
 > Los CTEs intermedios llevan `returning 1` solo para que PostgreSQL los
 > ejecute; el último bloque va fuera del `with` como sentencia principal.
 
+### Variante: evento de varios días — tareas de planeación + PROGRAMA
+
+El caso de un retiro, festival o apertura: por un lado el trabajo previo
+(tareas con fecha límite), por otro la agenda de lo que sucede cada día
+(actividades con horario). Los dos cuelgan del mismo proyecto.
+
+```sql
+begin;
+
+with proyecto as (
+  insert into event_plans (bu_id, name, kind, date, end_date, event_type, status, created_by)
+  values (
+    (select id from business_units where code = 'CL'),
+    'Retiro de bienestar — septiembre', 'evento', '2026-09-15', '2026-09-20', 'workshop', 'planning',
+    (select id from profiles where email = 'TU-CORREO@dominio.com')
+  ) returning id
+),
+planeacion as (
+  -- Trabajo PREVIO: se completa antes del evento
+  insert into tasks (title, due_date, area, priority, deadline_type, status,
+                     client_impact, proof_required, event_id, bu_id, created_by)
+  select v.title, v.vence, v.area, v.prio, 'HARD', 'OPEN', 'internal', false, p.id,
+         (select id from business_units where code = 'CL'),
+         (select id from profiles where email = 'TU-CORREO@dominio.com')
+  from (values
+    ('Definir costos',                 date '2026-08-14', 'finanzas',  'HIGH'),
+    ('Definir nombre del retiro',      date '2026-08-14', 'marketing', 'HIGH'),
+    ('Cerrar partnership',             date '2026-08-21', 'comercial', 'HIGH'),
+    ('Kit de regalo — Woodys',         date '2026-09-01', 'marketing', 'MEDIUM')
+  ) as v(title, vence, area, prio)
+  cross join proyecto p
+  returning 1
+)
+-- Lo que SUCEDE durante el evento: día + horario
+insert into project_activities (event_id, date, start_time, end_time, title, location, facilitator, status)
+select p.id, a.dia, a.ini, a.fin, a.titulo, a.lugar, a.imparte, 'planeada'
+from (values
+  (date '2026-09-15', '19:00', '02:00', 'Ice Breaker',                          null, null),
+  (date '2026-09-16', '10:30', '12:00', 'Yoga',                                 null, null),
+  (date '2026-09-16', '15:00', '17:00', 'Taller de ostiones',                   null, null),
+  (date '2026-09-17', '08:00', '10:00', 'Breathwork',                           null, null),
+  (date '2026-09-17', '11:00', '13:00', 'Avistamiento / tour de vida marina',   null, null),
+  (date '2026-09-17', '19:00', '22:00', 'Ceremonia de cacao / Ecstatic dance / Sound healing', null, null),
+  (date '2026-09-18', '08:00', '10:00', 'Mat Pilates',                          null, null),
+  (date '2026-09-18', '18:00', '02:00', 'Cata de vinos / Fiesta',               null, null),
+  (date '2026-09-19', '17:00', '19:00', 'Arteterapia',                          null, null),
+  (date '2026-09-20', '09:00', '13:00', 'Desayuno de cierre / Bazar',           null, null)
+) as a(dia, ini, fin, titulo, lugar, imparte)
+cross join proyecto p;
+
+commit;
+
+-- ─────────────────────────────────────────────────────────────
+-- RESUMEN: 1 proyecto (retiro, 15–20 sep) + 4 tareas de planeación
+-- + 10 actividades de programa en 6 días.
+-- FALTA: lugar y facilitador de cada actividad; responsables de las tareas.
+-- ─────────────────────────────────────────────────────────────
+```
+
+> Si una actividad necesita preparación propia, la tarea se liga con
+> `activity_id` además de `event_id` — pero eso requiere el id de la actividad,
+> así que conviene crearlas desde la app (botón de tarea en cada actividad del
+> Programa) en lugar de por SQL.
+
 ---
 
 ## LISTA DE VERIFICACIÓN ANTES DE ENTREGAR
@@ -311,6 +400,7 @@ commit;
 - [ ] Solo hay `INSERT` — ningún `UPDATE`, `DELETE` ni DDL
 - [ ] Ningún UUID escrito a mano
 - [ ] Todos los `kind`, `status`, `area`, `priority`, `event_type` salen de los catálogos
+- [ ] Si el evento dura varios días y tiene agenda, el programa va en `project_activities` (con día y horario) — NO como tareas
 - [ ] Las fechas están en `'YYYY-MM-DD'` y son reales, no relativas
 - [ ] Al final hay un bloque con RESUMEN, SUPUESTOS y FALTA
 

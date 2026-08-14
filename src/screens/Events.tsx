@@ -1203,6 +1203,196 @@ function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, 
   )
 }
 
+// ── Programa del evento: qué SUCEDE cada día, con horario ────────────────────
+// Distinto de las tareas: una tarea se completa (trabajo previo), una actividad
+// ocurre (yoga el miércoles 10:30–12:00). Se agrupa por día para leerse como el
+// itinerario que se le entrega al equipo y al asistente.
+interface ProgramActivity {
+  id: string; date: string; start_time: string | null; end_time: string | null
+  title: string; location: string | null; facilitator: string | null
+  capacity: number | null; cost: number | null; status: string; description: string | null
+}
+const ACT_STATUS: Record<string, { label: string; color: string }> = {
+  planeada:   { label: 'Planeada',   color: '#8A8A8A' },
+  confirmada: { label: 'Confirmada', color: '#3B82F6' },
+  hecha:      { label: 'Hecha',      color: '#22C55E' },
+  cancelada:  { label: 'Cancelada',  color: '#EF4444' },
+}
+const diaLargo = (iso: string) =>
+  new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' })
+
+function ProgramSection({ eventId, defaultDate, canWrite, userId, onOpenTask }: {
+  eventId: string; defaultDate: string | null; canWrite: boolean; userId?: string
+  onOpenTask?: (id: string) => void
+}) {
+  const [items, setItems] = useState<ProgramActivity[]>([])
+  const [tableMissing, setTableMissing] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [n, setN] = useState({ date: defaultDate ?? '', ini: '', fin: '', title: '', location: '', facilitator: '' })
+  const [taskCounts, setTaskCounts] = useState<Record<string, { total: number; hechas: number }>>({})
+
+  const load = useCallback(async () => {
+    const { data, error } = await supabase.from('project_activities')
+      .select('id, date, start_time, end_time, title, location, facilitator, capacity, cost, status, description')
+      .eq('event_id', eventId).order('date').order('start_time', { nullsFirst: true }).order('sort')
+    if (error) { setTableMissing(true); return }
+    const rows = (data ?? []) as ProgramActivity[]
+    setItems(rows)
+    if (rows.length) {
+      const { data: tk } = await supabase.from('tasks').select('activity_id, status')
+        .in('activity_id', rows.map(r => r.id))
+      const c: Record<string, { total: number; hechas: number }> = {}
+      for (const t of tk ?? []) {
+        const k = t.activity_id as string
+        c[k] = c[k] ?? { total: 0, hechas: 0 }
+        c[k].total++
+        if (t.status === 'APPROVED') c[k].hechas++
+      }
+      setTaskCounts(c)
+    }
+  }, [eventId])
+  useEffect(() => { load() }, [load])
+
+  async function add() {
+    if (!n.title.trim() || !n.date) return
+    const { error } = await supabase.from('project_activities').insert({
+      event_id: eventId, date: n.date, start_time: n.ini || null, end_time: n.fin || null,
+      title: n.title.trim(), location: n.location.trim() || null,
+      facilitator: n.facilitator.trim() || null, created_by: userId ?? null,
+    })
+    if (error) { showToast(`No se pudo agregar: ${error.message}`, 'error'); return }
+    setN({ date: n.date, ini: '', fin: '', title: '', location: '', facilitator: '' })
+    load()
+  }
+  async function setStatus(id: string, status: string) {
+    await supabase.from('project_activities').update({ status }).eq('id', id)
+    setItems(prev => prev.map(i => i.id === id ? { ...i, status } : i))
+  }
+  async function remove(id: string) {
+    await supabase.from('project_activities').delete().eq('id', id)
+    setItems(prev => prev.filter(i => i.id !== id))
+  }
+  // Tarea de preparación colgada de la actividad: se gestiona individual sin
+  // sacarla del conjunto del evento.
+  async function addPrepTask(a: ProgramActivity) {
+    const titulo = prompt(`Tarea de preparación para "${a.title}":`)
+    if (!titulo?.trim()) return
+    const { data, error } = await supabase.from('tasks').insert({
+      title: titulo.trim(), event_id: eventId, activity_id: a.id, status: 'OPEN',
+      due_date: a.date, deadline_type: 'HARD', client_impact: 'internal',
+      created_by: userId ?? null, priority: 'MEDIUM', proof_required: false,
+    }).select('id').single()
+    if (error) { showToast(`No se pudo crear: ${error.message}`, 'error'); return }
+    showToast('Tarea creada y ligada a la actividad.', 'success')
+    load()
+    if (data) onOpenTask?.(data.id)
+  }
+
+  const porDia = useMemo(() => {
+    const m = new Map<string, ProgramActivity[]>()
+    for (const a of items) { const arr = m.get(a.date) ?? []; arr.push(a); m.set(a.date, arr) }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [items])
+
+  const inp: React.CSSProperties = {
+    background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
+    color: 'var(--text-primary)', padding: '0 9px', fontSize: 12.5, outline: 'none', minHeight: 38, boxSizing: 'border-box',
+  }
+
+  if (tableMissing) return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+      <p style={{ fontSize: 12, color: 'var(--status-attention)', margin: 0 }}>Falta correr el SQL del programa (project_program.sql) en Supabase para activar esta sección.</p>
+    </div>
+  )
+
+  return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <CalendarDays size={13} style={{ color: '#E8A33D' }} />
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>
+          Programa{items.length ? ` (${items.length} ${items.length === 1 ? 'actividad' : 'actividades'} · ${porDia.length} ${porDia.length === 1 ? 'día' : 'días'})` : ''}
+        </span>
+        {canWrite && (
+          <button onClick={() => setAdding(v => !v)}
+            style={{ minHeight: 32, padding: '0 10px', borderRadius: 999, border: '1px solid var(--border-default)', background: adding ? 'var(--accent-bg)' : 'transparent', color: adding ? 'var(--accent)' : 'var(--text-secondary)', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Plus size={12} /> Actividad
+          </button>
+        )}
+      </div>
+
+      {items.length === 0 && !adding && (
+        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>
+          Sin programa aún. Aquí va lo que sucede durante el evento —con día y horario—, no el trabajo previo (eso son las tareas).
+        </p>
+      )}
+
+      {porDia.map(([dia, acts]) => (
+        <div key={dia} style={{ marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0 5px' }}>
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--accent)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>{diaLargo(dia)}</span>
+            <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+            <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{acts.length}</span>
+          </div>
+          {acts.map(a => {
+            const st = ACT_STATUS[a.status] ?? ACT_STATUS.planeada
+            const tc = taskCounts[a.id]
+            return (
+              <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '7px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+                <span className="num" style={{ width: 78, flexShrink: 0, fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', paddingTop: 2 }}>
+                  {a.start_time ? `${a.start_time.slice(0, 5)}${a.end_time ? `–${a.end_time.slice(0, 5)}` : ''}` : 'sin hora'}
+                </span>
+                <span style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: st.color, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', textDecoration: a.status === 'cancelada' ? 'line-through' : 'none', opacity: a.status === 'cancelada' ? 0.6 : 1 }}>{a.title}</div>
+                  {(a.location || a.facilitator || tc) && (
+                    <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 1, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {a.location && <span>📍 {a.location}</span>}
+                      {a.facilitator && <span>· {a.facilitator}</span>}
+                      {tc && <span className="num" style={{ color: tc.hechas === tc.total ? 'var(--status-healthy)' : 'var(--text-tertiary)' }}>· {tc.hechas}/{tc.total} tareas</span>}
+                    </div>
+                  )}
+                </div>
+                {canWrite && (
+                  <>
+                    <select value={a.status} onChange={e => setStatus(a.id, e.target.value)} aria-label="Estado"
+                      style={{ background: 'none', border: 'none', color: st.color, fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer', outline: 'none', flexShrink: 0 }}>
+                      {Object.entries(ACT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                    <button onClick={() => addPrepTask(a)} title="Agregar tarea de preparación para esta actividad"
+                      style={{ width: 28, height: 28, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0 }}><ListPlus size={12} /></button>
+                    <button onClick={() => remove(a.id)} aria-label="Quitar actividad"
+                      style={{ width: 28, height: 28, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0 }}><Trash2 size={12} /></button>
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ))}
+
+      {canWrite && adding && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-default)' }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input type="date" value={n.date} onChange={e => setN({ ...n, date: e.target.value })} className="num" style={{ ...inp, flex: 1 }} aria-label="Día" />
+            <input type="time" value={n.ini} onChange={e => setN({ ...n, ini: e.target.value })} className="num" style={{ ...inp, width: 96 }} aria-label="Inicio" />
+            <input type="time" value={n.fin} onChange={e => setN({ ...n, fin: e.target.value })} className="num" style={{ ...inp, width: 96 }} aria-label="Fin" />
+          </div>
+          <input value={n.title} onChange={e => setN({ ...n, title: e.target.value })} placeholder="Actividad — ej. Taller de ostiones"
+            onKeyDown={e => { if (e.key === 'Enter') add() }} style={inp} />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input value={n.location} onChange={e => setN({ ...n, location: e.target.value })} placeholder="Lugar" style={{ ...inp, flex: 1 }} />
+            <input value={n.facilitator} onChange={e => setN({ ...n, facilitator: e.target.value })} placeholder="Quién la imparte" style={{ ...inp, flex: 1 }} />
+            <button onClick={add} disabled={!n.title.trim() || !n.date}
+              style={{ minHeight: 38, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: 'none', background: n.title.trim() && n.date ? 'var(--accent)' : 'var(--bg-base)', color: n.title.trim() && n.date ? 'var(--on-accent)' : 'var(--text-tertiary)', cursor: n.title.trim() && n.date ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: 12 }}>
+              Agregar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Recursos requeridos: 1 bartender, 2 meseros, 1 guardia, equipo… ──────────
 function ResourcesSection({ eventId, canWrite }: { eventId: string; canWrite: boolean }) {
   const [items, setItems] = useState<Resource[]>([])
@@ -1809,6 +1999,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                   </p>
                 </div>
               )}
+              <ProgramSection eventId={event.id} defaultDate={event.date} canWrite={canWrite} userId={userId} onOpenTask={onOpenTask} />
               <ResourcesSection eventId={event.id} canWrite={canWrite} />
               <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} showCorte={showCorte} />
               {canWrite && (
