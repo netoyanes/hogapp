@@ -1,21 +1,33 @@
 # HOG APP · Prompt para generar SQL de proyectos y tareas
 
-> **Cómo se usa esto**
-> 1. Copia TODO este documento y pégalo en Claude (o el agente de IA que uses).
-> 2. Debajo, describe en lenguaje natural el evento, proyecto, remodelación o
->    tareas que quieres crear.
-> 3. La IA te devuelve **un solo bloque de SQL**.
-> 4. Mándaselo al Master **tal cual, sin editarlo tú** (copia completa, del
->    `begin;` al `commit;` con los comentarios de RESUMEN al final).
+> ⚠️ **Documento exclusivo para usuarios MASTER.** El botón que aplica este
+> SQL solo existe para el rol Master — no tiene caso dárselo a alguien más:
+> podría generar el SQL, pero no tendría dónde pegarlo. Si quieres que otra
+> persona del equipo pueda crear proyectos así, primero pídeme que la
+> convierta en Master o le dé el permiso puntual.
 >
-> **El Master lo aplica desde la propia app — ya no hace falta entrar a
-> Supabase.** En HOG APP, abajo a la derecha, hay un botón verde **⚡SQL**
-> (solo él lo ve). Ahí pega el SQL, la app le muestra EXACTAMENTE qué se
-> crearía — proyectos, tareas, recursos, presupuesto, con venue, responsable,
-> fechas y montos ya resueltos, no el texto crudo — y solo si lo firma se
-> guarda. Nada se aplica sin ese paso.
+> **Qué es esto.** Un atajo para crear de golpe un proyecto/evento completo
+> con todas sus tareas, recursos y presupuesto — en vez de darlos de alta uno
+> por uno en la interfaz. Tú describes lo que quieres en lenguaje natural, una
+> IA te arma el SQL exacto, y tú mismo lo aplicas en HOG APP con un preview de
+> por medio (nunca a ciegas).
 >
-> Tú solo entregas el SQL propuesto. Nunca lo ejecutas tú.
+> **El flujo completo (tú haces las dos partes):**
+> 1. Copia TODO este documento y pégalo en Claude, ChatGPT o el agente de IA
+>    que uses — no hace falta que sea el mismo Claude de HOG APP, puede ser
+>    cualquiera, incluso el chat normal de claude.ai en tu teléfono.
+> 2. Debajo del documento pegado, en el mismo chat, describe en lenguaje
+>    natural el evento, proyecto, remodelación o tareas que quieres crear
+>    (fechas, venue, quién queda a cargo, presupuesto — entre más completo,
+>    mejor sale).
+> 3. La IA te devuelve **un solo bloque de SQL**, listo para copiar.
+> 4. Copia ESE bloque completo (el `begin;` … `commit;` con los comentarios
+>    de RESUMEN al final) y pégalo en el botón ⚡SQL de HOG APP — ver abajo
+>    "Cómo pegarlo en la app" con el paso a paso.
+> 5. Ahí revisas un preview exacto de lo que se crearía y solo tú, con un
+>    clic, decides si se aplica de verdad.
+>
+> Nada se guarda en la base hasta que tú lo firmes dentro de la app.
 
 ---
 
@@ -297,32 +309,46 @@ commit;
 
 ---
 
-## PARA EL MASTER — cómo aplicarlo (botón ⚡SQL en la app)
+## CÓMO PEGARLO EN HOG APP (paso a paso)
 
-1. Abre HOG APP → botón verde **⚡SQL** (abajo a la derecha, solo tú lo ves).
-2. **Pega el SQL completo** tal como te lo mandaron, del `begin;` al final de
-   los comentarios de RESUMEN.
-3. Toca **Previsualizar**. La app corre el SQL de verdad contra la base y lo
-   revierte — el preview que ves es exacto, no una interpretación. Aparece
-   agrupado en Proyectos / Tareas / Recursos / Presupuesto, con los nombres
-   y montos ya resueltos (no los UUIDs ni el texto crudo).
-4. Revisa con cuidado dos cosas, porque el sistema NO las bloquea:
-   - **Tareas marcadas en ámbar** = quedarían sin asignar. Casi siempre es
-     porque el correo de esa persona no existe en HOG APP — revísalo antes
-     de firmar, o corrígelo ahí mismo en el textarea y vuelve a previsualizar.
-   - **El venue de cada proyecto/tarea** — un código de venue equivocado deja
-     el proyecto sin `bu_id` y falla al firmar (es obligatorio); en tareas
-     sueltas no falla, solo queda sin venue asignado.
-5. Si editas el SQL después de previsualizar, el botón de firmar se apaga
-   solo — vuelve a tocar Previsualizar antes de poder firmar.
-6. **Firmar y aplicar.** Ahí sí se guarda. Si algo truena a medio camino, la
-   transacción se revierte completa — no queda nada a medias.
-7. Queda registrado en Actividad con tu usuario y el SQL aplicado.
-8. Si te arrepientes después de firmar: en la app, **archiva** el proyecto o
-   las tareas (clic derecho → Archivar). No se borra nada por esta vía.
+No necesitas saber SQL para esta parte — solo copiar, pegar y leer el
+preview antes de decidir.
 
-### Alternativa (sin la app)
+1. **Copia el bloque de SQL** que te dio la IA. Todo, desde `begin;` hasta el
+   final de los comentarios que empiezan con `-- RESUMEN:`. Selecciónalo
+   completo (en la mayoría de los chats hay un botón "copiar" en la esquina
+   del bloque de código — úsalo para no dejar nada fuera).
+2. **Abre HOG APP** e inicia sesión con tu cuenta (Master).
+3. Busca, **abajo a la derecha de la pantalla**, un botón **verde
+   fosforescente** con un rayo ⚡ que dice **SQL**. Solo tú lo ves — nadie más
+   en el equipo tiene ese botón. Tócalo.
+4. Se abre un panel con una caja de texto grande. **Pega ahí** el SQL que
+   copiaste (clic dentro de la caja → pegar, o mantén presionado en el
+   teléfono → Pegar).
+5. Toca **Previsualizar**. Espera un par de segundos — la app está probando
+   el SQL de verdad contra la base de datos (y deshaciéndolo automáticamente
+   después, nada se guarda todavía). Te muestra una lista clara de lo que se
+   crearía: proyectos, tareas, recursos y presupuesto, con los nombres de
+   personas y venues ya resueltos — no código, cosas legibles como
+   "Confirmar layout de mesas — Neto — 5 sep 2026".
+6. **Revisa esa lista con calma** antes de seguir. Dos cosas a las que
+   prestar atención (la app no las bloquea sola):
+   - Si una tarea aparece **marcada en color ámbar**, va a quedar **sin
+     asignar** — normalmente porque el correo de esa persona no coincide con
+     ninguna cuenta de HOG APP. Puedes corregirlo editando el SQL en la
+     misma caja de texto (cambia el correo) y volver a tocar Previsualizar.
+   - Que el **venue** de cada proyecto/tarea sea el correcto.
+7. Si editas el texto después de previsualizar, el botón de firmar se
+   apaga solo — hay que volver a **Previsualizar** para poder firmar. Es
+   intencional: nunca se firma algo que no se acaba de revisar.
+8. Cuando todo se vea bien, toca **Firmar y aplicar**. Ahí sí queda guardado
+   en HOG APP — ya puedes verlo en Proyectos o en Tareas.
+9. Si te arrepientes después: dentro de la app, clic derecho sobre el
+   proyecto o la tarea → **Archivar**. Nunca se borra nada por esta vía, así
+   que siempre puedes deshacer el paso visualmente.
 
-El mismo SQL también se puede correr a mano en **Supabase → SQL Editor** — es
-el mismo texto, así que sigue siendo válido como respaldo si el botón no
-estuviera disponible por algún motivo.
+### Si el botón no aparece o algo falla
+
+Avísame directamente — puede ser que tu sesión necesite refrescarse, o que
+falte aplicar una actualización en la base. No hay necesidad de entrar a
+Supabase tú mismo para esto.
