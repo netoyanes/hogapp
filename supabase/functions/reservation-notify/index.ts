@@ -52,9 +52,17 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Sin permiso' }, 403)
     }
 
-    const { data: res } = await supabaseAdmin.from('reservations')
+    const { data: res, error: resErr } = await supabaseAdmin.from('reservations')
       .select('id, bu_id, guest_id, date, time_slot, party_size, status, source, manage_token, confirm_sent_at, bot_conversation_id, guests(full_name, phone), business_units(name)')
       .eq('id', reservationId).maybeSingle()
+    // Un error aquí casi siempre es la columna confirm_sent_at faltante (falta
+    // correr reclutamiento_confirmacion.sql). Antes se tragaba y devolvía
+    // "Reserva no encontrada", que mandaba a buscar el problema al lugar
+    // equivocado.
+    if (resErr) {
+      console.error('[reservation-notify] lectura de la reserva falló', resErr.message)
+      return json({ error: `No se pudo leer la reserva: ${resErr.message}. Si menciona confirm_sent_at, falta correr reclutamiento_confirmacion.sql en Supabase.` }, 500)
+    }
     if (!res) return json({ error: 'Reserva no encontrada' }, 404)
 
     // Política del aviso: solo reservas confirmadas, una sola vez, y los
@@ -115,28 +123,31 @@ Deno.serve(async (req: Request) => {
     const bodyParams = [guest?.full_name ?? 'cliente', venueName, fechaTxt, hora, pax]
       .map(t => ({ type: 'text', text: String(t) }))
 
-    // Primer intento: plantilla con botón URL dinámico (mi reserva). Si la
-    // plantilla se creó sin botón, Meta marca mismatch → reintento solo body.
-    let sent = await graphSend({
-      to, type: 'template',
-      template: {
-        name: template, language: { code: 'es_MX' },
-        components: [
-          { type: 'body', parameters: bodyParams },
-          { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: token }] },
-        ],
-      },
-    })
-    if (!sent.ok) {
-      sent = await graphSend({
-        to, type: 'template',
-        template: { name: template, language: { code: 'es_MX' }, components: [{ type: 'body', parameters: bodyParams }] },
-      })
+    // Meta es quisquilloso con dos cosas que no controlamos desde aquí: el
+    // IDIOMA con el que se registró la plantilla (es_MX vs es) y si lleva o no
+    // botón de URL dinámica. En vez de adivinar, se prueban las combinaciones
+    // en orden de preferencia y se reporta el último error si ninguna pasa.
+    const intentos: { lang: string; conBoton: boolean }[] = [
+      { lang: 'es_MX', conBoton: true },
+      { lang: 'es_MX', conBoton: false },
+      { lang: 'es',    conBoton: true },
+      { lang: 'es',    conBoton: false },
+    ]
+    let sent = { ok: false, data: null as unknown as Record<string, unknown> }
+    for (const it of intentos) {
+      const components: unknown[] = [{ type: 'body', parameters: bodyParams }]
+      if (it.conBoton) components.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: token }] })
+      sent = await graphSend({ to, type: 'template', template: { name: template, language: { code: it.lang }, components } })
+      if (sent.ok) { console.log('[reservation-notify] plantilla enviada', it.lang, it.conBoton ? 'con botón' : 'sin botón'); break }
+      console.log('[reservation-notify] intento fallido', it.lang, it.conBoton ? 'con botón' : 'sin botón',
+        JSON.stringify((sent.data as { error?: unknown })?.error ?? {}))
     }
     if (!sent.ok) {
-      const metaMsg = sent.data?.error?.message ?? 'Meta rechazó el envío'
-      console.error('[reservation-notify] plantilla falló', JSON.stringify(sent.data))
-      return json({ error: `Plantilla "${template}": ${metaMsg}` })
+      // deno-lint-ignore no-explicit-any
+      const e: any = (sent.data as any)?.error
+      const detalle = [e?.message, e?.error_data?.details].filter(Boolean).join(' — ')
+      console.error('[reservation-notify] plantilla falló en todos los intentos', JSON.stringify(sent.data))
+      return json({ error: `Plantilla "${template}": ${detalle || 'Meta rechazó el envío'}${e?.code ? ` (código ${e.code})` : ''}` })
     }
     await marcarEnviada()
     await supabaseAdmin.from('activity_log').insert({
