@@ -15,6 +15,23 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <!-- TEMA antes que nada: si esto viviera en el bundle, la app pintaría un
+         frame en oscuro antes de pasar a claro (parpadeo en cada carga), y
+         dependería de que TODO el bundle evalúe bien para siquiera tener tema.
+         Aquí es una línea que corre sí o sí. La lógica completa vive en
+         src/lib/theme.ts; esto solo replica la resolución inicial. -->
+    <script>
+      (function () {
+        try {
+          var m = localStorage.getItem('hog_theme') || 'dark'
+          var r = m === 'auto'
+            ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+            : (m === 'light' ? 'light' : 'dark')
+          document.documentElement.setAttribute('data-theme', r)
+          document.documentElement.style.colorScheme = r
+        } catch (e) { document.documentElement.setAttribute('data-theme', 'dark') }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

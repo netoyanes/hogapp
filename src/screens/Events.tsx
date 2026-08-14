@@ -1884,6 +1884,21 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   // Los totales viven aquí para que Aprobación y Presupuesto muestren SIEMPRE
   // la misma cifra — antes cada uno consultaba por su cuenta y se desfasaban
   const [totales, setTotales] = useState<{ gastos: number; ingresos: number; n: number } | null>(null)
+  // El chat se abre y cierra como en Airtable, y la elección se recuerda:
+  // quien trabaja solo no quiere una columna vacía comiéndose la pantalla.
+  const [chatOpen, setChatOpen] = useState(() => localStorage.getItem('hog_project_chat') !== '0')
+  function toggleChat() {
+    setChatOpen(v => { localStorage.setItem('hog_project_chat', v ? '0' : '1'); return !v })
+  }
+  async function copiarLink() {
+    if (!event) return
+    const url = `${window.location.origin}${window.location.pathname}?project=${event.id}`
+    try {
+      await navigator.clipboard.writeText(url)
+      showToast('Link del proyecto copiado — quien lo abra aterriza aquí.', 'success')
+      logActivity('event_shared', 'event', event.id, { name: event.name })
+    } catch { showToast('No se pudo copiar el link.', 'error') }
+  }
   const [taskFollowers, setTaskFollowers] = useState<Record<string, string[]>>({})
   const [bulkTasks, setBulkTasks] = useState('')
   const [templateId, setTemplateId] = useState('')
@@ -1892,8 +1907,12 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const buCode = buList.find(b => b.id === (event?.bu_id ?? buId))?.code ?? ''
   // La ventana crece con la pantalla: en un monitor grande el proyecto tiene
   // presupuesto, programa y tareas — apretarlo a 520px lo vuelve un túnel.
-  const anchoVentana = typeof window !== 'undefined' && window.innerWidth >= 1500 ? 860
+  const anchoBase = typeof window !== 'undefined' && window.innerWidth >= 1500 ? 860
     : typeof window !== 'undefined' && window.innerWidth >= 1200 ? 720 : 560
+  // El chat como COLUMNA (no al fondo del scroll) solo cabe si hay pantalla:
+  // apretado bajo 720px le robaría ancho al formulario, que es el trabajo real
+  const chatEnColumna = !!event && chatOpen && !isMobile && anchoBase >= 720
+  const anchoVentana = chatEnColumna ? anchoBase + 330 : anchoBase
   // Corte post-evento: se abre cuando el plan terminó (Realizado o fecha pasada)
   const todayISO = new Date().toISOString().slice(0, 10)
   const showCorte = !!event && (status === 'done' || !!((event.end_date ?? event.date) && (event.end_date ?? event.date)! < todayISO))
@@ -2125,7 +2144,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   return (
     // Ancho según pantalla: en monitores grandes el proyecto merece espacio —
     // capturar presupuesto y programa en una columna de 520px era estrangularlo.
-    <Sheet open onClose={onClose} isMobile={isMobile} width={anchoVentana}>
+    <Sheet open onClose={onClose} isMobile={isMobile} width={anchoVentana} tall={!!event}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Barra de estado FIJA: al volver de una distracción se sabe de
             inmediato en qué proyecto se está trabajando, quién responde y
@@ -2136,6 +2155,21 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             <h2 style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 800, margin: 0, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {event ? (name || event.name) : 'Nuevo proyecto'}
             </h2>
+            {/* Compartir y chat viven en el marco, no dentro del scroll: son
+                acciones sobre la ventana entera, disponibles siempre */}
+            {event && (
+              <>
+                <button onClick={copiarLink} title="Copiar link del proyecto — quien lo abra aterriza aquí"
+                  style={{ width: 34, height: 34, borderRadius: 8, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Link2 size={15} />
+                </button>
+                <button onClick={toggleChat} title={chatOpen ? 'Ocultar conversación' : 'Mostrar conversación'}
+                  style={{ width: 34, height: 34, borderRadius: 8, border: 'none', background: chatOpen ? 'var(--accent-bg)' : 'none', color: chatOpen ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <MessageCircle size={15} />
+                </button>
+                <div style={{ width: 1, height: 20, background: 'var(--border-subtle)', flexShrink: 0 }} />
+              </>
+            )}
             <button onClick={onClose} aria-label="Cerrar" style={{ width: 34, height: 34, border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', flexShrink: 0 }}><X size={16} /></button>
           </div>
           {event && (
@@ -2159,7 +2193,12 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
           )}
         </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
+      {/* Cuerpo en dos columnas: el trabajo a la izquierda, la conversación
+          fija a la derecha. Antes el chat vivía al final del scroll — para
+          escribirle a alguien había que recorrer todo el proyecto, y mientras
+          escribías perdías de vista lo que estabas comentando. */}
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 'var(--space-3)' }}>
           {/* Plantilla (solo al crear): pre-carga recursos, partidas y tareas */}
           {!event && templates.length > 0 && (
@@ -2524,12 +2563,13 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             </div>
           )}
 
-          {/* Chat del proyecto — menciones @, doble palomita, tiempo real */}
-          {event && (
+          {/* Chat inline solo cuando NO cabe como columna (móvil o ventana
+              angosta): la conversación no puede desaparecer por falta de ancho */}
+          {event && chatOpen && !chatEnColumna && (
             <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                 <MessageCircle size={13} style={{ color: 'var(--accent)' }} />
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Chat del proyecto</span>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Conversación</span>
               </div>
               <EntityChat scope="event" entityId={event.id} entityLabel={event.name} notifyUserIds={[event.responsible]} />
             </div>
@@ -2550,6 +2590,24 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             </div>
           )}
         </div>
+      </div>
+
+        {/* Riel de conversación — fijo mientras el proyecto se scrollea al lado */}
+        {chatEnColumna && event && (
+          <aside style={{ width: 330, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '10px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <MessageCircle size={13} style={{ color: 'var(--accent)' }} />
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Conversación</span>
+              <button onClick={toggleChat} aria-label="Ocultar conversación"
+                style={{ width: 26, height: 26, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X size={13} />
+              </button>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '0 12px 12px' }}>
+              <EntityChat scope="event" entityId={event.id} entityLabel={event.name} notifyUserIds={[event.responsible]} fill />
+            </div>
+          </aside>
+        )}
       </div>
       </div>
     </Sheet>

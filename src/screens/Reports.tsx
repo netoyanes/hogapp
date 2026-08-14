@@ -139,7 +139,7 @@ export function Reports({ userRole: _userRole }: Props) {
               <button
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', cursor: uploading ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-ui)', opacity: uploading ? 0.6 : 1 }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: '6px', cursor: uploading ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-ui)', opacity: uploading ? 0.6 : 1 }}
               >
                 <Upload size={13} />
                 {uploading ? 'Uploading…' : 'Upload HTML'}
@@ -236,7 +236,7 @@ export function Reports({ userRole: _userRole }: Props) {
                     <div style={{ display: 'flex', gap: '6px', marginTop: 'auto' }}>
                       <button
                         onClick={() => setPreview(report)}
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '7px', background: 'var(--accent)', color: '#000', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer', fontFamily: 'var(--font-ui)' }}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '7px', background: 'var(--accent)', color: 'var(--on-accent)', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer', fontFamily: 'var(--font-ui)' }}
                       >
                         <Maximize2 size={12} />
                         Preview

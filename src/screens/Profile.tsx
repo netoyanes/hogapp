@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Camera, Save, Clock, DollarSign, Trophy, Activity, Eye, KeyRound } from 'lucide-react'
+import { Camera, Save, Clock, DollarSign, Trophy, Activity, Eye, KeyRound, Sun } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { getViewAsRole, setViewAsRole } from '../lib/viewAs'
+import { getThemeMode, setThemeMode, resolveTheme, THEME_LABEL, type ThemeMode } from '../lib/theme'
 import { pinToPassword, isValidPin } from '../lib/hohAuth'
 import type { Profile as ProfileType, UserRole } from '../types'
 
@@ -190,6 +191,9 @@ export function Profile({ profile, onUpdated }: Props) {
   const [newPin, setNewPin] = useState('')
   const [pinSaving, setPinSaving] = useState(false)
   const [pinMsg, setPinMsg] = useState<string | null>(null)
+  // Espejo local del tema: el <html> lo cambia lib/theme, esto solo repinta
+  // los botones para que se vea cuál está elegido
+  const [themeMode, setTheme] = useState<ThemeMode>(() => getThemeMode())
 
   async function changeMyPin() {
     if (!isValidPin(newPin)) { setPinMsg('El PIN debe ser de 4 a 6 dígitos.'); return }
@@ -332,7 +336,7 @@ export function Profile({ profile, onUpdated }: Props) {
                   disabled={uploadingAvatar}
                   style={{ position: 'absolute', bottom: 0, right: 0, background: 'var(--accent)', border: 'none', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 >
-                  <Camera size={12} color="#000" />
+                  <Camera size={12} color="var(--on-accent)" />
                 </button>
                 <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} />
               </div>
@@ -346,6 +350,38 @@ export function Profile({ profile, onUpdated }: Props) {
             </div>
             {uploadingAvatar && <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '10px' }}>Uploading…</p>}
             {uploadError && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '10px' }}>Upload failed: {uploadError}</p>}
+          </div>
+
+          {/* Apariencia — la elección es del DISPOSITIVO, no de la cuenta: la
+              tablet del host stand y la laptop de oficina viven en luces
+              distintas y merecen ajustes distintos. */}
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '12px', padding: '20px' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <Sun size={15} style={{ color: 'var(--accent)' }} />
+              <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600 }}>Apariencia</h3>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginBottom: '14px', lineHeight: 1.5 }}>
+              Cómo se ve HOG APP en <strong>este dispositivo</strong>. En automático sigue a tu sistema: se aclara de día y se oscurece de noche sola.
+            </p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {(['dark', 'light', 'auto'] as ThemeMode[]).map(m => {
+                const on = themeMode === m
+                return (
+                  <button key={m} onClick={() => { setThemeMode(m); setTheme(m) }}
+                    title={THEME_LABEL[m].hint}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, flex: 1, minWidth: 130, padding: '12px 14px', borderRadius: '10px', cursor: 'pointer', textAlign: 'left', background: on ? 'var(--accent-bg)' : 'var(--bg-elevated)', border: `1px solid ${on ? 'var(--accent)' : 'var(--border-default)'}` }}>
+                    <span style={{ fontSize: '15px' }}>{THEME_LABEL[m].icon}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: on ? 'var(--accent)' : 'var(--text-primary)' }}>{THEME_LABEL[m].label}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', lineHeight: 1.35 }}>{THEME_LABEL[m].hint}</span>
+                  </button>
+                )
+              })}
+            </div>
+            {themeMode === 'auto' && (
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '11.5px', marginTop: '10px' }}>
+                Ahorita tu sistema está en <strong style={{ color: 'var(--text-secondary)' }}>{resolveTheme('auto') === 'light' ? 'claro' : 'oscuro'}</strong>.
+              </p>
+            )}
           </div>
 
           {/* Mi PIN — solo cuentas de piso (Heart of House) */}
@@ -478,7 +514,7 @@ export function Profile({ profile, onUpdated }: Props) {
           <button
             onClick={handleSave}
             disabled={saving}
-            style={{ background: saved ? '#16A34A' : 'var(--accent)', color: '#000', borderRadius: '9px', padding: '12px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            style={{ background: saved ? '#16A34A' : 'var(--accent)', color: 'var(--on-accent)', borderRadius: '9px', padding: '12px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
           >
             <Save size={15} />
             {saved ? 'Saved!' : saving ? 'Saving…' : 'Save changes'}

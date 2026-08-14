@@ -81,6 +81,53 @@
   /* ── Touch & focus ── */
   --touch-target: 44px;
   --focus-ring: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--accent);
+
+  /* ── Elevación — tokenizada para que el tema claro no herede sombras de
+     tema oscuro (una sombra negra al 55% sobre papel se ve como suciedad) ── */
+  --shadow-sheet:  0 24px 80px rgba(0, 0, 0, 0.55);
+  --shadow-pop:    0 8px 24px rgba(0, 0, 0, 0.45);
+  --scrim:         rgba(0, 0, 0, 0.55);
+  --scrim-stacked: rgba(0, 0, 0, 0.35);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TEMA CLARO — "back-of-house at noon". Mismo sistema, otra hora del día.
+   No es el oscuro invertido: sobre papel cálido el latón brillante se vuelve
+   ilegible, así que el acento BAJA de luminosidad y --on-accent se invierte
+   (texto claro sobre relleno oscuro). Todo lo demás en la app deriva de estos
+   nombres, así que no hay que tocar ningún componente.
+   ───────────────────────────────────────────────────────────────────────────── */
+:root[data-theme="light"] {
+  --bg-base:     #F6F3EE;
+  --bg-surface:  #FFFFFF;
+  --bg-elevated: #F1ECE3;
+  --bg-overlay:  #E7E0D4;
+
+  --accent:        #8F5E0C;
+  --accent-dim:    #6F480A;
+  --accent-bg:     rgba(143, 94, 12, 0.09);
+  --accent-border: rgba(143, 94, 12, 0.30);
+  --on-accent:     #FFF8EC;
+
+  --text-primary:   #1A1613;
+  --text-secondary: rgba(26, 22, 19, 0.64);
+  --text-tertiary:  rgba(26, 22, 19, 0.46);
+
+  --border-subtle:  rgba(26, 22, 19, 0.08);
+  --border-default: rgba(26, 22, 19, 0.15);
+  --border-strong:  rgba(26, 22, 19, 0.28);
+
+  /* Semánticos oscurecidos: el verde y el ámbar del tema noche desaparecen
+     sobre blanco. Mismo significado, contraste que sí se lee. */
+  --status-healthy:   #2E8B4F;
+  --status-attention: #9A6C05;
+  --status-risk:      #C2381F;
+  --status-none:      rgba(26, 22, 19, 0.38);
+
+  --shadow-sheet:  0 20px 60px rgba(26, 22, 19, 0.16);
+  --shadow-pop:    0 6px 20px rgba(26, 22, 19, 0.12);
+  --scrim:         rgba(26, 22, 19, 0.30);
+  --scrim-stacked: rgba(26, 22, 19, 0.16);
 }
 
 /* Money / KPI values: always mono, tabular numerals */

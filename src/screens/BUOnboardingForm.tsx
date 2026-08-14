@@ -406,7 +406,7 @@ export function BUOnboardingForm({ buCode, onClose, onSaved }: Props) {
             disabled={saving || saved}
             style={{
               background: saved ? 'var(--status-healthy)' : 'var(--accent)',
-              color: '#000',
+              color: 'var(--on-accent)',
               borderRadius: '8px',
               padding: '10px',
               fontSize: '13px',

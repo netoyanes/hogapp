@@ -129,7 +129,7 @@ export function Auth({ onSignIn, accessDenied }: Props) {
                 flex: 1, padding: '8px', borderRadius: '7px', border: 'none', cursor: 'pointer',
                 fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-ui)',
                 background: authKind === k ? 'var(--accent)' : 'transparent',
-                color: authKind === k ? '#000' : 'var(--text-secondary)',
+                color: authKind === k ? 'var(--on-accent)' : 'var(--text-secondary)',
               }}>
               {label}
             </button>
@@ -177,7 +177,7 @@ export function Auth({ onSignIn, accessDenied }: Props) {
               </div>
             )}
             <button type="submit" disabled={loading}
-              style={{ background: loading ? 'var(--accent-dim)' : 'var(--accent)', color: '#000', borderRadius: '8px', padding: '13px', fontSize: '15px', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', border: 'none', fontFamily: 'var(--font-ui)' }}>
+              style={{ background: loading ? 'var(--accent-dim)' : 'var(--accent)', color: 'var(--on-accent)', borderRadius: '8px', padding: '13px', fontSize: '15px', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', border: 'none', fontFamily: 'var(--font-ui)' }}>
               {loading ? '…' : 'Entrar'}
             </button>
           </form>
@@ -257,7 +257,7 @@ export function Auth({ onSignIn, accessDenied }: Props) {
           <button
             type="submit"
             disabled={loading}
-            style={{ background: loading ? 'var(--accent-dim)' : 'var(--accent)', color: '#000', borderRadius: '8px', padding: '11px', fontSize: '14px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', border: 'none', fontFamily: 'var(--font-ui)' }}
+            style={{ background: loading ? 'var(--accent-dim)' : 'var(--accent)', color: 'var(--on-accent)', borderRadius: '8px', padding: '11px', fontSize: '14px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', border: 'none', fontFamily: 'var(--font-ui)' }}
           >
             {loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
           </button>

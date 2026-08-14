@@ -526,7 +526,7 @@ export function ContentCalendar({ userRole: _userRole }: Props) {
                   style={{
                     flex: 2,
                     background: (fTitle.trim() && fBuId && fDate) ? 'var(--accent)' : 'var(--bg-elevated)',
-                    color: (fTitle.trim() && fBuId && fDate) ? '#000' : 'var(--text-tertiary)',
+                    color: (fTitle.trim() && fBuId && fDate) ? 'var(--on-accent)' : 'var(--text-tertiary)',
                     borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: 600, border: 'none',
                     cursor: (fTitle.trim() && fBuId && fDate) ? 'pointer' : 'not-allowed',
                   }}

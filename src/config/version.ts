@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.87.0"
+export const APP_VERSION = "2.88.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,21 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.88.0",
+    date: "2026-08-14",
+    type: "MINOR",
+    changes: [
+      "TEMA CLARO — HOG APP ahora se puede ver en claro, oscuro o AUTOMÁTICO (sigue a tu sistema: se aclara de día y se oscurece de noche sola). Se elige en Perfil → Apariencia y es por DISPOSITIVO: la tablet del host stand y tu laptop pueden verse distinto",
+      "No es el tema oscuro invertido: sobre papel el latón brillante no se lee, así que el acento baja de tono y el texto sobre botones se aclara. Se corrigieron 20+ botones que tenían el texto en negro fijo y habrían quedado ilegibles en claro",
+      "El tema se aplica ANTES de cargar la app: no hay parpadeo oscuro al entrar, y ya no depende de que todo el bundle levante bien",
+      "VENTANAS MÁS ALTAS Y DE ANCHO FLUIDO — antes eran de ancho fijo con un salto brusco entre tamaños de pantalla; ahora crecen con la ventana hasta un máximo definido, y las de trabajo (proyecto, tarea) reservan su marco desde el inicio en vez de crecer y encoger según el contenido",
+      "MARCO SUPERIOR DEL PROYECTO con acciones sobre la ventana entera: COPIAR LINK del proyecto (quien lo abra aterriza justo ahí) y botón para MOSTRAR/OCULTAR la conversación",
+      "LA CONVERSACIÓN SALE DEL FONDO DEL SCROLL y pasa a columna fija a la derecha (en pantallas de 1200px+): ya no hay que recorrer todo el proyecto para escribirle a alguien, y mientras escribes sigues viendo lo que estás comentando. Se recuerda si la dejaste abierta o cerrada",
+      "El chat vacío ahora ENSEÑA en vez de decir 'sin mensajes': explica para qué sirve y avisa que puedes @mencionar a alguien para que le llegue el aviso — la función que nadie descubría solo",
+      "Archivar y restaurar proyectos, y copiar su link, ahora se leen en español en Actividad",
+    ]
+  },
   {
     version: "2.87.0",
     date: "2026-08-14",
