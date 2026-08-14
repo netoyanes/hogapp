@@ -160,13 +160,16 @@ export default function App() {
     const goRes = () => handleNavigate('concierge')
     const goProjects = () => handleNavigate('events')
     const openDeal = (e: Event) => { const id = (e as CustomEvent).detail; if (id) setOverlayDealId(id) }
+    const openTask = (e: Event) => { const id = (e as CustomEvent).detail; if (id) setOverlayTaskId(id) }
     window.addEventListener('hog:open-reservations', goRes)
     window.addEventListener('hog:goto-projects', goProjects)
     window.addEventListener('hog:open-deal', openDeal)
+    window.addEventListener('hog:open-task', openTask)
     return () => {
       window.removeEventListener('hog:open-reservations', goRes)
       window.removeEventListener('hog:goto-projects', goProjects)
       window.removeEventListener('hog:open-deal', openDeal)
+      window.removeEventListener('hog:open-task', openTask)
     }
   })
 
