@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.82.0"
+export const APP_VERSION = "2.82.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.82.1",
+    date: "2026-08-14",
+    type: "PATCH",
+    changes: [
+      "FIX: al dar Preview a un archivo adjunto, el visor se abría DETRÁS de la ventana de la tarea — su z-index fijo quedaba por debajo del sistema de ventanas apiladas",
+      "FIX del mismo tipo: el panel de una oportunidad abierta desde el presupuesto de un proyecto quedaba detrás de la ventana del proyecto; ahora se apila encima como cualquier subventana",
+    ]
+  },
   {
     version: "2.82.0",
     date: "2026-08-14",
