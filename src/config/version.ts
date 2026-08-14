@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.86.1"
+export const APP_VERSION = "2.87.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,22 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.87.0",
+    date: "2026-08-14",
+    type: "MINOR",
+    changes: [
+      "FIX GRAVE EN APROBACIÓN — el monto de arriba no era el del presupuesto: se leía una sola vez al abrir la ventana, así que agregabas una partida y seguía diciendo la cifra vieja (MX$3,100 arriba vs MX$3,333 abajo). Se enviaba a aprobar —y a Slack— un número equivocado. Ahora es el mismo dato, siempre",
+      "EL FLUJO DE APROBACIÓN AHORA SE VE: riel de 4 pasos (armas presupuesto → envías → decide el aprobador → aprobado) marcando en cuál vas, el botón trae el NETO que estás mandando, y abajo dice qué va a pasar y A QUIÉN le llega, con nombre",
+      "Si no hay nadie configurado como aprobador, te lo advierte ANTES de enviar en vez de mandarlo al vacío",
+      "No se puede enviar un presupuesto sin partidas — no hay nada que decidir",
+      "SELECTS Y CAMPOS ARREGLADOS EN TODA LA APP: los desplegables (venue, responsable, dueño de partida, tipo de gasto) se pintaban con el chrome gris del sistema operativo — barras con relieve que sobre el tema oscuro se leían como un error. Ahora usan el estilo de la app, con su flecha y su desplegable oscuro",
+      "Fuera las flechitas de los campos numéricos (cantidad, costo, presupuesto) y los iconos de calendario/reloj ya se ven sobre fondo oscuro",
+      "RELACIONADOS DEL EQUIPO rediseñado: era un muro de 25 chips con TODO el directorio, donde los seleccionados se perdían entre los demás. Ahora arriba van los elegidos (con inicial y ✕ para quitar) y abajo se busca por nombre",
+      "La gente sin nombre capturado ya no aparece como chip '—' ni como opción de responsable: no se puede asignar un presupuesto a alguien que no se puede identificar",
+      "'Enviar requisición al gerente' pasa a botón secundario — competía en acento con 'Enviar presupuesto a aprobación' como si fueran la misma decisión, y son cosas distintas",
+    ]
+  },
   {
     version: "2.86.1",
     date: "2026-08-14",

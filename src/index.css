@@ -52,6 +52,33 @@ body {
   min-height: 100vh;
 }
 
+/* Los <select> nativos ignoran background/color y se pintan con el chrome del
+   sistema — barras grises con relieve que en un tema oscuro se leen como un
+   error de render. Se apaga esa apariencia y se dibuja la flecha nosotros.
+   El padding derecho reserva el espacio de la flecha para que no encime el
+   texto de la opción más larga. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 26px !important;
+}
+select:disabled { opacity: 0.5; }
+/* El desplegable sí lo pinta el SO: sin esto las opciones salen en blanco */
+select option { background: var(--bg-elevated); color: var(--text-primary); }
+
+/* Las flechitas de los number ocupan lugar y compiten con el dato. El valor se
+   escribe, no se incrementa de uno en uno. */
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Los pickers nativos de fecha/hora traen su icono en negro sobre fondo negro */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg-surface); }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
