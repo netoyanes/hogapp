@@ -427,10 +427,14 @@ function HoyTab({ buList, userId, isMobile, onGoReservas }: {
 // ═════════════════════════════════════════════════════════════════════════════
 // Resumen — productividad + ventas por venue
 // ═════════════════════════════════════════════════════════════════════════════
+interface LandingStat { bu_code: string; bu_name: string; vistas: number; visitantes: number; reservas: number; reservas_ok: number }
+
 function SummaryTab({ buList }: { buList: BU[] }) {
   const [period, setPeriod] = useState('7d')
   const [convs, setConvs] = useState<Conversation[]>([])
   const [botResCount, setBotResCount] = useState(0)
+  const [landing, setLanding] = useState<LandingStat[]>([])
+  const [landingMissing, setLandingMissing] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -438,12 +442,15 @@ function SummaryTab({ buList }: { buList: BU[] }) {
       setLoading(true)
       const days = period === 'today' ? 1 : period === '7d' ? 7 : 30
       const since = new Date(Date.now() - days * 86400000).toISOString()
-      const [{ data: cs }, { count }] = await Promise.all([
+      const [{ data: cs }, { count }, lv] = await Promise.all([
         supabase.from('bot_conversations').select('*').gte('created_at', since).order('created_at', { ascending: false }),
         supabase.from('reservations').select('id', { count: 'exact', head: true }).not('bot_conversation_id', 'is', null).gte('created_at', since),
+        supabase.rpc('fn_landing_stats', { p_desde: since }),
       ])
       setConvs((cs ?? []) as Conversation[])
       setBotResCount(count ?? 0)
+      if (lv.error) setLandingMissing(true)
+      else { setLandingMissing(false); setLanding((lv.data ?? []) as LandingStat[]) }
       setLoading(false)
     }
     load()
@@ -508,6 +515,44 @@ function SummaryTab({ buList }: { buList: BU[] }) {
             <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Sin venue identificado</span>
             <span className="num" style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--text-secondary)' }}>{perVenue.get('none')!.convs} conv.</span>
           </div>
+        )}
+      </div>
+
+      {/* ── Landing de reservas (?reservar=) — vistas → reservas por venue ── */}
+      <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Landing de reservas · quién ve el link</span>
+          {landing.length > 0 && (
+            <span className="num" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+              {landing.reduce((s, l) => s + Number(l.vistas), 0)} vistas · {landing.reduce((s, l) => s + Number(l.reservas), 0)} reservas
+            </span>
+          )}
+        </div>
+        {landingMissing ? (
+          <p style={{ padding: 14, fontSize: 12, color: 'var(--status-attention)', margin: 0 }}>Falta correr el SQL del tracker (landing_views.sql) en Supabase.</p>
+        ) : landing.length === 0 ? (
+          <p style={{ padding: 14, fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>
+            Sin vistas en este periodo. El contador arranca desde que se activó el tracker — comparte el link ?reservar= de cada venue y aquí verás cuánta gente lo abre.
+          </p>
+        ) : (
+          <>
+            {landing.map(l => {
+              const conv = Number(l.visitantes) > 0 ? Math.round((Number(l.reservas) / Number(l.visitantes)) * 100) : 0
+              return (
+                <div key={l.bu_code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
+                  <BUChip code={l.bu_code} />
+                  <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600, flex: 1, minWidth: 100 }}>{l.bu_name}</span>
+                  <span className="num" title="Aperturas totales del link" style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{l.vistas} vistas</span>
+                  <span className="num" title="Personas distintas" style={{ fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{l.visitantes} pers.</span>
+                  <span className="num" title={`${l.reservas} solicitadas · ${l.reservas_ok} confirmadas o sentadas`} style={{ fontSize: 12, color: 'var(--status-healthy)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{l.reservas} res.</span>
+                  <span className="num" title="Reservas ÷ personas que vieron el link" style={{ fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)', color: conv >= 10 ? 'var(--status-healthy)' : conv > 0 ? 'var(--text-secondary)' : 'var(--text-tertiary)', border: '1px solid var(--border-default)', borderRadius: 999, padding: '2px 8px' }}>{conv}%</span>
+                </div>
+              )
+            })}
+            <p style={{ padding: '8px 14px', fontSize: 10.5, color: 'var(--text-tertiary)', margin: 0 }}>
+              Vistas = aperturas del link · pers. = visitantes distintos · res. = reservas hechas desde el landing · % = reservas entre personas que lo vieron.
+            </p>
+          </>
         )}
       </div>
     </div>

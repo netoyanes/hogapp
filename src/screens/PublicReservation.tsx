@@ -43,6 +43,25 @@ export function PublicReservation({ code }: { code: string }) {
     return () => { document.head.removeChild(link) }
   }, [isOC])
 
+  // Tracker del landing: una vista por sesión de pestaña (el refresh no
+  // duplica) con un id de visitante persistente — así el equipo ve cuántas
+  // personas abren el link de cada venue y cuántas terminan reservando.
+  // Fire-and-forget: si falla, el landing sigue como si nada.
+  useEffect(() => {
+    try {
+      const key = `hog_lv_${code.toUpperCase()}`
+      if (sessionStorage.getItem(key)) return
+      sessionStorage.setItem(key, '1')
+      let sid = localStorage.getItem('hog_visitor')
+      if (!sid) { sid = crypto.randomUUID(); localStorage.setItem('hog_visitor', sid) }
+      supabase.rpc('fn_track_landing_view', {
+        p_code: code, p_session: sid,
+        p_device: window.innerWidth < 768 ? 'mobile' : 'desktop',
+        p_referrer: document.referrer || null,
+      }).then(() => {})
+    } catch { /* storage bloqueado (incógnito estricto): se pierde la vista, no el landing */ }
+  }, [code])
+
   const [info, setInfo] = useState<Info | null>(null)
   const [loadErr, setLoadErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)

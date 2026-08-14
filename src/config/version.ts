@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.84.0"
+export const APP_VERSION = "2.85.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.85.0",
+    date: "2026-08-14",
+    type: "MINOR",
+    changes: [
+      "TRACKER DEL LANDING DE RESERVAS — Concierge → Resumen ahora muestra, por venue: cuántas VISTAS tuvo el link público (?reservar=), cuántas PERSONAS distintas lo abrieron, cuántas RESERVAS salieron de ahí y la CONVERSIÓN (reservas ÷ personas)",
+      "El registro es anónimo y no estorba: una vista por sesión (el refresh no duplica), visitante identificado por un id persistente del navegador, y si algo falla el landing carga como si nada",
+      "El contador arranca desde que se activa el tracker — las vistas anteriores no se pueden reconstruir",
+    ]
+  },
   {
     version: "2.84.0",
     date: "2026-08-14",
