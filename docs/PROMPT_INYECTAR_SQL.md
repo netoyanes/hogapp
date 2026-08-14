@@ -1,33 +1,34 @@
 # HOG APP · Prompt para generar SQL de proyectos y tareas
 
-> ⚠️ **Documento exclusivo para usuarios MASTER.** El botón que aplica este
-> SQL solo existe para el rol Master — no tiene caso dárselo a alguien más:
-> podría generar el SQL, pero no tendría dónde pegarlo. Si quieres que otra
-> persona del equipo pueda crear proyectos así, primero pídeme que la
-> convierta en Master o le dé el permiso puntual.
+> ⚠️ **Solo funciona si tienes rol MASTER en HOG APP.** El botón que aplica
+> este SQL únicamente aparece para ese rol. Si lo compartes con alguien que no
+> es Master, podrá generar el SQL pero no tendrá dónde pegarlo.
 >
 > **Qué es esto.** Un atajo para crear de golpe un proyecto/evento completo
-> con todas sus tareas, recursos y presupuesto — en vez de darlos de alta uno
-> por uno en la interfaz. Tú describes lo que quieres en lenguaje natural, una
-> IA te arma el SQL exacto, y tú mismo lo aplicas en HOG APP con un preview de
-> por medio (nunca a ciegas).
+> —con todas sus tareas, recursos y presupuesto— en vez de darlos de alta uno
+> por uno en la interfaz. Describes lo que quieres en lenguaje natural, una IA
+> arma el SQL exacto, y tú mismo lo aplicas dentro de HOG APP con un preview
+> de por medio. Nunca a ciegas.
 >
-> **El flujo completo (tú haces las dos partes):**
+> **El flujo completo (haces las dos partes):**
 > 1. Copia TODO este documento y pégalo en Claude, ChatGPT o el agente de IA
->    que uses — no hace falta que sea el mismo Claude de HOG APP, puede ser
->    cualquiera, incluso el chat normal de claude.ai en tu teléfono.
-> 2. Debajo del documento pegado, en el mismo chat, describe en lenguaje
+>    que uses — no tiene que ser el Claude de HOG APP; sirve cualquiera,
+>    incluso el chat normal de claude.ai desde el teléfono.
+> 2. Debajo del documento pegado, en ese mismo chat, describe en lenguaje
 >    natural el evento, proyecto, remodelación o tareas que quieres crear
->    (fechas, venue, quién queda a cargo, presupuesto — entre más completo,
->    mejor sale).
-> 3. La IA te devuelve **un solo bloque de SQL**, listo para copiar.
-> 4. Copia ESE bloque completo (el `begin;` … `commit;` con los comentarios
->    de RESUMEN al final) y pégalo en el botón ⚡SQL de HOG APP — ver abajo
->    "Cómo pegarlo en la app" con el paso a paso.
-> 5. Ahí revisas un preview exacto de lo que se crearía y solo tú, con un
->    clic, decides si se aplica de verdad.
+>    (fechas, venue, quién queda a cargo, presupuesto — entre más completo lo
+>    describas, mejor sale el resultado).
+> 3. La IA devuelve **un solo bloque de SQL**, listo para copiar.
+> 4. Copia ese bloque completo y pégalo en el botón ⚡SQL de HOG APP — abajo
+>    está el paso a paso en "Cómo pegarlo en HOG APP".
+> 5. Revisas un preview exacto de lo que se crearía y, con un clic, decides si
+>    se aplica de verdad.
 >
-> Nada se guarda en la base hasta que tú lo firmes dentro de la app.
+> Nada se guarda en la base hasta que lo firmes dentro de la app.
+>
+> **Un dato que vas a necesitar:** ten a la mano **tu propio correo de HOG APP**
+> (con el que inicias sesión). La IA lo usa para marcarte como autor de lo que
+> se cree. Si no se lo dices, lo va a dejar pendiente.
 
 ---
 
@@ -72,6 +73,12 @@ el SQL Editor de Supabase, así que no cambies el formato por eso.
 
 Si te dan el nombre de una persona pero no su correo, **no adivines el correo**:
 usa `null` y anótalo como faltante.
+
+**El autor (`created_by`)**: usa siempre el correo de HOG APP de la persona que
+te está pidiendo el SQL — ella misma lo va a aplicar. Si no te lo dio, **pídeselo
+antes de generar el SQL**; es un solo dato y evita que todo quede sin autor. En
+las plantillas de abajo aparece como `TU-CORREO@dominio.com`: sustitúyelo, nunca
+lo dejes literal.
 
 ---
 
@@ -188,7 +195,7 @@ with proyecto as (
     null,
     'Permisos de obra. Trabajos fuera del horario de servicio.',
     (select id from profiles where email = 'responsable@dominio.com'),
-    (select id from profiles where email = 'neto@swells.mx')
+    (select id from profiles where email = 'TU-CORREO@dominio.com')
   ) returning id
 ),
 lista as (
@@ -210,7 +217,7 @@ select
   p.id,
   (select id from business_units where code = 'OC'),
   (select id from profiles where email = l.correo),
-  (select id from profiles where email = 'neto@swells.mx')
+  (select id from profiles where email = 'TU-CORREO@dominio.com')
 from lista l cross join proyecto p;
 
 commit;
@@ -234,7 +241,7 @@ select v.title, v.due_date, v.area, v.priority, v.horas, 'SOFT',
        'OPEN', 'internal', false,
        (select id from business_units where code = 'BM'),
        (select id from profiles where email = v.correo),
-       (select id from profiles where email = 'neto@swells.mx')
+       (select id from profiles where email = 'TU-CORREO@dominio.com')
 from (values
   ('Reponer cristalería rota', date '2026-08-20', 'piso', 'MEDIUM', 2, 'persona@dominio.com')
 ) as v(title, due_date, area, priority, horas, correo);
@@ -255,7 +262,7 @@ with proyecto as (
   values (
     (select id from business_units where code = 'BM'),
     'Bruma Night vol. 3', 'evento', '2026-09-12', '2026-09-12', 'musica', 'planning', 90000,
-    (select id from profiles where email = 'neto@swells.mx')
+    (select id from profiles where email = 'TU-CORREO@dominio.com')
   ) returning id
 ),
 tareas as (
@@ -264,7 +271,7 @@ tareas as (
   select v.title, v.due_date, v.area, v.priority, v.horas, 'SOFT',
          'OPEN', 'internal', false, p.id,
          (select id from business_units where code = 'BM'),
-         (select id from profiles where email = 'neto@swells.mx')
+         (select id from profiles where email = 'TU-CORREO@dominio.com')
   from (values
     ('Confirmar DJ headliner', date '2026-08-25', 'talento',   'HIGH',   3),
     ('Arte para redes',        date '2026-09-01', 'marketing', 'MEDIUM', 5)
@@ -349,6 +356,12 @@ preview antes de decidir.
 
 ### Si el botón no aparece o algo falla
 
-Avísame directamente — puede ser que tu sesión necesite refrescarse, o que
-falte aplicar una actualización en la base. No hay necesidad de entrar a
-Supabase tú mismo para esto.
+- **No ves el botón verde**: cierra sesión y vuelve a entrar. Si sigue sin
+  aparecer, tu cuenta probablemente no tiene rol Master — eso lo ajusta quien
+  administra HOG APP.
+- **Un error al previsualizar**: el mensaje que sale es literal y suele decir
+  exactamente qué está mal (un catálogo inválido, una tabla bloqueada, una
+  columna que no existe). Pégaselo de vuelta a la IA junto con el SQL y pídele
+  que lo corrija — casi siempre lo resuelve al primer intento.
+- **Nada de lo que pase aquí rompe la app**: si el SQL falla, no se guarda
+  nada. El peor caso es que tengas que volver a pedir el SQL.
