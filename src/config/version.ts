@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.85.1"
+export const APP_VERSION = "2.86.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,20 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.86.0",
+    date: "2026-08-14",
+    type: "MINOR",
+    changes: [
+      "PROYECTOS · BARRA DE ESTADO FIJA — al volver de una distracción se ve de inmediato en qué proyecto estás: nombre, venue, fase, responsable, fechas y avance de tareas, siempre visibles arriba sin scrollear",
+      "La ventana del proyecto ahora CRECE CON LA PANTALLA (hasta 860px en monitores grandes) en vez de quedarse en una sola columna angosta",
+      "PRESUPUESTO UNIFICADO — 'Recursos requeridos' y 'Presupuesto por partidas' eran lo mismo y ahora son UNA sola lista: un bartender y una maceta se capturan igual, con TIPO DE GASTO (personal, mobiliario, materiales, equipo, servicios, marketing, operación), ZONA, cantidad × costo unitario, y subtotal por tipo",
+      "Cada partida puede llevar su COTIZACIÓN adjunta (imagen o PDF) y su propio RESPONSABLE",
+      "El botón ahora dice 'Enviar presupuesto a aprobación' y el neto ya no suma recursos por separado",
+      "RELACIONADOS DEL EQUIPO en cada proyecto, además del responsable — se guardan al instante",
+      "CONFIGURACIÓN DE APROBADORES (solo Master): botón en Proyectos para elegir quién aprueba los presupuestos; a quien marques le aparece la pestaña de Aprobación y le llega el aviso",
+    ]
+  },
   {
     version: "2.85.1",
     date: "2026-08-14",
