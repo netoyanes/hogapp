@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.88.1"
+export const APP_VERSION = "2.89.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.89.0",
+    date: "2026-08-14",
+    type: "MINOR",
+    changes: [
+      "COMERCIAL — cada tarjeta del pipeline ahora muestra QUIÉN ABRIÓ y QUIÉN CERRÓ el deal como iconos: el que lo trajo con anillo gris, el que lo cerró con anillo verde encimado. Si todavía no hay cerrador, un círculo punteado con '?' lo dice — de ahí salen las comisiones y ya no hay que abrir tarjeta por tarjeta para saberlo",
+      "CANDADO EN PROPUESTA — ya no se puede mover un deal a 'Propuesta' sin capturar el MONTO propuesto y subir el PDF que se le mandó al cliente. La etapa afirma que el cliente ya tiene un número en la mano; sin eso, la columna miente y el pipeline suma dinero que nadie propuso",
+      "El monto capturado se vuelve el valor del deal, y la propuesta queda registrada en la bitácora con su monto — auditable",
+      "El PDF se ve en la ficha del deal con firma de quién lo subió y cuándo; en el board la tarjeta marca 📄 PDF",
+      "Al crear un deal ya no se puede elegir 'Propuesta' directo: un deal que apenas nace no tiene una propuesta enviada. Se crea y se mueve, que es donde se pide el PDF",
+      "Requiere correr crm_propuesta.sql — sin él la app no se rompe: pide solo el monto hasta que se aplique",
+    ]
+  },
   {
     version: "2.88.1",
     date: "2026-08-14",
