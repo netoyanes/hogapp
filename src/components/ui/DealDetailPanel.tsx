@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { X, Edit2, Check, ChevronDown, Phone, Mail, MessageSquare, Calendar, Briefcase } from 'lucide-react'
+import { X, Edit2, Check, ChevronDown, Phone, Mail, MessageSquare, Calendar, Briefcase, FileText, Upload } from 'lucide-react'
 import type { BusinessUnit } from '../../types'
 import type { CRMContact, CRMDeal } from '../../screens/CRM'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { Avatar } from './Avatar'
 import { ReactionBar } from './ReactionBar'
-import { useSheetLayer } from '../v2'
+import { useSheetLayer, showToast } from '../v2'
 import { notifySlack, dealStageChangedMessage, dealActivityMessage, dealCommentMessage, notifyUserDM, dealLink } from '../../hooks/useSlack'
 import { MentionArea, notifyMentions, useReadReceipts, ReadTicks, renderWithMentions, type Person } from './EntityChat'
 
@@ -80,6 +80,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
   const [deal, setDeal] = useState<CRMDeal | null>(null)
   const [creatorName, setCreatorName] = useState<string | null>(null)
   const [closerName, setCloserName] = useState<string | null>(null)
+  const [proposalUploaderName, setProposalUploaderName] = useState<string | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined)
   const [linkedTasks, setLinkedTasks] = useState<LinkedTask[]>([])
@@ -87,6 +88,12 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
   const [editing, setEditing] = useState(false)
   const [lostModal, setLostModal] = useState(false)
   const [lostReason, setLostReason] = useState('')
+  // Propuesta formal: para entrar a la etapa se exige monto + PDF
+  const [proposalModal, setProposalModal] = useState(false)
+  const [pMonto, setPMonto] = useState('')
+  const [pFile, setPFile] = useState<File | null>(null)
+  const [pBusy, setPBusy] = useState(false)
+  const pFileRef = useRef<HTMLInputElement>(null)
   const [actType, setActType] = useState<ActivityType>('NOTE')
   const [actBody, setActBody] = useState('')
   // Gente para @menciones y recibos de lectura (doble palomita) del hilo
@@ -135,6 +142,12 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
       } else {
         setCloserName(null)
       }
+      if (data.proposal_uploaded_by) {
+        const { data: up } = await supabase.from('profiles').select('full_name, email').eq('id', data.proposal_uploaded_by).single()
+        setProposalUploaderName(up?.full_name ?? up?.email ?? null)
+      } else {
+        setProposalUploaderName(null)
+      }
     }
   }, [dealId])
 
@@ -174,8 +187,22 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // El SQL crm_propuesta.sql agrega proposal_url; si aún no se corre, el deal
+  // (cargado con select *) no trae la llave y el gate exige solo el monto —
+  // la app no se rompe por un ALTER pendiente.
+  const proposalColumnReady = !!deal && 'proposal_url' in deal
+  const hasProposal = !!deal?.value && deal.value > 0 && (!proposalColumnReady || !!deal?.proposal_url)
+
   async function changeStage(stage: DealStage) {
     if (stage === 'LOST') { setLostModal(true); return }
+    // "Propuesta" afirma que YA se le propuso algo concreto al cliente: sin
+    // monto y sin el PDF de la propuesta no hay tal — se piden ahí mismo.
+    if (stage === 'PROPOSAL' && !hasProposal) {
+      setPMonto(deal?.value ? String(deal.value) : '')
+      setPFile(null)
+      setProposalModal(true)
+      return
+    }
     const prevStage = deal?.stage ?? ''
     const { data: { user } } = await supabase.auth.getUser()
     // Record the closer (closing-commission owner) the first time a deal is won
@@ -192,6 +219,53 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
       }
     }
     onUpdated()
+  }
+
+  // Monto + PDF → el deal entra a Propuesta con su documento firmado de quién
+  // lo subió y cuándo. El monto capturado ES el valor del deal: lo que se le
+  // propuso al cliente es lo que el pipeline debe sumar.
+  async function submitProposal() {
+    const monto = parseFloat(pMonto)
+    if (!monto || monto <= 0) { showToast('Pon el monto de la propuesta.', 'error'); return }
+    if (proposalColumnReady && !pFile && !deal?.proposal_url) { showToast('Sube el PDF de la propuesta.', 'error'); return }
+    setPBusy(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const patch: Record<string, unknown> = { stage: 'PROPOSAL', value: monto, updated_at: new Date().toISOString() }
+
+    if (proposalColumnReady && pFile) {
+      const path = `propuestas/${dealId}/${Date.now()}-${pFile.name.replace(/[^\w.-]+/g, '_')}`
+      const { error: upErr } = await supabase.storage.from('proofs').upload(path, pFile, { contentType: pFile.type || 'application/pdf' })
+      if (upErr) { setPBusy(false); showToast(`No se pudo subir el PDF: ${upErr.message}`, 'error'); return }
+      const { data: pub } = supabase.storage.from('proofs').getPublicUrl(path)
+      patch.proposal_url = pub.publicUrl
+      patch.proposal_type = pFile.type || 'application/pdf'
+      patch.proposal_uploaded_by = user?.id ?? null
+      patch.proposal_uploaded_at = new Date().toISOString()
+    }
+
+    const prevStage = deal?.stage ?? ''
+    const { error } = await supabase.from('crm_deals').update(patch).eq('id', dealId)
+    if (error) { setPBusy(false); showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+
+    // La propuesta queda en la bitácora del deal, con monto — auditable
+    await supabase.from('crm_activities').insert({
+      deal_id: dealId, type: 'NOTE', created_by: user?.id ?? null,
+      body: `📄 Propuesta enviada por $${monto.toLocaleString('es-MX')}${pFile ? ` — PDF: ${pFile.name}` : ''}`,
+    })
+    setDeal(d => d ? { ...d, ...patch, stage: 'PROPOSAL' as DealStage, value: monto } : d)
+    if (user?.id) {
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+      const updaterName = profile?.full_name ?? 'Someone'
+      notifySlack(dealStageChangedMessage(deal?.title ?? '', prevStage, 'PROPOSAL', updaterName))
+      if (deal?.created_by && deal.created_by !== user.id) {
+        notifyUserDM(deal.created_by, dealStageChangedMessage(deal?.title ?? '', prevStage, 'PROPOSAL', updaterName, dealLink(dealId)))
+      }
+    }
+    setPBusy(false)
+    setProposalModal(false)
+    loadActivities()
+    onUpdated()
+    showToast('Propuesta registrada — el deal pasó a Propuesta.', 'success')
   }
 
   async function confirmLost() {
@@ -402,6 +476,21 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                 <MetaRow label="Unidad">{bu?.code ?? '—'}</MetaRow>
               </div>
             )}
+            {/* El PDF de la propuesta, con su firma de quién y cuándo */}
+            {!editing && deal.proposal_url && (
+              <a href={deal.proposal_url} target="_blank" rel="noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '9px 11px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', textDecoration: 'none' }}>
+                <FileText size={14} style={{ color: '#F59E0B', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: 600 }}>Propuesta enviada</div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
+                    {proposalUploaderName ?? 'Alguien'}
+                    {deal.proposal_uploaded_at && ` · ${new Date(deal.proposal_uploaded_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
+                  </div>
+                </div>
+                <span style={{ fontSize: '10px', color: 'var(--accent)', fontWeight: 700, flexShrink: 0 }}>Ver PDF</span>
+              </a>
+            )}
           </section>
 
           {/* Créditos — de aquí salen las comisiones: quién trajo y quién cerró */}
@@ -604,6 +693,55 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
                 style={{ padding: '9px 14px', background: lostReason.trim() ? 'var(--status-risk)' : 'var(--bg-elevated)', color: lostReason.trim() ? '#fff' : 'var(--text-tertiary)', border: 'none', borderRadius: '6px', cursor: lostReason.trim() ? 'pointer' : 'not-allowed', fontSize: '12px', fontWeight: 700 }}
               >
                 Marcar perdido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Propuesta — el peaje para entrar a la etapa: monto y PDF.
+          No es burocracia: "Propuesta" en el board significa que el cliente ya
+          tiene un número en la mano. Sin eso, la columna miente y el pipeline
+          suma dinero que nadie propuso. */}
+      {proposalModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--scrim)', zIndex: zBase + 5, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '420px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: 7 }}>
+              <FileText size={15} style={{ color: '#F59E0B' }} /> Pasar a Propuesta
+            </h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
+              Esta etapa dice que al cliente ya se le propuso algo concreto. Captura el monto propuesto y sube el PDF que se le mandó.
+            </p>
+
+            <label style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Monto de la propuesta (MXN) *</label>
+            <input
+              type="number" inputMode="decimal" min={0} value={pMonto} onChange={e => setPMonto(e.target.value)}
+              autoFocus placeholder="0" className="num"
+              style={{ ...inputStyle, width: '100%', marginBottom: '14px', boxSizing: 'border-box', fontSize: '15px' }}
+            />
+
+            <label style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>
+              PDF de la propuesta {proposalColumnReady ? '*' : '(requiere correr crm_propuesta.sql)'}
+            </label>
+            <input ref={pFileRef} type="file" accept="application/pdf,image/*" style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) setPFile(f); e.target.value = '' }} />
+            <button
+              onClick={() => pFileRef.current?.click()}
+              disabled={!proposalColumnReady}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 44, padding: '0 12px', borderRadius: '8px', cursor: proposalColumnReady ? 'pointer' : 'not-allowed', textAlign: 'left', background: pFile ? 'var(--accent-bg)' : 'var(--bg-base)', border: `1px dashed ${pFile ? 'var(--accent-border)' : 'var(--border-default)'}`, color: pFile ? 'var(--accent)' : 'var(--text-tertiary)', fontSize: '12px', opacity: proposalColumnReady ? 1 : 0.5 }}
+            >
+              <Upload size={14} />
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {pFile ? pFile.name : deal?.proposal_url ? 'Ya hay un PDF cargado — súbelo de nuevo para reemplazarlo' : 'Elegir archivo…'}
+              </span>
+            </button>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '18px' }}>
+              <button onClick={() => setProposalModal(false)} disabled={pBusy}
+                style={{ padding: '9px 14px', background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>Cancelar</button>
+              <button onClick={submitProposal} disabled={pBusy}
+                style={{ padding: '9px 16px', background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', borderRadius: '6px', cursor: pBusy ? 'wait' : 'pointer', fontSize: '12px', fontWeight: 700 }}>
+                {pBusy ? 'Guardando…' : 'Registrar propuesta'}
               </button>
             </div>
           </div>

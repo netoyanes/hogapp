@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { BusinessUnit } from '../types'
-import { Plus, DollarSign, TrendingUp, Target, Briefcase, Music, AtSign, Phone, Link2, Star } from 'lucide-react'
+import { Plus, DollarSign, TrendingUp, Target, Briefcase, Music, AtSign, Phone, Link2, Star, FileText } from 'lucide-react'
 import { DealDetailPanel } from '../components/ui/DealDetailPanel'
+import { Avatar } from '../components/ui/Avatar'
 import { KPITile, SegmentedControl, BUChip, StatusBadgeV2, EmptyStateV2 } from '../components/v2'
 import { Contacts } from './Contacts'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
@@ -11,6 +12,9 @@ import { notifySlack, dealCreatedMessage, dealLink } from '../hooks/useSlack'
 
 type DealType = 'SPONSORSHIP' | 'PARTNERSHIP' | 'ADVERTISING' | 'EVENT' | 'OTHER'
 type DealStage = 'LEAD' | 'CONTACTED' | 'PROPOSAL' | 'NEGOTIATING' | 'WON' | 'LOST'
+
+/** Perfiles mínimos para pintar quién abrió y quién cerró cada deal */
+type Person = { id: string; full_name: string | null; email: string | null }
 
 export interface CRMContact {
   id: string
@@ -38,6 +42,12 @@ export interface CRMDeal {
   event_date: string | null
   created_at: string
   updated_at: string
+  // Propuesta formal — requisito para entrar a la etapa PROPOSAL.
+  // Opcionales en el tipo porque las columnas llegan con crm_propuesta.sql
+  proposal_url?: string | null
+  proposal_type?: string | null
+  proposal_uploaded_by?: string | null
+  proposal_uploaded_at?: string | null
 }
 
 const STAGES: { id: DealStage; label: string; color: string }[] = [
@@ -100,6 +110,7 @@ function Pipeline({ userRole, userId }: Props) {
   const [deals, setDeals] = useState<CRMDeal[]>([])
   const [contacts, setContacts] = useState<CRMContact[]>([])
   const [buses, setBuses] = useState<BusinessUnit[]>([])
+  const [people, setPeople] = useState<Person[]>([])
   const [selectedDeal, setSelectedDeal] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [stageFilter, setStageFilter] = useState<DealStage | ''>('')
@@ -124,14 +135,17 @@ function Pipeline({ userRole, userId }: Props) {
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(async () => {
-    const [{ data: d }, { data: c }, { data: b }] = await Promise.all([
+    const [{ data: d }, { data: c }, { data: b }, { data: p }] = await Promise.all([
       supabase.from('crm_deals').select('*').order('created_at', { ascending: false }),
       supabase.from('crm_contacts').select('*').order('full_name'),
       supabase.from('business_units').select('*').order('name'),
+      // Para poner cara a quién abrió y quién cerró cada deal en el board
+      supabase.from('profiles').select('id, full_name, email'),
     ])
     if (d) setDeals(d)
     if (c) setContacts(c)
     if (b) setBuses(b)
+    if (p) setPeople(p as Person[])
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -162,6 +176,11 @@ function Pipeline({ userRole, userId }: Props) {
   })
 
   const byStage = (stage: DealStage) => filtered.filter(d => d.stage === stage)
+  const nameOf = (id: string | null) => {
+    if (!id) return null
+    const p = people.find(x => x.id === id)
+    return p?.full_name?.trim() || p?.email || null
+  }
 
   async function save() {
     if (!cTitle.trim()) return
@@ -285,6 +304,8 @@ function Pipeline({ userRole, userId }: Props) {
               deal={deal}
               contact={contacts.find(c => c.id === deal.contact_id) ?? null}
               bu={buses.find(b => b.id === deal.bu_id) ?? null}
+              openerName={nameOf(deal.created_by)}
+              closerName={nameOf(deal.closed_by)}
               onClick={() => setSelectedDeal(deal.id)}
             />
           ))}
@@ -309,6 +330,8 @@ function Pipeline({ userRole, userId }: Props) {
                       deal={deal}
                       contact={contacts.find(c => c.id === deal.contact_id) ?? null}
                       bu={buses.find(b => b.id === deal.bu_id) ?? null}
+                      openerName={nameOf(deal.created_by)}
+                      closerName={nameOf(deal.closed_by)}
                       onClick={() => setSelectedDeal(deal.id)}
                     />
                   ))}
@@ -352,8 +375,12 @@ function Pipeline({ userRole, userId }: Props) {
                   </select>
                 </Field>
                 <Field label="Etapa">
+                  {/* Propuesta no se puede elegir al crear: esa etapa exige el
+                      monto propuesto y el PDF que se le mandó al cliente, y eso
+                      se captura al mover el deal desde su ficha. Un deal que
+                      apenas nace no tiene una propuesta enviada todavía. */}
                   <select value={cStage} onChange={e => setCStage(e.target.value as DealStage)} style={inputStyle}>
-                    {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    {STAGES.filter(s => s.id !== 'PROPOSAL').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </select>
                 </Field>
               </div>
@@ -427,7 +454,35 @@ function Pipeline({ userRole, userId }: Props) {
 
 // v2 card — the money is the anchor: value in mono with the probability as a
 // thin progress line right under it. Deal type as a small dot + label.
-function DealCard({ deal, contact, bu, onClick }: { deal: CRMDeal; contact: CRMContact | null; bu: BusinessUnit | null; onClick: () => void }) {
+// Quién ABRE y quién CIERRA — de ahí salen las comisiones, así que tiene que
+// leerse desde el board sin abrir cada tarjeta. Anillo punteado = cerrador
+// todavía vacío (el deal sigue vivo); anillo verde = ya lo cerró alguien.
+function OwnerIcons({ opener, closer, won }: { opener: string | null; closer: string | null; won: boolean }) {
+  if (!opener && !closer) return null
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+      {opener && (
+        <span title={`Abrió: ${opener}`} style={{ display: 'inline-flex', borderRadius: '50%', border: '1.5px solid var(--border-strong)', padding: 1 }}>
+          <Avatar name={opener} size={20} />
+        </span>
+      )}
+      {closer ? (
+        <span title={`Cerró: ${closer}`}
+          style={{ display: 'inline-flex', borderRadius: '50%', border: '1.5px solid var(--status-healthy)', padding: 1, marginLeft: opener ? -5 : 0, background: 'var(--bg-elevated)' }}>
+          <Avatar name={closer} size={20} />
+        </span>
+      ) : !won && opener ? (
+        <span title="Sin cerrador todavía"
+          style={{ width: 24, height: 24, borderRadius: '50%', border: '1.5px dashed var(--border-strong)', marginLeft: -5, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: 'var(--text-tertiary)', background: 'var(--bg-elevated)' }}>?</span>
+      ) : null}
+    </span>
+  )
+}
+
+function DealCard({ deal, contact, bu, openerName, closerName, onClick }: {
+  deal: CRMDeal; contact: CRMContact | null; bu: BusinessUnit | null
+  openerName: string | null; closerName: string | null; onClick: () => void
+}) {
   const typeColor = DEAL_TYPE_COLORS[deal.deal_type]
   return (
     <button
@@ -464,6 +519,18 @@ function DealCard({ deal, contact, bu, onClick }: { deal: CRMDeal; contact: CRMC
           </span>
         )}
       </div>
+
+      {/* Quién abre / quién cierra + señal de propuesta con PDF */}
+      {(openerName || closerName || deal.proposal_url) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <OwnerIcons opener={openerName} closer={closerName} won={deal.stage === 'WON'} />
+          {deal.proposal_url && (
+            <span title="Tiene PDF de propuesta" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 'auto', fontSize: 9, color: '#F59E0B', flexShrink: 0 }}>
+              <FileText size={10} /> PDF
+            </span>
+          )}
+        </div>
+      )}
     </button>
   )
 }
