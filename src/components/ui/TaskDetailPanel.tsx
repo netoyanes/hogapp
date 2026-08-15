@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check, Link2, Plus, Trash2, ExternalLink, Copy, FolderKanban } from 'lucide-react'
+import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check, Link2, Plus, Trash2, ExternalLink, Copy, FolderKanban, MessageCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, proofUploadedMessage, taskAssignedMessage, notifyUserDM, taskLink } from '../../hooks/useSlack'
 import { changeTaskStatus } from '../../lib/taskActions'
@@ -246,6 +246,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
   const [approvedAt, setApprovedAt] = useState<string | null>(null)
   // Metadata collapses so comments + evidence get the vertical space (mobile-first)
   const [metaOpen, setMetaOpen] = useState(!isMobile)
+  // Conversación retraíble desde el marco, como en Proyectos. Misma llave para
+  // los dos: abrir/cerrar el chat es UNA preferencia, no una por tipo de ventana.
+  const [chatOpen, setChatOpen] = useState(() => localStorage.getItem('hog_project_chat') !== '0')
+  function toggleChat() {
+    setChatOpen(v => { localStorage.setItem('hog_project_chat', v ? '0' : '1'); return !v })
+  }
+  // En riel lateral solo si la pantalla lo aguanta; si no, inline al fondo
+  const chatEnColumna = chatOpen && !isMobile && (typeof window !== 'undefined' && window.innerWidth >= 1100)
   const fileRef = useRef<HTMLInputElement>(null)
 
   // Nombre de quien subió/agregó un adjunto (para la firma al pie de la caja)
@@ -586,7 +594,8 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
           zIndex: zBase + 1,
           background: 'var(--bg-surface)',
           display: 'flex', flexDirection: 'column',
-          overflowY: 'auto',
+          // El marco (título y acciones) queda FIJO; solo el contenido scrollea
+          overflow: 'hidden',
           transition: 'transform .28s cubic-bezier(.2,.8,.2,1), filter .28s',
           ...(isMobile
             ? { position: 'fixed' as const, top: 0, right: 0, bottom: 0, left: 0, width: '100%' }
@@ -594,8 +603,10 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
                 position: 'fixed' as const, left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
                 // Mismo criterio que el Sheet: ancho fluido con techo y marco
                 // alto y estable, para que la tarea no cambie de tamaño según
-                // cuántas evidencias tenga cargadas
-                width: 'clamp(460px, 92vw, 600px)', height: 'min(92vh, 1040px)', maxHeight: '94vh',
+                // cuántas evidencias tenga cargadas. Con la conversación en
+                // riel, la ventana se ensancha para no robarle al contenido.
+                width: chatEnColumna ? 'clamp(760px, 94vw, 930px)' : 'clamp(460px, 92vw, 600px)',
+                height: 'min(92vh, 1040px)', maxHeight: '94vh',
                 border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)',
                 boxShadow: 'var(--shadow-sheet)',
                 animation: 'sheet-pop var(--motion-sheet)',
@@ -640,6 +651,10 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
               <button onClick={copyShareLink} title="Copy share link" style={{ color: copied ? 'var(--accent)' : 'var(--text-secondary)', background: copied ? 'var(--accent-bg)' : 'var(--bg-elevated)', border: `1px solid ${copied ? 'var(--accent-border)' : 'var(--border-default)'}`, padding: '5px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontFamily: 'var(--font-ui)' }}>
                 {copied ? <><Check size={12} /> Copied!</> : <Share2 size={13} />}
               </button>
+              <button onClick={toggleChat} title={chatOpen ? 'Ocultar conversación' : 'Mostrar conversación'}
+                style={{ color: chatOpen ? 'var(--accent)' : 'var(--text-secondary)', background: chatOpen ? 'var(--accent-bg)' : 'var(--bg-elevated)', border: `1px solid ${chatOpen ? 'var(--accent-border)' : 'var(--border-default)'}`, padding: '5px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <MessageCircle size={13} />
+              </button>
               <button onClick={onClose} style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', padding: '5px', borderRadius: '6px', cursor: 'pointer' }}>
                 <X size={13} />
               </button>
@@ -671,6 +686,11 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
             </button>
           </div>
         </div>
+
+        {/* Cuerpo en dos columnas: la tarea a la izquierda, la conversación en
+            riel a la derecha (si cabe y está abierta) — igual que en Proyectos */}
+        <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
 
         {/* Status changer */}
         <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
@@ -953,10 +973,15 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
           </div>
         </div>
 
-        {/* Chat de la tarea — menciones @, doble palomita y tiempo real */}
+        {/* Chat inline solo cuando NO va en riel (móvil o pantalla angosta):
+            la conversación no puede desaparecer por falta de ancho */}
         <div style={{ padding: '14px 20px', flex: 1 }}>
-          <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginBottom: '10px' }}>CHAT</p>
-          <EntityChat scope="task" entityId={taskId} entityLabel={task.title} notifyUserIds={[task.assigned_to, task.created_by]} />
+          {chatOpen && !chatEnColumna && (
+            <>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '11px', marginBottom: '10px' }}>CONVERSACIÓN</p>
+              <EntityChat scope="task" entityId={taskId} entityLabel={task.title} notifyUserIds={[task.assigned_to, task.created_by]} />
+            </>
+          )}
 
           {/* Task created baseline entry */}
           <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', opacity: 0.6, marginTop: 12 }}>
@@ -1034,6 +1059,25 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
               </button>
             )}
           </div>
+        </div>
+        </div>
+
+        {/* Riel de conversación — fijo mientras la tarea se scrollea al lado */}
+        {chatEnColumna && (
+          <aside style={{ width: 330, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '10px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <MessageCircle size={13} style={{ color: 'var(--accent)' }} />
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Conversación</span>
+              <button onClick={toggleChat} aria-label="Ocultar conversación"
+                style={{ width: 26, height: 26, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X size={13} />
+              </button>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '0 12px 12px' }}>
+              <EntityChat scope="task" entityId={taskId} entityLabel={task.title} notifyUserIds={[task.assigned_to, task.created_by]} fill />
+            </div>
+          </aside>
+        )}
         </div>
       </div>
 

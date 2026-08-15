@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.88.0"
+export const APP_VERSION = "2.88.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.88.1",
+    date: "2026-08-14",
+    type: "PATCH",
+    changes: [
+      "LA CONVERSACIÓN EN RIEL llega también a las TAREAS: columna fija a la derecha de la ventana, retraíble con el botón 💬 del marco superior — igual que en Proyectos",
+      "El marco de la tarea (título, compartir, conversación, cerrar) ahora queda FIJO arriba; solo el contenido scrollea",
+      "Abrir o cerrar la conversación es UNA sola preferencia para tareas y proyectos: la cierras en un lado y quedó cerrada en el otro",
+      "En pantallas angostas o teléfono la conversación regresa al cuerpo de la tarea — nunca desaparece por falta de espacio",
+    ]
+  },
   {
     version: "2.88.0",
     date: "2026-08-14",
