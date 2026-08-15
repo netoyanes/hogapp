@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.89.0"
+export const APP_VERSION = "2.90.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,22 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.90.0",
+    date: "2026-08-15",
+    type: "MINOR",
+    changes: [
+      "NÓMINA DE TEMPORALES Y EVENTUALES — nueva área exclusiva del Master (por ahora) para preparar la nómina quincenal de todas las unidades y medirla contra lo que produjo cada venue",
+      "PLANTILLA por venue: cada eventual con su puesto, tipo (temporal o eventual), tarifa por turno y teléfono. Nadie se borra — quien se va se da de baja, para que las quincenas ya pagadas no queden con renglones sin nombre",
+      "QUINCENA a la mexicana (1–15 y 16 a fin de mes, no 14 días corridos): el gerente arma su nómina persona por persona con turnos × tarifa + bono − descuento, la ENVÍA a aprobación y el Master la APRUEBA. Aprobada ya no se edita",
+      "OPERACIÓN SEMANAL por persona: turnos, horas, venta atribuida, incidencias y calificación de 1 a 5. Es lo que la quincena no dice — la quincena da el COSTO, esto da el RENDIMIENTO",
+      "COSTO LABORAL cruzado con el revenue de Finanzas del mismo periodo: cada venue se compara contra el promedio del propio holding, no contra un número de industria inventado. Se marca en rojo el que se desvía más de 20% arriba",
+      "PROYECCIÓN: con el histórico de quincenas aprobadas de cada venue se saca su % de costo laboral real y su costo por turno; escribes el revenue que esperas y te dice cuánta nómina aguanta y cuántos turnos compra",
+      "El resumen avisa cuántos venues no han enviado su quincena — para no cerrar el periodo con huecos",
+      "LISTO PARA LIBERAR sin tocar SQL: cuando quieras, le asignas la app 'nomina' al gerente en Usuarios y solo verá y capturará los venues que tiene asignados",
+      "Requiere correr nomina.sql en Supabase",
+    ]
+  },
   {
     version: "2.89.0",
     date: "2026-08-14",

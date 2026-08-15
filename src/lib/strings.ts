@@ -30,6 +30,7 @@ export const STR = {
     dashboard: 'Dashboard',
     pulso: 'Pulso Social',
     finanzas: 'Finanzas',
+    nomina: 'Nómina',
     tasks: 'Tareas',
     crm: 'Comercial',
     reservations: 'Reservas',

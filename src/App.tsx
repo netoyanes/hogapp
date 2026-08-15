@@ -7,6 +7,7 @@ import { Dashboard } from './screens/Dashboard'
 import { TaskBoard } from './screens/TaskBoard'
 import { MyWeek } from './screens/MyWeek'
 import { SocialPulse } from './screens/SocialPulse'
+import { Nomina } from './screens/Nomina'
 import { Finanzas } from './screens/Finanzas'
 import { RevenueUpload } from './screens/RevenueUpload'
 import { BUOnboardingForm } from './screens/BUOnboardingForm'
@@ -274,6 +275,12 @@ export default function App() {
         return role === 'MASTER' || userApps?.has('finanzas')
           ? <Finanzas userId={profile?.id} isMaster={role === 'MASTER'} />
           : <EmptyState icon="🔒" title="Acceso restringido" description="Finanzas es exclusivo del Master — él otorga el acceso." />
+      case 'nomina':
+        // Nómina de eventuales: arranca exclusiva del Master. Al liberar basta
+        // con dar la app 'nomina' — el SQL ya limita a cada gerente a SUS venues.
+        return role === 'MASTER' || userApps?.has('nomina')
+          ? <Nomina userId={profile?.id} isMaster={role === 'MASTER'} />
+          : <EmptyState icon="🔒" title="Solo Master" description="Nómina de eventuales es exclusiva de dirección por ahora." />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':

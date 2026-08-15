@@ -16,7 +16,7 @@ import {
 
 export type ModuleId =
   | 'tareas' | 'proyectos' | 'concierge' | 'comercial' | 'clientes'
-  | 'talento' | 'finanzas' | 'casa' | 'sistema'
+  | 'talento' | 'finanzas' | 'nomina' | 'casa' | 'sistema'
 
 export const MODULES: Record<ModuleId, { label: string; color: string; icon: React.ElementType }> = {
   tareas:    { label: 'Tareas',     color: '#7FA3C2', icon: CheckSquare },
@@ -26,11 +26,12 @@ export const MODULES: Record<ModuleId, { label: string; color: string; icon: Rea
   clientes:  { label: 'Clientes',   color: '#06B6D4', icon: Users },
   talento:   { label: 'Talento',    color: '#A855F7', icon: Music },
   finanzas:  { label: 'Finanzas',   color: '#3D89C4', icon: Landmark },
+  nomina:    { label: 'Nómina',     color: '#C27E22', icon: Users },
   casa:      { label: 'La Casa',    color: '#F97316', icon: ClipboardCheck },
   sistema:   { label: 'Sistema',    color: '#8A8A8A', icon: Shield },
 }
 export const MODULE_ORDER: ModuleId[] = [
-  'tareas', 'proyectos', 'concierge', 'comercial', 'clientes', 'talento', 'finanzas', 'casa', 'sistema',
+  'tareas', 'proyectos', 'concierge', 'comercial', 'clientes', 'talento', 'finanzas', 'nomina', 'casa', 'sistema',
 ]
 
 type D = Record<string, unknown> | null
@@ -75,6 +76,11 @@ export const ACTIONS: Record<string, ActionDef> = {
   event_shared:      { module: 'proyectos', icon: Link2,        color: '#06B6D4', label: d => `copió el link del proyecto "${s(d?.name)}"` },
   task_linked:       { module: 'proyectos', icon: Link2,        color: '#06B6D4', label: d => `ligó una tarea al proyecto "${s(d?.event)}"` },
   task_converted_to_project: { module: 'proyectos', icon: FolderKanban, color: '#22C55E', label: d => `convirtió la tarea "${s(d?.task)}" en el proyecto "${s(d?.name)}"` },
+
+  // ── Nómina de eventuales ──────────────────────────────────────────────────
+  payroll_submitted: { module: 'nomina', icon: Users, color: '#EAB308', label: d => `envió a aprobación la nómina de ${s(d?.periodo)} — ${s(d?.personas)} personas` },
+  payroll_approved:  { module: 'nomina', icon: Users, color: '#22C55E', label: d => `aprobó la nómina de ${s(d?.periodo)}` },
+  payroll_returned:  { module: 'nomina', icon: Users, color: '#EF4444', label: d => `regresó al gerente la nómina de ${s(d?.periodo)}` },
 
   // ── Concierge y reservas ──────────────────────────────────────────────────
   reservation_created:   { module: 'concierge', icon: CheckSquare, color: '#5FBF7A', label: d => `creó reserva de ${s(d?.guest)}${d?.bu ? ` en ${s(d.bu)}` : ''}${d?.date ? ` (${s(d.date)} · ${s(d.pax)} pax)` : ''}` },
