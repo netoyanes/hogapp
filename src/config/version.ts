@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.92.0"
+export const APP_VERSION = "2.92.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.92.1",
+    date: "2026-08-17",
+    type: "PATCH",
+    changes: [
+      "PAUTAS QUE INVITAN A RESERVAR — nuevas URLs para anuncios y compartidos: /r/CODIGO (reservas) y /w/CODIGO (wellness). Instagram tomaba 'HOG APP' como copy porque su robot lee el HTML crudo sin ejecutar JavaScript; estas rutas le sirven el copy correcto ('Reserva tu mesa en El Oyster Club — elige día, hora y cuántos son') y redirigen al instante al landing real",
+      "El botón COMPARTIR de Reservas y el link del portal Wellness ya copian estas URLs — usa SIEMPRE /r/CODIGO como destino de la pauta, no el ?reservar= directo",
+      "El tracker de vistas del landing sigue contando igual: la redirección aterriza en el mismo ?reservar= de siempre",
+    ]
+  },
   {
     version: "2.92.0",
     date: "2026-08-17",

@@ -1,3 +1,16 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/r/:code",
+      "destination": "/api/r/:code"
+    },
+    {
+      "source": "/w/:code",
+      "destination": "/api/w/:code"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }
