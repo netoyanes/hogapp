@@ -1,0 +1,69 @@
+// og-share — Plan B del preview de pautas, como edge function de Supabase.
+//
+// Mismo trabajo que api/r.js y api/w.js de Vercel: servir el Open Graph del
+// venue (título/descripción/imagen configurados en Reservas → Compartir) y
+// redirigir a la SPA. Existe por si las funciones /api de Vercel no registran
+// en el proyecto — vercel.json puede reescribir /r/:code y /w/:code hacia
+// esta URL (rewrite externo: Vercel PROXEA, el dominio visible no cambia).
+//
+//   /functions/v1/og-share?kind=r&code=OC   → reservas
+//   /functions/v1/og-share?kind=w&code=PC   → wellness
+//
+// Necesita el secret PORTAL_BASE_URL (https://tu-dominio) para armar la
+// redirección y las URLs absolutas del OG.
+// Verify JWT: DESACTIVADO — la consume el robot de Meta, anónimo.
+import { createClient } from 'jsr:@supabase/supabase-js@2'
+
+const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] ?? c))
+
+Deno.serve(async (req: Request) => {
+  const url = new URL(req.url)
+  const kind = url.searchParams.get('kind') === 'w' ? 'w' : 'r'
+  const code = (url.searchParams.get('code') ?? '').slice(0, 12)
+  const base = (Deno.env.get('PORTAL_BASE_URL') ?? '').replace(/\/$/, '')
+
+  // service role solo para LEER los 4 campos del preview — nada más sale de aquí
+  const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+  const { data: bu } = await db.from('business_units')
+    .select('name, og_title, og_description, og_image_url')
+    .ilike('code', code).limit(1).maybeSingle()
+
+  const dest = kind === 'r' ? `/?reservar=${encodeURIComponent(code)}` : `/?wellness=${encodeURIComponent(code)}`
+  const name = bu?.name ?? (kind === 'r' ? 'nuestra casa' : 'nuestro estudio')
+  const title = kind === 'r'
+    ? (bu?.og_title || `Reserva tu mesa en ${name}`)
+    : `Reserva tu clase en ${name}`
+  const description = kind === 'r'
+    ? (bu?.og_description || 'Elige día, hora y cuántos son — tu mesa queda confirmada en minutos.')
+    : 'Yoga y wellness — aparta tu lugar en segundos, sin cuentas ni contraseñas.'
+  const image = bu?.og_image_url || `${base}/icon-512.png`
+  const t = esc(title), d = esc(description), u = esc(dest), img = esc(image)
+
+  return new Response(`<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>${t}</title>
+<meta name="description" content="${d}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="${t}">
+<meta property="og:title" content="${t}">
+<meta property="og:description" content="${d}">
+<meta property="og:image" content="${img}">
+<meta property="og:url" content="${esc(base + dest)}">
+<meta name="twitter:card" content="${bu?.og_image_url ? 'summary_large_image' : 'summary'}">
+<meta name="twitter:title" content="${t}">
+<meta name="twitter:description" content="${d}">
+<meta name="twitter:image" content="${img}">
+<meta http-equiv="refresh" content="0; url=${esc(base + dest)}">
+<link rel="canonical" href="${esc(base + dest)}">
+</head>
+<body>
+<script>location.replace(${JSON.stringify(base + dest)})</script>
+<p>Redirigiendo… <a href="${esc(base + dest)}">continuar</a></p>
+</body>
+</html>`, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
+  })
+})
