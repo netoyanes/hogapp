@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Plus, Phone, MessageCircle, Camera, Footprints, Building2, AlertTriangle, MoreHorizontal, X, Search, Check, Settings2, Handshake, Share2, Copy, LayoutGrid, Armchair } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatPhone } from '../lib/phone'
@@ -1747,15 +1747,60 @@ function ShareBookingSheet({ buId, code, venueName, isMobile, onClose }: {
   const [enabled, setEnabled] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
+  // Preview de compartir/pautar (Open Graph) — configurable por venue
+  const [ogTitle, setOgTitle] = useState('')
+  const [ogDesc, setOgDesc] = useState('')
+  const [ogImage, setOgImage] = useState('')
+  const [ogMissing, setOgMissing] = useState(false)
+  const [ogSaving, setOgSaving] = useState(false)
+  const [subiendo, setSubiendo] = useState(false)
+  const ogFileRef = useRef<HTMLInputElement>(null)
   // /r/CODE en lugar de ?reservar= directo: esa ruta sirve el Open Graph del
   // venue, así una pauta o un compartido en IG/WhatsApp sale con "Reserva tu
   // mesa en {venue}" y no con "HOG APP" (el robot de Meta no ejecuta JS)
   const url = `${window.location.origin}/r/${code}`
 
   useEffect(() => {
-    supabase.from('business_units').select('public_booking_enabled').eq('id', buId).maybeSingle()
-      .then(({ data }) => setEnabled(!!data?.public_booking_enabled))
+    supabase.from('business_units').select('public_booking_enabled, og_title, og_description, og_image_url').eq('id', buId).maybeSingle()
+      .then(({ data, error }) => {
+        if (error) {
+          // Sin og_share.sql las columnas no existen: el toggle sigue vivo,
+          // la sección del preview avisa qué falta
+          setOgMissing(true)
+          supabase.from('business_units').select('public_booking_enabled').eq('id', buId).maybeSingle()
+            .then(({ data: d2 }) => setEnabled(!!d2?.public_booking_enabled))
+          return
+        }
+        setEnabled(!!data?.public_booking_enabled)
+        setOgTitle(data?.og_title ?? '')
+        setOgDesc(data?.og_description ?? '')
+        setOgImage(data?.og_image_url ?? '')
+      })
   }, [buId])
+
+  // La imagen del preview: JPG/PNG al bucket público; Meta pide ~1200×630
+  async function subirOgImagen(file: File) {
+    setSubiendo(true)
+    const ext = file.name.split('.').pop()
+    const path = `og/${code}-${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage.from('proofs').upload(path, file, { contentType: file.type || 'image/jpeg' })
+    setSubiendo(false)
+    if (upErr) { showToast(`No se pudo subir la imagen: ${upErr.message}`, 'error'); return }
+    const { data: pub } = supabase.storage.from('proofs').getPublicUrl(path)
+    setOgImage(pub.publicUrl)
+  }
+
+  async function guardarOg() {
+    setOgSaving(true)
+    const { error } = await supabase.from('business_units').update({
+      og_title: ogTitle.trim() || null,
+      og_description: ogDesc.trim() || null,
+      og_image_url: ogImage || null,
+    }).eq('id', buId)
+    setOgSaving(false)
+    if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+    showToast('Preview guardado — Meta lo relee en unos 5 minutos (o fuérzalo en el Sharing Debugger).', 'success')
+  }
 
   async function toggle() {
     if (enabled === null) return
@@ -1810,6 +1855,67 @@ function ShareBookingSheet({ buId, code, venueName, isMobile, onClose }: {
             Ver cómo lo ve el cliente ↗
           </a>
         )}
+
+        {/* ── Cómo se ve al compartir / pautar (Open Graph del venue) ──────── */}
+        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
+            Así se ve al compartir o pautar
+          </div>
+          {ogMissing ? (
+            <p style={{ fontSize: 12, color: 'var(--status-attention)', margin: 0, lineHeight: 1.5 }}>
+              Falta correr og_share.sql en Supabase para poder configurar el título e imagen del preview.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5 }}>
+                El título, texto e imagen que Instagram y WhatsApp muestran cuando alguien comparte <span style={{ fontFamily: 'var(--font-mono)' }}>/r/{code}</span> — y el copy que una pauta hereda si no escribes el suyo.
+              </p>
+
+              {/* Mini preview: cómo lo pintaría Meta */}
+              <div style={{ background: 'var(--bg-base)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                {ogImage && (
+                  <img src={ogImage} alt="" style={{ width: '100%', maxHeight: 150, objectFit: 'cover', display: 'block' }} />
+                )}
+                <div style={{ padding: '9px 12px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {ogTitle.trim() || `Reserva tu mesa en ${venueName}`}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    {ogDesc.trim() || 'Elige día, hora y cuántos son — tu mesa queda confirmada en minutos.'}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 3, fontFamily: 'var(--font-mono)' }}>{window.location.host}</div>
+                </div>
+              </div>
+
+              <input value={ogTitle} onChange={e => setOgTitle(e.target.value)} maxLength={70}
+                placeholder={`Título — ej. Reserva tu mesa en ${venueName}`}
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '10px 12px', fontSize: 13, outline: 'none', minHeight: 42, boxSizing: 'border-box' }} />
+              <input value={ogDesc} onChange={e => setOgDesc(e.target.value)} maxLength={160}
+                placeholder="Texto — ej. Ostras frescas y la mejor barra de la ciudad. Reserva en un minuto."
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '10px 12px', fontSize: 13, outline: 'none', minHeight: 42, boxSizing: 'border-box' }} />
+
+              <input ref={ogFileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) subirOgImagen(f); e.target.value = '' }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => ogFileRef.current?.click()} disabled={subiendo}
+                  style={{ flex: 1, minHeight: 42, borderRadius: 'var(--radius-sm)', border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Camera size={13} /> {subiendo ? 'Subiendo…' : ogImage ? 'Cambiar imagen' : 'Subir imagen (1200×630 recomendado)'}
+                </button>
+                {ogImage && (
+                  <button onClick={() => setOgImage('')} title="Quitar imagen"
+                    style={{ minHeight: 42, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-tertiary)', fontSize: 12, cursor: 'pointer' }}>
+                    Quitar
+                  </button>
+                )}
+              </div>
+
+              <button onClick={guardarOg} disabled={ogSaving}
+                style={{ minHeight: 44, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                {ogSaving ? 'Guardando…' : 'Guardar preview'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </Sheet>
   )

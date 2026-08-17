@@ -5,22 +5,24 @@
 // metaetiquetas del HTML crudo, y por eso una pauta apuntada a ?reservar=OC
 // salía con "HOG APP" de copy en lugar de algo que invite a reservar.
 //
-// Estas funciones responden un HTML mínimo con Open Graph del VENUE (título
-// que vende, descripción que invita) y redirigen al instante a la SPA real.
-// El robot se queda con las metas; el humano ni se entera del brinco.
+// Estas funciones responden un HTML mínimo con Open Graph del VENUE — título,
+// descripción e imagen CONFIGURABLES desde HOG APP (Reservas → Compartir,
+// columnas og_* de business_units vía fn_og_meta) — y redirigen al instante a
+// la SPA real. El robot se queda con las metas; el humano ni nota el brinco.
 
-/** Nombre del venue desde Supabase REST (anon) — sin SDK, es una sola consulta */
-export async function venueName(code) {
+/** Metadatos del venue vía RPC fn_og_meta (anon — devuelve SOLO los campos del preview) */
+export async function venueMeta(code) {
   try {
     const base = process.env.VITE_SUPABASE_URL
     const key = process.env.VITE_SUPABASE_ANON_KEY
     if (!base || !key) return null
-    const r = await fetch(
-      `${base}/rest/v1/business_units?code=ilike.${encodeURIComponent(code)}&select=name&limit=1`,
-      { headers: { apikey: key, Authorization: `Bearer ${key}` } },
-    )
-    const rows = await r.json()
-    return rows?.[0]?.name ?? null
+    const r = await fetch(`${base}/rest/v1/rpc/fn_og_meta`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_code: code }),
+    })
+    const data = await r.json()
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : null
   } catch {
     return null
   }
@@ -30,14 +32,14 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 /**
  * @param res respuesta de Vercel
- * @param o { title, description, dest, host } — dest es la ruta real de la SPA
+ * @param o { title, description, image, dest, host } — dest es la ruta real de la SPA
  */
-export function ogRedirect(res, { title, description, dest, host }) {
+export function ogRedirect(res, { title, description, image, dest, host }) {
   const t = esc(title), d = esc(description), u = esc(dest)
-  const img = `https://${host}/icon-512.png`
+  const img = esc(image || `https://${host}/icon-512.png`)
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
   // El robot de Meta re-scrapea seguido: cache corto para poder corregir copy
-  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600')
+  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300')
   res.status(200).send(`<!doctype html>
 <html lang="es">
 <head>
@@ -50,9 +52,10 @@ export function ogRedirect(res, { title, description, dest, host }) {
 <meta property="og:description" content="${d}">
 <meta property="og:image" content="${img}">
 <meta property="og:url" content="https://${host}${u}">
-<meta name="twitter:card" content="summary">
+<meta name="twitter:card" content="${image ? 'summary_large_image' : 'summary'}">
 <meta name="twitter:title" content="${t}">
 <meta name="twitter:description" content="${d}">
+<meta name="twitter:image" content="${img}">
 <meta http-equiv="refresh" content="0; url=${u}">
 <link rel="canonical" href="https://${host}${u}">
 </head>
