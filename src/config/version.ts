@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.92.1"
+export const APP_VERSION = "2.93.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.93.0",
+    date: "2026-08-17",
+    type: "MINOR",
+    changes: [
+      "PREVIEW DE PAUTA CONFIGURABLE DESDE HOG APP — en Reservas → Compartir ahora eliges el TÍTULO, el TEXTO y la IMAGEN que Instagram y WhatsApp muestran al compartir o pautar el link /r/CODIGO de cada venue, con una mini vista previa de cómo lo pintará Meta",
+      "La imagen se sube ahí mismo (1200×630 recomendado); sin configurar nada, cada venue sigue saliendo con el default 'Reserva tu mesa en {venue}'",
+      "El portal wellness (/w/) reusa la imagen del venue con su propio texto de clases",
+      "Requiere correr og_share.sql (columnas og_* + la función que se las sirve al robot de Meta sin abrirle la tabla)",
+    ]
+  },
   {
     version: "2.92.1",
     date: "2026-08-17",
