@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/r/:code",
-      "destination": "/api/r/:code"
+      "destination": "/api/r?code=:code"
     },
     {
       "source": "/w/:code",
-      "destination": "/api/w/:code"
+      "destination": "/api/w?code=:code"
     },
     {
       "source": "/(.*)",

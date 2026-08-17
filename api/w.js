@@ -1,7 +1,7 @@
 // /w/PC — igual que /r/ pero para el portal wellness (?wellness=CODE).
 // Reusa la IMAGEN configurada del venue; el texto tiene su propio default de
 // clases (el og_title de reservas hablaría de mesas, no de yoga).
-import { venueMeta, ogRedirect } from '../_og.js'
+import { venueMeta, ogRedirect } from './_og.js'
 
 export default async function handler(req, res) {
   const code = String(req.query.code ?? '').slice(0, 12)
