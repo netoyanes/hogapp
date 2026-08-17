@@ -129,8 +129,23 @@ export function WellnessPortal({ code }: { code: string }) {
       const { data, error } = await supabase.functions.invoke('wellness-pay', {
         body: { token, booking_id: b.booking_id },
       })
-      if (error || data?.error) { setMsg({ text: data?.error ?? 'No se pudo generar el pago.', error: true }); return }
-      window.open(data.pay_url, '_blank', 'noopener')
+      // Cuando la función responde 4xx/5xx, invoke() NO entrega el cuerpo en
+      // data: el JSON real ("Blumon auth falló…", "checkout rechazado…") viene
+      // dentro de error.context. Sin leerlo, todo error se veía como un
+      // genérico "no se pudo" — indiagnosticable desde el teléfono del alumno.
+      let payload = data as { pay_url?: string; error?: string } | null
+      if (error && !payload) {
+        try { payload = await (error as { context?: Response }).context?.json() ?? null } catch { payload = null }
+      }
+      if (!payload?.pay_url) {
+        setMsg({
+          text: payload?.error
+            ?? 'El pago en línea no está disponible ahorita — puedes pagar en el estudio. (Si esto persiste, avísanos.)',
+          error: true,
+        })
+        return
+      }
+      window.open(payload.pay_url, '_blank', 'noopener')
       setMsg({ text: 'Se abrió la página de pago seguro. Al terminar, tu clase aparecerá como pagada.' })
     } finally { setBusy(false) }
   }

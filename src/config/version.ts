@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.91.0"
+export const APP_VERSION = "2.91.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.91.1",
+    date: "2026-08-17",
+    type: "PATCH",
+    changes: [
+      "WELLNESS — cuando el pago en línea falla, el portal ahora dice la CAUSA real (credenciales de Blumon, sandbox cerrado, función sin desplegar…) en vez del genérico 'no se pudo generar el pago'. El error de la edge function venía en un lugar donde el portal no lo leía",
+      "Si el pago en línea no está disponible, el mensaje ofrece pagar en el estudio en vez de dejar al alumno en un callejón",
+    ]
+  },
   {
     version: "2.91.0",
     date: "2026-08-17",
