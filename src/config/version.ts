@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.93.0"
+export const APP_VERSION = "2.93.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.93.1",
+    date: "2026-08-17",
+    type: "PATCH",
+    changes: [
+      "FIX del preview de pautas: la función /api con ruta dinámica no se registraba en Vercel y /r/CODIGO servía el index estático (por eso el Sharing Debugger daba 206 y 'HOG APP'). Aplanada a función fija con el código por query",
+      "Plan B listo en el repo (edge function og-share) por si Vercel siguiera sin registrar funciones",
+    ]
+  },
   {
     version: "2.93.0",
     date: "2026-08-17",
