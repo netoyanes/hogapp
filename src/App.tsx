@@ -8,6 +8,8 @@ import { TaskBoard } from './screens/TaskBoard'
 import { MyWeek } from './screens/MyWeek'
 import { SocialPulse } from './screens/SocialPulse'
 import { Nomina } from './screens/Nomina'
+import { Wellness } from './screens/Wellness'
+import { WellnessPortal } from './screens/WellnessPortal'
 import { Finanzas } from './screens/Finanzas'
 import { RevenueUpload } from './screens/RevenueUpload'
 import { BUOnboardingForm } from './screens/BUOnboardingForm'
@@ -60,6 +62,8 @@ const _sharedTaskId = _params.get('share')
 const _aviso = _params.get('aviso')
 const _reservar = _params.get('reservar')
 const _mireserva = _params.get('mireserva')
+// ?wellness=CODIGO — portal público de clases (alumnos, sin cuenta HOG APP)
+const _wellness = _params.get('wellness')
 // ?task=<id>[&project=<id>] — deep-link a una tarea (desde la vista pública,
 // notificaciones o Slack). Con proyecto, la app aterriza en Proyectos, abre el
 // proyecto y encima la tarea; sin proyecto, aterriza en Tareas.
@@ -78,6 +82,9 @@ export default function App() {
   if (_reservar) return <PublicReservation code={_reservar} />
   // Mi reserva — el cliente gestiona su reserva desde el link del WhatsApp
   if (_mireserva) return <GuestReservation token={_mireserva} />
+  // Portal wellness público (también es el regreso del checkout de Blumon:
+  // el alumno aterriza aquí y ve su clase ya pagada)
+  if (_wellness) return <WellnessPortal code={_wellness} />
   // Shared task view — completely isolated, no app shell
   if (_sharedTaskId) return <SharedTask taskId={_sharedTaskId} />
   // Aviso de privacidad — página pública estática
@@ -281,6 +288,12 @@ export default function App() {
         return role === 'MASTER' || userApps?.has('nomina')
           ? <Nomina userId={profile?.id} isMaster={role === 'MASTER'} />
           : <EmptyState icon="🔒" title="Solo Master" description="Nómina de eventuales es exclusiva de dirección por ahora." />
+      case 'wellness':
+        // Instructores y gerentes con la app 'wellness'; el nivel lo decide la
+        // capability wellness_admin (gerente) — el instructor solo ve su reporte
+        return role === 'MASTER' || userApps?.has('wellness')
+          ? <Wellness userId={profile?.id} isManager={role === 'MASTER' || caps.has('wellness_admin')} />
+          : <EmptyState icon="🔒" title="Sin acceso" description="Wellness se asigna por usuario en Usuarios." />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':

@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.90.0"
+export const APP_VERSION = "2.91.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,20 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.91.0",
+    date: "2026-08-17",
+    type: "MINOR",
+    changes: [
+      "WELLNESS — sub-portal completo en dos caras: la ADMIN dentro de HOG APP (app 'wellness') y un PORTAL PÚBLICO para alumnos (?wellness=CODIGO), arrancando con Dharma Yoga con Rafa (martes y jueves 7:30, sábado 11:00)",
+      "PORTAL DEL ALUMNO sin contraseñas: ve la cartelera de los próximos 14 días con lugares disponibles, se registra UNA vez (nombre + teléfono) y su acceso queda guardado en el navegador; para volver desde otro teléfono basta poner su número. Reserva, cancela (hasta 3 h antes) y paga en línea",
+      "PAGOS con Blumon Pay por CHECKOUT LINK: la tarjeta se teclea en la página de Blumon — jamás toca nuestro servidor (cero carga PCI). El monto sale de la base, no del navegador. El webhook de Blumon confirma el pago y la clase queda 'Pagada' sola. También hay cobro manual en el estudio (efectivo/transferencia)",
+      "INSTRUCTORES con el MISMO login de HOG APP: con la app 'wellness' asignada, Rafa entra y ve una sola cosa — cuántos alumnos hay por horario en SUS clases, con nombres y pase de lista (asistió / no llegó)",
+      "GERENTES WELLNESS (capability 'wellness_admin'): además administran clases, horarios y precios sin tocar código, ven la base de alumnos con cuánto ha gastado cada quien, y los INGRESOS por semana / quincena / mes — separando lo COBRADO de lo RESERVADO POR COBRAR (la proyección: gente que ya dijo que viene)",
+      "El cupo se valida en el servidor: dos personas peleando el último lugar no lo duplican, y el precio de la reserva se congela al reservar",
+      "Requiere: correr wellness.sql + desplegar la edge function wellness-pay (con los secrets de Blumon) + registrar el webhook con Blumon",
+    ]
+  },
   {
     version: "2.90.0",
     date: "2026-08-15",
