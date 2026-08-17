@@ -1747,7 +1747,10 @@ function ShareBookingSheet({ buId, code, venueName, isMobile, onClose }: {
   const [enabled, setEnabled] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
-  const url = `${window.location.origin}/?reservar=${code}`
+  // /r/CODE en lugar de ?reservar= directo: esa ruta sirve el Open Graph del
+  // venue, así una pauta o un compartido en IG/WhatsApp sale con "Reserva tu
+  // mesa en {venue}" y no con "HOG APP" (el robot de Meta no ejecuta JS)
+  const url = `${window.location.origin}/r/${code}`
 
   useEffect(() => {
     supabase.from('business_units').select('public_booking_enabled').eq('id', buId).maybeSingle()

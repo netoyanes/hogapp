@@ -98,7 +98,7 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
           <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 17, margin: 0 }}>Wellness</h1>
           {!isManager && <StatusBadgeV2 tone="neutral" label="Vista de instructor" />}
           {isManager && buList.length > 0 && (
-            <a href={`${window.location.origin}${window.location.pathname}?wellness=${buList.find(b => classes.some(c => c.bu_id === b.id))?.code ?? buList[0].code}`}
+            <a href={`${window.location.origin}/w/${buList.find(b => classes.some(c => c.bu_id === b.id))?.code ?? buList[0].code}`}
               target="_blank" rel="noreferrer" onClick={() => {}}
               style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--accent)', textDecoration: 'none', border: '1px solid var(--accent-border)', borderRadius: 999, padding: '6px 12px', fontWeight: 700 }}>
               <Link2 size={12} /> Ver portal público
