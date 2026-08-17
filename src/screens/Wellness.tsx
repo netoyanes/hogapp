@@ -16,7 +16,7 @@ import { SegmentedControl, StatusBadgeV2, Sheet, showToast } from '../components
 //    (semana / quincena / mes) con proyección sobre reservas ya hechas.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface Instructor { id: string; bu_id: string; full_name: string; profile_id: string | null; active: boolean }
+interface Instructor { id: string; bu_id: string; full_name: string; profile_id: string | null; revenue_pct: number; active: boolean }
 interface WClass {
   id: string; bu_id: string; name: string; description: string | null
   instructor_id: string | null; price: number; capacity: number; duration_min: number; color: string; active: boolean
@@ -26,6 +26,7 @@ interface Student { id: string; full_name: string; phone: string; email: string 
 interface Booking {
   id: string; slot_id: string; class_date: string; student_id: string
   status: string; paid: boolean; paid_via: string | null; amount: number | null
+  instructor_pct: number | null
 }
 
 const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -118,7 +119,7 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
             onNew={() => setClassSheet('new')} onEdit={c => setClassSheet(c)} onChange={load} />
         )}
         {tab === 'alumnos' && isManager && <AlumnosTab students={students} bookings={bookings} />}
-        {tab === 'ingresos' && isManager && <IngresosTab bookings={bookings} classes={classes} slots={slots} />}
+        {tab === 'ingresos' && isManager && <IngresosTab bookings={bookings} classes={classes} slots={slots} instructors={instructors} />}
       </div>
 
       {classSheet && (
@@ -260,12 +261,44 @@ function ClasesTab({ classes, slots, instructors, buList, onNew, onEdit, onChang
     await supabase.from('wellness_classes').update({ active: !c.active }).eq('id', c.id)
     onChange()
   }
+  // El DEAL de cada instructor: % que se lleva de sus clases (lo típico 60/40).
+  // Se congela en cada reserva al reservar — cambiarlo aquí solo afecta lo nuevo.
+  async function setDeal(i: Instructor, raw: string) {
+    const v = Math.max(0, Math.min(100, Number(raw)))
+    if (Number.isNaN(v) || v === Number(i.revenue_pct)) return
+    const { error } = await supabase.from('wellness_instructors').update({ revenue_pct: v }).eq('id', i.id)
+    if (error) showToast(`No se pudo guardar el deal: ${error.message}`, 'error')
+    else { showToast(`Deal de ${i.full_name}: ${v}% instructor / ${100 - v}% POD — aplica a reservas nuevas.`, 'success'); onChange() }
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <button onClick={onNew}
         style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 14px', borderRadius: 999, border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
         <Plus size={14} /> Nueva clase
       </button>
+      {/* Deals por instructor — el reparto vive en la persona, no en la clase */}
+      {instructors.filter(i => i.active).length > 0 && (
+        <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', marginBottom: 4 }}>Deal por instructor</div>
+          <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', margin: '0 0 8px', lineHeight: 1.5 }}>
+            % del ingreso de sus clases que se lleva el instructor; el resto es del POD. Se <strong>congela en cada reserva</strong> — renegociar no reescribe lo ya vendido.
+          </p>
+          {instructors.filter(i => i.active).map(i => (
+            <div key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
+              <span style={{ flex: 1, minWidth: 120, fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{i.full_name}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <input type="number" inputMode="numeric" min={0} max={100} defaultValue={Number(i.revenue_pct)} key={`${i.id}-${i.revenue_pct}`}
+                  onBlur={e => setDeal(i, e.target.value)} className="num"
+                  style={{ ...inp, width: 64, minHeight: 34, fontSize: 12.5, fontFamily: 'var(--font-mono)', textAlign: 'right' }} />
+                <span className="num" style={{ fontSize: 11.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                  % instructor · {100 - Number(i.revenue_pct)}% POD
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {classes.map(c => {
         const sus = slots.filter(s => s.class_id === c.id && s.active)
         return (
@@ -454,14 +487,26 @@ function AlumnosTab({ students, bookings }: { students: Student[]; bookings: Boo
 }
 
 // ── INGRESOS (gerente): lo cobrado y lo reservado por cobrar ─────────────────
-function IngresosTab({ bookings, classes, slots }: { bookings: Booking[]; classes: WClass[]; slots: WSlot[] }) {
+function IngresosTab({ bookings, classes, slots, instructors }: { bookings: Booking[]; classes: WClass[]; slots: WSlot[]; instructors: Instructor[] }) {
   const hoy = new Date()
   const clsOf = (slotId: string) => classes.find(c => c.id === slots.find(s => s.id === slotId)?.class_id)
 
+  // % del instructor de una reserva: el congelado al reservar; si la reserva es
+  // anterior al deal (o el SQL viejo), cae al deal vigente del instructor, y al
+  // 60/40 típico del grupo como último recurso
+  const pctOf = (b: Booking) => {
+    if (b.instructor_pct != null) return Number(b.instructor_pct)
+    const c = clsOf(b.slot_id)
+    const i = instructors.find(x => x.id === c?.instructor_id)
+    return i ? Number(i.revenue_pct) : 60
+  }
   const rango = (from: string, to: string) => {
     const en = bookings.filter(b => b.class_date >= from && b.class_date <= to && b.status !== 'cancelada')
+    const pagadas = en.filter(b => b.paid)
+    const cobrado = pagadas.reduce((s, b) => s + Number(b.amount ?? 0), 0)
+    const instructor = pagadas.reduce((s, b) => s + Number(b.amount ?? 0) * pctOf(b) / 100, 0)
     return {
-      cobrado: en.filter(b => b.paid).reduce((s, b) => s + Number(b.amount ?? 0), 0),
+      cobrado, instructor, pod: cobrado - instructor,
       porCobrar: en.filter(b => !b.paid).reduce((s, b) => s + Number(b.amount ?? 0), 0),
       clases: en.length,
     }
@@ -488,11 +533,18 @@ function IngresosTab({ bookings, classes, slots }: { bookings: Booking[]; classe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookings, classes, slots])
 
-  const tile = (label: string, r: { cobrado: number; porCobrar: number; clases: number }) => (
-    <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '12px 16px', minWidth: 168, flex: 1 }}>
+  const tile = (label: string, r: { cobrado: number; instructor: number; pod: number; porCobrar: number; clases: number }) => (
+    <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '12px 16px', minWidth: 190, flex: 1 }}>
       <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{label}</div>
       <div className="num" style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>{mxn(r.cobrado)}</div>
-      <div className="num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: 5 }}>
+      {/* El reparto del deal, en la misma tarjeta: POD primero (es TU caja) */}
+      {r.cobrado > 0 && (
+        <div className="num" style={{ fontSize: 10.5, fontFamily: 'var(--font-mono)', marginTop: 5 }}>
+          <span style={{ color: 'var(--status-healthy)', fontWeight: 700 }}>POD {mxn(r.pod)}</span>
+          <span style={{ color: 'var(--text-tertiary)' }}> · instructores {mxn(r.instructor)}</span>
+        </div>
+      )}
+      <div className="num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>
         {r.porCobrar > 0 && <>+{mxn(r.porCobrar)} reservado por cobrar · </>}{r.clases} reservas
       </div>
     </div>
@@ -508,6 +560,38 @@ function IngresosTab({ bookings, classes, slots }: { bookings: Booking[]; classe
       <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5 }}>
         <strong>Cobrado</strong> = pagos confirmados (Blumon + efectivo). <strong>Por cobrar</strong> = lugares ya reservados sin pagar — es tu proyección: gente que dijo que viene. Incluye clases futuras del periodo.
       </p>
+      {/* Liquidación por instructor: el número con el que le pagas a cada quien */}
+      {(() => {
+        const m = new Map<string, { name: string; pct: number; cobrado: number; instructor: number; n: number }>()
+        for (const b of bookings.filter(b => b.class_date >= mIni && b.class_date <= mFin && b.status !== 'cancelada' && b.paid)) {
+          const c = clsOf(b.slot_id); if (!c?.instructor_id) continue
+          const i = instructors.find(x => x.id === c.instructor_id); if (!i) continue
+          const e = m.get(i.id) ?? { name: i.full_name, pct: Number(i.revenue_pct), cobrado: 0, instructor: 0, n: 0 }
+          e.cobrado += Number(b.amount ?? 0)
+          e.instructor += Number(b.amount ?? 0) * pctOf(b) / 100
+          e.n += 1; m.set(i.id, e)
+        }
+        const rows = [...m.values()].sort((a, b) => b.instructor - a.instructor)
+        if (!rows.length) return null
+        return (
+          <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>Liquidación por instructor (mes)</div>
+            {rows.map(r => (
+              <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
+                <span style={{ flex: 1, minWidth: 110, fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{r.name}</span>
+                <span className="num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{r.n} clases · deal {r.pct}%</span>
+                <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', width: 90, textAlign: 'right' }}>de {mxn(r.cobrado)}</span>
+                <span className="num" title="Lo que le toca al instructor" style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', width: 92, textAlign: 'right' }}>{mxn(r.instructor)}</span>
+                <span className="num" title="Lo que queda al POD" style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--status-healthy)', fontFamily: 'var(--font-mono)', width: 86, textAlign: 'right' }}>POD {mxn(r.cobrado - r.instructor)}</span>
+              </div>
+            ))}
+            <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: '8px 0 0', lineHeight: 1.5 }}>
+              Cada reserva usa el % vigente cuando se reservó — renegociar el deal no mueve lo ya vendido.
+            </p>
+          </div>
+        )
+      })()}
+
       <div>
         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>Por clase (mes)</div>
         {porClase.map(c => (

@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.91.1"
+export const APP_VERSION = "2.92.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.92.0",
+    date: "2026-08-17",
+    type: "MINOR",
+    changes: [
+      "WELLNESS · DEAL POR INSTRUCTOR — cada instructor tiene su reparto del ingreso (lo típico del grupo: 60% instructor / 40% POD, y es el default). Se edita en Clases y precios, por persona",
+      "El % se CONGELA en cada reserva al momento de reservar: renegociar el deal con un instructor no reescribe la contabilidad de clases ya vendidas",
+      "INGRESOS ahora muestra el reparto en cada periodo (semana/quincena/mes): cuánto es del POD y cuánto de instructores, y una LIQUIDACIÓN POR INSTRUCTOR del mes — el número exacto con el que le pagas a cada quien (clases cobradas, deal aplicado, su parte y la del POD)",
+      "Si ya corriste wellness.sql antes, recórrelo — agrega las columnas del deal sin tocar lo demás",
+    ]
+  },
   {
     version: "2.91.1",
     date: "2026-08-17",
