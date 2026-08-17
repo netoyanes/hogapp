@@ -40,15 +40,19 @@ grant execute on function public.fn_wellness_admin() to authenticated;
 -- profile_id liga al login de HOG APP cuando el instructor tiene cuenta: así
 -- Rafa entra con el MISMO sistema de login y solo ve sus clases.
 create table if not exists public.wellness_instructors (
-  id         uuid primary key default gen_random_uuid(),
-  bu_id      uuid not null references business_units(id) on delete cascade,
-  full_name  text not null,
-  phone      text,
-  email      text,
-  profile_id uuid unique references profiles(id) on delete set null,
-  active     boolean not null default true,
-  created_at timestamptz not null default now()
+  id          uuid primary key default gen_random_uuid(),
+  bu_id       uuid not null references business_units(id) on delete cascade,
+  full_name   text not null,
+  phone       text,
+  email       text,
+  profile_id  uuid unique references profiles(id) on delete set null,
+  -- El DEAL: % del ingreso de sus clases que se lleva el instructor.
+  -- Lo típico del grupo es 60 instructor / 40 POD — por eso el default.
+  revenue_pct numeric not null default 60 check (revenue_pct between 0 and 100),
+  active      boolean not null default true,
+  created_at  timestamptz not null default now()
 );
+alter table wellness_instructors add column if not exists revenue_pct numeric not null default 60;
 
 -- ── Clases (catálogo) ────────────────────────────────────────────────────────
 create table if not exists public.wellness_classes (
@@ -103,10 +107,14 @@ create table if not exists public.wellness_bookings (
   paid        boolean not null default false,
   paid_via    text,                 -- blumon · efectivo · transferencia · cortesia
   amount      numeric,              -- precio al momento de reservar (la historia no cambia)
+  -- % del instructor CONGELADO al reservar: renegociar el deal a futuro no
+  -- reescribe la contabilidad de clases ya vendidas
+  instructor_pct numeric,
   payment_id  uuid,
   created_at  timestamptz not null default now(),
   unique (slot_id, class_date, student_id)
 );
+alter table wellness_bookings add column if not exists instructor_pct numeric;
 create index if not exists idx_wellness_bookings_date on wellness_bookings (class_date desc);
 
 -- ── Pagos (espejo Blumon + manuales) ─────────────────────────────────────────
@@ -211,12 +219,14 @@ end $$;
 -- Reservar: valida cupo DENTRO de la función (el cliente no decide si cabe)
 create or replace function public.fn_wellness_book(p_token uuid, p_slot uuid, p_date date)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare v_student uuid; v_cap int; v_booked int; v_price numeric; v_weekday int; v_booking uuid;
+declare v_student uuid; v_cap int; v_booked int; v_price numeric; v_weekday int; v_booking uuid; v_pct numeric;
 begin
   select id into v_student from wellness_students where access_token = p_token;
   if v_student is null then return jsonb_build_object('error', 'Tu acceso no es válido — regístrate de nuevo.'); end if;
-  select c.capacity, c.price, s.weekday into v_cap, v_price, v_weekday
-    from wellness_slots s join wellness_classes c on c.id = s.class_id
+  select c.capacity, c.price, s.weekday, i.revenue_pct into v_cap, v_price, v_weekday, v_pct
+    from wellness_slots s
+    join wellness_classes c on c.id = s.class_id
+    left join wellness_instructors i on i.id = c.instructor_id
    where s.id = p_slot and s.active and c.active;
   if v_cap is null then return jsonb_build_object('error', 'Esa clase ya no está disponible.'); end if;
   if extract(dow from p_date)::int <> v_weekday or p_date < current_date then
@@ -225,8 +235,8 @@ begin
   select count(*) into v_booked from wellness_bookings
    where slot_id = p_slot and class_date = p_date and status <> 'cancelada';
   if v_booked >= v_cap then return jsonb_build_object('error', 'Esa clase ya está llena.'); end if;
-  insert into wellness_bookings (slot_id, class_date, student_id, amount)
-  values (p_slot, p_date, v_student, v_price)
+  insert into wellness_bookings (slot_id, class_date, student_id, amount, instructor_pct)
+  values (p_slot, p_date, v_student, v_price, v_pct)
   on conflict (slot_id, class_date, student_id) do update set status = 'reservada'
   returning id into v_booking;
   return jsonb_build_object('booking_id', v_booking, 'amount', v_price);
