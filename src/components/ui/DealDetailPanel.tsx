@@ -366,7 +366,6 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
           overflow: 'hidden',
         }}
       >
-        <FeedbackButton context="Ventana de oportunidad (deal)" />
         {/* Header */}
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
@@ -386,6 +385,8 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
               </div>
             </div>
             <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+              {/* Marco estandarizado: 🏳 Reportar · … · X */}
+              <FeedbackButton variant="inline" context={`Oportunidad: ${deal.title.slice(0, 80)}`} />
               {editing ? (
                 <button onClick={saveEdit} style={iconBtn('#22C55E')}><Check size={14} /></button>
               ) : (

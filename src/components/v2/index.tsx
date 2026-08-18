@@ -271,7 +271,7 @@ const layerBehindFx = (behind: number, isMobile: boolean): CSSProperties => behi
 
 // ── Sheet — en escritorio: modal CENTRADO; en teléfono: bottom sheet. Las
 // subventanas se apilan al centro con la anterior visible detrás ─────────────
-export function Sheet({ open, onClose, isMobile, children, width = 480, minWidth, tall = false }: {
+export function Sheet({ open, onClose, isMobile, children, width = 480, minWidth, tall = false, feedback = true }: {
   open: boolean; onClose: () => void; isMobile: boolean; children: ReactNode
   /** Ancho MÁXIMO en escritorio. La ventana crece con la pantalla hasta aquí. */
   width?: number
@@ -279,6 +279,8 @@ export function Sheet({ open, onClose, isMobile, children, width = 480, minWidth
   minWidth?: number
   /** Ventanas de trabajo (proyecto, tarea): marco alto y estable, estilo Airtable */
   tall?: boolean
+  /** false cuando la ventana pone la bandera INLINE en su propio header estandarizado */
+  feedback?: boolean
 }) {
   const { behind, isTop, zBase } = useSheetLayer(open)
   useEffect(() => {
@@ -343,8 +345,9 @@ export function Sheet({ open, onClose, isMobile, children, width = 480, minWidth
         )}
         {children}
         {/* La bandera de reporte vive en el PRIMITIVO: toda ventana presente
-            y futura la hereda sin que nadie tenga que acordarse de ponerla */}
-        <FeedbackButton />
+            y futura la hereda sin que nadie tenga que acordarse de ponerla.
+            Orden estándar del marco: 🏳 Reportar · Compartir · Conversación · X */}
+        {feedback && <FeedbackButton />}
       </div>
     </>,
     document.body

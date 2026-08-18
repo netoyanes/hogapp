@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.99.0"
+export const APP_VERSION = "2.99.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.99.1",
+    date: "2026-08-18",
+    type: "PATCH",
+    changes: [
+      "La bandera de REPORTAR se estandarizó arriba a la derecha en toda ventana — antes vivía abajo a la izquierda",
+      "En tarea, proyecto y oportunidad (deal), donde ya hay compartir/conversación/cerrar en el header, la bandera se integró en la misma fila con el mismo trato visual — mismo orden en todas: 🏳 Reportar · Compartir · Conversación · Cerrar",
+      "En el resto de ventanas la bandera flota arriba a la derecha, justo a la izquierda de la X, para no chocar con el cierre",
+    ]
+  },
   {
     version: "2.99.0",
     date: "2026-08-18",

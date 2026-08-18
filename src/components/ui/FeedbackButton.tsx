@@ -18,7 +18,11 @@ import { APP_VERSION } from '../../config/version'
 // ciclo (v2 → FeedbackButton → v2); el "enviado ✓" vive dentro del modal.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function FeedbackButton({ context }: { context?: string }) {
+export function FeedbackButton({ context, variant = 'float' }: {
+  context?: string
+  /** float: pin arriba-derecha (a la izquierda de la X). inline: botón de header. */
+  variant?: 'float' | 'inline'
+}) {
   const [open, setOpen] = useState(false)
   const [ctx, setCtx] = useState(context ?? '')
   const [kind, setKind] = useState<'falla' | 'mejora'>('falla')
@@ -64,9 +68,13 @@ export function FeedbackButton({ context }: { context?: string }) {
   return (
     <>
       <button onClick={abrir} title="Reportar una falla o sugerir una mejora de esta ventana" aria-label="Reportar falla o sugerir mejora"
-        style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 5, width: 26, height: 26, border: 'none', borderRadius: '50%', background: 'none', color: 'var(--text-tertiary)', opacity: 0.45, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'opacity .15s' }}
-        onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-        onMouseLeave={e => (e.currentTarget.style.opacity = '0.45')}>
+        style={variant === 'inline'
+          // Botón de header: mismo tamaño y trato que compartir/conversación/cerrar
+          ? { width: 34, height: 34, border: 'none', borderRadius: 8, background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }
+          // Flotante ESTÁNDAR: arriba a la derecha, dejando el hueco de la X
+          : { position: 'absolute', top: 12, right: 48, zIndex: 5, width: 28, height: 28, border: 'none', borderRadius: '50%', background: 'none', color: 'var(--text-tertiary)', opacity: 0.45, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'opacity .15s' }}
+        onMouseEnter={e => { if (variant !== 'inline') e.currentTarget.style.opacity = '1' }}
+        onMouseLeave={e => { if (variant !== 'inline') e.currentTarget.style.opacity = '0.45' }}>
         <Flag size={13} />
       </button>
 
