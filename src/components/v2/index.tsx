@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
+import { FeedbackButton } from '../ui/FeedbackButton'
 import { buColor, buColorBg, buColorBorder, buMonogram } from '../../lib/buIdentity'
 
 // ── BUChip — the signature element ───────────────────────────────────────────
@@ -341,6 +342,9 @@ export function Sheet({ open, onClose, isMobile, children, width = 480, minWidth
           </div>
         )}
         {children}
+        {/* La bandera de reporte vive en el PRIMITIVO: toda ventana presente
+            y futura la hereda sin que nadie tenga que acordarse de ponerla */}
+        <FeedbackButton />
       </div>
     </>,
     document.body

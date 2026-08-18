@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.98.0"
+export const APP_VERSION = "2.99.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.99.0",
+    date: "2026-08-18",
+    type: "MINOR",
+    changes: [
+      "REPORTAR FALLAS Y SUGERIR MEJORAS desde CUALQUIER ventana — una bandera discreta 🏳 abajo a la izquierda de toda ventana desplegable (tarea, proyecto, deal, cliente, clase, nómina…): la tocas y sale un mini-form con dos opciones (🐞 Falla / 💡 Mejora) y un campo de texto",
+      "El contexto viaja solo: qué ventana era, en qué pantalla estabas y la versión de la app — el que reporta solo escribe qué pasó",
+      "Cada reporte llega a Slack al instante y queda en Actividad (módulo Sistema, resaltado) — las fallas no se pierden en un buzón que nadie abre",
+      "La bandera vive en el componente base de ventanas: toda ventana futura la hereda sin que nadie tenga que acordarse de ponerla",
+      "Requiere app_feedback.sql (si no está, el reporte viaja igual por Slack y Actividad)",
+    ]
+  },
   {
     version: "2.98.0",
     date: "2026-08-18",

@@ -12,6 +12,7 @@ import { StatusBadge } from './StatusBadge'
 import { HtmlFrame } from './HtmlFrame'
 import { Avatar } from './Avatar'
 import { EntityChat } from './EntityChat'
+import { FeedbackButton } from './FeedbackButton'
 import type { Task, TaskStatus, TaskPriority, TaskArea, ClientImpact, DeadlineType } from '../../types'
 import { TASK_AREA_LABELS, TASK_AREA_GROUPS, CLIENT_IMPACT_LABELS } from '../../lib/taskAreas'
 
@@ -1062,6 +1063,7 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
         </div>
         </div>
 
+        <FeedbackButton context="Ventana de tarea" />
         {/* Riel de conversación — fijo mientras la tarea se scrollea al lado */}
         {chatEnColumna && (
           <aside style={{ width: 330, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>

@@ -4,6 +4,7 @@ import { X, Edit2, Check, ChevronDown, Phone, Mail, MessageSquare, Calendar, Bri
 import type { BusinessUnit } from '../../types'
 import type { CRMContact, CRMDeal } from '../../screens/CRM'
 import { TaskDetailPanel } from './TaskDetailPanel'
+import { FeedbackButton } from './FeedbackButton'
 import { Avatar } from './Avatar'
 import { ReactionBar } from './ReactionBar'
 import { useSheetLayer, showToast } from '../v2'
@@ -365,6 +366,7 @@ export function DealDetailPanel({ dealId, contacts, buses, onClose, onUpdated, u
           overflow: 'hidden',
         }}
       >
+        <FeedbackButton context="Ventana de oportunidad (deal)" />
         {/* Header */}
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
