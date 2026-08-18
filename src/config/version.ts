@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.94.1"
+export const APP_VERSION = "2.95.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.95.0",
+    date: "2026-08-18",
+    type: "MINOR",
+    changes: [
+      "CONCIERGE · HOY rediseñado — arriba va LA SEMANA DEL GRUPO: reservas creadas, reservas vía concierge, comensales nuevos registrados, conversaciones, vistas del landing y no-shows, cada una comparada contra el MISMO CORTE de la semana pasada (lunes→hoy vs lunes→mismo día anterior, para no comparar un martes contra una semana completa)",
+      "CONVERSIÓN CHAT→RESERVA de la semana en el encabezado: reservas nacidas en el concierge ÷ conversaciones nuevas — el número que dice si el bot vende o solo platica",
+      "FIX del '31441 min': la 1ª respuesta se calculaba sobre conversaciones VIEJAS que recibían un mensaje hoy (una de hace 3 semanas metía 30 mil minutos a la mediana). Ahora solo cuenta conversaciones INICIADAS hoy",
+      "Los KPIs de hoy explican su vacío: 'Confirmadas hoy —' ahora dice que no hay reservas para hoy, en vez de un guion mudo",
+      "ATIENDE AHORA desahogado: los pendientes con más de 3 días se colapsan en un botón 'Ver N pendientes viejos' — un escalado de hace 16 días es backlog, no urgencia, y enterraba lo que sí es de ahorita",
+    ]
+  },
   {
     version: "2.94.1",
     date: "2026-08-18",
