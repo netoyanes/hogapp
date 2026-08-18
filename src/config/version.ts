@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.97.0"
+export const APP_VERSION = "2.97.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.97.1",
+    date: "2026-08-18",
+    type: "PATCH",
+    changes: [
+      "FIX: archivar una tarea NO la quitaba de la ventana del proyecto (ni del timeline ni de las barras de avance) — la lista del proyecto no filtraba archivadas. Ahora desaparece de todos lados y las barras cuentan solo lo vivo",
+      "OPCIONES POR TAREA dentro del proyecto: clic derecho (o el botón ⋯ en táctil) sobre cualquier tarea → Abrir · Desvincular · ARCHIVAR — ya no hay que salir a Tareas para archivar algo que ves ahí",
+    ]
+  },
   {
     version: "2.97.0",
     date: "2026-08-18",
