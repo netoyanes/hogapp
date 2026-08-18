@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.102.1"
+export const APP_VERSION = "2.103.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.103.0",
+    date: "2026-08-18",
+    type: "MINOR",
+    changes: [
+      "EL CONCIERGE YA SABE QUIÉN LE ESCRIBE — antes de contestar la primera palabra identifica al cliente por su canal: en WhatsApp el número desde el que escribe ES su teléfono, y si ya está en la ficha, el bot lo reconoce",
+      "FIX de fondo: a un cliente CON reserva que solo quería avisar que llegaba tarde, el bot le pidió su teléfono CUATRO veces — porque solo se enteraba de la reserva DESPUÉS de sacarle nombre y teléfono. Ahora llega a la conversación sabiendo su nombre, su teléfono y sus reservas activas",
+      "Si el cliente ya tiene reserva, el bot entiende que no viene a reservar: una hora suelta (\'llego 4:15\', \'estoy a 4 cuadras\') es un aviso de llegada y se anota al instante, sin pedir nada",
+      "NO INSISTAS: si ya pidió un dato una vez y no se lo dieron, no lo vuelve a pedir — sigue con lo que tiene o pasa la conversación al equipo",
+      "Si el bot dice \'déjame confirmarlo con el equipo\', ahora está OBLIGADO a escalar en ese mismo turno — antes lo decía y dejaba al cliente esperando algo que nunca llegaba",
+      "Requiere redesplegar concierge-agent",
+    ]
+  },
   {
     version: "2.102.1",
     date: "2026-08-18",
