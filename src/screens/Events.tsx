@@ -193,7 +193,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
       supabase.from('event_plans').select('*').order('date', { ascending: true, nullsFirst: false }),
       supabase.from('business_units').select('id, code, name').order('name'),
       supabase.from('profiles').select('id, full_name').order('full_name'),
-      supabase.from('tasks').select('id, event_id, status, title, due_date, assigned_to').not('event_id', 'is', null),
+      supabase.from('tasks').select('id, event_id, status, title, due_date, assigned_to').not('event_id', 'is', null).eq('archived', false),
       supabase.from('project_templates').select('*').order('name'),
     ])
     setTemplates((tpl ?? []) as Template[])
@@ -1884,6 +1884,24 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   // Los totales viven aquí para que Aprobación y Presupuesto muestren SIEMPRE
   // la misma cifra — antes cada uno consultaba por su cuenta y se desfasaban
   const [totales, setTotales] = useState<{ gastos: number; ingresos: number; n: number } | null>(null)
+  // Menú de opciones por tarea (clic derecho o botón ⋯ — táctil no tiene
+  // clic derecho): Abrir · Archivar · Desvincular
+  const { openMenu: openTaskMenu, menuElement: taskMenuElement } = useContextMenu()
+
+  async function archivarTarea(t: TaskLite) {
+    const { error } = await supabase.from('tasks').update({ archived: true }).eq('id', t.id)
+    if (error) { showToast(`No se pudo archivar: ${error.message}`, 'error'); return }
+    logActivity('task_archived', 'task', t.id, { title: t.title, via: 'proyecto' })
+    showToast('Tarea archivada — la recuperas en Tareas con el filtro Archivadas.', 'success')
+    loadTasks()
+    window.dispatchEvent(new CustomEvent('hog:task-updated'))
+  }
+
+  const taskMenu = (t: TaskLite): CtxItem[] => [
+    { label: 'Abrir', icon: <CheckSquare size={13} />, onClick: () => onOpenTask?.(t.id) },
+    { label: 'Desvincular del proyecto', icon: <Unlink size={13} />, onClick: () => unlinkTask(t.id) },
+    { label: 'Archivar', icon: <Archive size={13} />, danger: true, onClick: () => archivarTarea(t) },
+  ]
   // El chat se abre y cierra como en Airtable, y la elección se recuerda:
   // quien trabaja solo no quiere una columna vacía comiéndose la pantalla.
   const [chatOpen, setChatOpen] = useState(() => localStorage.getItem('hog_project_chat') !== '0')
@@ -1986,7 +2004,9 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
 
   const loadTasks = useCallback(async () => {
     if (!event) return
-    const { data } = await supabase.from('tasks').select('id, title, status, assigned_to, due_date, estimated_hours').eq('event_id', event.id).order('created_at')
+    // Sin este filtro, archivar una tarea la ocultaba en Tareas pero seguía
+    // apareciendo dentro del proyecto — el bug del "todavía me aparece"
+    const { data } = await supabase.from('tasks').select('id, title, status, assigned_to, due_date, estimated_hours').eq('event_id', event.id).eq('archived', false).order('created_at')
     const ts = (data ?? []) as TaskLite[]
     setTasks(ts)
     if (!ts.length) return
@@ -2474,15 +2494,16 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 const ph = phaseOf(t.status)
                 return (
                   <button key={t.id} onClick={() => onOpenTask?.(t.id)}
+                    onContextMenu={e => canWrite && openTaskMenu(e, taskMenu(t))}
                     style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 5, width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${ph.color}`, borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left', minHeight: 44, marginBottom: 6 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }}>{t.title}</span>
                       <FunnelBar status={t.status} />
-                      {event && (
-                        <span role="button" title="Desvincular del proyecto (la tarea sigue viva en Tareas)"
-                          onClick={e => { e.stopPropagation(); unlinkTask(t.id) }}
-                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0 }}>
-                          <Unlink size={11} />
+                      {event && canWrite && (
+                        <span role="button" title="Opciones (abrir · desvincular · archivar)"
+                          onClick={e => { e.stopPropagation(); openTaskMenu(e, taskMenu(t)) }}
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0, fontSize: 14, fontWeight: 800 }}>
+                          ⋯
                         </span>
                       )}
                     </span>
@@ -2592,6 +2613,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
         </div>
       </div>
 
+        {taskMenuElement}
         {/* Riel de conversación — fijo mientras el proyecto se scrollea al lado */}
         {chatEnColumna && event && (
           <aside style={{ width: 330, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
