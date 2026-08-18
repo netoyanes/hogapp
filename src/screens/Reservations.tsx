@@ -38,6 +38,13 @@ interface Reservation {
   created_by: string | null
   bot_conversation_id: string | null
   manage_token?: string | null
+  // Sellos del ciclo de vida (el trigger de status los pone; confirm_sent_at
+  // lo pone reservation-notify al mandar el WhatsApp)
+  confirmed_at?: string | null
+  seated_at?: string | null
+  completed_at?: string | null
+  confirm_sent_at?: string | null
+  cancel_reason?: string | null
 }
 interface GuestLite { id: string; full_name: string; phone: string; tags: string[] }
 interface CapacityRow { id: string; day_of_week: number; max_reservations: number; max_pax: number; open_time: string | null; close_time: string | null; active: boolean }
@@ -61,6 +68,111 @@ const SOURCE_LABEL: Record<ResSource, string> = {
 }
 const ZONES = ['Terraza', 'Barra', 'Salón', 'VIP']
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+// ── Línea de tiempo de la reserva: de la creación al fin de la estancia ──────
+// Los hitos viven en la propia reserva (created_at, confirm_sent_at,
+// confirmed_at, seated_at, completed_at — el trigger de status los sella) y
+// los sucesos intermedios —avisos del cliente desde su link personalizado,
+// ediciones, cambios de hora— salen del activity_log. Un solo riel cuenta
+// toda la historia sin que nadie tenga que reconstruirla de memoria.
+interface TLItem { t: string | null; label: string; sub?: string; state: 'done' | 'pending' | 'note' | 'bad' }
+
+const fmtTL = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' })} · ${d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+}
+
+function ResTimeline({ res, bookedByName }: { res: Reservation; bookedByName: string }) {
+  const [eventos, setEventos] = useState<TLItem[]>([])
+  // Fallback para reservas viejas sin confirm_sent_at: la actividad registró el envío
+  const [envioFallback, setEnvioFallback] = useState<string | null>(null)
+
+  useEffect(() => {
+    setEventos([]); setEnvioFallback(null)
+    supabase.from('activity_log').select('created_at, action, details')
+      .eq('entity_type', 'reservation').eq('entity_id', res.id)
+      .order('created_at', { ascending: true }).limit(60)
+      .then(({ data }) => {
+        const out: TLItem[] = []
+        for (const ev of data ?? []) {
+          const d = (ev.details ?? {}) as Record<string, unknown>
+          const delCliente = d.actor === 'Cliente (mi reserva)'
+          if (typeof d.aviso === 'string') {
+            out.push({ t: ev.created_at, label: `El cliente avisó: ${d.aviso}`, sub: 'desde su link personalizado', state: 'note' })
+          } else if (ev.action === 'reservation_status' && delCliente) {
+            out.push({ t: ev.created_at, label: `El cliente canceló desde su link${d.motivo ? ` — ${d.motivo}` : ''}`, state: 'bad' })
+          } else if (ev.action === 'reservation_updated' && d.via === 'propuesta_aceptada') {
+            out.push({ t: ev.created_at, label: `Cambio de hora aceptado: ${d.antes} → ${d.ahora}`, state: 'note' })
+          } else if (ev.action === 'reservation_updated' && d.via === 'edicion' && Array.isArray(d.cambios)) {
+            out.push({ t: ev.created_at, label: `Reserva editada: ${(d.cambios as string[]).join(', ')}`, state: 'note' })
+          } else if (ev.action === 'reservation_updated' && String(d.via ?? '').startsWith('confirmacion_whatsapp')) {
+            setEnvioFallback(prev => prev ?? ev.created_at)
+          }
+        }
+        setEventos(out)
+      })
+  }, [res.id])
+
+  const cerradaMal = res.status === 'cancelled' || res.status === 'no_show'
+  const enviadaEn = res.confirm_sent_at ?? envioFallback
+  const confirmada = !!res.confirmed_at || ['confirmed', 'seated', 'completed'].includes(res.status)
+  const sentada = !!res.seated_at || ['seated', 'completed'].includes(res.status)
+  const finalizada = !!res.completed_at || res.status === 'completed'
+
+  const hitos: TLItem[] = [
+    { t: res.created_at, label: 'Reserva creada', sub: `${SOURCE_LABEL[res.source]} · ${bookedByName}`, state: 'done' },
+    { t: enviadaEn, label: 'Confirmación enviada por WhatsApp', sub: enviadaEn ? 'con su link personalizado' : undefined, state: enviadaEn ? 'done' : 'pending' },
+    { t: res.confirmed_at ?? null, label: 'Confirmada', state: confirmada ? 'done' : 'pending' },
+    ...eventos,
+    { t: res.seated_at ?? null, label: 'Sentada — el cliente llegó', state: sentada ? 'done' : 'pending' },
+    { t: res.completed_at ?? null, label: 'Estancia finalizada', state: finalizada ? 'done' : 'pending' },
+  ]
+  // Cancelada / no-show: lo que no pasó ya no va a pasar — el riel termina ahí.
+  // Si el cliente canceló desde su link, ese evento YA es el nodo final.
+  const yaCanceloCliente = eventos.some(e => e.state === 'bad')
+  const lista = cerradaMal
+    ? [
+        ...hitos.filter(i => i.state !== 'pending'),
+        ...(yaCanceloCliente ? [] : [{
+          t: null,
+          label: res.status === 'no_show' ? 'No-show — el cliente nunca llegó' : `Cancelada${res.cancel_reason ? ` — ${res.cancel_reason}` : ''}`,
+          state: 'bad' as const,
+        }]),
+      ]
+    : hitos
+  // Lo vivido se ordena por hora real (los avisos del cliente caen donde
+  // ocurrieron); lo pendiente se queda al final en orden natural.
+  const vividos = lista.filter(i => i.state !== 'pending').sort((a, b) => (a.t ?? '9999').localeCompare(b.t ?? '9999'))
+  const porVenir = lista.filter(i => i.state === 'pending')
+  const riel = [...vividos, ...porVenir]
+
+  return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 10 }}>Línea de tiempo</label>
+      {riel.map((i, idx) => (
+        <div key={idx} style={{ display: 'flex', gap: 10, position: 'relative', paddingBottom: idx === riel.length - 1 ? 0 : 13 }}>
+          {idx < riel.length - 1 && <div style={{ position: 'absolute', left: 5, top: 15, bottom: -2, width: 2, background: 'var(--border-subtle)' }} />}
+          <div style={{
+            width: 12, height: 12, borderRadius: '50%', marginTop: 2, flexShrink: 0, zIndex: 1, boxSizing: 'border-box',
+            background: i.state === 'done' ? 'var(--accent)' : i.state === 'note' ? 'var(--status-attention)' : i.state === 'bad' ? 'var(--status-risk)' : 'var(--bg-elevated)',
+            border: i.state === 'pending' ? '2px solid var(--border-strong)' : 'none',
+          }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: i.state === 'pending' ? 500 : 700, color: i.state === 'pending' ? 'var(--text-tertiary)' : i.state === 'bad' ? 'var(--status-risk)' : 'var(--text-primary)' }}>
+              {i.label}
+            </div>
+            {(i.t || i.sub) && (
+              <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 1 }}>
+                {i.t && <span className="num" style={{ fontFamily: 'var(--font-mono)' }}>{fmtTL(i.t)}</span>}
+                {i.t && i.sub ? ' · ' : ''}{i.sub ?? ''}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function isoLocal(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -152,6 +264,7 @@ export function Reservations({ userRole, userId }: Props) {
     const g = menuRes ? guestMap[menuRes.guest_id] : null
     setGuestEdit(menuRes ? { name: g?.full_name ?? '', phone: g?.phone ?? '', notes: '' } : null)
     setGuestNotes0('')
+    setCancelOpen(false); setCancelReason('')
     // Notas del cliente (persisten entre visitas) — se cargan al abrir el panel
     if (menuRes) {
       supabase.from('guests').select('notes').eq('id', menuRes.guest_id).maybeSingle().then(({ data }) => {
@@ -225,6 +338,8 @@ export function Reservations({ userRole, userId }: Props) {
     }))
   }, [buId])
   const [cancelReason, setCancelReason] = useState('')
+  // La cancelación vive plegada: cancelar es la excepción, no el camino
+  const [cancelOpen, setCancelOpen] = useState(false)
 
   const canWrite = ['MASTER', 'OPS_MANAGER', 'TEAM', 'MARKETING', 'HEART_OF_HOUSE'].includes(userRole ?? '')
   const isTeam = userRole === 'TEAM'
@@ -425,10 +540,16 @@ export function Reservations({ userRole, userId }: Props) {
     // Texto plano SIN emojis: el prefill de wa.me corrompe los caracteres
     // fuera de ASCII en algunos teléfonos (salen "�" y hasta rompe el link).
     const msg = `¡Tu reserva está confirmada!\n\n${venueName}\n${fechaTxt}\n${res.time_slot.slice(0, 5)} hrs · ${res.party_size} ${res.party_size === 1 ? 'persona' : 'personas'}\nA nombre de ${g?.full_name ?? ''}\n\nSi llegas un poco tarde o te surge un imprevisto, avísanos aquí:\n${link}\n\n¡Te esperamos!`
+    // Los envíos manuales también sellan confirm_sent_at: la línea de tiempo
+    // y el dedup cuentan la MISMA historia venga por donde venga el mensaje.
+    // Si la columna aún no existe (falta reclutamiento_confirmacion.sql), el
+    // update falla en silencio y el fallback por actividad cubre el hueco.
+    const sellarEnvio = () => supabase.from('reservations').update({ confirm_sent_at: new Date().toISOString() }).eq('id', res.id).then(() => {})
     if (res.bot_conversation_id) {
       const { error } = await supabase.functions.invoke('concierge-send', { body: { conversationId: res.bot_conversation_id, body: msg } })
       if (!error) {
         logActivity('reservation_updated', 'reservation', res.id, { via: 'confirmacion_whatsapp_concierge' })
+        void sellarEnvio()
         showToast('Confirmación enviada por el concierge ✅', 'success')
         return
       }
@@ -439,6 +560,7 @@ export function Reservations({ userRole, userId }: Props) {
     const wa = digits.length === 10 ? `52${digits}` : digits
     window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank')
     logActivity('reservation_updated', 'reservation', res.id, { via: 'confirmacion_whatsapp_manual' })
+    void sellarEnvio()
     showToast('WhatsApp abierto con la confirmación lista — solo envíala.', 'success')
   }
 
@@ -862,6 +984,10 @@ export function Reservations({ userRole, userId }: Props) {
               {menuRes.notes ? ` · ${menuRes.notes}` : ''}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* La historia completa de la reserva, de la creación al final
+                  de la estancia — reemplaza a la pila de botones gigantes */}
+              <ResTimeline res={menuRes} bookedByName={bookedBy(menuRes)} />
+
               {/* Cliente — datos editables en la misma ventana */}
               {canWrite && guestEdit && (
                 <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
@@ -965,22 +1091,39 @@ export function Reservations({ userRole, userId }: Props) {
                   </div>
                 </div>
               )}
-              {['requested', 'confirmed'].includes(menuRes.status) && (
+              {/* UNA acción primaria según el momento de la reserva — el
+                  resto queda discreto. La línea de tiempo ya cuenta el estado;
+                  aquí solo vive el siguiente paso. */}
+              {menuRes.status === 'requested' && (
                 <button onClick={() => confirmWhatsApp(menuRes)}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: '#1fa855', color: '#fff', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
-                  <MessageCircle size={17} /> Confirmar por WhatsApp
+                  <MessageCircle size={17} /> Confirmar y enviar WhatsApp
                 </button>
               )}
-              {['requested', 'confirmed'].includes(menuRes.status) && (
+              {menuRes.status === 'confirmed' && (
                 <button onClick={() => { if (window.confirm(`¿Sentar a ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'}, ${menuRes.party_size} pax?`)) setStatus(menuRes, 'seated') }}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
                   <Armchair size={17} /> Sentar
                 </button>
               )}
-              {menuRes.party_size >= eventPaxThreshold && (
+              {menuRes.status === 'confirmed' && !menuRes.confirm_sent_at && (
+                /* Confirmada pero sin mensaje enviado: el hueco se ve en la
+                   línea de tiempo y este botón discreto lo cierra */
+                <button onClick={() => confirmWhatsApp(menuRes)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, padding: '0 14px', borderRadius: 999, border: '1px solid #1fa855', background: 'none', color: '#1fa855', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  <MessageCircle size={15} /> Enviar confirmación por WhatsApp
+                </button>
+              )}
+              {menuRes.status === 'seated' && (
+                <button onClick={() => setStatus(menuRes, 'completed')}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+                  <Check size={17} /> Completar visita — terminó su estancia
+                </button>
+              )}
+              {menuRes.party_size >= eventPaxThreshold && !['completed', 'no_show', 'cancelled'].includes(menuRes.status) && (
                 <button onClick={() => convertToDeal(menuRes)}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-                  <Handshake size={16} /> Convertir en deal (Evento) · {menuRes.party_size} pax
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, padding: '0 14px', borderRadius: 999, border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  <Handshake size={15} /> Convertir en deal (Evento) · {menuRes.party_size} pax
                 </button>
               )}
               {['completed', 'no_show', 'cancelled'].includes(menuRes.status) ? (
@@ -991,19 +1134,27 @@ export function Reservations({ userRole, userId }: Props) {
                 </button>
               ) : (
                 <>
-                  <button onClick={() => { if (window.confirm(`¿Marcar no-show a ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'} (${menuRes.party_size} pax)?`)) setStatus(menuRes, 'no_show') }}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: '1px solid color-mix(in srgb, var(--status-risk) 30%, transparent)', background: 'color-mix(in srgb, var(--status-risk) 10%, transparent)', color: 'var(--status-risk)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-                    <AlertTriangle size={16} /> Marcar no-show
-                  </button>
-                  <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
-                    <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 6 }}>Cancelar reserva</label>
-                    <input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="Motivo (opcional)…"
-                      style={{ width: '100%', minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }} />
-                    <button onClick={() => setStatus(menuRes, 'cancelled', cancelReason)}
-                      style={{ width: '100%', minHeight: 50, borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-                      Cancelar reserva
+                  {/* Los caminos malos, juntos y en voz baja: son la excepción */}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => { if (window.confirm(`¿Marcar no-show a ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'} (${menuRes.party_size} pax)?`)) setStatus(menuRes, 'no_show') }}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '0 10px', borderRadius: 999, border: '1px solid color-mix(in srgb, var(--status-risk) 30%, transparent)', background: 'none', color: 'var(--status-risk)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                      <AlertTriangle size={14} /> No-show
+                    </button>
+                    <button onClick={() => setCancelOpen(o => !o)}
+                      style={{ flex: 1, minHeight: 44, padding: '0 10px', borderRadius: 999, border: '1px solid var(--border-default)', background: cancelOpen ? 'var(--bg-elevated)' : 'none', color: 'var(--text-secondary)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                      Cancelar reserva…
                     </button>
                   </div>
+                  {cancelOpen && (
+                    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+                      <input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="Motivo (opcional)…" autoFocus
+                        style={{ width: '100%', minHeight: 40, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }} />
+                      <button onClick={() => setStatus(menuRes, 'cancelled', cancelReason)}
+                        style={{ width: '100%', minHeight: 46, borderRadius: 999, border: '1px solid color-mix(in srgb, var(--status-risk) 35%, transparent)', background: 'color-mix(in srgb, var(--status-risk) 10%, transparent)', color: 'var(--status-risk)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                        Confirmar cancelación
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>

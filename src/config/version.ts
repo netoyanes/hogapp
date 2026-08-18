@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.99.1"
+export const APP_VERSION = "2.100.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.100.0",
+    date: "2026-08-18",
+    type: "MINOR",
+    changes: [
+      "LÍNEA DE TIEMPO DE LA RESERVA — la ventana de cada reserva ahora cuenta su historia completa: cuándo se creó (y por qué canal), cuándo se le envió el WhatsApp de confirmación, cuándo confirmó el cliente, si avisó retraso o canceló DESDE SU LINK personalizado, cuándo se sentó y cuándo terminó su estancia",
+      "Los avisos del cliente vía su link salen en ámbar en el riel, con fecha y hora exactas — ya no hay que pescarlos en las notas",
+      "BOTONES LIMPIOS: una sola acción primaria según el momento — Solicitada: 'Confirmar y enviar WhatsApp' · Confirmada: 'Sentar' · Sentada: 'Completar visita'. El botón de WhatsApp desaparece cuando la confirmación YA se envió (el riel lo dice)",
+      "No-show y Cancelar bajaron de volumen: una fila discreta al final, y el motivo de cancelación solo se pide al tocar 'Cancelar reserva…'",
+      "Los envíos manuales de WhatsApp también sellan la hora de envío — la línea de tiempo cuenta la misma historia venga por donde venga el mensaje",
+    ]
+  },
   {
     version: "2.99.1",
     date: "2026-08-18",
