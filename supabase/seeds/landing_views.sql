@@ -21,6 +21,16 @@ create table if not exists public.landing_views (
   referrer   text,                 -- de dónde llegó (IG, Google, directo…)
   viewed_at  timestamptz not null default now()
 );
+-- GEO (v2): país/región/ciudad del visitante. Lo llena la edge function
+-- og-share con los headers x-vercel-ip-* que Vercel calcula al proxear /r/CODE
+-- — gratis, sin servicios externos y sin tocar la privacidad más allá de la
+-- ciudad. Los links viejos (?reservar= directo) no traen geo: por eso las
+-- pautas y compartidos deben usar SIEMPRE /r/CODE.
+alter table landing_views add column if not exists country text;
+alter table landing_views add column if not exists region  text;
+alter table landing_views add column if not exists city    text;
+alter table landing_views add column if not exists via     text;   -- 'link' = entró por /r/
+
 create index if not exists idx_lviews_bu   on landing_views (bu_id, viewed_at desc);
 create index if not exists idx_lviews_time on landing_views (viewed_at desc);
 
@@ -77,5 +87,25 @@ $$;
 
 revoke all on function public.fn_landing_stats(timestamptz) from public;
 grant execute on function public.fn_landing_stats(timestamptz) to authenticated;
+
+-- De dónde nos ven: top ciudades del periodo (para el Resumen del Concierge)
+create or replace function public.fn_landing_geo(p_desde timestamptz)
+returns table(country text, region text, city text, vistas bigint)
+language sql security definer set search_path = public as $$
+  select v.country, v.region, v.city, count(*)
+  from landing_views v
+  where v.viewed_at >= p_desde and v.country is not null
+  group by v.country, v.region, v.city
+  order by count(*) desc
+  limit 12
+$$;
+revoke all on function public.fn_landing_geo(timestamptz) from public;
+grant execute on function public.fn_landing_geo(timestamptz) to authenticated;
+
+-- ── BANDEJA: marca de VISUALIZADO (para el cierre en bulk) ───────────────────
+-- Se llena al abrir el hilo; una conversación cuenta como visualizada solo si
+-- se abrió DESPUÉS de su último mensaje — si el cliente escribió de nuevo,
+-- vuelve a ser "no vista" y no se puede cerrar en bulk sin abrirla.
+alter table bot_conversations add column if not exists viewed_at timestamptz;
 
 notify pgrst, 'reload schema';

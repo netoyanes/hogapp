@@ -49,6 +49,9 @@ export function PublicReservation({ code }: { code: string }) {
   // Fire-and-forget: si falla, el landing sigue como si nada.
   useEffect(() => {
     try {
+      // Si llegó por /r/CODE (&t=r), la vista YA se registró en el servidor —
+      // con geo. Contarla aquí también la duplicaría.
+      if (new URLSearchParams(window.location.search).get('t') === 'r') return
       const key = `hog_lv_${code.toUpperCase()}`
       if (sessionStorage.getItem(key)) return
       sessionStorage.setItem(key, '1')

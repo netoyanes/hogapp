@@ -92,6 +92,7 @@ export const ACTIONS: Record<string, ActionDef> = {
   book:                  { module: 'concierge', icon: CheckSquare, color: '#5FBF7A', label: d => `reservó${d?.bu ? ` en ${s(d.bu)}` : ''}` },
   concierge_config_saved:{ module: 'concierge', icon: Bot,        color: '#8A8A8A', label: d => `ajustó el bot de ${s(d?.bu, 'un venue')}${d?.channel ? ` (${s(d.channel)})` : ''}${d?.campo ? ` — ${s(d.campo)}` : ''}` },
   concierge_simulated:   { module: 'concierge', icon: Bot,        color: '#8A8A8A', label: () => `probó el bot en el simulador` },
+  concierge_bulk_closed: { module: 'concierge', icon: CheckSquare, color: '#8A8A8A', label: d => `cerró ${s(d?.total)} conversaciones en bulk` },
   wa_delivery_failed:    { module: 'concierge', icon: AlertTriangle, color: '#E5533C', notable: true, label: d => `WhatsApp NO entregado a ${s(d?.destinatario)} — ${s(d?.motivo, 'sin detalle')}${d?.codigo ? ` (código ${s(d.codigo)})` : ''}` },
   venue_faq_saved:       { module: 'concierge', icon: Bot,        color: '#8A8A8A', label: d => `guardó el FAQ del bot de ${s(d?.bu, 'un venue')}` },
   venue_payment_config_saved: { module: 'concierge', icon: Landmark, color: '#3D89C4', notable: true, label: d => `cambió los datos bancarios de apartados${d?.bu ? ` de ${s(d.bu)}` : ''}` },
