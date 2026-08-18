@@ -143,6 +143,16 @@ export function PublicReservation({ code }: { code: string }) {
   }, [code, fecha, pax, info?.supported])
 
   useEffect(() => {
+    // RED DE SEGURIDAD: si lo que llega como "venue" tiene la forma de un
+    // código de PR (SOFI-MZT), no es un venue — ningún venue del grupo lleva
+    // guion. Pasa cuando og-share está en una versión vieja que no conoce
+    // /p/ y manda el código de PR por la ruta de reservas. En vez de morir
+    // con "no se pudo cargar", se guarda la atribución y se lleva al cliente
+    // al selector de casas, que es donde debía haber caído.
+    if (/^[A-Z0-9]{3,12}-[A-Z]{2,8}$/.test(code.toUpperCase())) {
+      window.location.replace(`/?casas=1&ref=${encodeURIComponent(code.toUpperCase())}`)
+      return
+    }
     supabase.functions.invoke('public-reservation', { body: { action: 'info', code } })
       .then(({ data, error }) => {
         if (error || data?.error) setLoadErr(data?.error ?? 'No se pudo cargar. Intenta más tarde.')

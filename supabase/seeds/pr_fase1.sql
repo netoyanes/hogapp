@@ -378,3 +378,22 @@ begin
   return jsonb_build_object('ok', true, 'aplicado', p_aplicar, 'cambios', v_cambios);
 end $$;
 grant execute on function public.fn_pr_recalcular_tiers(boolean) to authenticated;
+
+-- ─── Casas públicas para el selector ────────────────────────────────────────
+-- El selector de casas (aterrizaje de /p/CODIGO sin venue) lo ve gente SIN
+-- cuenta, y business_units solo se lee autenticado. Esto expone únicamente lo
+-- que ya es público en cualquier link de reserva: código, nombre y ubicación.
+--
+-- Es RPC y no edge function a propósito: una lectura pública no debería
+-- depender de que alguien se acuerde de redesplegar una función.
+create or replace function public.fn_casas_publicas()
+returns table (code text, name text, location text)
+language sql stable security definer set search_path = public as $$
+  select code, name, location
+    from business_units
+   where public_booking_enabled
+     and coalesce(inventory_type, 'nightly_capacity') = 'nightly_capacity'
+   order by name
+$$;
+revoke all on function public.fn_casas_publicas() from public;
+grant execute on function public.fn_casas_publicas() to anon, authenticated;

@@ -21,11 +21,17 @@ export function CasasPicker() {
   const ref = refVigente()
 
   useEffect(() => {
-    supabase.functions.invoke('public-reservation', { body: { action: 'venues' } })
-      .then(({ data, error }) => {
-        if (error || data?.error) { setErr('No pudimos cargar las casas. Intenta de nuevo.'); return }
-        setCasas((data?.venues ?? []) as Casa[])
-      })
+    // Lectura directa por RPC: no depende de ninguna edge function, así que
+    // el selector funciona aunque el resto del módulo esté a medio desplegar.
+    supabase.rpc('fn_casas_publicas').then(({ data, error }) => {
+      if (error) {
+        setErr(/does not exist|function/i.test(error.message)
+          ? 'Falta correr pr_fase1.sql en Supabase.'
+          : 'No pudimos cargar las casas. Intenta de nuevo.')
+        return
+      }
+      setCasas((data ?? []) as Casa[])
+    })
   }, [])
 
   return (

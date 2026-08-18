@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.102.0"
+export const APP_VERSION = "2.102.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.102.1",
+    date: "2026-08-18",
+    type: "PATCH",
+    changes: [
+      "FIX: el link de un PR ya no muere con \'no se pudo cargar\' cuando og-share está en una versión vieja — si un código de PR llega por la ruta de venues, se reconoce (ningún venue lleva guion), se guarda la atribución y se lleva al cliente al selector de casas",
+      "El selector de casas ya no depende de ninguna función edge: lee por RPC, así que funciona aunque el módulo esté a medio desplegar",
+    ]
+  },
   {
     version: "2.102.0",
     date: "2026-08-18",
