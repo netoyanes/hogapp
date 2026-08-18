@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { refVigente, limpiarRef } from '../lib/prRef'
 import { AppLogoBadge } from '../components/ui/AppLogo'
 
 // Página pública de reservas — accesible sin sesión vía ?reservar=<CÓDIGO>.
@@ -162,9 +163,16 @@ export function PublicReservation({ code }: { code: string }) {
       setFormErr('Elige uno de los horarios disponibles.'); return
     }
     setFormErr(null); setSending(true)
-    const { data, errMsg } = await invokePublic({ action: 'book', code, nombre, telefono, fecha, horario, pax, notas })
+    // El código del PR que trajo a este cliente (lo guardó /p/CODIGO). El
+    // servidor decide si aplica: aquí solo se acompaña la reserva.
+    const { data, errMsg } = await invokePublic({
+      action: 'book', code, nombre, telefono, fecha, horario, pax, notas, ref: refVigente(),
+    })
     setSending(false)
     if (errMsg) { setFormErr(errMsg); return }
+    // Reservó: el crédito ya se cobró y el código no debe seguir vivo para la
+    // siguiente reserva — si vuelve, que lo traiga quien lo vuelva a invitar.
+    limpiarRef()
     setDone(data as unknown as Done)
   }
 

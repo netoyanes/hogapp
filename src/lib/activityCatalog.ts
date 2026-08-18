@@ -78,10 +78,16 @@ export const ACTIONS: Record<string, ActionDef> = {
   task_linked:       { module: 'proyectos', icon: Link2,        color: '#06B6D4', label: d => `ligó una tarea al proyecto "${s(d?.event)}"` },
   task_converted_to_project: { module: 'proyectos', icon: FolderKanban, color: '#22C55E', label: d => `convirtió la tarea "${s(d?.task)}" en el proyecto "${s(d?.name)}"` },
 
-  // ── Nómina de eventuales ──────────────────────────────────────────────────
+  // ── Red PR (atribución y comisiones) ──────────────────────────────────────
   pr_alta:     { module: 'pr', icon: Megaphone, color: '#22C55E', notable: true, label: d => `dio de alta al PR ${s(d?.nombre)} con el código ${s(d?.codigo)}` },
   pr_tier:     { module: 'pr', icon: Megaphone, color: '#EAB308', label: d => `movió a ${s(d?.codigo)} de ${s(d?.antes)} a ${s(d?.ahora)}` },
   pr_estatus:  { module: 'pr', icon: Megaphone, color: '#EF4444', notable: true, label: d => `marcó a ${s(d?.codigo)} como ${s(d?.estatus)}` },
+  pr_atribucion: { module: 'pr', icon: Megaphone, color: '#22C55E', label: d => `atribuyó una mesa a ${s(d?.codigo)}${d?.factor && Number(d.factor) < 1 ? ` (crédito ${Math.round(Number(d.factor) * 100)}%)` : ''}` },
+  pr_consumo:    { module: 'pr', icon: Megaphone, color: '#3D89C4', label: d => `cerró una mesa con consumo de $${s(d?.consumo)}` },
+  pr_validacion: { module: 'pr', icon: Megaphone, color: '#8FBF9F', notable: true, label: d => `${d?.aprueba ? 'validó' : 'rechazó'} una comisión de $${s(d?.monto)}${d?.motivo ? ` — ${s(d.motivo)}` : ''}` },
+  pr_corte:      { module: 'pr', icon: Megaphone, color: '#C27E22', notable: true, label: d => `liberó el corte ${s(d?.periodo)}: $${s(d?.total)} para ${s(d?.prs)} PRs` },
+
+  // ── Nómina de eventuales ──────────────────────────────────────────────────
   payroll_submitted: { module: 'nomina', icon: Users, color: '#EAB308', label: d => `envió a aprobación la nómina de ${s(d?.periodo)} — ${s(d?.personas)} personas` },
   payroll_approved:  { module: 'nomina', icon: Users, color: '#22C55E', label: d => `aprobó la nómina de ${s(d?.periodo)}` },
   payroll_returned:  { module: 'nomina', icon: Users, color: '#EF4444', label: d => `regresó al gerente la nómina de ${s(d?.periodo)}` },

@@ -13,6 +13,7 @@ import { FloorEditor } from '../components/ui/FloorEditor'
 import { FloorLive } from '../components/ui/FloorLive'
 import { OccupancyCurve } from '../components/ui/OccupancyCurve'
 import { SegmentedControl, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
+import { SentarSheet, ConsumoSheet } from '../components/ui/SentarYConsumo'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type ResStatus = 'requested' | 'confirmed' | 'seated' | 'completed' | 'no_show' | 'cancelled'
@@ -45,6 +46,11 @@ interface Reservation {
   completed_at?: string | null
   confirm_sent_at?: string | null
   cancel_reason?: string | null
+  // Fase 1 del módulo PR: lo que ancla la comisión a la realidad
+  pax_sentado?: number | null
+  consumo_neto?: number | null
+  mesa_ref?: string | null
+  ticket_url?: string | null
 }
 interface GuestLite { id: string; full_name: string; phone: string; tags: string[] }
 interface CapacityRow { id: string; day_of_week: number; max_reservations: number; max_pax: number; open_time: string | null; close_time: string | null; active: boolean }
@@ -68,6 +74,99 @@ const SOURCE_LABEL: Record<ResSource, string> = {
 }
 const ZONES = ['Terraza', 'Barra', 'Salón', 'VIP']
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+
+// ── Quién trajo esta mesa ────────────────────────────────────────────────────
+// Muestra el código si ya está atribuida; si no, y la mesa acaba de sentarse,
+// deja que el HOST la atribuya — nunca el PR, y nunca después de 15 minutos.
+// Esa ventana corta no es burocracia: es lo que impide que un código se cuele
+// sobre una mesa que ya se fue y que nadie puede confirmar.
+function AtribucionPR({ res, atribucion, canWrite, onAtribuida }: {
+  res: Reservation
+  atribucion: { codigo: string; factor: number } | null
+  canWrite: boolean
+  onAtribuida: () => void
+}) {
+  const [abierto, setAbierto] = useState(false)
+  const [codigo, setCodigo] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  // La ventana del host: 15 minutos desde que se sentó
+  const minutos = res.seated_at ? (Date.now() - new Date(res.seated_at).getTime()) / 60000 : null
+  const enVentana = minutos !== null && minutos <= 15
+  const cerrada = ['completed', 'no_show', 'cancelled'].includes(res.status)
+
+  async function atribuir() {
+    const c = codigo.trim().toUpperCase()
+    if (!c) return
+    setBusy(true)
+    const { data, error } = await supabase.rpc('fn_pr_attribute', {
+      p_reservation: res.id, p_codigo: c, p_canal: 'host_manual',
+    })
+    setBusy(false)
+    if (error) {
+      showToast(/does not exist|function/i.test(error.message)
+        ? 'El módulo PR no está instalado — corre pr_attribution.sql.'
+        : `No se pudo: ${error.message}`, 'error')
+      return
+    }
+    const r = data as { ok: boolean; error?: string; pr?: string; factor?: number; estado?: string }
+    if (!r?.ok) { showToast(r?.error ?? 'No se pudo atribuir.', 'error'); return }
+    logActivity('pr_atribucion', 'reservation', res.id, { codigo: c, canal: 'host_manual', factor: r.factor })
+    showToast(r.estado === 'disputada'
+      ? `Atribuida a ${r.pr} — queda en revisión del PR Manager.`
+      : `Mesa atribuida a ${r.pr}.`, 'success')
+    onAtribuida()
+  }
+
+  if (atribucion) {
+    return (
+      <div style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>La trajo</span>
+        <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, color: 'var(--accent)' }}>{atribucion.codigo}</span>
+        {atribucion.factor < 1 && (
+          <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>
+            crédito {Math.round(atribucion.factor * 100)}%
+          </span>
+        )}
+      </div>
+    )
+  }
+  if (!canWrite || cerrada || !enVentana) return null
+
+  return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+      {!abierto ? (
+        <button onClick={() => setAbierto(true)}
+          style={{ width: '100%', minHeight: 42, borderRadius: 999, border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+          ¿La trajo un PR? Atribuir · quedan {Math.max(0, Math.ceil(15 - (minutos ?? 0)))} min
+        </button>
+      ) : (
+        <>
+          <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
+            Código del PR
+          </label>
+          <input value={codigo} autoFocus onChange={e => setCodigo(e.target.value.toUpperCase())}
+            placeholder="SOFI-MZT" className="num"
+            style={{ width: '100%', minHeight: 46, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 12px', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }} />
+          <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: '6px 0 10px', lineHeight: 1.5 }}>
+            Confírmalo con el cliente antes de capturarlo. Una atribución del host vale 75% — el código puesto por el propio cliente al reservar vale 100%.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => { setAbierto(false); setCodigo('') }}
+              style={{ flex: 1, minHeight: 44, borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+              Cancelar
+            </button>
+            <button onClick={atribuir} disabled={busy || !codigo.trim()}
+              style={{ flex: 1, minHeight: 44, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', opacity: busy || !codigo.trim() ? 0.5 : 1 }}>
+              {busy ? 'Atribuyendo…' : 'Atribuir'}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 // ── Línea de tiempo de la reserva: de la creación al fin de la estancia ──────
 // Los hitos viven en la propia reserva (created_at, confirm_sent_at,
@@ -340,6 +439,11 @@ export function Reservations({ userRole, userId }: Props) {
   const [cancelReason, setCancelReason] = useState('')
   // La cancelación vive plegada: cancelar es la excepción, no el camino
   const [cancelOpen, setCancelOpen] = useState(false)
+  // Sentar y cerrar mesa: los dos momentos que anclan el dinero a la realidad
+  const [sentando, setSentando] = useState<Reservation | null>(null)
+  const [cobrando, setCobrando] = useState<Reservation | null>(null)
+  // Quién trajo cada reserva del día (código PR) — se pinta en la lista
+  const [prMap, setPrMap] = useState<Record<string, { codigo: string; factor: number }>>({})
 
   const canWrite = ['MASTER', 'OPS_MANAGER', 'TEAM', 'MARKETING', 'HEART_OF_HOUSE'].includes(userRole ?? '')
   const isTeam = userRole === 'TEAM'
@@ -397,6 +501,18 @@ export function Reservations({ userRole, userId }: Props) {
       setGuestMap(Object.fromEntries((gs ?? []).map(g => [g.id, g as GuestLite])))
       setNoShowMap(Object.fromEntries((st ?? []).map(s => [s.guest_id, s.no_shows])))
     }
+    // Quién trajo cada reserva. Falla en silencio si el módulo PR no está
+    // instalado: la pantalla de reservas no depende de él para funcionar.
+    const resIds = (res ?? []).map(r => r.id)
+    if (resIds.length) {
+      const { data: attrs } = await supabase.from('pr_attributions')
+        .select('reservation_id, codigo_snapshot, factor_atribucion')
+        .in('reservation_id', resIds).eq('estado', 'activa')
+      setPrMap(Object.fromEntries((attrs ?? []).map(a => [
+        a.reservation_id as string,
+        { codigo: a.codigo_snapshot as string, factor: Number(a.factor_atribucion) },
+      ])))
+    } else setPrMap({})
     setLoadError(false)
     setLoading(false)
   }, [buId, date])
@@ -857,7 +973,17 @@ export function Reservations({ userRole, userId }: Props) {
                   <button onClick={() => { setMenuRes(r); setCancelReason('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flex: 1, minWidth: 0, textAlign: 'left', minHeight: 44 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{gname}</span>
-                      <span className="num" style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 700 }}>{r.party_size}p</span>
+                      <span className="num" style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 700 }}>
+                        {r.pax_sentado != null && r.pax_sentado !== r.party_size
+                          ? <>{r.pax_sentado}p <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>de {r.party_size}</span></>
+                          : `${r.party_size}p`}
+                      </span>
+                      {prMap[r.id] && (
+                        <span title={`La trajo ${prMap[r.id].codigo}`} className="num"
+                          style={{ fontSize: 9.5, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--accent)', background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', borderRadius: 3, padding: '0 5px', letterSpacing: '0.03em' }}>
+                          {prMap[r.id].codigo}
+                        </span>
+                      )}
                       {(noShowMap[r.guest_id] ?? 0) >= 2 && (
                         <span title={`${noShowMap[r.guest_id]} no-shows previos`} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, color: 'var(--status-attention)', fontFamily: 'var(--font-mono)' }}>
                           <AlertTriangle size={11} /> {noShowMap[r.guest_id]}
@@ -906,7 +1032,7 @@ export function Reservations({ userRole, userId }: Props) {
                         </button>
                       </>
                     ) : (
-                      <button onClick={() => { if (window.confirm(`¿Sentar a ${gname}, ${r.party_size} pax?`)) setStatus(r, 'seated') }}
+                      <button onClick={() => setSentando(r)}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 44, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 13, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, boxShadow: '0 0 0 2px color-mix(in srgb, var(--status-healthy) 30%, transparent)' }}>
                         <Armchair size={15} /> Sentar
                       </button>
@@ -988,6 +1114,14 @@ export function Reservations({ userRole, userId }: Props) {
                   primero (alerta de cambio de hora → siguiente paso → datos
                   de la reserva editables), el cliente después, y la línea de
                   tiempo al final — es consulta, no gestión. */}
+
+              {/* QUIÉN TRAJO ESTA MESA. Si ya tiene código, se muestra y punto:
+                  no se puede cambiar desde aquí (lo impide el motor). Si no lo
+                  tiene y acaba de sentarse, el host puede atribuirla —dentro de
+                  15 minutos y confirmándolo con el cliente— a factor 0.75. */}
+              <AtribucionPR res={menuRes} atribucion={prMap[menuRes.id] ?? null} canWrite={canWrite}
+                onAtribuida={() => { setMenuRes(null); load() }} />
+
               {menuRes.proposed_time && (
                 <div style={{ background: 'color-mix(in srgb, var(--status-attention) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 30%, transparent)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
                   <p style={{ fontSize: 12, color: 'var(--status-attention)', fontWeight: 700, margin: '0 0 8px' }}>
@@ -1027,7 +1161,7 @@ export function Reservations({ userRole, userId }: Props) {
                 </button>
               )}
               {menuRes.status === 'confirmed' && (
-                <button onClick={() => { if (window.confirm(`¿Sentar a ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'}, ${menuRes.party_size} pax?`)) setStatus(menuRes, 'seated') }}
+                <button onClick={() => { const r = menuRes; setMenuRes(null); setSentando(r) }}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
                   <Armchair size={17} /> Sentar
                 </button>
@@ -1041,9 +1175,9 @@ export function Reservations({ userRole, userId }: Props) {
                 </button>
               )}
               {menuRes.status === 'seated' && (
-                <button onClick={() => setStatus(menuRes, 'completed')}
+                <button onClick={() => { const r = menuRes; setMenuRes(null); setCobrando(r) }}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
-                  <Check size={17} /> Completar visita — terminó su estancia
+                  <Check size={17} /> Cerrar mesa — capturar consumo
                 </button>
               )}
 
@@ -1167,6 +1301,23 @@ export function Reservations({ userRole, userId }: Props) {
           </div>
         )}
       </Sheet>
+
+      {sentando && (
+        <SentarSheet reservationId={sentando.id}
+          nombre={guestMap[sentando.guest_id]?.full_name ?? 'cliente'}
+          paxReservado={sentando.party_size} isMobile={isMobile}
+          onClose={() => setSentando(null)}
+          onDone={() => { setSentando(null); load() }} />
+      )}
+
+      {cobrando && (
+        <ConsumoSheet reservationId={cobrando.id}
+          nombre={guestMap[cobrando.guest_id]?.full_name ?? 'cliente'}
+          paxSentado={cobrando.pax_sentado ?? cobrando.party_size}
+          tienePR={!!prMap[cobrando.id]} isMobile={isMobile}
+          onClose={() => setCobrando(null)}
+          onDone={() => { setCobrando(null); load() }} />
+      )}
 
       {capOpen && buId && (
         <CapacityEditor buId={buId} buCode={buMap[buId] ?? ''} onClose={() => setCapOpen(false)} onSaved={load} />

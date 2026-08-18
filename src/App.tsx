@@ -26,6 +26,9 @@ import { Objectives } from './screens/Objectives'
 import { Reports } from './screens/Reports'
 import { Concierge } from './screens/Concierge'
 import { PRNetwork } from './screens/PRNetwork'
+import { PRComisiones } from './screens/PRComisiones'
+import { CasasPicker } from './screens/CasasPicker'
+import { capturarRefDeUrl } from './lib/prRef'
 import { Casa } from './screens/Casa'
 import { SharedTask } from './screens/SharedTask'
 import { PrivacyNotice } from './screens/PrivacyNotice'
@@ -65,11 +68,16 @@ const _reservar = _params.get('reservar')
 const _mireserva = _params.get('mireserva')
 // ?wellness=CODIGO — portal público de clases (alumnos, sin cuenta HOG APP)
 const _wellness = _params.get('wellness')
+// ?casas=1 — selector de casas: donde aterriza el link de un PR sin venue
+const _casas = _params.get('casas')
 // ?task=<id>[&project=<id>] — deep-link a una tarea (desde la vista pública,
 // notificaciones o Slack). Con proyecto, la app aterriza en Proyectos, abre el
 // proyecto y encima la tarea; sin proyecto, aterriza en Tareas.
 const _deepProject = _params.get('project')
 if (_deepProject) localStorage.setItem('hog_pending_project', _deepProject)
+// ?ref=CODIGO — el PR que trajo a este visitante. Se guarda ANTES de pintar
+// nada, para que sobreviva a cualquier navegación posterior dentro del portal.
+capturarRefDeUrl()
 
 // Strip a query param from the URL bar without reloading (so an overlay doesn't reopen on refresh)
 function stripUrlParam(key: string) {
@@ -86,6 +94,8 @@ export default function App() {
   // Portal wellness público (también es el regreso del checkout de Blumon:
   // el alumno aterriza aquí y ve su clase ya pagada)
   if (_wellness) return <WellnessPortal code={_wellness} />
+  // Selector de casas — aterrizaje del link de un PR que no apunta a un venue
+  if (_casas) return <CasasPicker />
   // Shared task view — completely isolated, no app shell
   if (_sharedTaskId) return <SharedTask taskId={_sharedTaskId} />
   // Aviso de privacidad — página pública estática
@@ -246,7 +256,7 @@ export default function App() {
     ALLOWED_VIEWS = role === 'PR'
       ? new Set(['pr', 'profile'])                              // el PR ve SOLO su código y sus números
       : role === 'PR_MANAGER'
-      ? new Set(['pr', 'concierge', 'profile', 'resumen'])       // coordina la red y ve reservas
+      ? new Set(['pr', 'prcom', 'concierge', 'profile', 'resumen']) // coordina la red y ve reservas
       : role === 'DEV'
       ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'events',
                  'revenue', 'reports', 'activity', 'templates', 'profile', 'resumen']) // auditoría: todo menos admin (Usuarios/Carga)
@@ -313,6 +323,12 @@ export default function App() {
         return ['MASTER', 'C_LEVEL', 'PR_MANAGER', 'PR'].includes(role ?? '') || userApps?.has('pr')
           ? <PRNetwork userRole={role} userId={profile?.id} />
           : <EmptyState icon="🔒" title="Sin acceso" description="La Red PR se asigna por usuario en Usuarios." />
+      case 'prcom':
+        // Comisiones: el gerente valida las de SU casa, dirección libera el
+        // corte. El PR nunca entra — sus números los ve en su propia tarjeta.
+        return ['MASTER', 'C_LEVEL', 'PR_MANAGER', 'OPS_MANAGER'].includes(role ?? '') || userApps?.has('prcom')
+          ? <PRComisiones userRole={role} />
+          : <EmptyState icon="🔒" title="Sin acceso" description="Las comisiones las validan gerentes y dirección." />
       case 'casa':
         return <Casa userId={profile?.id} userRole={role} />
       case 'reportar': // slot de bottom-nav del HoH: La Casa con el reporte abierto

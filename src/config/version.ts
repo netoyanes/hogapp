@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.101.0"
+export const APP_VERSION = "2.102.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,23 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.102.0",
+    date: "2026-08-18",
+    type: "MINOR",
+    changes: [
+      "RED PR · FASE 1 — el link del PR YA FUNCIONA: /p/CODIGO lleva al cliente a reservar (a una casa concreta o al selector de las casas), guarda el código 30 días en su navegador y lo aplica solo al reservar. Si toca el link de otro PR, gana el último — el que estuvo más cerca de la decisión",
+      "El PR puede generar su QR apuntado a UNA casa o a todas, desde su misma tarjeta",
+      "SENTAR AHORA PIDE EL PAX REAL — cuántos llegaron de verdad, no cuántos reservaron. De ahí sale el show rate honesto y el multiplicador de mesa grande",
+      "CERRAR MESA captura el consumo del ticket (con foto mientras el POS no esté conectado) y calcula la comisión al instante, mostrándola al host: se ve el número pero dice claro que está POR VALIDAR",
+      "El host puede atribuir una mesa a un PR dentro de los 15 min posteriores a sentarla, con crédito del 75% — nunca después, y nunca el propio PR",
+      "COMISIONES PR: cola del gerente para validar o rechazar (con motivo obligatorio) y corte quincenal que libera lo validado. Cada comisión muestra CÓMO salió el monto — tarifa, crédito y cada multiplicador",
+      "El PR ve en su tarjeta lo que trae en camino, lo sentado, los no-show y su dinero separado en por validar / validado / liberado",
+      "Tiers automáticos por ventana de 90 días (suben y bajan), y bloqueo de viernes y sábado cuando el show rate cae de 65%",
+      "Cuando el cupo del canal PR se llena, el sistema propone a dónde sí: fechas cercanas y casas hermanas con lugar",
+      "Requiere pr_fase1.sql + redesplegar og-share y public-reservation",
+    ]
+  },
   {
     version: "2.101.0",
     date: "2026-08-18",
