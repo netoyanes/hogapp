@@ -643,6 +643,8 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
               )}
             </div>
             <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+              {/* Marco estandarizado: 🏳 Reportar · (convertir) · Compartir · Conversación · X */}
+              <FeedbackButton variant="inline" context={`Tarea: ${task.title.slice(0, 80)}`} />
               {!task.event_id && (
                 <button onClick={() => setConvertOpen(true)} title="Convertir en proyecto"
                   style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', padding: '5px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
@@ -1063,7 +1065,6 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
         </div>
         </div>
 
-        <FeedbackButton context="Ventana de tarea" />
         {/* Riel de conversación — fijo mientras la tarea se scrollea al lado */}
         {chatEnColumna && (
           <aside style={{ width: 330, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>

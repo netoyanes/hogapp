@@ -5,6 +5,7 @@ import { logActivity } from '../hooks/useActivityLog'
 import { notifySlack, notifyUserDM } from '../hooks/useSlack'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { EntityChat } from '../components/ui/EntityChat'
+import { FeedbackButton } from '../components/ui/FeedbackButton'
 import { useContextMenu, type CtxItem } from '../components/ui/ContextMenu'
 import { phaseOf, FunnelBar, PhaseLegend } from '../components/ui/TaskPhase'
 import { BUChip, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
@@ -2164,7 +2165,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   return (
     // Ancho según pantalla: en monitores grandes el proyecto merece espacio —
     // capturar presupuesto y programa en una columna de 520px era estrangularlo.
-    <Sheet open onClose={onClose} isMobile={isMobile} width={anchoVentana} tall={!!event}>
+    <Sheet open onClose={onClose} isMobile={isMobile} width={anchoVentana} tall={!!event} feedback={false}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Barra de estado FIJA: al volver de una distracción se sabe de
             inmediato en qué proyecto se está trabajando, quién responde y
@@ -2175,8 +2176,8 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             <h2 style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 800, margin: 0, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {event ? (name || event.name) : 'Nuevo proyecto'}
             </h2>
-            {/* Compartir y chat viven en el marco, no dentro del scroll: son
-                acciones sobre la ventana entera, disponibles siempre */}
+            {/* Marco estandarizado: 🏳 Reportar · Compartir · Conversación · X */}
+            <FeedbackButton variant="inline" context={event ? `Proyecto: ${event.name}` : 'Nuevo proyecto'} />
             {event && (
               <>
                 <button onClick={copiarLink} title="Copiar link del proyecto — quien lo abra aterriza aquí"
