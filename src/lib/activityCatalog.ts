@@ -93,6 +93,10 @@ export const ACTIONS: Record<string, ActionDef> = {
   concierge_config_saved:{ module: 'concierge', icon: Bot,        color: '#8A8A8A', label: d => `ajustó el bot de ${s(d?.bu, 'un venue')}${d?.channel ? ` (${s(d.channel)})` : ''}${d?.campo ? ` — ${s(d.campo)}` : ''}` },
   concierge_simulated:   { module: 'concierge', icon: Bot,        color: '#8A8A8A', label: () => `probó el bot en el simulador` },
   concierge_bulk_closed: { module: 'concierge', icon: CheckSquare, color: '#8A8A8A', label: d => `cerró ${s(d?.total)} conversaciones en bulk` },
+
+  // ── Reportes de la app (bandera de cada ventana) ──────────────────────────
+  feedback_sent: { module: 'sistema', icon: AlertTriangle, color: '#EAB308', notable: true,
+    label: d => `${s(d?.kind) === 'mejora' ? 'sugirió una mejora' : 'reportó una FALLA'}${d?.context ? ` en "${s(d.context)}"` : ''}: ${s(d?.message)}` },
   wa_delivery_failed:    { module: 'concierge', icon: AlertTriangle, color: '#E5533C', notable: true, label: d => `WhatsApp NO entregado a ${s(d?.destinatario)} — ${s(d?.motivo, 'sin detalle')}${d?.codigo ? ` (código ${s(d.codigo)})` : ''}` },
   venue_faq_saved:       { module: 'concierge', icon: Bot,        color: '#8A8A8A', label: d => `guardó el FAQ del bot de ${s(d?.bu, 'un venue')}` },
   venue_payment_config_saved: { module: 'concierge', icon: Landmark, color: '#3D89C4', notable: true, label: d => `cambió los datos bancarios de apartados${d?.bu ? ` de ${s(d.bu)}` : ''}` },
