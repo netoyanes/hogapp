@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.97.1"
+export const APP_VERSION = "2.98.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.98.0",
+    date: "2026-08-18",
+    type: "MINOR",
+    changes: [
+      "ANALÍTICA · DETALLE POR VENUE — clic en cualquier venue de la matriz abre su detalle: tres mini-tablas con CADA SUCESO y su fecha — vistas del link (cuándo, de qué ciudad, móvil o desktop), conversaciones (cuándo, quién, canal, estado) y reservas (cuándo se creó, para qué fecha, pax, origen, estado)",
+      "COMPARATIVA vs el periodo anterior del mismo tamaño (7 vs los 7 previos, 30 vs 30, 90 vs 90): ▲▼ por venue en vistas, conversaciones y reservas, y los totales del grupo dicen su periodo anterior en el tooltip (ámbar si van cayendo)",
+      "El detalle se carga solo al expandir — no se pagan 13 venues × 3 tablas por adelantado",
+    ]
+  },
   {
     version: "2.97.1",
     date: "2026-08-18",

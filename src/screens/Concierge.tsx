@@ -1155,7 +1155,9 @@ function AnaliticaTab({ buList }: { buList: BU[] }) {
   const [period, setPeriod] = useState('7d')
   const [rows, setRows] = useState<VenueRow[]>([])
   const [geoRows, setGeoRows] = useState<GeoRow[]>([])
-  const [comensales, setComensales] = useState<{ ahora: number } | null>(null)
+  const [comensales, setComensales] = useState<{ ahora: number; antes: number } | null>(null)
+  const [prev, setPrev] = useState<Map<string, { vistas: number; convs: number; reservas: number }>>(new Map())
+  const [detalle, setDetalle] = useState<string | null>(null)   // venue expandido
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -1163,16 +1165,44 @@ function AnaliticaTab({ buList }: { buList: BU[] }) {
       setLoading(true)
       const days = period === '30d' ? 30 : period === '90d' ? 90 : 7
       const since = new Date(Date.now() - days * 86400000).toISOString()
-      const [lv, geo, { data: cs }, { data: rs }, { count: gCount }] = await Promise.all([
+      // Periodo ANTERIOR del mismo tamaño (7 vs los 7 previos, 30 vs 30…):
+      // sin la comparativa, "80 reservas" no dice si vas subiendo o cayendo
+      const since2 = new Date(Date.now() - 2 * days * 86400000).toISOString()
+      const [lv, geo, { data: cs }, { data: rs }, { count: gCount },
+        lv2, { data: cs2 }, { data: rs2 }, { count: gCount2 }] = await Promise.all([
         supabase.rpc('fn_landing_stats', { p_desde: since }),
         supabase.rpc('fn_landing_geo', { p_desde: since }),
         supabase.from('bot_conversations').select('bu_id, status, assigned_to').eq('is_simulated', false).gte('created_at', since),
         supabase.from('reservations').select('bu_id, status, source, bot_conversation_id').gte('created_at', since),
         supabase.from('guests').select('id', { count: 'exact', head: true }).gte('created_at', since),
+        supabase.rpc('fn_landing_stats', { p_desde: since2 }),
+        supabase.from('bot_conversations').select('bu_id, status').eq('is_simulated', false).gte('created_at', since2).lt('created_at', since),
+        supabase.from('reservations').select('bu_id, status, source, bot_conversation_id').gte('created_at', since2).lt('created_at', since),
+        supabase.from('guests').select('id', { count: 'exact', head: true }).gte('created_at', since2).lt('created_at', since),
       ])
       const landing = (lv.data ?? []) as { bu_code: string; vistas: number; visitantes: number; reservas: number; reservas_ok: number }[]
       setGeoRows(geo.error ? [] : ((geo.data ?? []) as GeoRow[]))
-      setComensales({ ahora: gCount ?? 0 })
+      setComensales({ ahora: gCount ?? 0, antes: gCount2 ?? 0 })
+      // Agregados del periodo anterior (por venue y de grupo)
+      // fn_landing_stats(since2) trae AMBOS periodos juntos: se resta el actual
+      const landingAmbos = (lv2.data ?? []) as { bu_code: string; vistas: number }[]
+      const prevPorVenue = new Map<string, { vistas: number; convs: number; reservas: number }>()
+      const prevDe = (buId: string) => {
+        if (!prevPorVenue.has(buId)) prevPorVenue.set(buId, { vistas: 0, convs: 0, reservas: 0 })
+        return prevPorVenue.get(buId)!
+      }
+      for (const l of landingAmbos) {
+        const bu = buList.find(b => b.code === l.bu_code); if (!bu) continue
+        const actual = Number(landing.find(x => x.bu_code === l.bu_code)?.vistas ?? 0)
+        prevDe(bu.id).vistas = Math.max(0, Number(l.vistas) - actual)
+      }
+      for (const c of (cs2 ?? []) as { bu_id: string | null }[]) {
+        if (c.bu_id) prevDe(c.bu_id).convs += 1
+      }
+      for (const r of (rs2 ?? []) as { bu_id: string; status: string }[]) {
+        if (r.status !== 'cancelled') prevDe(r.bu_id).reservas += 1
+      }
+      setPrev(prevPorVenue)
 
       const porVenue = new Map<string, VenueRow>()
       const fila = (bu: BU): VenueRow => {
@@ -1216,6 +1246,20 @@ function AnaliticaTab({ buList }: { buList: BU[] }) {
   }), { vistas: 0, visitantes: 0, resWeb: 0, convs: 0, escaladas: 0, reservas: 0, viaConcierge: 0, confirmadas: 0, noShows: 0 })
   const botPct = tot.convs > 0 ? Math.round(((tot.convs - tot.escaladas) / tot.convs) * 100) : null
   const chatConv = tot.convs > 0 ? Math.round((tot.viaConcierge / tot.convs) * 100) : null
+  // Totales del periodo anterior (para el ▲/▼ del grupo)
+  const totPrev = [...prev.values()].reduce((t, r) => ({
+    vistas: t.vistas + r.vistas, convs: t.convs + r.convs, reservas: t.reservas + r.reservas,
+  }), { vistas: 0, convs: 0, reservas: 0 })
+  const delta = (ahora: number, antes: number, invertir = false) => {
+    const d = ahora - antes
+    if (d === 0) return { txt: '=', color: 'var(--text-tertiary)' }
+    const mejora = invertir ? d < 0 : d > 0
+    return { txt: `${d > 0 ? '▲' : '▼'} ${Math.abs(d)}`, color: mejora ? 'var(--status-healthy)' : 'var(--status-risk)' }
+  }
+  const DeltaTag = ({ ahora, antes, invertir }: { ahora: number; antes: number; invertir?: boolean }) => {
+    const d = delta(ahora, antes, invertir)
+    return <span className="num" title={`Periodo anterior: ${antes}`} style={{ fontSize: 9.5, fontWeight: 700, color: d.color, fontFamily: 'var(--font-mono)', marginLeft: 5 }}>{d.txt}</span>
+  }
 
   const th: React.CSSProperties = { padding: '8px 10px', fontSize: 9.5, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700 }
   const td: React.CSSProperties = { padding: '8px 10px', fontSize: 12.5, color: 'var(--text-secondary)', textAlign: 'right', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }
@@ -1227,14 +1271,20 @@ function AnaliticaTab({ buList }: { buList: BU[] }) {
 
       {/* Totales del grupo */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))', gap: 8 }}>
-        <KPITile label="Vistas del link" value={String(tot.vistas)} hint="Aperturas del landing de reservas (todo el grupo)" />
-        <KPITile label="Conversaciones" value={String(tot.convs)} icon={<MessageCircle size={12} />} />
+        <KPITile label="Vistas del link" value={`${tot.vistas}`} hint={`Aperturas del landing (todo el grupo) · periodo anterior: ${totPrev.vistas}`}
+          color={tot.vistas >= totPrev.vistas ? undefined : 'var(--status-attention)'} />
+        <KPITile label="Conversaciones" value={`${tot.convs}`} icon={<MessageCircle size={12} />}
+          hint={`Periodo anterior: ${totPrev.convs}`} color={tot.convs >= totPrev.convs ? undefined : 'var(--status-attention)'} />
         <KPITile label="Bot solo" value={botPct != null ? `${botPct}%` : '—'} color="var(--accent)"
           hint="Conversaciones resueltas sin humano — EL KPI del bot" />
-        <KPITile label="Reservas" value={String(tot.reservas)} hint="Creadas en el periodo, sin canceladas" />
+        <KPITile label="Reservas" value={`${tot.reservas}`}
+          hint={`Creadas en el periodo, sin canceladas · periodo anterior: ${totPrev.reservas}`}
+          color={tot.reservas >= totPrev.reservas ? undefined : 'var(--status-attention)'} />
         <KPITile label="Vía concierge" value={String(tot.viaConcierge)} color="var(--status-healthy)"
           hint={chatConv != null ? `${chatConv}% de las conversaciones terminan en reserva` : undefined} />
-        <KPITile label="Comensales nuevos" value={String(comensales?.ahora ?? 0)} hint="Clientes registrados por primera vez" />
+        <KPITile label="Comensales nuevos" value={String(comensales?.ahora ?? 0)}
+          hint={`Clientes registrados por primera vez · periodo anterior: ${comensales?.antes ?? 0}`}
+          color={(comensales?.ahora ?? 0) >= (comensales?.antes ?? 0) ? undefined : 'var(--status-attention)'} />
       </div>
 
       {/* Matriz por venue */}
@@ -1266,24 +1316,37 @@ function AnaliticaTab({ buList }: { buList: BU[] }) {
               <tbody>
                 {rows.map(r => {
                   const rBot = r.convs > 0 ? Math.round(((r.convs - r.escaladas) / r.convs) * 100) : null
+                  const pv = prev.get(r.bu.id)
+                  const abierto = detalle === r.bu.id
                   return (
-                    <tr key={r.bu.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                    <React.Fragment key={r.bu.id}>
+                    <tr onClick={() => setDetalle(abierto ? null : r.bu.id)}
+                      style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', background: abierto ? 'var(--bg-elevated)' : undefined }}>
                       <td style={{ ...td, textAlign: 'left', fontFamily: 'var(--font-ui)' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{abierto ? '▾' : '▸'}</span>
                           <BUChip code={r.bu.code} size="sm" />
                           <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>{r.bu.name}</span>
                         </span>
                       </td>
-                      <td style={td}>{r.vistas || '—'}</td>
+                      <td style={td}>{r.vistas || '—'}{pv != null && r.vistas + pv.vistas > 0 && <DeltaTag ahora={r.vistas} antes={pv.vistas} />}</td>
                       <td style={td}>{r.visitantes || '—'}</td>
-                      <td style={td}>{r.convs || '—'}</td>
+                      <td style={td}>{r.convs || '—'}{pv != null && r.convs + pv.convs > 0 && <DeltaTag ahora={r.convs} antes={pv.convs} />}</td>
                       <td style={{ ...td, color: rBot != null && rBot < 50 ? 'var(--status-attention)' : td.color }}>{rBot != null ? `${rBot}%` : '—'}</td>
-                      <td style={{ ...td, fontWeight: 700, color: 'var(--text-primary)' }}>{r.reservas || '—'}</td>
+                      <td style={{ ...td, fontWeight: 700, color: 'var(--text-primary)' }}>{r.reservas || '—'}{pv != null && r.reservas + pv.reservas > 0 && <DeltaTag ahora={r.reservas} antes={pv.reservas} />}</td>
                       <td style={{ ...td, color: 'var(--status-healthy)' }}>{r.viaConcierge || '—'}</td>
                       <td style={td}>{r.resWeb || '—'}</td>
                       <td style={td}>{r.confirmadas || '—'}</td>
                       <td style={{ ...td, color: r.noShows > 0 ? 'var(--status-risk)' : td.color }}>{r.noShows || '—'}</td>
                     </tr>
+                    {abierto && (
+                      <tr>
+                        <td colSpan={10} style={{ padding: 0, background: 'var(--bg-base)' }}>
+                          <VenueDetalle bu={r.bu} period={period} />
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   )
                 })}
               </tbody>
@@ -1309,8 +1372,95 @@ function AnaliticaTab({ buList }: { buList: BU[] }) {
       )}
 
       <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5 }}>
-        Este portal crecerá por módulo: hoy concentra el Concierge; siguen wellness, campañas por pauta y show-rate por venue.
+        Clic en un venue abre su detalle: cada vista, conversación y reserva con su fecha. Los ▲▼ comparan contra el periodo anterior del mismo tamaño. Este portal crecerá por módulo: hoy Concierge; siguen wellness, campañas y show-rate.
       </p>
+    </div>
+  )
+}
+
+// Detalle por venue: los SUCESOS detrás de cada número, con su fecha —
+// se carga al expandir la fila, nunca por adelantado (13 venues × 3 tablas).
+function VenueDetalle({ bu, period }: { bu: BU; period: string }) {
+  const [vistas, setVistas] = useState<{ viewed_at: string; city: string | null; country: string | null; device: string | null; via: string | null }[]>([])
+  const [convs, setConvs] = useState<{ created_at: string; channel: string; display_name: string | null; status: string }[]>([])
+  const [resv, setResv] = useState<{ created_at: string; date: string; time_slot: string; party_size: number; status: string; source: string | null; guests: { full_name: string } | null }[]>([])
+  const [cargando, setCargando] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      setCargando(true)
+      const days = period === '30d' ? 30 : period === '90d' ? 90 : 7
+      const since = new Date(Date.now() - days * 86400000).toISOString()
+      const [{ data: v }, { data: c }, { data: r }] = await Promise.all([
+        supabase.from('landing_views').select('viewed_at, city, country, device, via')
+          .eq('bu_id', bu.id).gte('viewed_at', since).order('viewed_at', { ascending: false }).limit(60),
+        supabase.from('bot_conversations').select('created_at, channel, display_name, status')
+          .eq('bu_id', bu.id).eq('is_simulated', false).gte('created_at', since).order('created_at', { ascending: false }).limit(60),
+        supabase.from('reservations').select('created_at, date, time_slot, party_size, status, source, guests(full_name)')
+          .eq('bu_id', bu.id).gte('created_at', since).order('created_at', { ascending: false }).limit(60),
+      ])
+      setVistas(v ?? []); setConvs((c ?? []) as typeof convs); setResv((r ?? []) as unknown as typeof resv)
+      setCargando(false)
+    }
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bu.id, period])
+
+  const f = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const caja: React.CSSProperties = { flex: 1, minWidth: 220 }
+  const titulo: React.CSSProperties = { fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: 6 }
+  const lista: React.CSSProperties = { maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }
+  const linea: React.CSSProperties = { display: 'flex', gap: 8, fontSize: 11, padding: '4px 6px', background: 'var(--bg-surface)', borderRadius: 6, alignItems: 'baseline' }
+  const fecha: React.CSSProperties = { fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', fontSize: 10, flexShrink: 0, minWidth: 92 }
+
+  if (cargando) return <p style={{ padding: 14, fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>Cargando el detalle…</p>
+
+  return (
+    <div style={{ display: 'flex', gap: 14, padding: '12px 14px', flexWrap: 'wrap' }}>
+      <div style={caja}>
+        <div style={titulo}>Vistas del link · {vistas.length}{vistas.length === 60 ? '+' : ''}</div>
+        <div style={lista}>
+          {vistas.length === 0 && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Sin vistas en el periodo (requiere landing_views.sql y links /r/).</span>}
+          {vistas.map((v, i) => (
+            <div key={i} style={linea}>
+              <span className="num" style={fecha}>{f(v.viewed_at)}</span>
+              <span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {[v.city, v.country].filter(Boolean).join(', ') || 'sin ubicación'}{v.device ? ` · ${v.device === 'mobile' ? '📱' : '💻'}` : ''}{v.via === 'link' ? ' · /r/' : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={caja}>
+        <div style={titulo}>Conversaciones · {convs.length}{convs.length === 60 ? '+' : ''}</div>
+        <div style={lista}>
+          {convs.length === 0 && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Sin conversaciones en el periodo.</span>}
+          {convs.map((c, i) => (
+            <div key={i} style={linea}>
+              <span className="num" style={fecha}>{f(c.created_at)}</span>
+              <span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {c.display_name ?? 'Cliente'} · {c.channel === 'whatsapp' ? 'WA' : 'IG'}
+              </span>
+              <StatusBadgeV2 tone={STATUS_META[c.status as ConvStatus]?.tone ?? 'neutral'} label={STATUS_META[c.status as ConvStatus]?.label ?? c.status} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={caja}>
+        <div style={titulo}>Reservas · {resv.length}{resv.length === 60 ? '+' : ''}</div>
+        <div style={lista}>
+          {resv.length === 0 && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Sin reservas creadas en el periodo.</span>}
+          {resv.map((r, i) => (
+            <div key={i} style={linea}>
+              <span className="num" style={fecha} title="Cuándo se creó">{f(r.created_at)}</span>
+              <span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {r.guests?.full_name ?? 'Cliente'} · {new Date(r.date + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} {r.time_slot} · {r.party_size}p{r.source ? ` · ${r.source}` : ''}
+              </span>
+              <StatusBadgeV2 tone={RES_STATUS[r.status]?.tone ?? 'neutral'} label={RES_STATUS[r.status]?.label ?? r.status} />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
