@@ -30,6 +30,7 @@ interface Conversation {
   first_replied_at: string | null
   followups_sent: number
   referral: { source?: string; headline?: string | null; body?: string | null; ref?: string | null } | null
+  viewed_at?: string | null
   created_at: string
 }
 interface Message {
@@ -541,6 +542,7 @@ function SummaryTab({ buList }: { buList: BU[] }) {
   const [botResCount, setBotResCount] = useState(0)
   const [landing, setLanding] = useState<LandingStat[]>([])
   const [landingMissing, setLandingMissing] = useState(false)
+  const [geoRows, setGeoRows] = useState<GeoRow[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -548,15 +550,17 @@ function SummaryTab({ buList }: { buList: BU[] }) {
       setLoading(true)
       const days = period === 'today' ? 1 : period === '7d' ? 7 : 30
       const since = new Date(Date.now() - days * 86400000).toISOString()
-      const [{ data: cs }, { count }, lv] = await Promise.all([
+      const [{ data: cs }, { count }, lv, geo] = await Promise.all([
         supabase.from('bot_conversations').select('*').gte('created_at', since).order('created_at', { ascending: false }),
         supabase.from('reservations').select('id', { count: 'exact', head: true }).not('bot_conversation_id', 'is', null).gte('created_at', since),
         supabase.rpc('fn_landing_stats', { p_desde: since }),
+        supabase.rpc('fn_landing_geo', { p_desde: since }),
       ])
       setConvs((cs ?? []) as Conversation[])
       setBotResCount(count ?? 0)
       if (lv.error) setLandingMissing(true)
       else { setLandingMissing(false); setLanding((lv.data ?? []) as LandingStat[]) }
+      setGeoRows(geo.error ? [] : ((geo.data ?? []) as GeoRow[]))
       setLoading(false)
     }
     load()
@@ -634,6 +638,20 @@ function SummaryTab({ buList }: { buList: BU[] }) {
             </span>
           )}
         </div>
+        {!landingMissing && geoRows.length > 0 && (
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 7 }}>
+              De dónde nos ven <span style={{ textTransform: 'none', letterSpacing: 'normal' }}>· solo visitas vía /r/ (pautas y compartidos)</span>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {geoRows.map((g, i) => (
+                <span key={i} className="num" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 999, padding: '4px 10px' }}>
+                  {[g.city, g.region, g.country].filter(Boolean).join(', ')} · <strong style={{ color: 'var(--text-primary)' }}>{g.vistas}</strong>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         {landingMissing ? (
           <p style={{ padding: 14, fontSize: 12, color: 'var(--status-attention)', margin: 0 }}>Falta correr el SQL del tracker (landing_views.sql) en Supabase.</p>
         ) : landing.length === 0 ? (
@@ -668,11 +686,33 @@ function SummaryTab({ buList }: { buList: BU[] }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // Bandeja — conversaciones en vivo + simulador
 // ═════════════════════════════════════════════════════════════════════════════
+interface GeoRow { country: string; region: string | null; city: string | null; vistas: number }
+
 function InboxTab({ buList, userId, isMobile, isMaster }: { buList: BU[]; userId?: string; isMobile: boolean; isMaster: boolean }) {
   const [convs, setConvs] = useState<Conversation[]>([])
   const [statusFilter, setStatusFilter] = useState('open')
   const [openConv, setOpenConv] = useState<Conversation | null>(null)
   const [loading, setLoading] = useState(true)
+  // Cierre en BULK — solo de conversaciones VISUALIZADAS (abiertas después de
+  // su último mensaje): cerrar sin ver es barrer debajo del tapete.
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [cerrando, setCerrando] = useState(false)
+  const esVisualizada = (c: Conversation) =>
+    !!c.viewed_at && c.viewed_at >= c.last_message_at && c.status !== 'closed'
+
+  async function cerrarSeleccion() {
+    if (!sel.size) return
+    if (!window.confirm(`¿Cerrar ${sel.size} ${sel.size === 1 ? 'conversación' : 'conversaciones'}? Se pueden reabrir desde el hilo si el cliente vuelve a escribir.`)) return
+    setCerrando(true)
+    const { error } = await supabase.from('bot_conversations')
+      .update({ status: 'closed' }).in('id', [...sel])
+    setCerrando(false)
+    if (error) { showToast(`No se pudo cerrar: ${error.message}`, 'error'); return }
+    logActivity('concierge_bulk_closed', 'bot_conversation', [...sel][0], { total: sel.size })
+    showToast(`${sel.size} ${sel.size === 1 ? 'conversación cerrada' : 'conversaciones cerradas'}.`, 'success')
+    setSel(new Set())
+    load()
+  }
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('bot_conversations').select('*').order('last_message_at', { ascending: false }).limit(200)
@@ -740,6 +780,28 @@ function InboxTab({ buList, userId, isMobile, isMaster }: { buList: BU[]; userId
         )}
       </div>
 
+      {/* Barra de cierre en bulk: aparece cuando hay visualizadas que cerrar */}
+      {filtered.some(esVisualizada) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={() => {
+            const visibles = filtered.filter(esVisualizada).map(c => c.id)
+            setSel(prev => prev.size === visibles.length ? new Set() : new Set(visibles))
+          }}
+            style={{ minHeight: 34, padding: '0 12px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+            {sel.size === filtered.filter(esVisualizada).length && sel.size > 0 ? 'Quitar selección' : `Seleccionar visualizadas (${filtered.filter(esVisualizada).length})`}
+          </button>
+          {sel.size > 0 && (
+            <button onClick={cerrarSeleccion} disabled={cerrando}
+              style={{ minHeight: 34, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
+              {cerrando ? 'Cerrando…' : `Cerrar ${sel.size} ${sel.size === 1 ? 'conversación' : 'conversaciones'}`}
+            </button>
+          )}
+          <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
+            Solo se pueden cerrar en bulk las que abriste después de su último mensaje 👁
+          </span>
+        </div>
+      )}
+
       <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
         {loading ? (
           <p style={{ padding: 14, color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>Cargando…</p>
@@ -751,7 +813,15 @@ function InboxTab({ buList, userId, isMobile, isMaster }: { buList: BU[]; userId
             const bu = buList.find(b => b.id === c.bu_id)
             return (
               <button key={c.id} onClick={() => setOpenConv(c)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 56, padding: '8px 14px', border: 'none', borderBottom: '1px solid var(--border-subtle)', background: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 56, padding: '8px 14px', border: 'none', borderBottom: '1px solid var(--border-subtle)', background: sel.has(c.id) ? 'var(--accent-bg)' : 'none', cursor: 'pointer', textAlign: 'left' }}>
+                {esVisualizada(c) ? (
+                  <input type="checkbox" checked={sel.has(c.id)}
+                    onClick={e => e.stopPropagation()}
+                    onChange={() => setSel(prev => { const n = new Set(prev); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n })}
+                    style={{ width: 16, height: 16, accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }} />
+                ) : c.status !== 'closed' ? (
+                  <span title="Ábrela primero — solo lo visualizado se cierra en bulk" style={{ width: 16, flexShrink: 0, textAlign: 'center', fontSize: 10, color: 'var(--border-strong)' }}>·</span>
+                ) : <span style={{ width: 16, flexShrink: 0 }} />}
                 <ChIcon size={15} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -762,6 +832,7 @@ function InboxTab({ buList, userId, isMobile, isMaster }: { buList: BU[]; userId
                     {bu && <BUChip code={bu.code} size="sm" />}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                    {esVisualizada(c) && <span title="Visualizada — puedes cerrarla en bulk">👁 </span>}
                     {CHANNEL_LABEL[c.channel]} · {timeAgo(c.last_message_at)}
                     {c.pending_fields.length > 0 && ` · falta: ${c.pending_fields.map(f => PENDING_LABEL[f] ?? f).join(', ')}`}
                   </div>
@@ -797,6 +868,13 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
   const [resPreview, setResPreview] = useState<ResPreview | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const bu = buList.find(b => b.id === conv.bu_id)
+
+  // Abrir el hilo = visualizarlo: habilita el cierre en bulk desde la Bandeja.
+  // Silencioso si la columna aún no existe (landing_views.sql v2 pendiente).
+  useEffect(() => {
+    supabase.from('bot_conversations').update({ viewed_at: new Date().toISOString() })
+      .eq('id', conv.id).then(() => {})
+  }, [conv.id])
 
   const loadMessages = useCallback(async () => {
     const [{ data }, { data: res }] = await Promise.all([

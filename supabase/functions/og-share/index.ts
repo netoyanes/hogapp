@@ -29,14 +29,14 @@ Deno.serve(async (req: Request) => {
   // service role solo para LEER los 4 campos del preview — nada más sale de aquí
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   let { data: bu } = await db.from('business_units')
-    .select('name, og_title, og_description, og_image_url')
+    .select('id, name, og_title, og_description, og_image_url')
     .ilike('code', code).limit(1).maybeSingle()
   if (!bu) {
     // Sin og_share.sql las columnas no existen y el select truena: cae al
     // puro nombre — el preview sale genérico pero con el venue correcto
     const { data: solo } = await db.from('business_units')
-      .select('name').ilike('code', code).limit(1).maybeSingle()
-    if (solo) bu = { name: solo.name, og_title: null, og_description: null, og_image_url: null }
+      .select('id, name').ilike('code', code).limit(1).maybeSingle()
+    if (solo) bu = { id: solo.id, name: solo.name, og_title: null, og_description: null, og_image_url: null }
   }
 
   const dest = kind === 'r' ? `/?reservar=${encodeURIComponent(code)}` : `/?wellness=${encodeURIComponent(code)}`
@@ -49,9 +49,31 @@ Deno.serve(async (req: Request) => {
   const ua = (req.headers.get('user-agent') ?? '').toLowerCase()
   const esBot = /facebookexternalhit|facebot|twitterbot|whatsapp|linkedinbot|telegrambot|slackbot|discordbot|pinterest|bot|crawler|spider|preview/.test(ua)
   if (!esBot) {
+    // GEO gratis: Vercel calcula país/región/ciudad del visitante y los manda
+    // en headers al proxear. Se registra la vista AQUÍ (con geo) y el redirect
+    // lleva &t=r para que el tracker del navegador no la cuente OTRA vez.
+    if (kind === 'r' && bu?.id) {
+      const g = (h: string) => {
+        const v = req.headers.get(h)
+        try { return v ? decodeURIComponent(v).slice(0, 80) : null } catch { return v?.slice(0, 80) ?? null }
+      }
+      // fire-and-forget con timeout corto: el redirect no espera a la métrica
+      await Promise.race([
+        db.from('landing_views').insert({
+          bu_id: bu.id, code: code.toUpperCase(), via: 'link',
+          device: /mobile|iphone|android/.test(ua) ? 'mobile' : 'desktop',
+          referrer: req.headers.get('referer')?.slice(0, 300) ?? null,
+          country: g('x-vercel-ip-country'),
+          region: g('x-vercel-ip-country-region'),
+          city: g('x-vercel-ip-city'),
+        }),
+        new Promise(r => setTimeout(r, 800)),
+      ]).catch(() => {})
+    }
+    const sep = dest.includes('?') ? '&' : '?'
     return new Response(null, {
       status: 302,
-      headers: { Location: base + dest, 'Cache-Control': 'no-store' },
+      headers: { Location: base + dest + (kind === 'r' ? sep + 't=r' : ''), 'Cache-Control': 'no-store' },
     })
   }
   const name = bu?.name ?? (kind === 'r' ? 'nuestra casa' : 'nuestro estudio')

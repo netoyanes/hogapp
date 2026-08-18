@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.95.1"
+export const APP_VERSION = "2.96.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.96.0",
+    date: "2026-08-18",
+    type: "MINOR",
+    changes: [
+      "GEO DEL LINK DE RESERVAS — cada visita que entra por /r/CODIGO registra PAÍS, REGIÓN y CIUDAD del visitante (lo calcula Vercel al proxear, gratis y sin servicios externos). En Concierge → Resumen aparece 'De dónde nos ven': top ciudades del periodo",
+      "Sin doble conteo: la vista se registra en el servidor (con geo) y el navegador ya no la vuelve a contar; los links viejos ?reservar= directos siguen contando pero sin geo — otra razón para pautar SIEMPRE con /r/CODIGO",
+      "BANDEJA · CIERRE EN BULK — selecciona varias conversaciones y ciérralas de un golpe, PERO solo las VISUALIZADAS: las que abriste después de su último mensaje (👁). Cerrar sin ver es barrer debajo del tapete; si el cliente escribió de nuevo, la conversación vuelve a ser 'no vista' y exige abrirse",
+      "Botón 'Seleccionar visualizadas' + confirmación con conteo; el cierre queda en Actividad",
+      "Requiere re-correr landing_views.sql (agrega columnas de geo y la marca de visualizado) y re-desplegar og-share",
+    ]
+  },
   {
     version: "2.95.1",
     date: "2026-08-18",
