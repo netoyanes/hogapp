@@ -205,6 +205,30 @@ function esperaColor(iso: string): string {
   return mins > 15 ? 'var(--status-risk)' : mins > 5 ? 'var(--status-attention)' : 'var(--status-healthy)'
 }
 
+// Tile semanal con variación vs el mismo corte de la semana pasada.
+// bueno='baja' invierte el color (menos no-shows = verde).
+function SemanaTile({ label, m, hint, bueno = 'sube' }: {
+  label: string; m: { ahora: number; antes: number } | undefined; hint?: string; bueno?: 'sube' | 'baja'
+}) {
+  const ahora = m?.ahora ?? 0, antes = m?.antes ?? 0
+  const delta = ahora - antes
+  const mejora = bueno === 'sube' ? delta > 0 : delta < 0
+  const empeora = bueno === 'sube' ? delta < 0 : delta > 0
+  const color = delta === 0 ? 'var(--text-tertiary)' : mejora ? 'var(--status-healthy)' : empeora ? 'var(--status-risk)' : 'var(--text-tertiary)'
+  return (
+    <div title={hint} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '11px 14px', minWidth: 128 }}>
+      <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+        <span className="num" style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>{ahora}</span>
+        <span className="num" style={{ fontSize: 10.5, fontWeight: 700, color, fontFamily: 'var(--font-mono)' }}>
+          {delta === 0 ? '=' : `${delta > 0 ? '▲' : '▼'} ${Math.abs(delta)}`}
+        </span>
+      </div>
+      <div className="num" style={{ fontSize: 9.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>sem. pasada: {antes}</div>
+    </div>
+  )
+}
+
 function HoyTab({ buList, userId, isMobile, onGoReservas }: {
   buList: BU[]; userId?: string; isMobile: boolean; onGoReservas: () => void
 }) {
@@ -212,6 +236,11 @@ function HoyTab({ buList, userId, isMobile, onGoReservas }: {
   const [resDias, setResDias] = useState<HoyRes[]>([])
   const [caps, setCaps] = useState<Record<string, { max_reservations: number; max_pax: number }>>({})
   const [convsHoy, setConvsHoy] = useState<{ created_at: string; first_replied_at: string | null }[]>([])
+  // Pulso semanal del grupo: conteos de ESTA semana vs el MISMO corte de la
+  // semana pasada (lunes→ahora contra lunes→mismo momento de hace 7 días —
+  // comparar un martes contra la semana completa anterior siempre saldría rojo)
+  const [semana, setSemana] = useState<Record<string, { ahora: number; antes: number }> | null>(null)
+  const [verViejas, setVerViejas] = useState(false)
   const [openConv, setOpenConv] = useState<Conversation | null>(null)
   const [busyRes, setBusyRes] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -222,17 +251,51 @@ function HoyTab({ buList, userId, isMobile, onGoReservas }: {
   const manISO = `${man.getFullYear()}-${String(man.getMonth() + 1).padStart(2, '0')}-${String(man.getDate()).padStart(2, '0')}`
 
   const load = useCallback(async () => {
-    const [{ data: q }, { data: rs }, { data: cp }, { data: ch }] = await Promise.all([
+    // Cortes de la semana: lunes 00:00 de esta semana, y el mismo corte -7d
+    const dow = (hoy.getDay() + 6) % 7
+    const lunes = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - dow)
+    const lunesPasado = new Date(lunes.getTime() - 7 * 86400000)
+    const cortePasado = new Date(hoy.getTime() - 7 * 86400000)
+    const iso = (d: Date) => d.toISOString()
+
+    // Conteos en el servidor (head:true): 6 métricas × 2 ventanas
+    const cuenta = (q: PromiseLike<{ count: number | null }>) => q
+    const rango = (desde: Date, hasta: Date) => ({ d: iso(desde), h: iso(hasta) })
+    const wAhora = rango(lunes, hoy), wAntes = rango(lunesPasado, cortePasado)
+    const par = (arma: (w: { d: string; h: string }) => PromiseLike<{ count: number | null }>) =>
+      Promise.all([cuenta(arma(wAhora)), cuenta(arma(wAntes))])
+
+    const [{ data: q }, { data: rs }, { data: cp }, { data: ch },
+      [resA, resB], [conA, conB], [gA, gB], [cvA, cvB], [lvA, lvB], [nsA, nsB],
+    ] = await Promise.all([
       supabase.from('bot_conversations').select('*').eq('status', 'needs_human').eq('is_simulated', false).order('last_message_at'),
       supabase.from('reservations').select('id, bu_id, date, time_slot, party_size, status, bot_conversation_id, guests(full_name)')
         .gte('date', hoyISO).lte('date', manISO),
       supabase.from('venue_capacity').select('bu_id, max_reservations, max_pax').eq('day_of_week', hoy.getDay()).eq('active', true),
-      supabase.from('bot_conversations').select('created_at, first_replied_at').eq('is_simulated', false).gte('last_message_at', hoyISO),
+      // 1ª respuesta: SOLO conversaciones CREADAS hoy. Antes filtraba por
+      // last_message_at y una conversación de hace 3 semanas con mensaje nuevo
+      // metía 30,000 minutos a la mediana — el "31441 min" del reporte.
+      supabase.from('bot_conversations').select('created_at, first_replied_at').eq('is_simulated', false).gte('created_at', hoyISO),
+      par(w => supabase.from('reservations').select('id', { count: 'exact', head: true }).gte('created_at', w.d).lt('created_at', w.h)),
+      par(w => supabase.from('reservations').select('id', { count: 'exact', head: true }).gte('created_at', w.d).lt('created_at', w.h)
+        .or('bot_conversation_id.not.is.null,source.in.(whatsapp,instagram)')),
+      par(w => supabase.from('guests').select('id', { count: 'exact', head: true }).gte('created_at', w.d).lt('created_at', w.h)),
+      par(w => supabase.from('bot_conversations').select('id', { count: 'exact', head: true }).eq('is_simulated', false).gte('created_at', w.d).lt('created_at', w.h)),
+      par(w => supabase.from('landing_views').select('id', { count: 'exact', head: true }).gte('viewed_at', w.d).lt('viewed_at', w.h)),
+      par(w => supabase.from('reservations').select('id', { count: 'exact', head: true }).eq('status', 'no_show').gte('no_show_at', w.d).lt('no_show_at', w.h)),
     ])
     setQueue((q ?? []) as Conversation[])
     setResDias((rs ?? []) as unknown as HoyRes[])
     setCaps(Object.fromEntries((cp ?? []).map(c => [c.bu_id, { max_reservations: c.max_reservations, max_pax: c.max_pax }])))
     setConvsHoy(ch ?? [])
+    setSemana({
+      reservas:    { ahora: resA.count ?? 0, antes: resB.count ?? 0 },
+      concierge:   { ahora: conA.count ?? 0, antes: conB.count ?? 0 },
+      comensales:  { ahora: gA.count ?? 0, antes: gB.count ?? 0 },
+      conversaciones: { ahora: cvA.count ?? 0, antes: cvB.count ?? 0 },
+      landing:     { ahora: lvA.count ?? 0, antes: lvB.count ?? 0 },
+      noshows:     { ahora: nsA.count ?? 0, antes: nsB.count ?? 0 },
+    })
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hoyISO, manISO])
@@ -242,11 +305,16 @@ function HoyTab({ buList, userId, isMobile, onGoReservas }: {
   // La cola se prioriza: quejas 🚨 → comprobantes 🧾 → el resto por antigüedad
   const esQueja = (c: Conversation) => /^queja/i.test(c.escalation_reason ?? '')
   const esComprobante = (c: Conversation) => /(comprobante|apartado)/i.test(c.escalation_reason ?? '')
-  const cola = [...queue].sort((a, b) => {
+  const colaTotal = [...queue].sort((a, b) => {
     const pa = esQueja(a) ? 0 : esComprobante(a) ? 1 : 2
     const pb = esQueja(b) ? 0 : esComprobante(b) ? 1 : 2
     return pa !== pb ? pa - pb : a.last_message_at.localeCompare(b.last_message_at)
   })
+  // Un pendiente de hace 16 días ya no es "atiende ahora": es backlog. Se
+  // separa para que lo urgente de verdad no quede enterrado bajo lo rancio.
+  const LIMITE_VIEJA = 3 * 86400000
+  const viejas = colaTotal.filter(c => Date.now() - new Date(c.last_message_at).getTime() > LIMITE_VIEJA)
+  const cola = colaTotal.filter(c => Date.now() - new Date(c.last_message_at).getTime() <= LIMITE_VIEJA)
   const sinConfirmar = resDias.filter(r => r.status === 'requested')
 
   // Confirmar directo desde la tarjeta: reserva confirmada + aviso automático
@@ -296,23 +364,61 @@ function HoyTab({ buList, userId, isMobile, onGoReservas }: {
     borderRadius: 'var(--radius-md)', padding: '12px 14px',
   }
 
+  // Conversión de la semana: conversaciones nuevas → reservas vía concierge
+  const convSemana = semana?.conversaciones.ahora ?? 0
+  const conversionPct = convSemana > 0 && semana
+    ? Math.round((semana.concierge.ahora / convSemana) * 100) : null
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      {/* ── Pulso de calidad ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
-        <KPITile label="1ª respuesta hoy" value={frMediana != null ? `${Math.round(frMediana)} min` : '—'}
-          color={frMediana != null && frMediana > 10 ? 'var(--status-attention)' : undefined} hint="Mediana del día" />
-        <KPITile label="Esperando humano" value={String(cola.length)}
-          color={cola.length ? 'var(--status-risk)' : 'var(--status-healthy)'} />
-        <KPITile label="Confirmadas hoy" value={confirmadasPct != null ? `${confirmadasPct}%` : '—'}
-          color={confirmadasPct != null && confirmadasPct < 60 ? 'var(--status-attention)' : undefined} />
-        <KPITile label="Conversaciones hoy" value={String(convsHoy.length)} />
+      {/* ── La semana del grupo: la actividad real, comparada ── */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>La semana del grupo</span>
+          <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>desde el lunes · vs el mismo corte de la semana pasada</span>
+          {conversionPct != null && (
+            <span className="num" style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+              title="Reservas vía concierge ÷ conversaciones nuevas de la semana">
+              conversión chat→reserva {conversionPct}%
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))', gap: 8 }}>
+          <SemanaTile label="Reservas creadas" m={semana?.reservas} hint="Todas las fuentes, todo el grupo (por fecha de creación)" />
+          <SemanaTile label="Vía concierge" m={semana?.concierge} hint="Reservas nacidas en WhatsApp/Instagram o con conversación del bot" />
+          <SemanaTile label="Comensales nuevos" m={semana?.comensales} hint="Clientes registrados por primera vez en el grupo" />
+          <SemanaTile label="Conversaciones" m={semana?.conversaciones} hint="Conversaciones nuevas del bot (reales, sin simulador)" />
+          <SemanaTile label="Vistas del landing" m={semana?.landing} hint="Aperturas del link público de reservas (requiere landing_views.sql)" />
+          <SemanaTile label="No-shows" m={semana?.noshows} bueno="baja" hint="Reservas marcadas no-show esta semana — bajar es bueno" />
+        </div>
+      </div>
+
+      {/* ── Pulso de hoy ── */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Hoy</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
+          <KPITile label="1ª respuesta" value={frMediana != null ? `${Math.round(frMediana)} min` : '—'}
+            color={frMediana != null && frMediana > 10 ? 'var(--status-attention)' : undefined}
+            hint="Mediana de conversaciones INICIADAS hoy — sin datos si hoy nadie ha escrito" />
+          <KPITile label="Esperando humano" value={String(cola.length)}
+            color={cola.length ? 'var(--status-risk)' : 'var(--status-healthy)'} />
+          <KPITile label="Confirmadas hoy" value={confirmadasPct != null ? `${confirmadasPct}%` : '—'}
+            hint="De las reservas para HOY, % ya confirmadas — vacío si no hay reservas hoy"
+            color={confirmadasPct != null && confirmadasPct < 60 ? 'var(--status-attention)' : undefined} />
+          <KPITile label="Conversaciones hoy" value={String(convsHoy.length)} hint="Iniciadas hoy" />
+        </div>
       </div>
 
       {/* ── Atiende ahora ── */}
       <div>
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
           Atiende ahora {cola.length + sinConfirmar.length > 0 && `· ${cola.length + sinConfirmar.length}`}
+          {viejas.length > 0 && (
+            <button onClick={() => setVerViejas(v => !v)}
+              style={{ marginLeft: 10, fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 999, padding: '3px 10px', cursor: 'pointer', textTransform: 'none', letterSpacing: 'normal' }}>
+              {verViejas ? 'Ocultar' : 'Ver'} {viejas.length} pendientes viejos (+3 días)
+            </button>
+          )}
         </div>
         {loading ? null : cola.length === 0 && sinConfirmar.length === 0 ? (
           <div style={{ ...cardStyle, textAlign: 'center', padding: '24px', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600 }}>
@@ -320,7 +426,7 @@ function HoyTab({ buList, userId, isMobile, onGoReservas }: {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {cola.map(c => {
+            {(verViejas ? colaTotal : cola).map(c => {
               const bu = buList.find(b => b.id === c.bu_id)
               return (
                 <button key={c.id} onClick={() => setOpenConv(c)}
