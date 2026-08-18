@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.93.1"
+export const APP_VERSION = "2.94.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.94.0",
+    date: "2026-08-18",
+    type: "MINOR",
+    changes: [
+      "MENÚ DEL OYSTER (/menu/oc.html) REORDENADO — primero promos y alimentos, bebidas al final: Especial de Sábado y Brunch Dominical arriba, luego conchas, entradas, oysters, especiales, barras, sandwiches, botanas y postres; la carta de bebidas cierra",
+      "BRUNCH DOMINICAL cargado y ANUNCIADO: banner visible toda la semana ('Ostiones ilimitados, tostadas, caldo bichi y copa de espumoso') y su sección completa en la carta — ostiones ilimitados en todas sus salsas, tostada a elegir, caldo bichi, shots de cóctel de camarón con ostión, arroz amarillo con almejas, postre a elegir y copa de vino espumoso",
+      "MENÚ BILINGÜE — botón EN/ES fijo arriba a la derecha: traduce secciones, grupos, descripciones, banners, notas y el aviso legal (~150 textos); nombres propios de platillos y cócteles se respetan. La elección se recuerda en el dispositivo",
+      "Un solo origen de datos: el menú se sigue editando en español y el inglés sale de un diccionario — lo que no esté traducido cae al español en vez de romperse",
+    ]
+  },
   {
     version: "2.93.1",
     date: "2026-08-17",
