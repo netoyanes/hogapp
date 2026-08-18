@@ -240,6 +240,37 @@ body {
   max-width: 46ch;
   line-height: 1.7;
 }
+/* --- Sección destacada (especiales / brunch) -------------------------
+   Tarjeta con DOBLE FILETE al estilo de las cartas clásicas: el contenido
+   vive dentro de un paquete visual cerrado, separado del menú corrido.
+   El filete interior es un ::before para no tocar el layout interno. */
+.seccion--destacada {
+  position: relative;
+  margin: 3.2rem auto 1.2rem;
+  padding: 2.4rem 1.4rem 2.1rem;
+  border: 2px solid var(--tinta);
+  border-radius: 20px;
+  background: var(--cielo-claro);
+}
+.seccion--destacada::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border: 1px solid var(--tinta);
+  border-radius: 14px;
+  pointer-events: none;
+}
+.seccion--destacada .seccion__head { margin-bottom: 1.4rem; }
+/* El título del especial se recorta sobre el filete superior, como sello */
+.seccion--destacada .seccion__titulo { font-size: clamp(1.45rem, 6vw, 1.9rem); }
+.seccion--destacada .grupo { margin-bottom: 0.4rem; }
+/* Cierra el paquete: la nota final (la copa de espumoso) como pie del marco */
+.seccion--destacada .grupo__cierre-nota {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--tinta);
+}
+
 .badge-proximamente {
   display: inline-block;
   margin-left: 0.75rem;
@@ -657,6 +688,7 @@ const MENU = {
       id: "especial-de-sabado",
       nombre: "Especial de Sábado",
       subtitulo: null,
+      destacada: true,
       estado: "activo",
       dias_visibles: [6],   // solo visible los sábados cuando esté activa
       /* Contenido tomado tal cual de la media carta impresa (sin precios). */
@@ -690,6 +722,10 @@ const MENU = {
       id: "brunch-dominical",
       nombre: "Brunch Dominical",
       subtitulo: "Todos los domingos",
+      /* destacada: la sección se enmarca como tarjeta con doble filete — es un
+         PAQUETE cerrado, no parte del menú corrido; sin el marco, al llegar a
+         Entradas parecía que el brunch seguía. */
+      destacada: true,
       estado: "activo",
       /* Visible TODA la semana a propósito: anuncia el brunch para que la
          gente planee su domingo — no solo lo descubra ya estando ahí. */
@@ -1751,7 +1787,7 @@ if (typeof module !== "undefined" && module.exports) {
   }
 
   function renderSeccion(seccion) {
-    const section = crear("section", "seccion");
+    const section = crear("section", "seccion" + (seccion.destacada ? " seccion--destacada" : ""));
     section.id = "sec-" + seccion.id;
 
     const head = crear("div", "seccion__head");
@@ -1866,7 +1902,8 @@ if (typeof module !== "undefined" && module.exports) {
     if (cta) cta.textContent = tr("Reservar mesa");
     const langBtn = document.getElementById("lang-toggle");
     if (langBtn) {
-      langBtn.textContent = LANG === "en" ? "ES · Español" : "EN · English";
+      langBtn.textContent = LANG === "en" ? "ES" : "EN";
+      langBtn.title = LANG === "en" ? "Ver en español" : "View in English";
       langBtn.addEventListener("click", () => {
         localStorage.setItem("oc_lang", LANG === "en" ? "es" : "en");
         location.reload();
@@ -1891,11 +1928,14 @@ if (typeof module !== "undefined" && module.exports) {
   }
   .cta-reservar:active { background: var(--cielo); color: var(--tinta); }
   .lang-toggle {
-    position: fixed; top: 14px; right: 14px; z-index: 60;
+    position: fixed; top: 12px; right: 12px; z-index: 60;
+    width: 44px; height: 44px;
     background: var(--cielo); color: var(--tinta);
-    border: 1.5px solid var(--tinta); border-radius: 999px;
-    font-family: var(--mono, monospace); font-size: 12px; letter-spacing: .08em;
-    padding: 8px 14px; cursor: pointer; box-shadow: 0 3px 10px rgba(35,31,32,.18);
+    border: 1.5px solid var(--tinta); border-radius: 50%;
+    font-family: var(--mono, monospace); font-size: 13px; font-weight: 700;
+    letter-spacing: .04em; cursor: pointer;
+    box-shadow: 0 3px 10px rgba(35,31,32,.18);
+    display: flex; align-items: center; justify-content: center;
   }
   .lang-toggle:active { background: var(--tinta); color: var(--cielo); }
 </style>
