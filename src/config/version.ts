@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.96.0"
+export const APP_VERSION = "2.97.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.97.0",
+    date: "2026-08-18",
+    type: "MINOR",
+    changes: [
+      "CONCIERGE · ANALÍTICA — pestaña nueva que CONCENTRA todo lo que maneja el Concierge en un solo portal: totales del grupo arriba (vistas del link, conversaciones, % resuelto por el bot solo, reservas, vía concierge, comensales nuevos) y una MATRIZ POR VENUE comparable — vistas, visitantes, conversaciones, % bot, reservas por origen (concierge/web), confirmadas y no-shows",
+      "Periodos de 7 / 30 / 90 días; el % de bot solo se marca en ámbar bajo 50% y los no-shows en rojo",
+      "'De dónde nos ven' (el geo de las visitas vía /r/) también vive aquí",
+      "El portal está diseñado para crecer por módulo: hoy Concierge; siguen wellness, campañas por pauta y show-rate",
+    ]
+  },
   {
     version: "2.96.0",
     date: "2026-08-18",
