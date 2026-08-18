@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/r/:code",
-      "destination": "/api/r?code=:code"
+      "destination": "https://ksxgxdewrwoslpnvvqnm.supabase.co/functions/v1/og-share?kind=r&code=:code"
     },
     {
       "source": "/w/:code",
-      "destination": "/api/w?code=:code"
+      "destination": "https://ksxgxdewrwoslpnvvqnm.supabase.co/functions/v1/og-share?kind=w&code=:code"
     },
     {
       "source": "/(.*)",

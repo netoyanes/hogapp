@@ -20,13 +20,24 @@ Deno.serve(async (req: Request) => {
   const url = new URL(req.url)
   const kind = url.searchParams.get('kind') === 'w' ? 'w' : 'r'
   const code = (url.searchParams.get('code') ?? '').slice(0, 12)
-  const base = (Deno.env.get('PORTAL_BASE_URL') ?? '').replace(/\/$/, '')
+  // Vercel proxea este contenido: el dominio REAL del portal viene en
+  // x-forwarded-host — cero secrets que configurar. PORTAL_BASE_URL queda
+  // como override opcional (p. ej. si algún día el proxy cambia).
+  const fwd = (req.headers.get('x-forwarded-host') ?? '').split(',')[0].trim()
+  const base = fwd ? `https://${fwd}` : (Deno.env.get('PORTAL_BASE_URL') ?? '').replace(/\/$/, '')
 
   // service role solo para LEER los 4 campos del preview — nada más sale de aquí
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-  const { data: bu } = await db.from('business_units')
+  let { data: bu } = await db.from('business_units')
     .select('name, og_title, og_description, og_image_url')
     .ilike('code', code).limit(1).maybeSingle()
+  if (!bu) {
+    // Sin og_share.sql las columnas no existen y el select truena: cae al
+    // puro nombre — el preview sale genérico pero con el venue correcto
+    const { data: solo } = await db.from('business_units')
+      .select('name').ilike('code', code).limit(1).maybeSingle()
+    if (solo) bu = { name: solo.name, og_title: null, og_description: null, og_image_url: null }
+  }
 
   const dest = kind === 'r' ? `/?reservar=${encodeURIComponent(code)}` : `/?wellness=${encodeURIComponent(code)}`
   const name = bu?.name ?? (kind === 'r' ? 'nuestra casa' : 'nuestro estudio')
