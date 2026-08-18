@@ -25,6 +25,7 @@ import { Events } from './screens/Events'
 import { Objectives } from './screens/Objectives'
 import { Reports } from './screens/Reports'
 import { Concierge } from './screens/Concierge'
+import { PRNetwork } from './screens/PRNetwork'
 import { Casa } from './screens/Casa'
 import { SharedTask } from './screens/SharedTask'
 import { PrivacyNotice } from './screens/PrivacyNotice'
@@ -242,7 +243,11 @@ export default function App() {
     ALLOWED_VIEWS = expandApps(userApps)
   } else {
     // Objetivos es SOLO Master; Contenido se retiró (vive en Proyectos)
-    ALLOWED_VIEWS = role === 'DEV'
+    ALLOWED_VIEWS = role === 'PR'
+      ? new Set(['pr', 'profile'])                              // el PR ve SOLO su código y sus números
+      : role === 'PR_MANAGER'
+      ? new Set(['pr', 'concierge', 'profile', 'resumen'])       // coordina la red y ve reservas
+      : role === 'DEV'
       ? new Set(['dashboard', 'tasks', 'crm', 'concierge', 'casa', 'contacts', 'events',
                  'revenue', 'reports', 'activity', 'templates', 'profile', 'resumen']) // auditoría: todo menos admin (Usuarios/Carga)
       : role === 'HEART_OF_HOUSE'
@@ -302,6 +307,12 @@ export default function App() {
       case 'reservations': // alias legado (links viejos de Slack/Calendario)
       case 'concierge':
         return <Concierge userId={profile?.id} userRole={role} caps={caps} />
+      case 'pr':
+        // Red PR: la administra dirección; el PR entra a ver solo su tarjeta.
+        // Las policies del SQL son quienes de verdad limitan — esto es la puerta.
+        return ['MASTER', 'C_LEVEL', 'PR_MANAGER', 'PR'].includes(role ?? '') || userApps?.has('pr')
+          ? <PRNetwork userRole={role} userId={profile?.id} />
+          : <EmptyState icon="🔒" title="Sin acceso" description="La Red PR se asigna por usuario en Usuarios." />
       case 'casa':
         return <Casa userId={profile?.id} userRole={role} />
       case 'reportar': // slot de bottom-nav del HoH: La Casa con el reporte abierto

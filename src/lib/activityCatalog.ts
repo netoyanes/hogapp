@@ -1,7 +1,7 @@
 import {
   CheckSquare, ArrowRight, Paperclip, MessageSquare, UserPlus, Activity, Archive,
   AlertTriangle, FolderKanban, Handshake, Shell, Music, Landmark, ClipboardCheck,
-  Shield, Zap, Eye, Link2, Bot, Users,
+  Shield, Zap, Eye, Link2, Bot, Users, Megaphone,
 } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -16,7 +16,7 @@ import {
 
 export type ModuleId =
   | 'tareas' | 'proyectos' | 'concierge' | 'comercial' | 'clientes'
-  | 'talento' | 'finanzas' | 'nomina' | 'casa' | 'sistema'
+  | 'talento' | 'finanzas' | 'nomina' | 'casa' | 'pr' | 'sistema'
 
 export const MODULES: Record<ModuleId, { label: string; color: string; icon: React.ElementType }> = {
   tareas:    { label: 'Tareas',     color: '#7FA3C2', icon: CheckSquare },
@@ -28,10 +28,11 @@ export const MODULES: Record<ModuleId, { label: string; color: string; icon: Rea
   finanzas:  { label: 'Finanzas',   color: '#3D89C4', icon: Landmark },
   nomina:    { label: 'Nómina',     color: '#C27E22', icon: Users },
   casa:      { label: 'La Casa',    color: '#F97316', icon: ClipboardCheck },
+  pr:        { label: 'Red PR',     color: '#D946A0', icon: Megaphone },
   sistema:   { label: 'Sistema',    color: '#8A8A8A', icon: Shield },
 }
 export const MODULE_ORDER: ModuleId[] = [
-  'tareas', 'proyectos', 'concierge', 'comercial', 'clientes', 'talento', 'finanzas', 'nomina', 'casa', 'sistema',
+  'tareas', 'proyectos', 'concierge', 'comercial', 'clientes', 'talento', 'finanzas', 'nomina', 'casa', 'pr', 'sistema',
 ]
 
 type D = Record<string, unknown> | null
@@ -78,6 +79,9 @@ export const ACTIONS: Record<string, ActionDef> = {
   task_converted_to_project: { module: 'proyectos', icon: FolderKanban, color: '#22C55E', label: d => `convirtió la tarea "${s(d?.task)}" en el proyecto "${s(d?.name)}"` },
 
   // ── Nómina de eventuales ──────────────────────────────────────────────────
+  pr_alta:     { module: 'pr', icon: Megaphone, color: '#22C55E', notable: true, label: d => `dio de alta al PR ${s(d?.nombre)} con el código ${s(d?.codigo)}` },
+  pr_tier:     { module: 'pr', icon: Megaphone, color: '#EAB308', label: d => `movió a ${s(d?.codigo)} de ${s(d?.antes)} a ${s(d?.ahora)}` },
+  pr_estatus:  { module: 'pr', icon: Megaphone, color: '#EF4444', notable: true, label: d => `marcó a ${s(d?.codigo)} como ${s(d?.estatus)}` },
   payroll_submitted: { module: 'nomina', icon: Users, color: '#EAB308', label: d => `envió a aprobación la nómina de ${s(d?.periodo)} — ${s(d?.personas)} personas` },
   payroll_approved:  { module: 'nomina', icon: Users, color: '#22C55E', label: d => `aprobó la nómina de ${s(d?.periodo)}` },
   payroll_returned:  { module: 'nomina', icon: Users, color: '#EF4444', label: d => `regresó al gerente la nómina de ${s(d?.periodo)}` },
