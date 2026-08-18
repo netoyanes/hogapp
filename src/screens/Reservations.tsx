@@ -984,9 +984,101 @@ export function Reservations({ userRole, userId }: Props) {
               {menuRes.notes ? ` · ${menuRes.notes}` : ''}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* La historia completa de la reserva, de la creación al final
-                  de la estancia — reemplaza a la pila de botones gigantes */}
-              <ResTimeline res={menuRes} bookedByName={bookedBy(menuRes)} />
+              {/* ORDEN PARA EL EQUIPO EN PISO: lo urgente y lo accionable
+                  primero (alerta de cambio de hora → siguiente paso → datos
+                  de la reserva editables), el cliente después, y la línea de
+                  tiempo al final — es consulta, no gestión. */}
+              {menuRes.proposed_time && (
+                <div style={{ background: 'color-mix(in srgb, var(--status-attention) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 30%, transparent)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                  <p style={{ fontSize: 12, color: 'var(--status-attention)', fontWeight: 700, margin: '0 0 8px' }}>
+                    Propuesta de cambio: {menuRes.time_slot} → {menuRes.proposed_time} (esperando al cliente)
+                  </p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={async () => {
+                      const { error } = await supabase.from('reservations').update({ time_slot: menuRes.proposed_time, proposed_time: null }).eq('id', menuRes.id)
+                      if (error) { showToast(`No se pudo aplicar: ${error.message}`, 'error'); return }
+                      logActivity('reservation_updated', 'reservation', menuRes.id, { antes: menuRes.time_slot, ahora: menuRes.proposed_time, via: 'propuesta_aceptada' })
+                      showToast(`Reserva movida a las ${menuRes.proposed_time}.`, 'success')
+                      setMenuRes(null); load()
+                    }}
+                      style={{ flex: 1, minHeight: 44, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      Cliente aceptó → mover
+                    </button>
+                    <button onClick={async () => {
+                      const { error } = await supabase.from('reservations').update({ proposed_time: null }).eq('id', menuRes.id)
+                      if (error) { showToast(`No se pudo: ${error.message}`, 'error'); return }
+                      logActivity('reservation_updated', 'reservation', menuRes.id, { mantiene: menuRes.time_slot, via: 'propuesta_rechazada' })
+                      showToast(`Se mantiene a las ${menuRes.time_slot} — resuelve el conflicto en la curva.`, 'success')
+                      setMenuRes(null); load()
+                    }}
+                      style={{ flex: 1, minHeight: 44, borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      No aceptó → mantener
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* UNA acción primaria según el momento de la reserva — sin
+                  scroll: es lo primero que toca el equipo en piso */}
+              {menuRes.status === 'requested' && (
+                <button onClick={() => confirmWhatsApp(menuRes)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: '#1fa855', color: '#fff', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+                  <MessageCircle size={17} /> Confirmar y enviar WhatsApp
+                </button>
+              )}
+              {menuRes.status === 'confirmed' && (
+                <button onClick={() => { if (window.confirm(`¿Sentar a ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'}, ${menuRes.party_size} pax?`)) setStatus(menuRes, 'seated') }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+                  <Armchair size={17} /> Sentar
+                </button>
+              )}
+              {menuRes.status === 'confirmed' && !menuRes.confirm_sent_at && (
+                /* Confirmada pero sin mensaje enviado: el hueco se ve en la
+                   línea de tiempo y este botón discreto lo cierra */
+                <button onClick={() => confirmWhatsApp(menuRes)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, padding: '0 14px', borderRadius: 999, border: '1px solid #1fa855', background: 'none', color: '#1fa855', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  <MessageCircle size={15} /> Enviar confirmación por WhatsApp
+                </button>
+              )}
+              {menuRes.status === 'seated' && (
+                <button onClick={() => setStatus(menuRes, 'completed')}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+                  <Check size={17} /> Completar visita — terminó su estancia
+                </button>
+              )}
+
+              {/* Edición completa — cualquier rol con escritura (HoH incluido) */}
+              {canWrite && editForm && (
+                <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+                  <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 8 }}>Reserva</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 0.8fr', gap: 8, marginBottom: 8 }}>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Fecha
+                      <input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} className="num"
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3 }} /></label>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Hora
+                      <input type="time" value={editForm.time} onChange={e => setEditForm({ ...editForm, time: e.target.value })} className="num"
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, fontFamily: 'var(--font-mono)' }} /></label>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Pax
+                      <input type="number" inputMode="numeric" min={1} value={editForm.pax} onChange={e => setEditForm({ ...editForm, pax: Math.max(1, Number(e.target.value)) })} className="num"
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, textAlign: 'center' }} /></label>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8, marginBottom: 8 }}>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Zona
+                      <select value={editForm.zone} onChange={e => setEditForm({ ...editForm, zone: e.target.value })}
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, cursor: 'pointer' }}>
+                        <option value="">Sin zona</option>
+                        {[...new Set([...ZONES, ...(editForm.zone ? [editForm.zone] : [])])].map(z => <option key={z} value={z}>{z}</option>)}
+                      </select></label>
+                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Notas
+                      <input value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Alergias, ocasión, mesa pedida…"
+                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3 }} /></label>
+                  </div>
+                  <button onClick={saveResEdit}
+                    style={{ width: '100%', minHeight: 50, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                    Guardar cambios (reserva y cliente)
+                  </button>
+                </div>
+              )}
 
               {/* Cliente — datos editables en la misma ventana */}
               {canWrite && guestEdit && (
@@ -1030,96 +1122,6 @@ export function Reservations({ userRole, userId }: Props) {
                 </div>
               )}
 
-              {/* Edición completa — cualquier rol con escritura (HoH incluido) */}
-              {canWrite && editForm && (
-                <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
-                  <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 8 }}>Reserva</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 0.8fr', gap: 8, marginBottom: 8 }}>
-                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Fecha
-                      <input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} className="num"
-                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3 }} /></label>
-                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Hora
-                      <input type="time" value={editForm.time} onChange={e => setEditForm({ ...editForm, time: e.target.value })} className="num"
-                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, fontFamily: 'var(--font-mono)' }} /></label>
-                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Pax
-                      <input type="number" inputMode="numeric" min={1} value={editForm.pax} onChange={e => setEditForm({ ...editForm, pax: Math.max(1, Number(e.target.value)) })} className="num"
-                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, textAlign: 'center' }} /></label>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8, marginBottom: 8 }}>
-                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Zona
-                      <select value={editForm.zone} onChange={e => setEditForm({ ...editForm, zone: e.target.value })}
-                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3, cursor: 'pointer' }}>
-                        <option value="">Sin zona</option>
-                        {[...new Set([...ZONES, ...(editForm.zone ? [editForm.zone] : [])])].map(z => <option key={z} value={z}>{z}</option>)}
-                      </select></label>
-                    <label style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Notas
-                      <input value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Alergias, ocasión, mesa pedida…"
-                        style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginTop: 3 }} /></label>
-                  </div>
-                  <button onClick={saveResEdit}
-                    style={{ width: '100%', minHeight: 50, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-                    Guardar cambios (reserva y cliente)
-                  </button>
-                </div>
-              )}
-              {menuRes.proposed_time && (
-                <div style={{ background: 'color-mix(in srgb, var(--status-attention) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--status-attention) 30%, transparent)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                  <p style={{ fontSize: 12, color: 'var(--status-attention)', fontWeight: 700, margin: '0 0 8px' }}>
-                    Propuesta de cambio: {menuRes.time_slot} → {menuRes.proposed_time} (esperando al cliente)
-                  </p>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={async () => {
-                      const { error } = await supabase.from('reservations').update({ time_slot: menuRes.proposed_time, proposed_time: null }).eq('id', menuRes.id)
-                      if (error) { showToast(`No se pudo aplicar: ${error.message}`, 'error'); return }
-                      logActivity('reservation_updated', 'reservation', menuRes.id, { antes: menuRes.time_slot, ahora: menuRes.proposed_time, via: 'propuesta_aceptada' })
-                      showToast(`Reserva movida a las ${menuRes.proposed_time}.`, 'success')
-                      setMenuRes(null); load()
-                    }}
-                      style={{ flex: 1, minHeight: 44, borderRadius: 999, border: 'none', background: 'var(--accent)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                      Cliente aceptó → mover
-                    </button>
-                    <button onClick={async () => {
-                      const { error } = await supabase.from('reservations').update({ proposed_time: null }).eq('id', menuRes.id)
-                      if (error) { showToast(`No se pudo: ${error.message}`, 'error'); return }
-                      logActivity('reservation_updated', 'reservation', menuRes.id, { mantiene: menuRes.time_slot, via: 'propuesta_rechazada' })
-                      showToast(`Se mantiene a las ${menuRes.time_slot} — resuelve el conflicto en la curva.`, 'success')
-                      setMenuRes(null); load()
-                    }}
-                      style={{ flex: 1, minHeight: 44, borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                      No aceptó → mantener
-                    </button>
-                  </div>
-                </div>
-              )}
-              {/* UNA acción primaria según el momento de la reserva — el
-                  resto queda discreto. La línea de tiempo ya cuenta el estado;
-                  aquí solo vive el siguiente paso. */}
-              {menuRes.status === 'requested' && (
-                <button onClick={() => confirmWhatsApp(menuRes)}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: '#1fa855', color: '#fff', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
-                  <MessageCircle size={17} /> Confirmar y enviar WhatsApp
-                </button>
-              )}
-              {menuRes.status === 'confirmed' && (
-                <button onClick={() => { if (window.confirm(`¿Sentar a ${guestMap[menuRes.guest_id]?.full_name ?? 'cliente'}, ${menuRes.party_size} pax?`)) setStatus(menuRes, 'seated') }}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
-                  <Armchair size={17} /> Sentar
-                </button>
-              )}
-              {menuRes.status === 'confirmed' && !menuRes.confirm_sent_at && (
-                /* Confirmada pero sin mensaje enviado: el hueco se ve en la
-                   línea de tiempo y este botón discreto lo cierra */
-                <button onClick={() => confirmWhatsApp(menuRes)}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, padding: '0 14px', borderRadius: 999, border: '1px solid #1fa855', background: 'none', color: '#1fa855', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                  <MessageCircle size={15} /> Enviar confirmación por WhatsApp
-                </button>
-              )}
-              {menuRes.status === 'seated' && (
-                <button onClick={() => setStatus(menuRes, 'completed')}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, padding: '0 14px', borderRadius: 999, border: 'none', background: 'var(--status-healthy)', color: '#04210f', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
-                  <Check size={17} /> Completar visita — terminó su estancia
-                </button>
-              )}
               {menuRes.party_size >= eventPaxThreshold && !['completed', 'no_show', 'cancelled'].includes(menuRes.status) && (
                 <button onClick={() => convertToDeal(menuRes)}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, padding: '0 14px', borderRadius: 999, border: '1px solid var(--accent-border)', background: 'var(--accent-bg)', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
@@ -1157,6 +1159,10 @@ export function Reservations({ userRole, userId }: Props) {
                   )}
                 </>
               )}
+
+              {/* La historia completa de la reserva — al final: es consulta,
+                  no gestión. Lo operativo ya quedó arriba. */}
+              <ResTimeline res={menuRes} bookedByName={bookedBy(menuRes)} />
             </div>
           </div>
         )}

@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.100.0"
+export const APP_VERSION = "2.100.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.100.1",
+    date: "2026-08-18",
+    type: "PATCH",
+    changes: [
+      "VENTANA DE RESERVA reordenada para el equipo en piso: lo primero que se ve es lo accionable — la alerta de cambio de hora (si hay), el botón del siguiente paso (Confirmar/Sentar/Completar) y los datos de la reserva editables (fecha, hora, pax, zona, notas)",
+      "El cliente pasó al segundo bloque y la LÍNEA DE TIEMPO bajó al final de la ventana — es consulta, no gestión",
+    ]
+  },
   {
     version: "2.100.0",
     date: "2026-08-18",
