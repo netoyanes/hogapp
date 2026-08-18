@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.94.0"
+export const APP_VERSION = "2.94.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.94.1",
+    date: "2026-08-18",
+    type: "PATCH",
+    changes: [
+      "MENÚ OC — el Brunch Dominical (y el Especial de Sábado) ahora van ENMARCADOS como tarjeta con doble filete y fondo propio: son paquetes cerrados, no parte del menú corrido — antes al llegar a Entradas parecía que el brunch seguía",
+      "La nota de la copa de espumoso cierra el marco como pie, con su filete",
+      "El botón de idioma pasó a círculo compacto EN/ES — el largo tapaba los banners al flotar",
+    ]
+  },
   {
     version: "2.94.0",
     date: "2026-08-18",
