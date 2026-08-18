@@ -617,6 +617,16 @@ const MENU = {
      ------------------------------------------------------------------------ */
   banners: [
     {
+      id: "brunch-dominical",
+      titulo: "Brunch Dominical · todos los domingos",
+      texto: "Ostiones ilimitados, tostadas, caldo bichi y copa de espumoso",
+      dias: [],
+      hora_inicio: null,
+      hora_fin: null,
+      siempre_visible: true,
+      estado: "activo"
+    },
+    {
       id: "happy-hour-bebidas",
       titulo: "Happy Hour • 3:00 P.M. - 6:00 P.M.",
       texto: "2 x 1 en Martinis & Oyster Marys",
@@ -643,259 +653,71 @@ const MENU = {
      ------------------------------------------------------------------------ */
   secciones: [
 
-    /* ====================================================================
-       BEBIDAS  (activa) — contenido tal cual la carta digital de bebidas
-       ==================================================================== */
     {
-      id: "bebidas",
-      nombre: "Bebidas",
-      subtitulo:
-        "Destilados y licores se sirven de 45 ml. Precios en pesos mexicanos, " +
-        "IVA incluido. La propina no es obligatoria.",
+      id: "especial-de-sabado",
+      nombre: "Especial de Sábado",
+      subtitulo: null,
       estado: "activo",
-      dias_visibles: null,
+      dias_visibles: [6],   // solo visible los sábados cuando esté activa
+      /* Contenido tomado tal cual de la media carta impresa (sin precios). */
       grupos: [
-
-        /* --- LOS OYSTER SHOTS --------------------------------------- */
         {
-          nombre: "Los Oyster Shots",
-          alineacion_titulo: "centro",
-          estilo: "lista",
-          alineacion: "izquierda",
+          nombre: "Ostiones",
+          estilo: "lista",   // renglones centrados y espaciados, como la carta
           items: [
-            { nombre: "Shot de Oyster Mary",  precio: null, estado: "activo" },
-            { nombre: "Shot de Espumoso",     precio: null, estado: "activo" },
-            { nombre: "Shot de Arrecife MC",  precio: null, estado: "activo" }
-          ],
-          nota_pie: "Acompañados de tres piezas de ostion",
-          precio: 330
-        },
-
-        /* --- COCTELERÍA SIGNATURE ----------------------------------- */
-        {
-          nombre: "Coctelería Signature",
-          titulo_estilo: "etiqueta",
-          estilo: "display",
-          alineacion: "izquierda",
-          items: [
-            { nombre: "Oyster Mary",    precio: 220, descripcion: "Jugo de tomate preparado con vodka", estado: "activo" },
-            { nombre: "Mar Verde",      precio: 260, descripcion: "Syrup de eucalipto, chartreuse verde y tequileño blanco", estado: "activo" },
-            { nombre: "Shiso Martini",  precio: 260, descripcion: "Vodka de shiso, vermut seco y aceite de shiso", estado: "activo" },
-            { nombre: "Marea Blanca",   precio: 260, descripcion: "Vodka de ruibarbo, lychee, prosecco y syrup de cardamomo - romero", estado: "activo" },
-            { nombre: "Arrecife MC",    precio: 260, descripcion: "Tequileño blanco, pepino y syrup de chile con limón amarillo", estado: "activo" },
-            { nombre: "Pepino Martini", precio: 260, descripcion: "Vodka, vermut seco, pepino, albahaca y limón", estado: "activo" }
-          ]
-        },
-
-        /* --- COCTELERÍA CLÁSICA ------------------------------------- */
-        {
-          nombre: "Coctelería Clásica",
-          titulo_estilo: "etiqueta",
-          estilo: "display",
-          alineacion: "izquierda",
-          items: [
-            { nombre: "Mezcalita",        precio: 240, volumen_ml: 110, estado: "activo" },
-            { nombre: "Margarita",        precio: 230, volumen_ml: 110, estado: "activo" },
-            { nombre: "Cosmopolitan",     precio: 250, volumen_ml: 120, estado: "activo" },
-            { nombre: "Martini",          precio: 270, volumen_ml: 90,  estado: "activo" },
-            { nombre: "Espresso Martini", precio: 260, volumen_ml: 120, estado: "activo" },
-            { nombre: "Negroni",          precio: 260, volumen_ml: 90,  estado: "activo" },
-            { nombre: "Mezcal Negroni",   precio: 260, volumen_ml: 110, estado: "activo" },
-            { nombre: "Old Fashioned",    precio: 260, volumen_ml: 90,  estado: "activo" },
-            { nombre: "Naked & Famous",   precio: 280, volumen_ml: 120, estado: "activo" },
-            { nombre: "Carajillo",        precio: 240, volumen_ml: 90,  estado: "activo" }
+            { nombre: "Aguachile verde", precio: null, estado: "activo" },
+            { nombre: "Maracuyá",        precio: null, estado: "activo" },
+            { nombre: "Habanero",        precio: null, estado: "activo" },
+            { nombre: "Mignonette",      precio: null, estado: "activo" },
+            { nombre: "Rasurado",        precio: null, estado: "activo" },
+            { nombre: "Natural",         precio: null, estado: "activo" }
           ]
         },
         {
           nombre: null,
-          estilo: "display",
-          alineacion: "derecha",
+          centrado: true,
           items: [
-            { nombre: "St-Germain Spritz", precio: 280, volumen_ml: 160, estado: "activo" },
-            { nombre: "Aperol Spritz",     precio: 260, volumen_ml: 160, estado: "activo" },
-            { nombre: "Mezcal Spritz",     precio: 260, volumen_ml: 160, estado: "activo" }
-          ]
-        },
-
-        /* --- MEZCAL & TEQUILA ---------------------------------------- */
-        {
-          nombre: "Mezcal & Tequila",
-          titulo_estilo: "etiqueta",
-          estilo: "display",
-          alineacion: "izquierda",
-          items: [
-            { nombre: "400 Conejos",    precio: 220, volumen_ml: 45, estado: "activo" },
-            { nombre: "Amarás Espadín", precio: 260, volumen_ml: 45, estado: "activo" },
-            { nombre: "Montelobos",     precio: 260, volumen_ml: 45, estado: "activo" },
-            { nombre: "Ojo de Tigre",   precio: 230, volumen_ml: 45, estado: "activo" }
-          ]
-        },
-        {
-          nombre: null,
-          estilo: "display",
-          alineacion: "derecha",
-          items: [
-            { nombre: "Dobel Diamante",    precio: 220, volumen_ml: 45, estado: "activo" },
-            { nombre: "Don Julio 70",      precio: 270, volumen_ml: 45, estado: "activo" },
-            { nombre: "7 Leguas Blanco",   precio: 190, volumen_ml: 45, estado: "activo" },
-            { nombre: "7 Leguas Reposado", precio: 210, volumen_ml: 45, estado: "activo" },
-            { nombre: "Tequileño",         precio: 190, volumen_ml: 45, estado: "activo" },
-            { nombre: "1800 Cristalino",   precio: 220, volumen_ml: 45, estado: "activo" },
-            { nombre: "Siete Machos",      precio: 190, volumen_ml: 45, estado: "activo" },
-            { nombre: "Velvique",          precio: 290, volumen_ml: 45, estado: "activo" }
-          ]
-        },
-
-        /* --- RON ------------------------------------------------------ */
-        {
-          nombre: "Ron",
-          titulo_estilo: "etiqueta",
-          alineacion_titulo: "izquierda",
-          estilo: "display",
-          alineacion: "izquierda",
-          items: [
-            { nombre: "Bacardí Blanco",    precio: 160, volumen_ml: 45, estado: "activo" },
-            { nombre: "Matusalem Platino", precio: 170, volumen_ml: 45, estado: "activo" },
-            { nombre: "Havana 7",          precio: 190, volumen_ml: 45, estado: "activo" },
-            { nombre: "Zacapa 23",         precio: 240, volumen_ml: 45, estado: "activo" }
-          ]
-        },
-
-        /* --- GINEBRA -------------------------------------------------- */
-        {
-          nombre: "Ginebra",
-          titulo_estilo: "etiqueta",
-          alineacion_titulo: "derecha",
-          estilo: "display",
-          alineacion: "derecha",
-          items: [
-            { nombre: "Bombay Sapphire", precio: 190, volumen_ml: 45, estado: "activo" },
-            { nombre: "Tanqueray",       precio: 210, volumen_ml: 45, estado: "activo" },
-            { nombre: "Hendrick's",      precio: 240, volumen_ml: 45, estado: "activo" }
-          ]
-        },
-
-        /* --- WHISKY --------------------------------------------------- */
-        {
-          nombre: "Whisky",
-          titulo_estilo: "etiqueta",
-          alineacion_titulo: "izquierda",
-          estilo: "display",
-          alineacion: "izquierda",
-          items: [
-            { nombre: "Johnnie Walker Black Label", precio: 230, volumen_ml: 45, estado: "activo" },
-            { nombre: "Bulleit",                    precio: 200, volumen_ml: 45, estado: "activo" },
-            { nombre: "Jack Daniel's",              precio: 210, volumen_ml: 45, estado: "activo" },
-            { nombre: "Chivas 12",                  precio: 230, volumen_ml: 45, estado: "activo" }
-          ]
-        },
-
-        /* --- VODKA ---------------------------------------------------- */
-        {
-          nombre: "Vodka",
-          titulo_estilo: "etiqueta",
-          alineacion_titulo: "derecha",
-          estilo: "display",
-          alineacion: "derecha",
-          items: [
-            { nombre: "Stoli",      precio: 170, volumen_ml: 45, estado: "activo" },
-            { nombre: "Grey Goose", precio: 220, volumen_ml: 45, estado: "activo" }
-          ]
-        },
-
-        /* --- LICORES -------------------------------------------------- */
-        {
-          nombre: "Licores",
-          titulo_estilo: "etiqueta",
-          alineacion_titulo: "izquierda",
-          estilo: "display",
-          alineacion: "izquierda",
-          items: [
-            { nombre: "Fernet Branca", precio: 180, volumen_ml: 45, estado: "activo" },
-            { nombre: "Licor 43",      precio: 180, volumen_ml: 45, estado: "activo" },
-            { nombre: "Baileys",       precio: 180, volumen_ml: 45, estado: "activo" },
-            { nombre: "Sambuca Negro", precio: 180, volumen_ml: 45, estado: "activo" },
-            { nombre: "Strega",        precio: 190, volumen_ml: 45, estado: "activo" },
-            { nombre: "Campari",       precio: 170, volumen_ml: 45, estado: "activo" },
-            { nombre: "Aperol",        precio: 170, volumen_ml: 45, estado: "activo" }
-          ]
-        },
-
-        /* --- VINOS ---------------------------------------------------- */
-        {
-          nombre: "Vinos",
-          titulo_estilo: "etiqueta",
-          estilo: "display",
-          alineacion: "alternada",
-          items: [
-            { nombre: "Casa Madero 3V",        precio: 1450, estado: "activo" },
-            { nombre: "Chenin Blanc Orgánico", precio: 1100, precio_copa: 220, estado: "activo" },
-            { nombre: "Monte Xanic Chenin",    precio: 1450, estado: "activo" },
-            { nombre: "Monteviña Blanco",      precio: 890,  precio_copa: 180, estado: "activo" },
-            { nombre: "Casa Madero Rosado",    precio: 1100, estado: "activo" },
-            { nombre: "Casa Madero 2V",        precio: 1200, precio_copa: 230, estado: "activo" },
-            { nombre: "Freakshow Petit",       precio: 1790, estado: "activo" },
-            { nombre: "Casa Madero Shiraz",    precio: 1200, precio_copa: 230, estado: "activo" },
-            { nombre: "Edad Moderna Blanco",   precio: 1630, estado: "activo" },
-            { nombre: "Hito Rosé",             precio: 920,  precio_copa: 190, estado: "activo" },
-            { nombre: "L\u2019Ars Espumoso",       precio: 930,  estado: "activo" }
-          ]
-        },
-
-        /* --- CERVEZA -------------------------------------------------- */
-        {
-          nombre: "Cerveza",
-          alineacion_titulo: "izquierda",
-          estilo: "leader",
-          items: [
-            { nombre: "Corona",           precio: 110, volumen_ml: 355, estado: "activo" },
-            { nombre: "Victoria",         precio: 110, volumen_ml: 355, estado: "activo" },
-            { nombre: "Pacífico Ballena", precio: 220, estado: "activo" },
-            { nombre: "Miller High Life", precio: 220, estado: "activo" }
-          ]
-        },
-
-        /* --- SIN ALCOHOL ---------------------------------------------- */
-        {
-          nombre: "Sin Alcohol",
-          alineacion_titulo: "izquierda",
-          estilo: "leader",
-          items: [
-            { nombre: "Limonada",     precio: 120, etiquetas: ["sin alcohol"], estado: "activo" },
-            { nombre: "Agua Mineral", precio: 80,  volumen_ml: 355, etiquetas: ["sin alcohol"], estado: "activo" },
-            { nombre: "Refresco",     precio: 80,  volumen_ml: 355, etiquetas: ["sin alcohol"], estado: "activo" },
-            { nombre: "Agua Natural", precio: 70,  volumen_ml: 355, etiquetas: ["sin alcohol"], estado: "activo" }
-          ]
-        },
-
-        /* --- CAFÉ ------------------------------------------------------ */
-        {
-          nombre: "Café",
-          alineacion_titulo: "izquierda",
-          estilo: "leader",
-          items: [
-            { nombre: "Americano", precio: 70, estado: "activo" },
-            { nombre: "Espresso",  precio: 70, estado: "activo" },
-            { nombre: "Latte",     precio: 80, estado: "activo" }
-          ]
-        },
-
-        /* --- FUERA DE CARTA (ocultos, nunca se borran) ----------------- */
-        {
-          nombre: "Fuera de carta",
-          estilo: "leader",
-          items: [
-            { nombre: "Modelo Especial",    precio: 120, volumen_ml: 355, estado: "oculto" },
-            { nombre: "Negra Modelo",       precio: 120, volumen_ml: 355, estado: "oculto" },
-            { nombre: "Pacífico",           precio: 110, volumen_ml: 355, estado: "oculto" },
-            { nombre: "Mezcalita Black",    precio: 240, volumen_ml: 110, estado: "oculto" },
-            { nombre: "Mezcalitas Sabores", precio: 240, volumen_ml: 110, descripcion: "Maracuyá, jamaica, pepino, toronja, tamarindo", estado: "oculto" },
-            { nombre: "Margaritas Sabores", precio: 230, volumen_ml: 110, descripcion: "Maracuyá, jamaica, pepino, toronja, tamarindo", estado: "oculto" },
-            { nombre: "Lemonade",           precio: 120, descripcion: "Maracuyá / Pepino / Jamaica", estado: "oculto" }
+            { nombre: "Shot de camarón con ostion",   precio: null, estado: "activo" },
+            { nombre: "Camarones ajillo agridulce",   precio: null, estado: "activo" },
+            { nombre: "Crudo de kampachi",            precio: null, estado: "activo" },
+            { nombre: "Crudo de callo",               precio: null, estado: "activo" },
+            { nombre: "Taco de jaiba",                precio: null, estado: "activo" }
           ]
         }
       ]
     },
+    {
+      id: "brunch-dominical",
+      nombre: "Brunch Dominical",
+      subtitulo: "Todos los domingos",
+      estado: "activo",
+      /* Visible TODA la semana a propósito: anuncia el brunch para que la
+         gente planee su domingo — no solo lo descubra ya estando ahí. */
+      dias_visibles: null,
+      grupos: [
+        {
+          nombre: null,
+          estilo: "lista",
+          items: [
+            { nombre: "Ostiones ilimitados", descripcion: "En todas sus variedades de salsas", precio: null, estado: "activo" },
+            { nombre: "Tostada a elegir · 1 pza por persona", descripcion: "Excepto jaiba", precio: null, estado: "activo" },
+            { nombre: "Caldo bichi por persona", precio: null, estado: "activo" },
+            { nombre: "Shots de cóctel de camarón con ostión", precio: null, estado: "activo" },
+            { nombre: "Arroz amarillo con variedad de almejas", descripcion: "Porción por persona", precio: null, estado: "activo" }
+          ]
+        },
+        {
+          nombre: "Postre a elegir",
+          estilo: "lista",
+          items: [
+            { nombre: "Arroz con leche", precio: null, estado: "activo" },
+            { nombre: "Nuestra variedad de helados artesanales", precio: null, estado: "activo" }
+          ],
+          nota_pie: "Acompañado de copa de vino espumoso para degustar"
+        }
+      ]
+    },
+
 
     /* ====================================================================
        LA BARRA DE CONCHAS  (activa) — menú corto soft opening
@@ -1169,47 +991,6 @@ const MENU = {
       grupos: []
     },
     {
-      id: "especial-de-sabado",
-      nombre: "Especial de Sábado",
-      subtitulo: null,
-      estado: "activo",
-      dias_visibles: [6],   // solo visible los sábados cuando esté activa
-      /* Contenido tomado tal cual de la media carta impresa (sin precios). */
-      grupos: [
-        {
-          nombre: "Ostiones",
-          estilo: "lista",   // renglones centrados y espaciados, como la carta
-          items: [
-            { nombre: "Aguachile verde", precio: null, estado: "activo" },
-            { nombre: "Maracuyá",        precio: null, estado: "activo" },
-            { nombre: "Habanero",        precio: null, estado: "activo" },
-            { nombre: "Mignonette",      precio: null, estado: "activo" },
-            { nombre: "Rasurado",        precio: null, estado: "activo" },
-            { nombre: "Natural",         precio: null, estado: "activo" }
-          ]
-        },
-        {
-          nombre: null,
-          centrado: true,
-          items: [
-            { nombre: "Shot de camarón con ostion",   precio: null, estado: "activo" },
-            { nombre: "Camarones ajillo agridulce",   precio: null, estado: "activo" },
-            { nombre: "Crudo de kampachi",            precio: null, estado: "activo" },
-            { nombre: "Crudo de callo",               precio: null, estado: "activo" },
-            { nombre: "Taco de jaiba",                precio: null, estado: "activo" }
-          ]
-        }
-      ]
-    },
-    {
-      id: "especial-de-domingo",
-      nombre: "Especial de Domingo",
-      subtitulo: null,
-      estado: "oculto",
-      dias_visibles: [0],   // solo visible los domingos cuando esté activa
-      grupos: []
-    },
-    {
       id: "para-terminar",
       nombre: "Para Terminar",
       subtitulo: "Postres",
@@ -1225,7 +1006,261 @@ const MENU = {
           ]
         }
       ]
-    }
+    },
+
+    /* ====================================================================
+       BEBIDAS  (activa) — contenido tal cual la carta digital de bebidas
+       ==================================================================== */
+    {
+      id: "bebidas",
+      nombre: "Bebidas",
+      subtitulo:
+        "Destilados y licores se sirven de 45 ml. Precios en pesos mexicanos, " +
+        "IVA incluido. La propina no es obligatoria.",
+      estado: "activo",
+      dias_visibles: null,
+      grupos: [
+
+        /* --- LOS OYSTER SHOTS --------------------------------------- */
+        {
+          nombre: "Los Oyster Shots",
+          alineacion_titulo: "centro",
+          estilo: "lista",
+          alineacion: "izquierda",
+          items: [
+            { nombre: "Shot de Oyster Mary",  precio: null, estado: "activo" },
+            { nombre: "Shot de Espumoso",     precio: null, estado: "activo" },
+            { nombre: "Shot de Arrecife MC",  precio: null, estado: "activo" }
+          ],
+          nota_pie: "Acompañados de tres piezas de ostion",
+          precio: 330
+        },
+
+        /* --- COCTELERÍA SIGNATURE ----------------------------------- */
+        {
+          nombre: "Coctelería Signature",
+          titulo_estilo: "etiqueta",
+          estilo: "display",
+          alineacion: "izquierda",
+          items: [
+            { nombre: "Oyster Mary",    precio: 220, descripcion: "Jugo de tomate preparado con vodka", estado: "activo" },
+            { nombre: "Mar Verde",      precio: 260, descripcion: "Syrup de eucalipto, chartreuse verde y tequileño blanco", estado: "activo" },
+            { nombre: "Shiso Martini",  precio: 260, descripcion: "Vodka de shiso, vermut seco y aceite de shiso", estado: "activo" },
+            { nombre: "Marea Blanca",   precio: 260, descripcion: "Vodka de ruibarbo, lychee, prosecco y syrup de cardamomo - romero", estado: "activo" },
+            { nombre: "Arrecife MC",    precio: 260, descripcion: "Tequileño blanco, pepino y syrup de chile con limón amarillo", estado: "activo" },
+            { nombre: "Pepino Martini", precio: 260, descripcion: "Vodka, vermut seco, pepino, albahaca y limón", estado: "activo" }
+          ]
+        },
+
+        /* --- COCTELERÍA CLÁSICA ------------------------------------- */
+        {
+          nombre: "Coctelería Clásica",
+          titulo_estilo: "etiqueta",
+          estilo: "display",
+          alineacion: "izquierda",
+          items: [
+            { nombre: "Mezcalita",        precio: 240, volumen_ml: 110, estado: "activo" },
+            { nombre: "Margarita",        precio: 230, volumen_ml: 110, estado: "activo" },
+            { nombre: "Cosmopolitan",     precio: 250, volumen_ml: 120, estado: "activo" },
+            { nombre: "Martini",          precio: 270, volumen_ml: 90,  estado: "activo" },
+            { nombre: "Espresso Martini", precio: 260, volumen_ml: 120, estado: "activo" },
+            { nombre: "Negroni",          precio: 260, volumen_ml: 90,  estado: "activo" },
+            { nombre: "Mezcal Negroni",   precio: 260, volumen_ml: 110, estado: "activo" },
+            { nombre: "Old Fashioned",    precio: 260, volumen_ml: 90,  estado: "activo" },
+            { nombre: "Naked & Famous",   precio: 280, volumen_ml: 120, estado: "activo" },
+            { nombre: "Carajillo",        precio: 240, volumen_ml: 90,  estado: "activo" }
+          ]
+        },
+        {
+          nombre: null,
+          estilo: "display",
+          alineacion: "derecha",
+          items: [
+            { nombre: "St-Germain Spritz", precio: 280, volumen_ml: 160, estado: "activo" },
+            { nombre: "Aperol Spritz",     precio: 260, volumen_ml: 160, estado: "activo" },
+            { nombre: "Mezcal Spritz",     precio: 260, volumen_ml: 160, estado: "activo" }
+          ]
+        },
+
+        /* --- MEZCAL & TEQUILA ---------------------------------------- */
+        {
+          nombre: "Mezcal & Tequila",
+          titulo_estilo: "etiqueta",
+          estilo: "display",
+          alineacion: "izquierda",
+          items: [
+            { nombre: "400 Conejos",    precio: 220, volumen_ml: 45, estado: "activo" },
+            { nombre: "Amarás Espadín", precio: 260, volumen_ml: 45, estado: "activo" },
+            { nombre: "Montelobos",     precio: 260, volumen_ml: 45, estado: "activo" },
+            { nombre: "Ojo de Tigre",   precio: 230, volumen_ml: 45, estado: "activo" }
+          ]
+        },
+        {
+          nombre: null,
+          estilo: "display",
+          alineacion: "derecha",
+          items: [
+            { nombre: "Dobel Diamante",    precio: 220, volumen_ml: 45, estado: "activo" },
+            { nombre: "Don Julio 70",      precio: 270, volumen_ml: 45, estado: "activo" },
+            { nombre: "7 Leguas Blanco",   precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "7 Leguas Reposado", precio: 210, volumen_ml: 45, estado: "activo" },
+            { nombre: "Tequileño",         precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "1800 Cristalino",   precio: 220, volumen_ml: 45, estado: "activo" },
+            { nombre: "Siete Machos",      precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "Velvique",          precio: 290, volumen_ml: 45, estado: "activo" }
+          ]
+        },
+
+        /* --- RON ------------------------------------------------------ */
+        {
+          nombre: "Ron",
+          titulo_estilo: "etiqueta",
+          alineacion_titulo: "izquierda",
+          estilo: "display",
+          alineacion: "izquierda",
+          items: [
+            { nombre: "Bacardí Blanco",    precio: 160, volumen_ml: 45, estado: "activo" },
+            { nombre: "Matusalem Platino", precio: 170, volumen_ml: 45, estado: "activo" },
+            { nombre: "Havana 7",          precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "Zacapa 23",         precio: 240, volumen_ml: 45, estado: "activo" }
+          ]
+        },
+
+        /* --- GINEBRA -------------------------------------------------- */
+        {
+          nombre: "Ginebra",
+          titulo_estilo: "etiqueta",
+          alineacion_titulo: "derecha",
+          estilo: "display",
+          alineacion: "derecha",
+          items: [
+            { nombre: "Bombay Sapphire", precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "Tanqueray",       precio: 210, volumen_ml: 45, estado: "activo" },
+            { nombre: "Hendrick's",      precio: 240, volumen_ml: 45, estado: "activo" }
+          ]
+        },
+
+        /* --- WHISKY --------------------------------------------------- */
+        {
+          nombre: "Whisky",
+          titulo_estilo: "etiqueta",
+          alineacion_titulo: "izquierda",
+          estilo: "display",
+          alineacion: "izquierda",
+          items: [
+            { nombre: "Johnnie Walker Black Label", precio: 230, volumen_ml: 45, estado: "activo" },
+            { nombre: "Bulleit",                    precio: 200, volumen_ml: 45, estado: "activo" },
+            { nombre: "Jack Daniel's",              precio: 210, volumen_ml: 45, estado: "activo" },
+            { nombre: "Chivas 12",                  precio: 230, volumen_ml: 45, estado: "activo" }
+          ]
+        },
+
+        /* --- VODKA ---------------------------------------------------- */
+        {
+          nombre: "Vodka",
+          titulo_estilo: "etiqueta",
+          alineacion_titulo: "derecha",
+          estilo: "display",
+          alineacion: "derecha",
+          items: [
+            { nombre: "Stoli",      precio: 170, volumen_ml: 45, estado: "activo" },
+            { nombre: "Grey Goose", precio: 220, volumen_ml: 45, estado: "activo" }
+          ]
+        },
+
+        /* --- LICORES -------------------------------------------------- */
+        {
+          nombre: "Licores",
+          titulo_estilo: "etiqueta",
+          alineacion_titulo: "izquierda",
+          estilo: "display",
+          alineacion: "izquierda",
+          items: [
+            { nombre: "Fernet Branca", precio: 180, volumen_ml: 45, estado: "activo" },
+            { nombre: "Licor 43",      precio: 180, volumen_ml: 45, estado: "activo" },
+            { nombre: "Baileys",       precio: 180, volumen_ml: 45, estado: "activo" },
+            { nombre: "Sambuca Negro", precio: 180, volumen_ml: 45, estado: "activo" },
+            { nombre: "Strega",        precio: 190, volumen_ml: 45, estado: "activo" },
+            { nombre: "Campari",       precio: 170, volumen_ml: 45, estado: "activo" },
+            { nombre: "Aperol",        precio: 170, volumen_ml: 45, estado: "activo" }
+          ]
+        },
+
+        /* --- VINOS ---------------------------------------------------- */
+        {
+          nombre: "Vinos",
+          titulo_estilo: "etiqueta",
+          estilo: "display",
+          alineacion: "alternada",
+          items: [
+            { nombre: "Casa Madero 3V",        precio: 1450, estado: "activo" },
+            { nombre: "Chenin Blanc Orgánico", precio: 1100, precio_copa: 220, estado: "activo" },
+            { nombre: "Monte Xanic Chenin",    precio: 1450, estado: "activo" },
+            { nombre: "Monteviña Blanco",      precio: 890,  precio_copa: 180, estado: "activo" },
+            { nombre: "Casa Madero Rosado",    precio: 1100, estado: "activo" },
+            { nombre: "Casa Madero 2V",        precio: 1200, precio_copa: 230, estado: "activo" },
+            { nombre: "Freakshow Petit",       precio: 1790, estado: "activo" },
+            { nombre: "Casa Madero Shiraz",    precio: 1200, precio_copa: 230, estado: "activo" },
+            { nombre: "Edad Moderna Blanco",   precio: 1630, estado: "activo" },
+            { nombre: "Hito Rosé",             precio: 920,  precio_copa: 190, estado: "activo" },
+            { nombre: "L\u2019Ars Espumoso",       precio: 930,  estado: "activo" }
+          ]
+        },
+
+        /* --- CERVEZA -------------------------------------------------- */
+        {
+          nombre: "Cerveza",
+          alineacion_titulo: "izquierda",
+          estilo: "leader",
+          items: [
+            { nombre: "Corona",           precio: 110, volumen_ml: 355, estado: "activo" },
+            { nombre: "Victoria",         precio: 110, volumen_ml: 355, estado: "activo" },
+            { nombre: "Pacífico Ballena", precio: 220, estado: "activo" },
+            { nombre: "Miller High Life", precio: 220, estado: "activo" }
+          ]
+        },
+
+        /* --- SIN ALCOHOL ---------------------------------------------- */
+        {
+          nombre: "Sin Alcohol",
+          alineacion_titulo: "izquierda",
+          estilo: "leader",
+          items: [
+            { nombre: "Limonada",     precio: 120, etiquetas: ["sin alcohol"], estado: "activo" },
+            { nombre: "Agua Mineral", precio: 80,  volumen_ml: 355, etiquetas: ["sin alcohol"], estado: "activo" },
+            { nombre: "Refresco",     precio: 80,  volumen_ml: 355, etiquetas: ["sin alcohol"], estado: "activo" },
+            { nombre: "Agua Natural", precio: 70,  volumen_ml: 355, etiquetas: ["sin alcohol"], estado: "activo" }
+          ]
+        },
+
+        /* --- CAFÉ ------------------------------------------------------ */
+        {
+          nombre: "Café",
+          alineacion_titulo: "izquierda",
+          estilo: "leader",
+          items: [
+            { nombre: "Americano", precio: 70, estado: "activo" },
+            { nombre: "Espresso",  precio: 70, estado: "activo" },
+            { nombre: "Latte",     precio: 80, estado: "activo" }
+          ]
+        },
+
+        /* --- FUERA DE CARTA (ocultos, nunca se borran) ----------------- */
+        {
+          nombre: "Fuera de carta",
+          estilo: "leader",
+          items: [
+            { nombre: "Modelo Especial",    precio: 120, volumen_ml: 355, estado: "oculto" },
+            { nombre: "Negra Modelo",       precio: 120, volumen_ml: 355, estado: "oculto" },
+            { nombre: "Pacífico",           precio: 110, volumen_ml: 355, estado: "oculto" },
+            { nombre: "Mezcalita Black",    precio: 240, volumen_ml: 110, estado: "oculto" },
+            { nombre: "Mezcalitas Sabores", precio: 240, volumen_ml: 110, descripcion: "Maracuyá, jamaica, pepino, toronja, tamarindo", estado: "oculto" },
+            { nombre: "Margaritas Sabores", precio: 230, volumen_ml: 110, descripcion: "Maracuyá, jamaica, pepino, toronja, tamarindo", estado: "oculto" },
+            { nombre: "Lemonade",           precio: 120, descripcion: "Maracuyá / Pepino / Jamaica", estado: "oculto" }
+          ]
+        }
+      ]
+    },
   ]
 };
 
@@ -1249,6 +1284,224 @@ if (typeof module !== "undefined" && module.exports) {
 
 (function () {
   "use strict";
+
+  /* ---- Idioma (ES/EN) ------------------------------------------------
+     Un solo origen de datos (en español) + diccionario de traducción.
+     Lo que no esté en el diccionario se muestra en español tal cual —
+     nombres propios de cócteles, marcas y platillos se quedan.
+     El botón EN/ES guarda la elección y recarga. ---------------------- */
+  const LANG = localStorage.getItem("oc_lang") === "en" ? "en" : "es";
+  const EN = {
+    /* — UI — */
+    "Reservar mesa": "Book a table",
+    "Próximamente": "Coming soon",
+    "Copa": "Glass",
+    "Marisquería de tres costas": "A seafood house of three coasts",
+    "Atlántico europeo": "European Atlantic",
+    "Mar de Cortés": "Sea of Cortez",
+    "Pacífico californiano": "Californian Pacific",
+    "Precios en pesos mexicanos, IVA incluido. El consumo de mariscos crudos o poco cocidos puede aumentar el riesgo de enfermedades transmitidas por alimentos. Disponibilidad, especies y precios de mercado sujetos a temporada, marea y pesca del día.":
+      "Prices in Mexican pesos, tax included. Consuming raw or undercooked seafood may increase your risk of foodborne illness. Availability, species and market prices subject to season, tide and the day's catch.",
+
+    /* — Banners — */
+    "Happy Hour • 3:00 P.M. - 6:00 P.M.": "Happy Hour • 3:00 P.M. - 6:00 P.M.",
+    "2 x 1 en Martinis & Oyster Marys": "2-for-1 Martinis & Oyster Marys",
+    "Happy Hour de Ostiones": "Oyster Happy Hour",
+    "Todos los días · 3 PM a 6 PM · Ostiones al natural $30 pza": "Every day · 3 PM to 6 PM · Oysters on the half shell $30 each",
+    "Brunch Dominical · todos los domingos": "Sunday Brunch · every Sunday",
+    "Ostiones ilimitados, tostadas, caldo bichi y copa de espumoso": "Unlimited oysters, tostadas, caldo bichi and a glass of sparkling wine",
+
+    /* — Secciones — */
+    "Especial de Sábado": "Saturday Special",
+    "Brunch Dominical": "Sunday Brunch",
+    "Todos los domingos": "Every Sunday",
+    "La Barra de Conchas": "The Shellfish Bar",
+    "Entradas": "Starters",
+    "The Oysters": "The Oysters",
+    "Especiales para Compartir": "Specials to Share",
+    "Especiales de la Casa": "House Specials",
+    "Barra Fría": "Cold Bar",
+    "Barra Caliente": "Hot Bar",
+    "Club Sandwiches": "Club Sandwiches",
+    "Platos para Botanear": "Snacking Plates",
+    "Para Terminar": "To Finish",
+    "Postres": "Desserts",
+    "Bebidas": "Drinks",
+
+    /* — Subtítulos y notas — */
+    "Selección viva del día según temporada y marea, servida sobre hielo. Precio por pieza, excepto el callo de hacha.":
+      "Live daily selection by season and tide, served over ice. Priced per piece, except the pen shell scallop.",
+    "Fríos y frescos, por pieza o por docena.": "Cold and fresh, by the piece or by the dozen.",
+    "Destilados y licores se sirven de 45 ml. Precios en pesos mexicanos, IVA incluido. La propina no es obligatoria.":
+      "Spirits and liqueurs are served as 45 ml pours. Prices in Mexican pesos, tax included. Tipping is optional.",
+    "Selección del soft opening: ostión, almeja y callo de hacha.": "Soft-opening selection: oyster, clam and pen shell scallop.",
+    "Para acompañar las conchas.": "To go with the shellfish.",
+    "El precio indicado se suma al costo de cada concha. Puede agregarse caviar a cualquier preparación; suplemento según selección y porción.":
+      "The listed price is added to each shell. Caviar may be added to any preparation; supplement varies by selection and portion.",
+    "Acompañados de tres piezas de ostion": "Served with three oysters",
+    "Acompañado de copa de vino espumoso para degustar": "Paired with a glass of sparkling wine to taste",
+
+    /* — Grupos — */
+    "Ostiones": "Oysters",
+    "Postre a elegir": "Choice of dessert",
+    "Conchas al natural": "Shells on the half shell",
+    "Platillos de la casa": "House plates",
+    "Preparaciones para conchas": "Preparations for shells",
+    "Fríos y frescos": "Cold and fresh",
+    "Salsas": "Sauces",
+    "Cócteles": "Seafood cocktails",
+    "Tostadas": "Tostadas",
+    "Crudos": "Crudos",
+    "Los Oyster Shots": "The Oyster Shots",
+    "Whisky": "Whisky",
+    "Vodka": "Vodka",
+    "Coctelería Signature": "Signature Cocktails",
+    "Coctelería Clásica": "Classic Cocktails",
+    "Mezcal & Tequila": "Mezcal & Tequila",
+    "Ron": "Rum",
+    "Ginebra": "Gin",
+    "Licores": "Liqueurs",
+    "Vinos": "Wines",
+    "Cerveza": "Beer",
+    "Sin Alcohol": "Zero Proof",
+    "Café": "Coffee",
+    "Fuera de carta": "Off the menu",
+
+    /* — Brunch dominical — */
+    "Ostiones ilimitados": "Unlimited oysters",
+    "En todas sus variedades de salsas": "In all our house sauces",
+    "Tostada a elegir · 1 pza por persona": "Tostada of your choice · 1 per person",
+    "Excepto jaiba": "Except soft-shell crab",
+    "Caldo bichi por persona": "Caldo bichi per person",
+    "Shots de cóctel de camarón con ostión": "Shrimp-and-oyster cocktail shots",
+    "Arroz amarillo con variedad de almejas": "Yellow rice with assorted clams",
+    "Porción por persona": "One serving per person",
+    "Arroz con leche": "Rice pudding",
+    "Nuestra variedad de helados artesanales": "Our selection of artisanal ice creams",
+
+    /* — Especial de sábado — */
+    "Aguachile verde": "Green aguachile",
+    "Maracuyá": "Passion fruit",
+    "Habanero": "Habanero",
+    "Mignonette": "Mignonette",
+    "Rasurado": "Shaved ice mignonette",
+    "Natural": "Natural",
+    "Shot de camarón con ostion": "Shrimp-and-oyster shot",
+    "Camarones ajillo agridulce": "Sweet-and-sour garlic shrimp",
+    "Crudo de kampachi": "Kampachi crudo",
+    "Crudo de callo": "Scallop crudo",
+    "Taco de jaiba": "Soft-shell crab taco",
+
+    /* — Nombres descriptivos de platillos — */
+    "Ostión / ostra al natural": "Oyster on the half shell",
+    "Almeja chocolata al natural": "Chocolata clam on the half shell",
+    "Almeja reina al natural": "Queen clam on the half shell",
+    "Almeja chocolata rasurada": "Shaved chocolata clam",
+    "Callo de hacha al natural": "Pen shell scallop, natural",
+    "Agregar caviar": "Add caviar",
+    "Ostra zarandeada": "Zarandeada-style oyster",
+    "Ostra al escabeche": "Oyster in escabeche",
+    "Rockefeller verde": "Green Rockefeller",
+    "Ostiones Rockefeller · 8 pzas": "Oysters Rockefeller · 8 pc",
+    "Aguachile rojo": "Red aguachile",
+    "Coctel de camarón · 200 g": "Shrimp cocktail · 200 g",
+    "Campechano de camarón y ostión · 100 g + 100 g": "Shrimp & oyster campechano · 100 g + 100 g",
+    "Tostada de atún sellado · 60 g": "Seared tuna tostada · 60 g",
+    "Tostada de camarón · 80 g": "Shrimp tostada · 80 g",
+    "Tostada de callo · 50 g": "Scallop tostada · 50 g",
+    "Tostada de jaiba suave · 100 g": "Soft-shell crab tostada · 100 g",
+    "Tostada de kampachi · 60 g": "Kampachi tostada · 60 g",
+    "Crudo de atún · 100 g": "Tuna crudo · 100 g",
+    "Crudo de callo · 80 g": "Scallop crudo · 80 g",
+    "Crudo de kampachi · 100 g": "Kampachi crudo · 100 g",
+    "Ceviche del día · 150 g": "Ceviche of the day · 150 g",
+    "Torre de mariscos Oyster Club": "Oyster Club seafood tower",
+    "Callo de hacha en tres tiempos · 600 g": "Pen shell scallop three ways · 600 g",
+    "Callo de hacha a la mantequilla · 200 g": "Butter-seared pen shell scallop · 200 g",
+    "Camarones al ajillo · 200 g": "Garlic shrimp · 200 g",
+    "Camarones para pelar · 1 kg": "Peel-and-eat shrimp · 1 kg",
+    "Almejas al vino blanco · 500 g": "Clams in white wine · 500 g",
+    "Pescado zarandeado · 1 kg": "Zarandeado-grilled fish · 1 kg",
+    "Caldito Bichi": "Caldo bichi",
+    "Sándwich de langosta · 300 g": "Lobster roll · 300 g",
+    "Sándwich de jaiba suave · 400 g": "Soft-shell crab sandwich · 400 g",
+    "Club Especial del Chef": "Chef's Special Club",
+    "Arroz con leche · 180 g": "Rice pudding · 180 g",
+    "Brownie con helado · 150 g": "Brownie with ice cream · 150 g",
+    "Selección de helados artesanales · 120 g": "Artisanal ice cream selection · 120 g",
+    "Agua Natural": "Still water",
+    "Agua Mineral": "Sparkling water",
+    "Refresco": "Soda",
+
+    /* — Descripciones — */
+    "Jugo de tomate preparado con vodka": "Spiced tomato juice with vodka",
+    "Syrup de eucalipto, chartreuse verde y tequileño blanco": "Eucalyptus syrup, green chartreuse and blanco tequila",
+    "Vodka de shiso, vermut seco y aceite de shiso": "Shiso vodka, dry vermouth and shiso oil",
+    "Vodka de ruibarbo, lychee, prosecco y syrup de cardamomo - romero": "Rhubarb vodka, lychee, prosecco and cardamom-rosemary syrup",
+    "Tequileño blanco, pepino y syrup de chile con limón amarillo": "Blanco tequila, cucumber and chile syrup with yellow lemon",
+    "Vodka, vermut seco, pepino, albahaca y limón": "Vodka, dry vermouth, cucumber, basil and lime",
+    "Maracuyá / Pepino / Jamaica": "Passion fruit / Cucumber / Hibiscus",
+    "Maracuyá, jamaica, pepino, toronja, tamarindo": "Passion fruit, hibiscus, cucumber, grapefruit, tamarind",
+    "Ostra fresca de la selección del día, abierta al momento y servida con limón amarillo, limón Eureka y salsas de la casa":
+      "Fresh oyster from the day's selection, shucked to order and served with yellow lemon, Eureka lemon and house sauces",
+    "Almeja chocolata de sabor profundo y mineral, rasurada al momento y presentada sobre hielo con cítricos frescos":
+      "Chocolata clam, deep and mineral in flavor, shaved to order and presented over ice with fresh citrus",
+    "Almeja reina de textura firme y dulzor marino, servida limpia, fría y lista para acompañarse con las salsas de la casa":
+      "Queen clam, firm and sweet, served clean and cold, ready for the house sauces",
+    "Callo de hacha del Mar de Cortés, laminado al momento y servido con cítricos, flor de sal y el acompañamiento de la barra":
+      "Sea of Cortez pen shell scallop, sliced to order and served with citrus, fleur de sel and the bar's garnishes",
+    "Caviar servido sobre cualquier ostra, almeja o preparación de la barra; suplemento según variedad y gramaje":
+      "Caviar served over any oyster, clam or bar preparation; supplement varies by variety and weight",
+    "Almeja chocolata abierta al momento con limón, salsa bruja y chiltepín; mineral, fresca y de picor aromático":
+      "Chocolata clam shucked to order with lime, salsa bruja and chiltepin; mineral, fresh, aromatically spicy",
+    "Asada a la brasa con adobo zarandeado, mantequilla de ajo y cítricos; intensa, ahumada y jugosa":
+      "Charcoal-grilled with zarandeado adobo, garlic butter and citrus; intense, smoky and juicy",
+    "Escabeche templado de pimentón, laurel, vinagre y aceite de oliva, sobre la concha recién abierta":
+      "Warm escabeche of paprika, bay leaf, vinegar and olive oil over the freshly opened shell",
+    "Espinaca, hinojo, Pernod y pan molido dorado; cremosa, herbal y gratinada al momento":
+      "Spinach, fennel, Pernod and golden breadcrumbs; creamy, herbal, gratinéed to order",
+    "Gratinada con reducción de salsa inglesa, mantequilla y longaniza dorada, superficie caramelizada y ahumada":
+      "Gratinéed with a Worcestershire reduction, butter and crisped longaniza; caramelized, smoky top",
+    "Clásica preparación francesa de vinagre, echalote y vino tinto": "The classic French preparation of vinegar, shallot and red wine",
+    "Clásica receta francesa con echalote y perejil, cocinada a fuego lento": "The classic French recipe with shallot and parsley, slow-cooked",
+    "Vinagre de vino tinto, echalote finamente picado y pimienta triturada; acidez limpia y clásica":
+      "Red wine vinegar, finely chopped shallot and crushed pepper; clean, classic acidity",
+    "Granada fresca, vinagre, echalote y chile serrano; frutal, brillante y ligeramente picante":
+      "Fresh pomegranate, vinegar, shallot and serrano chile; fruity, bright, lightly spicy",
+    "Salsa negra, limón, pepino fresco y chiltepín sonorense; intensa, cítrica y picante":
+      "Salsa negra, lime, fresh cucumber and Sonoran chiltepin; intense, citrusy and spicy",
+    "Ceniza de habanero, salsa de limón amarillo y cebolla morada": "Habanero ash, yellow-lemon sauce and red onion",
+    "Aguachile verde o rojo, aceite de oliva y cebolla morada": "Green or red aguachile, olive oil and red onion",
+    "Mayonesa, ceniza de habanero y salsa de limón amarillo": "Mayo, habanero ash and yellow-lemon sauce",
+    "Mayonesa de chipotle, cebollín y aguacate": "Chipotle mayo, chives and avocado",
+    "Salsa ponzu, cebollín y ajonjolí": "Ponzu, chives and sesame",
+    "Salsas negras y pico de gallo": "Dark sauces and pico de gallo",
+    "Guacamole asado y pico de gallo": "Roasted guacamole and pico de gallo",
+    "Guacamole asado, col morada y mayonesa": "Roasted guacamole, red cabbage and mayo",
+    "Guacamole asado, pepinillos encurtidos y un toque de aguachile verde": "Roasted guacamole, pickles and a touch of green aguachile",
+    "Con nuestra cátsup ahumada, pico de gallo y aguacate": "With our smoked ketchup, pico de gallo and avocado",
+    "Con hueva de salmón, acompañado de una copa de vino espumoso": "With salmon roe, served with a glass of sparkling wine",
+    "Consomé de camarón sin cáscara (80 g) con papa y zanahoria": "Peeled shrimp consommé (80 g) with potato and carrot",
+    "Servidos con salsa de la casa, mayonesa y salsa coctel": "Served with house sauce, mayo and cocktail sauce",
+    "Agridulces, con setas, mantequilla y aceite de oliva": "Sweet and sour, with mushrooms, butter and olive oil",
+    "Clásicos, gratinados con queso parmesano": "Classic, gratinéed with Parmesan",
+    "Coleslaw, mayonesa de chipotle y guacamole": "Coleslaw, chipotle mayo and guacamole",
+    "Inspirado en las Coquilles Saint-Jacques: callo de hacha dorado en mantequilla noisette, glaseado con beurre blanc de vino blanco y echalote, terminado gratinado en su concha. Opción de agregar caviar según selección disponible":
+      "Inspired by Coquilles Saint-Jacques: pen shell scallop seared in brown butter, glazed with a white-wine and shallot beurre blanc, gratinéed in its shell. Caviar optional, per available selection",
+    "Tres expresiones del callo: crudo con leche de tigre de mango verde; tostado en mantequilla noisette; curado con sal de gusano, cítricos y chile. Para compartir":
+      "Three expressions of the scallop: raw with green-mango leche de tigre; seared in brown butter; cured with worm salt, citrus and chile. To share",
+    "Ostras 6 pzas, almeja 6 pzas, camarón cocido 120 g, callo de hacha 80 g, pulpo 100 g y crudo del día 100 g":
+      "6 oysters, 6 clams, poached shrimp 120 g, pen shell scallop 80 g, octopus 100 g and crudo of the day 100 g",
+    "Asada con mantequilla, mayonesa, toque de limón amarillo y hojas frescas": "Grilled with butter, mayo, a touch of yellow lemon and fresh leaves",
+    "Fresco y agridulce, un balance perfecto": "Fresh and sweet-sour, a perfect balance",
+    "Cremoso y picante": "Creamy and spicy",
+    "Potente, para paladares que disfrutan el picor": "Bold — for palates that enjoy the heat",
+    "Clásico y cremoso": "Classic and creamy",
+    "Docena $410": "Dozen $410",
+    "Docena $460 · Happy hour de 3 a 6 pm: $30 la pieza": "Dozen $460 · Happy hour 3–6 pm: $30 each",
+    "Solo fines de semana": "Weekends only",
+  };
+  const tr = (t) => (LANG === "en" && t && EN[t] !== undefined ? EN[t] : t);
 
   /* ---- Utilidades ---------------------------------------------------- */
 
@@ -1289,7 +1542,7 @@ if (typeof module !== "undefined" && module.exports) {
   function lineaPrecio(item) {
     let linea = formatearPrecio(item.precio);
     if (item.precio_copa != null) {
-      linea += " • Copa " + formatearPrecio(item.precio_copa);
+      linea += " • " + tr("Copa") + " " + formatearPrecio(item.precio_copa);
     }
     return linea;
   }
@@ -1361,8 +1614,8 @@ if (typeof module !== "undefined" && module.exports) {
   // Estilo "display": nombre grande, descripción y precio debajo.
   function renderItemDisplay(item) {
     const li = crear("li", "item item--display");
-    li.appendChild(crear("span", "display__nombre", item.nombre));
-    if (item.descripcion) li.appendChild(crear("p", "display__desc", item.descripcion));
+    li.appendChild(crear("span", "display__nombre", tr(item.nombre)));
+    if (item.descripcion) li.appendChild(crear("p", "display__desc", tr(item.descripcion)));
     if (item.precio != null) {
       const detalle = detalleServicio(item);
       li.appendChild(crear("span", "display__precio", lineaPrecio(item) + (detalle ? " · " + detalle : "")));
@@ -1374,7 +1627,7 @@ if (typeof module !== "undefined" && module.exports) {
   function renderItemLeader(item) {
     const li = crear("li", "item item--leader");
     const detalle = detalleServicio(item);
-    li.appendChild(crear("span", "leader__nombre", item.nombre + (detalle ? " · " + detalle : "")));
+    li.appendChild(crear("span", "leader__nombre", tr(item.nombre) + (detalle ? " · " + detalle : "")));
     li.appendChild(crear("span", "leader__linea"));
     if (item.precio != null) li.appendChild(crear("span", "leader__precio", lineaPrecio(item)));
     return li;
@@ -1387,7 +1640,7 @@ if (typeof module !== "undefined" && module.exports) {
 
     const encabezado = crear("div", "item__head");
     const nombreWrap = crear("div", "item__nombre-wrap");
-    nombreWrap.appendChild(crear("span", "item__nombre", item.nombre));
+    nombreWrap.appendChild(crear("span", "item__nombre", tr(item.nombre)));
 
     const detalle = detalleServicio(item);
     if (detalle) nombreWrap.appendChild(crear("span", "item__detalle", detalle));
@@ -1401,7 +1654,7 @@ if (typeof module !== "undefined" && module.exports) {
     li.appendChild(encabezado);
 
     if (item.descripcion) {
-      li.appendChild(crear("p", "item__desc", item.descripcion));
+      li.appendChild(crear("p", "item__desc", tr(item.descripcion)));
     }
 
     const pie = crear("div", "item__pie");
@@ -1423,13 +1676,13 @@ if (typeof module !== "undefined" && module.exports) {
 
     const encabezado = crear("div", "item__head");
     const nombreWrap = crear("div", "item__nombre-wrap");
-    nombreWrap.appendChild(crear("span", "item__nombre", addon.nombre));
+    nombreWrap.appendChild(crear("span", "item__nombre", tr(addon.nombre)));
     encabezado.appendChild(nombreWrap);
     encabezado.appendChild(crear("span", "item__puntos"));
     encabezado.appendChild(crear("span", "item__precio item__precio--addon", formatearSobreprecio(addon.sobreprecio)));
     li.appendChild(encabezado);
 
-    if (addon.descripcion) li.appendChild(crear("p", "item__desc", addon.descripcion));
+    if (addon.descripcion) li.appendChild(crear("p", "item__desc", tr(addon.descripcion)));
 
     const pie = crear("div", "item__pie");
     if (addon.origen) pie.appendChild(crear("span", "item__origen", addon.origen));
@@ -1464,13 +1717,13 @@ if (typeof module !== "undefined" && module.exports) {
     if (grupo.nombre) {
       const esEtiqueta = grupo.titulo_estilo === "etiqueta";
       const clase = (esEtiqueta ? "grupo__etiqueta" : "grupo__titulo") + " " + claseAlineacionTitulo(grupo);
-      frag.appendChild(crear("h3", clase, grupo.nombre));
+      frag.appendChild(crear("h3", clase, tr(grupo.nombre)));
     }
-    if (grupo.nota) frag.appendChild(crear("p", "grupo__nota", grupo.nota));
+    if (grupo.nota) frag.appendChild(crear("p", "grupo__nota", tr(grupo.nota)));
 
     if (Array.isArray(grupo.subgrupos) && grupo.subgrupos.length) {
       grupo.subgrupos.forEach((sg) => {
-        frag.appendChild(crear("h4", "subgrupo__titulo", sg.nombre));
+        frag.appendChild(crear("h4", "subgrupo__titulo", tr(sg.nombre)));
         frag.appendChild(renderItems(sg.items || [], grupo.estilo));
       });
     } else {
@@ -1480,7 +1733,7 @@ if (typeof module !== "undefined" && module.exports) {
     // Cierre del grupo (p. ej. "Acompañados de tres piezas de ostion · $330").
     if (grupo.nota_pie || grupo.precio != null) {
       const cierre = crear("div", "grupo__cierre");
-      if (grupo.nota_pie) cierre.appendChild(crear("p", "grupo__cierre-nota", grupo.nota_pie));
+      if (grupo.nota_pie) cierre.appendChild(crear("p", "grupo__cierre-nota", tr(grupo.nota_pie)));
       if (grupo.precio != null) cierre.appendChild(crear("p", "grupo__cierre-precio", formatearPrecio(grupo.precio)));
       frag.appendChild(cierre);
     }
@@ -1489,8 +1742,8 @@ if (typeof module !== "undefined" && module.exports) {
 
   function renderAddons(addons) {
     const bloque = crear("div", "addons");
-    bloque.appendChild(crear("h3", "grupo__titulo titulo--izq", addons.titulo));
-    if (addons.nota) bloque.appendChild(crear("p", "grupo__nota grupo__nota--destacada", addons.nota));
+    bloque.appendChild(crear("h3", "grupo__titulo titulo--izq", tr(addons.titulo)));
+    if (addons.nota) bloque.appendChild(crear("p", "grupo__nota grupo__nota--destacada", tr(addons.nota)));
     const ul = crear("ul", "items");
     (addons.items || []).filter(itemVisible).forEach((a) => ul.appendChild(renderAddon(a)));
     bloque.appendChild(ul);
@@ -1502,17 +1755,17 @@ if (typeof module !== "undefined" && module.exports) {
     section.id = "sec-" + seccion.id;
 
     const head = crear("div", "seccion__head");
-    const h2 = crear("h2", "seccion__titulo", seccion.nombre);
+    const h2 = crear("h2", "seccion__titulo", tr(seccion.nombre));
     head.appendChild(h2);
 
     if (seccion.estado === "proximamente") {
-      head.appendChild(crear("span", "badge-proximamente", "Próximamente"));
+      head.appendChild(crear("span", "badge-proximamente", tr("Próximamente")));
       section.appendChild(head);
       return section;
     }
 
     if (seccion.subtitulo) {
-      head.appendChild(crear("p", "seccion__subtitulo", seccion.subtitulo));
+      head.appendChild(crear("p", "seccion__subtitulo", tr(seccion.subtitulo)));
     }
     section.appendChild(head);
 
@@ -1538,7 +1791,7 @@ if (typeof module !== "undefined" && module.exports) {
     const nav = document.getElementById("nav");
     nav.innerHTML = "";
     secciones.forEach((sec) => {
-      const a = crear("a", "nav__link", sec.nombre);
+      const a = crear("a", "nav__link", tr(sec.nombre));
       a.href = "#sec-" + sec.id;
       if (sec.estado === "proximamente") a.classList.add("nav__link--proximamente");
       nav.appendChild(a);
@@ -1568,8 +1821,8 @@ if (typeof module !== "undefined" && module.exports) {
 
   function renderCabecera(r) {
     // El logotipo (#marca) es una imagen estática; no se sobrescribe.
-    document.getElementById("lema").textContent = r.lema;
-    document.getElementById("costas").textContent = r.costas.join(" · ");
+    document.getElementById("lema").textContent = tr(r.lema);
+    document.getElementById("costas").textContent = r.costas.map(tr).join(" · ");
   }
 
   function renderBanners(banners, ctx) {
@@ -1577,14 +1830,14 @@ if (typeof module !== "undefined" && module.exports) {
     cont.innerHTML = "";
     banners.filter((b) => bannerVisible(b, ctx)).forEach((b) => {
       const div = crear("div", "banner");
-      div.appendChild(crear("span", "banner__titulo", b.titulo));
-      div.appendChild(crear("span", "banner__texto", b.texto));
+      div.appendChild(crear("span", "banner__titulo", tr(b.titulo)));
+      div.appendChild(crear("span", "banner__texto", tr(b.texto)));
       cont.appendChild(div);
     });
   }
 
   function renderPie(r) {
-    document.getElementById("aviso-legal").textContent = r.aviso_legal;
+    document.getElementById("aviso-legal").textContent = tr(r.aviso_legal);
   }
 
   /* ---- Arranque ------------------------------------------------------ */
@@ -1607,6 +1860,18 @@ if (typeof module !== "undefined" && module.exports) {
     visibles.forEach((s) => main.appendChild(renderSeccion(s)));
 
     renderPie(MENU.restaurante);
+
+    // CTA fija y botón de idioma. El botón enseña el idioma AL QUE cambias.
+    const cta = document.getElementById("cta-reservar");
+    if (cta) cta.textContent = tr("Reservar mesa");
+    const langBtn = document.getElementById("lang-toggle");
+    if (langBtn) {
+      langBtn.textContent = LANG === "en" ? "ES · Español" : "EN · English";
+      langBtn.addEventListener("click", () => {
+        localStorage.setItem("oc_lang", LANG === "en" ? "es" : "en");
+        location.reload();
+      });
+    }
   }
 
   document.addEventListener("DOMContentLoaded", init);
@@ -1625,8 +1890,17 @@ if (typeof module !== "undefined" && module.exports) {
     z-index: 50; white-space: nowrap;
   }
   .cta-reservar:active { background: var(--cielo); color: var(--tinta); }
+  .lang-toggle {
+    position: fixed; top: 14px; right: 14px; z-index: 60;
+    background: var(--cielo); color: var(--tinta);
+    border: 1.5px solid var(--tinta); border-radius: 999px;
+    font-family: var(--mono, monospace); font-size: 12px; letter-spacing: .08em;
+    padding: 8px 14px; cursor: pointer; box-shadow: 0 3px 10px rgba(35,31,32,.18);
+  }
+  .lang-toggle:active { background: var(--tinta); color: var(--cielo); }
 </style>
-<a class="cta-reservar" href="/?reservar=OC">Reservar mesa</a>
+<button id="lang-toggle" class="lang-toggle" type="button"></button>
+<a id="cta-reservar" class="cta-reservar" href="/?reservar=OC">Reservar mesa</a>
 
 </body>
 </html>
