@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck, Home, Radio, Landmark, Users, Flower2 } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck, Home, Radio, Landmark, Users, Flower2, Megaphone } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
 import { STR } from '../../lib/strings'
@@ -22,6 +22,7 @@ export const NAV_ITEMS = [
   { id: 'finanzas',   label: STR.nav.finanzas,   icon: Landmark },
   { id: 'nomina',     label: STR.nav.nomina,     icon: Users,           masterOnly: true },
   { id: 'wellness',   label: STR.nav.wellness,   icon: Flower2 },
+  { id: 'pr',         label: STR.nav.pr,         icon: Megaphone },
   { id: 'tasks',      label: STR.nav.tasks,      icon: CheckSquare,     shortcut: '2' },
   { id: 'crm',        label: STR.nav.crm,        icon: Handshake,       shortcut: '3' },
   { id: 'concierge',  label: STR.nav.concierge,  icon: Shell },
@@ -53,6 +54,14 @@ export function navItemsForRole(userRole?: string, apps?: Set<string> | null) {
   // Heart of House (piso + tablet de host): La Casa, Reservas (Concierge) y Perfil
   if (userRole === 'HEART_OF_HOUSE') {
     return NAV_ITEMS.filter(item => ['resumen', 'casa', 'concierge', 'profile'].includes(item.id))
+  }
+  // Red PR: el PR entra SOLO a su código y su perfil; su manager coordina la
+  // red y ve las reservas. Ninguno de los dos toca operación de piso.
+  if (userRole === 'PR') {
+    return NAV_ITEMS.filter(item => ['pr', 'profile'].includes(item.id))
+  }
+  if (userRole === 'PR_MANAGER') {
+    return NAV_ITEMS.filter(item => ['resumen', 'pr', 'concierge', 'profile'].includes(item.id))
   }
   // DEV (auditoría): ve toda la plataforma menos administración y Finanzas
   if (userRole === 'DEV') {

@@ -31,6 +31,7 @@ export const STR = {
     pulso: 'Pulso Social',
     finanzas: 'Finanzas',
     nomina: 'Nómina',
+    pr: 'Red PR',
     wellness: 'Wellness',
     tasks: 'Tareas',
     crm: 'Comercial',

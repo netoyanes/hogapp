@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.100.1"
+export const APP_VERSION = "2.101.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,20 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.101.0",
+    date: "2026-08-18",
+    type: "MINOR",
+    changes: [
+      "RED PR — arranca el módulo de atribución: cada relaciones públicas se da de alta con un CÓDIGO INMUTABLE y dictable por teléfono (ej. SOFI-MZT), su link /p/CODIGO y su QR descargable en alta resolución",
+      "El código nunca cambia y nunca se reasigna, ni cuando el PR se da de baja — la atribución histórica lo referencia",
+      "MOTOR DE ATRIBUCIÓN en base de datos con las reglas que protegen el dinero: imposible apilar dos códigos en una reserva (candado a nivel de tabla, no de pantalla) · nada de retroactividad (una reserva ya sentada solo la atribuye el host, dentro de 15 min) · cutoff configurable por venue en SU hora local · auto-atribución del PR a su propio teléfono cae a factor 0 con bandera · tope de 15% de manuales al mes · bloqueo de viernes y sábado por show rate bajo",
+      "Tablas de comisión con SNAPSHOT de la política: cambiar una tarifa hoy jamás recalcula lo ya devengado",
+      "Cupo de aforo por canal PR configurable por venue y día de la semana",
+      "Roles nuevos PR y PR_MANAGER: el PR ve SOLO su código y sus números — no puede marcar sentada ni ver clientes ajenos, y eso se impone por políticas de base de datos, no por la interfaz",
+      "Requiere pr_attribution.sql",
+    ]
+  },
   {
     version: "2.100.1",
     date: "2026-08-18",
