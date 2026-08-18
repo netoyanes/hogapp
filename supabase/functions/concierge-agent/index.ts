@@ -100,6 +100,36 @@ function normalizePhoneMX(raw: string): string | null {
   return /^52\d{10}$/.test(digits) ? '+' + digits : null
 }
 
+
+// Resuelve al cliente de la conversación sin molestarlo: por el canal ligado o,
+// en WhatsApp, por el propio número desde el que escribe. Devuelve null solo
+// cuando de verdad no hay forma de saber quién es.
+// deno-lint-ignore no-explicit-any
+async function resolverGuest(ctx: any): Promise<string | null> {
+  if (ctx.conv.guest_id) return ctx.conv.guest_id
+  const { data: gc } = await ctx.supabaseAdmin.from('guest_channels')
+    .select('guest_id').eq('channel', ctx.conv.channel).eq('external_id', ctx.conv.external_id).maybeSingle()
+  let gid: string | null = gc?.guest_id ?? null
+  if (!gid && ctx.conv.channel === 'whatsapp') {
+    const tel = normalizePhoneMX(String(ctx.conv.external_id ?? ''))
+    if (tel) {
+      const { data: g } = await ctx.supabaseAdmin.from('guests').select('id').eq('phone', tel).maybeSingle()
+      gid = g?.id ?? null
+    }
+  }
+  if (gid) {
+    await ctx.supabaseAdmin.from('bot_conversations').update({ guest_id: gid }).eq('id', ctx.conv.id)
+    ctx.conv.guest_id = gid
+  }
+  return gid
+}
+
+interface ResumenReserva {
+  id: string; date: string; time_slot: string; party_size: number
+  status: string; zone: string | null; notes: string | null
+  business_units?: { code: string; name: string } | null
+}
+
 const TOOLS = [
   {
     name: 'identificar_venue',
@@ -323,7 +353,60 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
     ? await supabaseAdmin.from('venue_reservation_settings').select('engine, online_max_pax').eq('bu_id', conv.bu_id).maybeSingle()
     : { data: null }
 
-  const ctx = { supabaseAdmin, conv: { ...conv }, bu, cfg, pay, faq: botInfo?.faq ?? null, engine: resEngine }
+  // ── QUIÉN ES QUIEN ESCRIBE — se resuelve ANTES de la primera palabra ──────
+  // Quien escribe por WhatsApp trae su teléfono en el canal mismo: el
+  // external_id ES su número. Pedírselo es como pedirle identificación a
+  // alguien que lleva rato hablándote por teléfono. Antes esto solo se sabía
+  // DESPUÉS de que el bot lograra sacarle nombre y teléfono, así que a un
+  // cliente con reserva —que solo quería avisar que llegaba tarde— el bot le
+  // pedía cuatro veces un dato que ya tenía enfrente.
+  let identidad: { guest: { id: string; full_name: string; phone: string } | null; reservas: ResumenReserva[] } = { guest: null, reservas: [] }
+  try {
+    let guestId: string | null = conv.guest_id ?? null
+
+    // 1) El canal ya está ligado a un cliente (cualquier canal)
+    if (!guestId) {
+      const { data: gc } = await supabaseAdmin.from('guest_channels')
+        .select('guest_id').eq('channel', conv.channel).eq('external_id', conv.external_id).maybeSingle()
+      guestId = gc?.guest_id ?? null
+    }
+    // 2) WhatsApp: el external_id ES el teléfono — se busca directo
+    if (!guestId && conv.channel === 'whatsapp') {
+      const tel = normalizePhoneMX(String(conv.external_id ?? ''))
+      if (tel) {
+        const { data: g } = await supabaseAdmin.from('guests').select('id').eq('phone', tel).maybeSingle()
+        guestId = g?.id ?? null
+        // Se deja el canal ligado para que el resto del sistema lo sepa
+        if (guestId) {
+          await supabaseAdmin.from('guest_channels')
+            .upsert({ guest_id: guestId, channel: conv.channel, external_id: conv.external_id }, { onConflict: 'channel,external_id' })
+        }
+      }
+    }
+
+    if (guestId) {
+      if (!conv.guest_id) {
+        await supabaseAdmin.from('bot_conversations').update({ guest_id: guestId }).eq('id', conversationId)
+        conv.guest_id = guestId
+      }
+      const [{ data: g }, { data: res }] = await Promise.all([
+        supabaseAdmin.from('guests').select('id, full_name, phone').eq('id', guestId).maybeSingle(),
+        supabaseAdmin.from('reservations')
+          .select('id, date, time_slot, party_size, status, zone, notes, business_units(code, name)')
+          .eq('guest_id', guestId)
+          .gte('date', new Date(Date.now() - 6 * 3600_000).toISOString().slice(0, 10))
+          .in('status', ['requested', 'confirmed', 'seated'])
+          .order('date').limit(5),
+      ])
+      identidad = { guest: g as typeof identidad.guest, reservas: (res ?? []) as unknown as ResumenReserva[] }
+    }
+  } catch (e) {
+    // Identificar al cliente es una MEJORA del contexto, no un requisito para
+    // atender: si algo falla aquí, el bot sigue funcionando como antes.
+    console.error('[agent] no se pudo identificar al cliente:', String(e))
+  }
+
+  const ctx = { supabaseAdmin, conv: { ...conv }, bu, cfg, pay, faq: botInfo?.faq ?? null, engine: resEngine, identidad }
   const system = buildSystemPrompt(ctx, venues ?? [], isFollowup, settingsMap.app_public_url, pay)
   // Mensajes consecutivos del mismo rol se fusionan: así el batching de 45s
   // (varios mensajes del cliente antes del turno) llega como un solo bloque,
@@ -419,6 +502,25 @@ function buildSystemPrompt(ctx: any, venues: any[], isFollowup: boolean, publicU
   lines.push('Eres el CONCIERGE de HOG, un holding de venues de hospitalidad en México. Atiendes por ' + (ctx.conv.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram') + '.')
   lines.push('QUIÉN ERES: un concierge, no un vendedor. Tu oficio es ATENDER — recibir bien, contestar lo que te preguntan y facilitarle la noche a quien escribe. La reserva es la CONSECUENCIA de atender bien, nunca lo primero que sale de tu boca. Un concierge que arranca vendiendo sin saludar se siente a spam; uno que atiende primero, vende sin esfuerzo.')
   lines.push('SALUDO — esta regla va ANTES que cualquier estrategia de venta del FAQ: si es tu primer mensaje de la conversación, o el cliente abre saludando ("hola", "buenas", "qué tal", "buenas tardes"), lo PRIMERO es devolver el saludo en tono humano y ponerte a la orden. Una línea, cálida, natural. PROHIBIDO responder un saludo lanzándote directo a ofrecer eventos, DJs o promociones: eso se siente a robot vendedor. Salvo que el cliente ya haya dicho a qué viene en ese mismo mensaje, tras saludar pregunta en qué le puedes ayudar o qué anda buscando. En mensajes posteriores ya no vuelvas a saludar.')
+  // ── LO QUE YA SABEMOS DE QUIEN ESCRIBE ────────────────────────────────────
+  // Va ALTO en el prompt a propósito: pesa más que cualquier regla de captura
+  // de datos. El error más caro del bot es pedir lo que ya tiene.
+  const ident = ctx.identidad
+  if (ident?.guest) {
+    lines.push(`YA SABES QUIÉN ES: se llama ${ident.guest.full_name} y su teléfono es ${ident.guest.phone}. Ya lo tienes — está en su ficha. PROHIBIDO pedirle su nombre o su teléfono, ni para "confirmar", ni para "anotarlo con el equipo", ni para nada. Háblale por su nombre desde el primer mensaje.`)
+    if (ident.reservas?.length) {
+      const hoy = new Date().toISOString().slice(0, 10)
+      const detalle = (ident.reservas as ResumenReserva[]).map((r: ResumenReserva) => {
+        const casa = r.business_units?.name ?? 'el venue'
+        const cuando = r.date === hoy ? 'HOY' : r.date
+        return `${cuando} a las ${String(r.time_slot).slice(0, 5)} en ${casa}, ${r.party_size} personas (${r.status})${r.zone ? `, zona ${r.zone}` : ''}${r.notes ? ` — notas: ${r.notes}` : ''}`
+      }).join(' · ')
+      lines.push(`RESERVA(S) QUE YA TIENE: ${detalle}.`)
+      lines.push('ESTO CAMBIA TODO LO QUE SIGUE: este cliente NO viene a reservar, ya reservó. Viene a resolver algo de SU reserva. Si dice una hora suelta ("llego 4:15", "llego 15 min tarde", "estoy a 4 cuadras", "voy en camino"), es un AVISO DE LLEGADA sobre esa reserva — anótalo de inmediato con agregar_nota_reserva y confírmale en UNA línea tranquila ("listo, le aviso al equipo, tu mesa te espera"). Si pide algo de la mesa (terraza, zona, un detalle), anótalo igual con agregar_nota_reserva. NUNCA le pidas datos para "poder avisarle al equipo": ya tienes todo lo que necesitas.')
+    }
+  }
+  lines.push('NO INSISTAS — regla dura: si ya pediste un dato UNA vez y el cliente no te lo dio, NO se lo vuelvas a pedir. Sigue la conversación con lo que sí tienes. Si de verdad no puedes avanzar sin ese dato, usa escalar_a_humano y dile con naturalidad que el equipo lo retoma. Repetir la misma petición dos o tres veces se siente a interrogatorio y es la forma más rápida de arruinar una conversación que iba bien.')
+  lines.push('NO PROMETAS Y DESAPAREZCAS: si dices "déjame confirmarlo con el equipo", esa frase OBLIGA a que uses escalar_a_humano en ese mismo turno. Decirlo sin escalar deja al cliente esperando algo que nunca llega — es peor que no haberlo dicho.')
   lines.push('Regla dura, sin excepción: cada mensaje tuyo debe SERVIRLE al cliente — contestar exactamente lo que preguntó y dejarle claro el siguiente paso. Nunca le pidas un dato que ya dio. Nunca lo hagas cambiar de canal sin llevar su contexto. Sé breve, cálido, en español de México, sin emojis excesivos.')
   lines.push('NUNCA EXPONGAS EL SISTEMA: el cliente no sabe ni le importa que existan una base de datos, un registro o una programación cargada. PROHIBIDAS frases como "no hay nada registrado en el sistema", "no lo tengo en la base", "no tengo información cargada", "el sistema no me muestra". Si no sabes algo, dilo como lo diría una persona ("déjame confirmarlo con el equipo y te digo") — jamás culpes a un sistema ni describas tu funcionamiento interno.')
   lines.push('NUNCA DEJES AL CLIENTE SIN SALIDA: prohibido cerrar un mensaje con un "no" pelón. Si algo no se puede o no lo tienes, di lo que SÍ hay en su lugar, en la misma frase. Un concierge nunca contesta "no hay" y se queda callado.')
@@ -809,7 +911,9 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
     }
 
     case 'agregar_nota_reserva': {
-      if (!ctx.conv.guest_id) return { error: 'No tengo identificado al cliente — pídele su teléfono para ubicar su reserva.' }
+      // Antes esto exigía el teléfono y el bot se lo pedía al cliente aunque
+      // estuviera escribiendo DESDE ese número. Ahora se resuelve solo.
+      if (!await resolverGuest(ctx)) return { error: 'No logro ubicar al cliente por su canal. NO le pidas el teléfono más de una vez: usa escalar_a_humano para que el equipo lo tome.' }
       let nq = supabaseAdmin.from('reservations')
         .select('id, date, time_slot, party_size, notes')
         .eq('guest_id', ctx.conv.guest_id)
@@ -830,7 +934,7 @@ async function executeTool(ctx: any, name: string, input: any): Promise<Record<s
     }
 
     case 'cancelar_reserva': {
-      if (!ctx.conv.guest_id) return { error: 'No tengo identificado al cliente en esta conversación — pídele su teléfono para ubicar su reserva, o usa escalar_a_humano.' }
+      if (!await resolverGuest(ctx)) return { error: 'No logro ubicar al cliente por su canal. NO insistas pidiéndole el teléfono: usa escalar_a_humano para que el equipo lo tome.' }
       let q = supabaseAdmin.from('reservations')
         .select('id, date, time_slot, party_size')
         .eq('guest_id', ctx.conv.guest_id)
