@@ -288,8 +288,18 @@ function PRDetalleSheet({ pr, esAdmin, isMobile, onClose, onChanged }: {
   const [qr, setQr] = useState<string | null>(null)
   const [tier, setTier] = useState<Tier>(pr.tier)
   const [busy, setBusy] = useState(false)
+  // Link a UNA casa: quien lo abre entra directo a reservar ahí. Vacío = el
+  // link general, que aterriza en el selector de casas.
+  const [venue, setVenue] = useState('')
+  const [venues, setVenues] = useState<{ code: string; name: string }[]>([])
   // El link del PR vive en /p/ — /r/ ya es de los venues y /w/ de wellness
-  const link = `${window.location.origin}/p/${pr.codigo}`
+  const link = `${window.location.origin}/p/${pr.codigo}${venue ? `?v=${venue}` : ''}`
+
+  useEffect(() => {
+    supabase.from('business_units').select('code, name')
+      .eq('public_booking_enabled', true).order('name')
+      .then(({ data }) => setVenues((data ?? []) as { code: string; name: string }[]))
+  }, [])
 
   useEffect(() => {
     QRCode.toDataURL(link, { width: 1024, margin: 2, errorCorrectionLevel: 'H',
@@ -304,7 +314,7 @@ function PRDetalleSheet({ pr, esAdmin, isMobile, onClose, onChanged }: {
   function descargar() {
     if (!qr) return
     const a = document.createElement('a')
-    a.href = qr; a.download = `QR-${pr.codigo}.png`; a.click()
+    a.href = qr; a.download = `QR-${pr.codigo}${venue ? `-${venue}` : ''}.png`; a.click()
   }
 
   async function guardarTier() {
@@ -351,16 +361,28 @@ function PRDetalleSheet({ pr, esAdmin, isMobile, onClose, onChanged }: {
             </div>
           )}
 
+          <NumerosPR prId={pr.id} />
+
           {/* El código, el link y el QR — lo que el PR viene a buscar */}
           <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 14, textAlign: 'center' }}>
             <label style={{ ...lb, textAlign: 'left' }}>Su código</label>
             <div className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 26, fontWeight: 800, color: 'var(--accent)', letterSpacing: '0.06em', marginBottom: 10 }}>
               {pr.codigo}
             </div>
+            {/* A qué casa apunta: el QR y el link se regeneran al elegir */}
+            <select value={venue} onChange={e => setVenue(e.target.value)}
+              style={{ width: '100%', minHeight: 42, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer', marginBottom: 10, boxSizing: 'border-box' }}>
+              <option value="">Todas las casas (el cliente elige)</option>
+              {venues.map(v => <option key={v.code} value={v.code}>Directo a {v.name}</option>)}
+            </select>
+
             {qr && (
               <img src={qr} alt={`QR de ${pr.codigo}`} width={168} height={168}
                 style={{ borderRadius: 10, background: '#fff', padding: 6, display: 'block', margin: '0 auto 10px' }} />
             )}
+            <p className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-tertiary)', margin: '0 0 10px', wordBreak: 'break-all' }}>
+              {link.replace(/^https?:\/\//, '')}
+            </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={copiar}
                 style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-primary)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
@@ -432,5 +454,57 @@ function PRDetalleSheet({ pr, esAdmin, isMobile, onClose, onChanged }: {
         </div>
       </div>
     </Sheet>
+  )
+}
+
+// ── Los números de la quincena en curso ─────────────────────────────────────
+// Lo que trae en camino, lo que ya se sentó y cuánto lleva ganado. La
+// distinción entre "por validar" y "liberado" es deliberada y se nombra: el PR
+// tiene que entender que ver un número no es tenerlo cobrado.
+function NumerosPR({ prId }: { prId: string }) {
+  const [n, setN] = useState<Record<string, number> | null>(null)
+  const [sinModulo, setSinModulo] = useState(false)
+
+  useEffect(() => {
+    supabase.rpc('fn_pr_mis_numeros', { p_pr: prId }).then(({ data, error }) => {
+      if (error) { setSinModulo(true); return }
+      const r = data as Record<string, unknown>
+      if (!r?.ok) { setSinModulo(true); return }
+      setN(r as unknown as Record<string, number>)
+    })
+  }, [prId])
+
+  if (sinModulo || !n) return null
+  const mx = (v: number) => `$${Number(v ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+
+  return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+        Quincena en curso
+      </label>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
+        <Mini label="En camino" valor={String(n.en_camino ?? 0)} sub={`${n.pax_en_camino ?? 0} pax`} />
+        <Mini label="Sentadas" valor={String(n.sentadas ?? 0)} color="var(--status-healthy)" />
+        <Mini label="No-show" valor={String(n.no_show ?? 0)} color={(n.no_show ?? 0) > 0 ? 'var(--status-risk)' : undefined} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <Mini label="Por validar" valor={mx(n.por_validar)} color="var(--status-attention)" />
+        <Mini label="Validado" valor={mx(n.validado)} />
+        <Mini label="Liberado" valor={mx(n.liberado)} color="var(--status-healthy)" />
+      </div>
+      <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: '9px 0 0', lineHeight: 1.5 }}>
+        <strong>Por validar</strong> todavía no es dinero tuyo: el gerente de cada casa revisa las mesas del día siguiente. Al liberarse el corte pasa a <strong>liberado</strong> y entra a pago.
+      </p>
+    </div>
+  )
+}
+
+function Mini({ label, valor, sub, color }: { label: string; valor: string; sub?: string; color?: string }) {
+  return (
+    <div style={{ background: 'var(--bg-base)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>
+      <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+      <div className="num" style={{ fontSize: 15, fontWeight: 800, color: color ?? 'var(--text-primary)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{valor}</div>
+      {sub && <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 1 }}>{sub}</div>}
+    </div>
   )
 }

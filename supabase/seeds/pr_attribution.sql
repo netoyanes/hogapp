@@ -36,9 +36,15 @@ alter table profiles add constraint profiles_role_check
 
 -- ─── Helpers ─────────────────────────────────────────────────────────────────
 -- Quién administra la red (alta/baja de PRs, cupos, disputas)
+--
+-- El coalesce NO es adorno: si el usuario no tiene fila en profiles o su rol
+-- viene NULL (pasa con una invitación recién aceptada), `NULL in (...)` da
+-- NULL, y en plpgsql `if not NULL then` NO entra al bloque — el guardia se
+-- cae solo y deja pasar a cualquiera. Un permiso debe ser sí o no, nunca
+-- "no sé": ante la duda, no.
 create or replace function public.fn_pr_admin()
 returns boolean language sql stable security definer set search_path = public as $$
-  select hog_role() in ('MASTER','C_LEVEL','PR_MANAGER')
+  select coalesce(hog_role() in ('MASTER','C_LEVEL','PR_MANAGER'), false)
 $$;
 
 revoke all on function public.fn_pr_admin() from public;

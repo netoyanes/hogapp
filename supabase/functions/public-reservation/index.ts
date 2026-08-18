@@ -136,6 +136,17 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Acción desconocida.' }, 400)
     }
 
+    // ── VENUES: el selector de casas del link de un PR (/p/CODIGO sin ?v=) ──
+    // Público a propósito: es la misma información que ya se ve en cualquier
+    // link de reserva, solo que junta. No expone nada del programa PR.
+    if (body.action === 'venues') {
+      const { data: bus } = await admin.from('business_units')
+        .select('code, name, location, public_booking_enabled, inventory_type')
+        .eq('public_booking_enabled', true).order('name')
+      const abiertas = (bus ?? []).filter(b => (b.inventory_type ?? 'nightly_capacity') === 'nightly_capacity')
+      return json({ ok: true, venues: abiertas.map(b => ({ code: b.code, name: b.name, location: b.location })) })
+    }
+
     const code = String(body.code ?? '').trim().toUpperCase()
     if (!code) return json({ error: 'Falta el venue.' }, 400)
 
@@ -276,15 +287,38 @@ Deno.serve(async (req: Request) => {
         reservaId = reserva.id
       }
 
+      // ── ATRIBUCIÓN PR ────────────────────────────────────────────────────
+      // El código llega del navegador (lo guardó /p/CODIGO por 30 días). Aquí
+      // solo se pasa el recado: TODAS las reglas —cutoff, cliente recurrente,
+      // auto-atribución, tope de manuales— viven en fn_pr_attribute, en la
+      // base, para que valgan igual venga la reserva de donde venga.
+      // Si el motor rechaza, la reserva NO se cae: el cliente ya reservó y eso
+      // es lo que importa; lo que se pierde es el crédito, y queda el porqué.
+      let atribucion: { ok: boolean; error?: string } | null = null
+      const refPr = String(body.ref ?? '').trim().toUpperCase().slice(0, 24)
+      if (refPr && /^[A-Z0-9]{3,12}-[A-Z]{2,8}$/.test(refPr)) {
+        const { data: attr, error: aErr } = await admin.rpc('fn_pr_attribute', {
+          p_reservation: reservaId, p_codigo: refPr, p_canal: 'link',
+        })
+        atribucion = aErr ? { ok: false, error: aErr.message } : (attr as { ok: boolean; error?: string })
+        if (atribucion && !atribucion.ok) {
+          console.warn('[public-reservation] atribución rechazada', refPr, atribucion.error)
+        }
+      }
+
       await admin.from('activity_log').insert({
         user_id: null, action: 'reservation_created', entity_type: 'reservation', entity_id: reservaId,
-        details: { actor: 'Reserva web', bu: bu.code, date: fecha, slot: hora, pax, channel: 'web' },
+        details: {
+          actor: 'Reserva web', bu: bu.code, date: fecha, slot: hora, pax, channel: 'web',
+          ...(atribucion?.ok ? { pr: refPr } : {}),
+        },
       })
-      await notifySlack(admin, `🌐 *Reserva web* — ${bu.name}\n${fecha} · ${hora} · ${pax} pax · ${nombre}${deposito ? `\n⚠️ Apartado pendiente: $${deposito.total}` : ''}`)
+      await notifySlack(admin, `🌐 *Reserva web* — ${bu.name}\n${fecha} · ${hora} · ${pax} pax · ${nombre}${atribucion?.ok ? `\n🎟 Trae código de ${refPr}` : ''}${deposito ? `\n⚠️ Apartado pendiente: $${deposito.total}` : ''}`)
 
       return json({
         ok: true, venue: bu.name, fecha, hora, pax,
         deposito, // si != null, el front muestra el aviso de apartado
+        pr: atribucion?.ok ? refPr : null,
       })
     }
 

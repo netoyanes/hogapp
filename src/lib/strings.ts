@@ -32,6 +32,7 @@ export const STR = {
     finanzas: 'Finanzas',
     nomina: 'Nómina',
     pr: 'Red PR',
+    prcom: 'Comisiones PR',
     wellness: 'Wellness',
     tasks: 'Tareas',
     crm: 'Comercial',
