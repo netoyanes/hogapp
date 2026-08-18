@@ -141,7 +141,7 @@ export function Concierge({ userId, userRole, caps }: { userId?: string; userRol
         { id: 'clientes', label: 'Clientes' },
         ...(isOpsPlus ? [{ id: 'talento', label: 'Talento' }] : []),   // fees = dato sensible: Ops/Master
         ...(isMaster ? [{ id: 'reclutamiento', label: 'Reclutamiento' }] : []),   // bolsa de trabajo: solo Master
-        ...(canSeeSummary ? [{ id: 'summary', label: 'Resumen' }] : []),
+        ...(canSeeSummary ? [{ id: 'summary', label: 'Resumen' }, { id: 'analitica', label: 'Analítica' }] : []),
         ...(isMaster ? [{ id: 'config', label: 'Config' }] : []),
       ]
 
@@ -181,6 +181,7 @@ export function Concierge({ userId, userRole, caps }: { userId?: string; userRol
             {isOpsPlus && tab === 'talento' && <TalentoTab buList={buList} userId={userId} isMobile={isMobile} />}
             {isMaster && tab === 'reclutamiento' && <ReclutamientoTab buList={buList} isMobile={isMobile} />}
             {canSeeSummary && tab === 'summary' && <SummaryTab buList={buList} />}
+            {canSeeSummary && tab === 'analitica' && <AnaliticaTab buList={buList} />}
             {isMaster && tab === 'config' && <ConfigTab buList={buList} />}
           </div>
         </div>
@@ -1134,6 +1135,183 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
         </div>
       </div>
     </Sheet>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ANALÍTICA — el portal que CONCENTRA todo lo que maneja el Concierge, por
+// venue y para el grupo completo: vistas del landing (con geo), conversaciones
+// y tasa de autoservicio del bot, reservas por origen, confirmación y
+// no-shows. Una sola matriz comparable en vez de datos regados por pestañas.
+// ═════════════════════════════════════════════════════════════════════════════
+interface VenueRow {
+  bu: BU
+  vistas: number; visitantes: number; resWeb: number
+  convs: number; escaladas: number
+  reservas: number; viaConcierge: number; confirmadas: number; noShows: number
+}
+
+function AnaliticaTab({ buList }: { buList: BU[] }) {
+  const [period, setPeriod] = useState('7d')
+  const [rows, setRows] = useState<VenueRow[]>([])
+  const [geoRows, setGeoRows] = useState<GeoRow[]>([])
+  const [comensales, setComensales] = useState<{ ahora: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const days = period === '30d' ? 30 : period === '90d' ? 90 : 7
+      const since = new Date(Date.now() - days * 86400000).toISOString()
+      const [lv, geo, { data: cs }, { data: rs }, { count: gCount }] = await Promise.all([
+        supabase.rpc('fn_landing_stats', { p_desde: since }),
+        supabase.rpc('fn_landing_geo', { p_desde: since }),
+        supabase.from('bot_conversations').select('bu_id, status, assigned_to').eq('is_simulated', false).gte('created_at', since),
+        supabase.from('reservations').select('bu_id, status, source, bot_conversation_id').gte('created_at', since),
+        supabase.from('guests').select('id', { count: 'exact', head: true }).gte('created_at', since),
+      ])
+      const landing = (lv.data ?? []) as { bu_code: string; vistas: number; visitantes: number; reservas: number; reservas_ok: number }[]
+      setGeoRows(geo.error ? [] : ((geo.data ?? []) as GeoRow[]))
+      setComensales({ ahora: gCount ?? 0 })
+
+      const porVenue = new Map<string, VenueRow>()
+      const fila = (bu: BU): VenueRow => {
+        if (!porVenue.has(bu.id)) porVenue.set(bu.id, {
+          bu, vistas: 0, visitantes: 0, resWeb: 0, convs: 0, escaladas: 0,
+          reservas: 0, viaConcierge: 0, confirmadas: 0, noShows: 0,
+        })
+        return porVenue.get(bu.id)!
+      }
+      for (const l of landing) {
+        const bu = buList.find(b => b.code === l.bu_code); if (!bu) continue
+        const f = fila(bu)
+        f.vistas = Number(l.vistas); f.visitantes = Number(l.visitantes); f.resWeb = Number(l.reservas)
+      }
+      for (const c of (cs ?? []) as { bu_id: string | null; status: string; assigned_to: string | null }[]) {
+        const bu = buList.find(b => b.id === c.bu_id); if (!bu) continue
+        const f = fila(bu)
+        f.convs += 1
+        if (c.status === 'needs_human' || c.status === 'human' || (c.status === 'closed' && c.assigned_to)) f.escaladas += 1
+      }
+      for (const r of (rs ?? []) as { bu_id: string; status: string; source: string | null; bot_conversation_id: string | null }[]) {
+        const bu = buList.find(b => b.id === r.bu_id); if (!bu) continue
+        const f = fila(bu)
+        if (r.status !== 'cancelled') f.reservas += 1
+        if (r.bot_conversation_id || r.source === 'whatsapp' || r.source === 'instagram') f.viaConcierge += 1
+        if (['confirmed', 'seated', 'completed'].includes(r.status)) f.confirmadas += 1
+        if (r.status === 'no_show') f.noShows += 1
+      }
+      setRows([...porVenue.values()].sort((a, b) => b.reservas - a.reservas || b.convs - a.convs))
+      setLoading(false)
+    }
+    load()
+  }, [period, buList])
+
+  // Totales del grupo — la fila que responde "¿cómo vamos?" antes del detalle
+  const tot = rows.reduce((t, r) => ({
+    vistas: t.vistas + r.vistas, visitantes: t.visitantes + r.visitantes, resWeb: t.resWeb + r.resWeb,
+    convs: t.convs + r.convs, escaladas: t.escaladas + r.escaladas,
+    reservas: t.reservas + r.reservas, viaConcierge: t.viaConcierge + r.viaConcierge,
+    confirmadas: t.confirmadas + r.confirmadas, noShows: t.noShows + r.noShows,
+  }), { vistas: 0, visitantes: 0, resWeb: 0, convs: 0, escaladas: 0, reservas: 0, viaConcierge: 0, confirmadas: 0, noShows: 0 })
+  const botPct = tot.convs > 0 ? Math.round(((tot.convs - tot.escaladas) / tot.convs) * 100) : null
+  const chatConv = tot.convs > 0 ? Math.round((tot.viaConcierge / tot.convs) * 100) : null
+
+  const th: React.CSSProperties = { padding: '8px 10px', fontSize: 9.5, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700 }
+  const td: React.CSSProperties = { padding: '8px 10px', fontSize: 12.5, color: 'var(--text-secondary)', textAlign: 'right', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <FilterChips active={period} onChange={setPeriod}
+        options={[{ id: '7d', label: '7 días' }, { id: '30d', label: '30 días' }, { id: '90d', label: '90 días' }]} />
+
+      {/* Totales del grupo */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))', gap: 8 }}>
+        <KPITile label="Vistas del link" value={String(tot.vistas)} hint="Aperturas del landing de reservas (todo el grupo)" />
+        <KPITile label="Conversaciones" value={String(tot.convs)} icon={<MessageCircle size={12} />} />
+        <KPITile label="Bot solo" value={botPct != null ? `${botPct}%` : '—'} color="var(--accent)"
+          hint="Conversaciones resueltas sin humano — EL KPI del bot" />
+        <KPITile label="Reservas" value={String(tot.reservas)} hint="Creadas en el periodo, sin canceladas" />
+        <KPITile label="Vía concierge" value={String(tot.viaConcierge)} color="var(--status-healthy)"
+          hint={chatConv != null ? `${chatConv}% de las conversaciones terminan en reserva` : undefined} />
+        <KPITile label="Comensales nuevos" value={String(comensales?.ahora ?? 0)} hint="Clientes registrados por primera vez" />
+      </div>
+
+      {/* Matriz por venue */}
+      <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Por venue · {period === '7d' ? 'últimos 7 días' : period === '30d' ? 'últimos 30 días' : 'últimos 90 días'}
+        </div>
+        {loading ? (
+          <p style={{ padding: 14, color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>Cargando…</p>
+        ) : rows.length === 0 ? (
+          <EmptyStateV2 icon={<TrendingUp size={26} />} title="Sin actividad en el periodo. Las vistas requieren landing_views.sql y los links /r/CODIGO." />
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                  <th style={{ ...th, textAlign: 'left' }}>Venue</th>
+                  <th style={th} title="Aperturas del link de reservas">Vistas</th>
+                  <th style={th} title="Personas distintas">Visit.</th>
+                  <th style={th} title="Conversaciones del bot">Conv.</th>
+                  <th style={th} title="% resueltas sin humano">Bot solo</th>
+                  <th style={th} title="Reservas creadas (sin canceladas)">Reservas</th>
+                  <th style={th} title="Nacidas en WhatsApp/Instagram">Vía conc.</th>
+                  <th style={th} title="Nacidas del link público">Web</th>
+                  <th style={th} title="Confirmadas / sentadas / completadas">Conf.</th>
+                  <th style={th} title="No-shows del periodo">No-show</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => {
+                  const rBot = r.convs > 0 ? Math.round(((r.convs - r.escaladas) / r.convs) * 100) : null
+                  return (
+                    <tr key={r.bu.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={{ ...td, textAlign: 'left', fontFamily: 'var(--font-ui)' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          <BUChip code={r.bu.code} size="sm" />
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>{r.bu.name}</span>
+                        </span>
+                      </td>
+                      <td style={td}>{r.vistas || '—'}</td>
+                      <td style={td}>{r.visitantes || '—'}</td>
+                      <td style={td}>{r.convs || '—'}</td>
+                      <td style={{ ...td, color: rBot != null && rBot < 50 ? 'var(--status-attention)' : td.color }}>{rBot != null ? `${rBot}%` : '—'}</td>
+                      <td style={{ ...td, fontWeight: 700, color: 'var(--text-primary)' }}>{r.reservas || '—'}</td>
+                      <td style={{ ...td, color: 'var(--status-healthy)' }}>{r.viaConcierge || '—'}</td>
+                      <td style={td}>{r.resWeb || '—'}</td>
+                      <td style={td}>{r.confirmadas || '—'}</td>
+                      <td style={{ ...td, color: r.noShows > 0 ? 'var(--status-risk)' : td.color }}>{r.noShows || '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* De dónde nos ven — geo de las visitas vía /r/ */}
+      {geoRows.length > 0 && (
+        <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '12px 14px' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+            De dónde nos ven <span style={{ textTransform: 'none', letterSpacing: 'normal' }}>· visitas vía /r/ (pautas y compartidos)</span>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {geoRows.map((g, i) => (
+              <span key={i} className="num" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 999, padding: '4px 10px' }}>
+                {[g.city, g.region, g.country].filter(Boolean).join(', ')} · <strong style={{ color: 'var(--text-primary)' }}>{g.vistas}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5 }}>
+        Este portal crecerá por módulo: hoy concentra el Concierge; siguen wellness, campañas por pauta y show-rate por venue.
+      </p>
+    </div>
   )
 }
 
