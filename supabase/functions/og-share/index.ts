@@ -40,6 +40,20 @@ Deno.serve(async (req: Request) => {
   }
 
   const dest = kind === 'r' ? `/?reservar=${encodeURIComponent(code)}` : `/?wellness=${encodeURIComponent(code)}`
+
+  // HUMANOS → 302 de servidor directo al landing: cero dependencia de que el
+  // navegador ejecute meta-refresh o JS (Safari se quedaba parado en
+  // "Redirigiendo…"). El HTML con metas queda SOLO para los robots de preview,
+  // que es quien lo necesita. no-store en ambas ramas: una respuesta cacheada
+  // en el edge no distingue user-agent y serviría la rama equivocada.
+  const ua = (req.headers.get('user-agent') ?? '').toLowerCase()
+  const esBot = /facebookexternalhit|facebot|twitterbot|whatsapp|linkedinbot|telegrambot|slackbot|discordbot|pinterest|bot|crawler|spider|preview/.test(ua)
+  if (!esBot) {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: base + dest, 'Cache-Control': 'no-store' },
+    })
+  }
   const name = bu?.name ?? (kind === 'r' ? 'nuestra casa' : 'nuestro estudio')
   const title = kind === 'r'
     ? (bu?.og_title || `Reserva tu mesa en ${name}`)
@@ -75,6 +89,6 @@ Deno.serve(async (req: Request) => {
 </body>
 </html>`, {
     status: 200,
-    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
   })
 })
