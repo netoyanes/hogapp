@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.95.0"
+export const APP_VERSION = "2.95.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.95.1",
+    date: "2026-08-18",
+    type: "PATCH",
+    changes: [
+      "BANDEJA — las conversaciones (IG y WhatsApp) ahora traen FECHA: separadores de día entre mensajes ('Hoy', 'Ayer', 'Miércoles 13 de agosto') al estilo WhatsApp, y la HORA en cada mensaje junto a quién lo mandó",
+      "Al abrir una conversación de hace dos semanas ya sabes de qué fecha es cada cosa — antes se leía como un presente eterno",
+    ]
+  },
   {
     version: "2.95.0",
     date: "2026-08-18",

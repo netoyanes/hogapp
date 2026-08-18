@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Bot, MessageCircle, Camera, Send, Power, X, Plus, Hand, Undo2, CheckCircle2, FlaskConical, TrendingUp, Inbox, Shell, ChevronLeft, ChevronRight, Music, Search, Star, Briefcase } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
@@ -977,13 +977,41 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
           </div>
         )}
 
-        {/* Mensajes */}
+        {/* Mensajes — con separador de día (patrón WhatsApp) y hora en cada
+            burbuja: una conversación de hace dos semanas se lee sabiendo de
+            QUÉ fecha es cada cosa, no como un presente eterno. */}
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {messages.length === 0 && <p style={{ color: 'var(--text-tertiary)', fontSize: 12, textAlign: 'center' }}>Sin mensajes aún.</p>}
-          {messages.map(m => (
-            <div key={m.id} style={roleStyle(m.role)}>
-              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)', marginBottom: 2 }}>
-                {m.role === 'guest' ? 'Cliente' : m.role === 'bot' ? 'Bot' : m.role === 'agent' ? (m.meta?.via === 'instagram_app' ? 'Equipo · app de Instagram' : m.meta?.via === 'auto_confirm' ? 'Equipo · confirmación automática' : 'Equipo') : 'Sistema'}
+          {messages.map((m, i) => {
+            const dia = (iso: string) => {
+              const d = new Date(iso)
+              return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+            }
+            const etiquetaDia = (iso: string) => {
+              const d = new Date(iso)
+              const hoy = new Date()
+              const ayer = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 1)
+              if (dia(iso) === dia(hoy.toISOString())) return 'Hoy'
+              if (d.getFullYear() === ayer.getFullYear() && d.getMonth() === ayer.getMonth() && d.getDate() === ayer.getDate()) return 'Ayer'
+              const txt = d.toLocaleDateString('es-MX', {
+                weekday: 'long', day: 'numeric', month: 'long',
+                year: d.getFullYear() !== hoy.getFullYear() ? 'numeric' : undefined,
+              })
+              return txt.charAt(0).toUpperCase() + txt.slice(1)
+            }
+            const nuevoDia = i === 0 || dia(m.created_at) !== dia(messages[i - 1].created_at)
+            const hora = new Date(m.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+            return (
+            <React.Fragment key={m.id}>
+              {nuevoDia && (
+                <div style={{ alignSelf: 'center', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 999, padding: '3px 12px', margin: '6px 0 2px', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+                  {etiquetaDia(m.created_at)}
+                </div>
+              )}
+            <div style={roleStyle(m.role)}>
+              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)', marginBottom: 2, display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                <span>{m.role === 'guest' ? 'Cliente' : m.role === 'bot' ? 'Bot' : m.role === 'agent' ? (m.meta?.via === 'instagram_app' ? 'Equipo · app de Instagram' : m.meta?.via === 'auto_confirm' ? 'Equipo · confirmación automática' : 'Equipo') : 'Sistema'}</span>
+                <span className="num" style={{ fontFamily: 'var(--font-mono)', textTransform: 'none', letterSpacing: 'normal' }}>{hora}</span>
               </div>
               {/* Imágenes (comprobantes de depósito, fotos): tap → abre completa */}
               {m.meta?.image_url && (
@@ -994,7 +1022,9 @@ function ThreadSheet({ conv, buList, userId, isMobile, onClose, onChanged }: {
               )}
               {m.body}
             </div>
-          ))}
+            </React.Fragment>
+            )
+          })}
         </div>
 
         {/* Composer */}
