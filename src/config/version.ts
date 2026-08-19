@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.103.0"
+export const APP_VERSION = "2.104.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,20 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.104.0",
+    date: "2026-08-19",
+    type: "MINOR",
+    changes: [
+      "CLIP DE ADJUNTOS en las tareas del proyecto: si una tarea trae evidencias o links, se ve el clip (con el número si son varios) — la abres y ahí están",
+      "CORTE POST-EVENTO CON UTILIDAD: captura el ingreso total y el gasto total de la noche, y la utilidad y el margen % se calculan solos, con el desglose por persona si registraste la asistencia real",
+      "El corte avisa en rojo cuando el evento costó más de lo que produjo",
+      "Se retiró la pantalla de APROBACIÓN de la ventana del proyecto — la autorización del presupuesto se lleva por fuera mientras se define el proceso. El código quedó intacto: volver a montarla es una línea",
+      "Se retiró Enviar requisición al gerente",
+      "Guardar como plantilla bajó hasta el fondo de la ventana, en voz baja: es algo que se hace una vez, no compite con armar el proyecto",
+      "Requiere project_corte_utilidad.sql",
+    ]
+  },
   {
     version: "2.103.0",
     date: "2026-08-18",

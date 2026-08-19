@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { Plus, X, Search, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ClipboardList, Save, Clock, CalendarDays, UserPlus, MessageCircle, Trash2, Copy, Archive, ArchiveRestore, Pencil, Link2, Unlink, Paperclip, Settings, ShieldCheck } from 'lucide-react'
+import { Plus, X, Search, CheckSquare, ListPlus, ChevronLeft, ChevronRight, Save, Clock, CalendarDays, UserPlus, MessageCircle, Trash2, Copy, Archive, ArchiveRestore, Pencil, Link2, Unlink, Paperclip, Settings, ShieldCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
-import { notifySlack, notifyUserDM } from '../hooks/useSlack'
+import { notifyUserDM } from '../hooks/useSlack'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { EntityChat } from '../components/ui/EntityChat'
 import { FeedbackButton } from '../components/ui/FeedbackButton'
@@ -39,6 +39,8 @@ interface EventPlan {
   budget: number | null
   expected_attendance: number | null
   actual_attendance: number | null
+  actual_revenue?: number | null
+  actual_cost?: number | null
   requirements: string | null
   collaborators: string | null
   responsible: string | null
@@ -1160,7 +1162,10 @@ function ApprovalsDashboard({ rows, buMap, nameOf, onOpen }: {
 }
 
 // ── Aprobación (Gerente de Eficiencia): enviar → revisar → aprobar/regresar ──
-function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, status, totales, nPartidas, onStatus }: {
+// Retirada de la ventana (v2.104.0): la autorización del presupuesto se lleva
+// por fuera mientras se define el proceso. Se EXPORTA —en vez de borrarse— para
+// que siga compilando y volver a montarla sea una línea, no una reconstrucción.
+export function ApprovalSection({ event, buCode, canWrite, canApprove, userId, people, status, totales, nPartidas, onStatus }: {
   event: EventPlan
   buCode: string
   canWrite: boolean
@@ -1874,6 +1879,9 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const [budget, setBudget] = useState(event?.budget != null ? String(event.budget) : '')
   const [expectedAtt, setExpectedAtt] = useState(event?.expected_attendance != null ? String(event.expected_attendance) : '')
   const [actualAtt, setActualAtt] = useState(event?.actual_attendance != null ? String(event.actual_attendance) : '')
+  // Corte post-evento: los dos totales de los que sale la utilidad
+  const [ingresoReal, setIngresoReal] = useState(event?.actual_revenue != null ? String(event.actual_revenue) : '')
+  const [gastoReal, setGastoReal] = useState(event?.actual_cost != null ? String(event.actual_cost) : '')
   const [requirements, setRequirements] = useState(event?.requirements ?? '')
   const [collaborators, setCollaborators] = useState(event?.collaborators ?? '')
   const [responsible, setResponsible] = useState(event?.responsible ?? '')
@@ -1884,7 +1892,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const [relQ, setRelQ] = useState('')
   // Los totales viven aquí para que Aprobación y Presupuesto muestren SIEMPRE
   // la misma cifra — antes cada uno consultaba por su cuenta y se desfasaban
-  const [totales, setTotales] = useState<{ gastos: number; ingresos: number; n: number } | null>(null)
+  const [, setTotales] = useState<{ gastos: number; ingresos: number; n: number } | null>(null)
   // Menú de opciones por tarea (clic derecho o botón ⋯ — táctil no tiene
   // clic derecho): Abrir · Archivar · Desvincular
   const { openMenu: openTaskMenu, menuElement: taskMenuElement } = useContextMenu()
@@ -1919,9 +1927,9 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
     } catch { showToast('No se pudo copiar el link.', 'error') }
   }
   const [taskFollowers, setTaskFollowers] = useState<Record<string, string[]>>({})
+  const [taskAdjuntos, setTaskAdjuntos] = useState<Record<string, number>>({})
   const [bulkTasks, setBulkTasks] = useState('')
   const [templateId, setTemplateId] = useState('')
-  const [reqTaskId, setReqTaskId] = useState(event?.requisition_task_id ?? null)
   const canDelete = ['MASTER', 'OPS_MANAGER'].includes(userRole ?? '')
   const buCode = buList.find(b => b.id === (event?.bu_id ?? buId))?.code ?? ''
   // La ventana crece con la pantalla: en un monitor grande el proyecto tiene
@@ -1967,41 +1975,6 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
     showToast(`Plantilla "${tname.trim()}" guardada — disponible al crear planes nuevos.`, 'success')
   }
 
-  // Requisición operativa: los recursos del plan llegan al gerente del venue
-  // como tarea de alta prioridad en el Task Manager (+ aviso a Slack)
-  async function sendRequisition() {
-    if (!event) return
-    if (reqTaskId) { onOpenTask?.(reqTaskId); return }
-    const [{ data: res }, { data: bud }] = await Promise.all([
-      supabase.from('project_resources').select('name, qty, unit_cost').eq('event_id', event.id),
-      supabase.from('project_budget_items').select('concept, amount, is_income').eq('event_id', event.id),
-    ])
-    if (!(res ?? []).length) { showToast('Agrega primero los recursos requeridos.', 'error'); return }
-    const gastos = (bud ?? []).filter(b => !b.is_income).reduce((s, b) => s + b.amount, 0)
-    const desc = [
-      `Requisición de recursos — ${event.name} (${buCode})`,
-      event.date ? `Fecha: ${event.date}${event.end_date ? ` → ${event.end_date}` : ''}${startTime ? ` · ${startTime}` : ''}` : '',
-      '',
-      'RECURSOS REQUERIDOS:',
-      ...(res ?? []).map(r => `- ${r.qty}× ${r.name}${r.unit_cost != null ? ` (${mxn(r.unit_cost)} c/u)` : ''}`),
-      gastos > 0 ? `\nPresupuesto de gastos del plan: ${mxn(gastos)}` : '',
-      '',
-      'Confirmar plantilla del turno e insumos/inventario necesarios.',
-    ].filter(Boolean).join('\n')
-    const { data: task, error } = await supabase.from('tasks').insert({
-      title: `Requisición — ${event.name}${event.date ? ` (${event.date})` : ''}`,
-      description: desc, status: 'OPEN', priority: 'HIGH', deadline_type: 'HARD',
-      bu_id: event.bu_id, due_date: event.date, event_id: event.id,
-      area: 'piso', client_impact: 'internal', created_by: userId ?? null,
-    }).select('id, title, status, assigned_to, due_date, estimated_hours').single()
-    if (error || !task) { showToast(`No se pudo crear la requisición: ${error?.message}`, 'error'); return }
-    await supabase.from('event_plans').update({ requisition_task_id: task.id }).eq('id', event.id)
-    setReqTaskId(task.id)
-    setTasks(prev => [...prev, task as TaskLite])
-    logActivity('task_created', 'task', task.id, { title: task.title, via: 'requisicion', event: event.name })
-    notifySlack(`📋 *Requisición de recursos* — ${event.name} (${buCode})${event.date ? ` · ${event.date}` : ''}\n${(res ?? []).slice(0, 6).map(r => `• ${r.qty}× ${r.name}`).join('\n')}${(res ?? []).length > 6 ? `\n…y ${(res ?? []).length - 6} más` : ''}`)
-    showToast('Requisición enviada al Task Manager del venue.', 'success')
-  }
 
   const loadTasks = useCallback(async () => {
     if (!event) return
@@ -2012,10 +1985,23 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
     setTasks(ts)
     if (!ts.length) return
     // Relacionados (seguidores) de cada tarea — para los círculos apilados
-    const { data: fl } = await supabase.from('task_followers').select('task_id, user_id').in('task_id', ts.map(t => t.id))
+    const ids = ts.map(t => t.id)
+    const [{ data: fl }, { data: pr }, { data: lk }] = await Promise.all([
+      supabase.from('task_followers').select('task_id, user_id').in('task_id', ids),
+      supabase.from('task_proofs').select('task_id, archived').in('task_id', ids),
+      supabase.from('task_links').select('task_id, archived').in('task_id', ids),
+    ])
     const m: Record<string, string[]> = {}
     for (const f of (fl ?? []) as { task_id: string; user_id: string }[]) (m[f.task_id] = m[f.task_id] ?? []).push(f.user_id)
     setTaskFollowers(m)
+    // Clip de adjuntos: evidencias + links vivos. Se cuentan juntos porque para
+    // quien mira la lista son lo mismo — "esta tarea trae algo que ver".
+    const adj: Record<string, number> = {}
+    for (const r of [...(pr ?? []), ...(lk ?? [])] as { task_id: string; archived?: boolean | null }[]) {
+      if (r.archived) continue
+      adj[r.task_id] = (adj[r.task_id] ?? 0) + 1
+    }
+    setTaskAdjuntos(adj)
   }, [event])
   useEffect(() => { loadTasks() }, [loadTasks])
   // Al guardar algo en la subventana de tarea, esta lista se refresca sola
@@ -2104,6 +2090,8 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
       budget: budget !== '' ? Number(budget) : null,
       expected_attendance: expectedAtt !== '' ? Math.max(0, Number(expectedAtt)) : null,
       actual_attendance: actualAtt !== '' ? Math.max(0, Number(actualAtt)) : null,
+      actual_revenue: ingresoReal !== '' ? Math.max(0, Number(ingresoReal)) : null,
+      actual_cost: gastoReal !== '' ? Math.max(0, Number(gastoReal)) : null,
       requirements: requirements.trim() || null,
       collaborators: collaborators.trim() || null,
       responsible: responsible || null, status,
@@ -2417,12 +2405,11 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             </div>
           </div>
 
-          {/* Flujo de aprobación (Gerente de Eficiencia) */}
-          {event && (
-            <ApprovalSection event={event} buCode={buCode} canWrite={canWrite} canApprove={canApprove}
-              userId={userId} people={people} status={status}
-              totales={totales} nPartidas={totales?.n ?? 0} onStatus={setStatus} />
-          )}
+          {/* El flujo de aprobación se retiró de la ventana: por ahora la
+              autorización del presupuesto se lleva fuera de la app. El
+              componente ApprovalSection y su historial siguen en el código —
+              cuando el proceso esté claro se vuelve a montar aquí sin
+              reconstruir nada. */}
 
           {/* Recursos y presupuesto por partidas (requieren el plan guardado) */}
           {event ? (
@@ -2443,29 +2430,64 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                       </div>
                     </div>
                   )}
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
-                    Captura los montos reales por partida abajo (campo "real $") — el Δ contra presupuesto se calcula solo. Guarda para registrar la asistencia real.
+                  {/* EL RESULTADO DE LA NOCHE. El desglose por partida (abajo)
+                      responde "¿me pasé del presupuesto?"; esto responde la
+                      pregunta que decide si el evento se repite: "¿ganamos?" */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <label style={lbl}>Ingreso total</label>
+                      <input type="number" inputMode="decimal" min={0} step="0.01" value={ingresoReal}
+                        onChange={e => setIngresoReal(e.target.value)} className="num" style={inp}
+                        disabled={!canWrite} placeholder="0.00" />
+                    </div>
+                    <div>
+                      <label style={lbl}>Gasto total</label>
+                      <input type="number" inputMode="decimal" min={0} step="0.01" value={gastoReal}
+                        onChange={e => setGastoReal(e.target.value)} className="num" style={inp}
+                        disabled={!canWrite} placeholder="0.00" />
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const ing = Number(ingresoReal || 0)
+                    const gas = Number(gastoReal || 0)
+                    if (!ingresoReal && !gastoReal) return null
+                    const util = ing - gas
+                    const margen = ing > 0 ? (util / ing) * 100 : null
+                    const pax = Number(actualAtt || 0)
+                    const tono = util > 0 ? 'var(--status-healthy)' : util < 0 ? 'var(--status-risk)' : 'var(--text-secondary)'
+                    return (
+                      <div style={{ background: 'var(--bg-base)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Utilidad</span>
+                          <span className="num" style={{ fontSize: 22, fontWeight: 800, color: tono, fontFamily: 'var(--font-mono)' }}>{mxn(util)}</span>
+                          {margen !== null && (
+                            <span className="num" style={{ fontSize: 15, fontWeight: 800, color: tono, fontFamily: 'var(--font-mono)' }}>
+                              {margen.toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                        {pax > 0 && (
+                          <div className="num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>
+                            {mxn(ing / pax)} por persona · utilidad {mxn(util / pax)} por persona · {pax} asistentes
+                          </div>
+                        )}
+                        {ing > 0 && margen !== null && margen < 0 && (
+                          <div style={{ fontSize: 11, color: 'var(--status-risk)', marginTop: 4, fontWeight: 600 }}>
+                            El evento costó más de lo que produjo.
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.45 }}>
+                    Estos dos totales son el resultado de la noche completa. Abajo puedes además capturar el real por partida (campo "real $") para ver contra qué partida te desviaste — el Δ se calcula solo. Guarda para registrar el corte.
                   </p>
                 </div>
               )}
               <ProgramSection eventId={event.id} defaultDate={event.date} canWrite={canWrite} userId={userId} onOpenTask={onOpenTask} />
               <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} people={people} showCorte={showCorte} onTotals={setTotales} />
-              {canWrite && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {/* Secundario a propósito: la acción principal del proyecto es
-                      enviar a aprobación (arriba). La requisición es otra cosa
-                      —le pasa la lista al gerente del venue como tarea— y en
-                      acento competía con ella como si fueran alternativas. */}
-                  <button onClick={sendRequisition} title="Crea una tarea en el Task Manager del venue con la lista de recursos, para que el gerente la ejecute"
-                    style={{ flex: 1, minWidth: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, borderRadius: 999, border: `1px solid ${reqTaskId ? 'var(--status-healthy)' : 'var(--border-default)'}`, background: reqTaskId ? 'color-mix(in srgb, var(--status-healthy) 10%, transparent)' : 'none', color: reqTaskId ? 'var(--status-healthy)' : 'var(--text-secondary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                    <ClipboardList size={15} /> {reqTaskId ? 'Requisición enviada — ver tarea' : 'Enviar requisición al gerente'}
-                  </button>
-                  <button onClick={saveAsTemplate}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, padding: '0 14px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                    <Save size={14} /> Guardar como plantilla
-                  </button>
-                </div>
-              )}
             </>
           ) : (
             <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
@@ -2499,6 +2521,15 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                     style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 5, width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${ph.color}`, borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left', minHeight: 44, marginBottom: 6 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }}>{t.title}</span>
+                      {(taskAdjuntos[t.id] ?? 0) > 0 && (
+                        <span title={`${taskAdjuntos[t.id]} ${taskAdjuntos[t.id] === 1 ? 'adjunto' : 'adjuntos'} — ábrela para verlos`}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 2, flexShrink: 0, color: 'var(--accent)' }}>
+                          <Paperclip size={12} />
+                          {taskAdjuntos[t.id] > 1 && (
+                            <span className="num" style={{ fontSize: 9.5, fontWeight: 800, fontFamily: 'var(--font-mono)' }}>{taskAdjuntos[t.id]}</span>
+                          )}
+                        </span>
+                      )}
                       <FunnelBar status={t.status} />
                       {event && canWrite && (
                         <span role="button" title="Opciones (abrir · desvincular · archivar)"
@@ -2610,6 +2641,16 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 </button>
               )}
             </div>
+          )}
+
+          {/* Hasta el fondo y en voz baja: guardar como plantilla es algo que se
+              hace UNA vez, cuando el proyecto ya quedó bien — no compite con el
+              trabajo de armarlo. */}
+          {canWrite && event && (
+            <button onClick={saveAsTemplate}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', minHeight: 42, borderRadius: 999, border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-tertiary)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+              <Save size={13} /> Guardar este proyecto como plantilla
+            </button>
           )}
         </div>
       </div>
