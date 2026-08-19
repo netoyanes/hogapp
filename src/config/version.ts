@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.104.1"
+export const APP_VERSION = "2.104.2"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.104.2",
+    date: "2026-08-19",
+    type: "PATCH",
+    changes: [
+      "GUARDAR AHORA SE VERIFICA CONTRA LA BASE: si el cambio no entró —por permisos o por lo que sea— lo dice en vez de fingir que guardó. Un UPDATE rechazado no devuelve error ni filas, así que antes se veía exactamente igual que un guardado exitoso",
+      "Al guardar, el ingreso y el gasto se re-sincronizan con lo que la base REALMENTE almacenó: si algo no entró se nota al instante, no al reabrir",
+      "FIX: un monto con coma de miles o espacio daba NaN y viajaba a la base como vacío — el dato se perdía en silencio. Ahora se limpia antes de enviarlo",
+    ]
+  },
   {
     version: "2.104.1",
     date: "2026-08-19",
