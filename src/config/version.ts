@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.104.0"
+export const APP_VERSION = "2.104.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.104.1",
+    date: "2026-08-19",
+    type: "PATCH",
+    changes: [
+      "FIX: el corte post-evento solo aparecía si el proyecto ya estaba marcado como Realizado o su fecha ya había pasado — si capturabas uno en curso, la sección simplemente no existía. Ahora se ve en CUALQUIER proyecto guardado",
+      "LA UTILIDAD YA SE VE SIN ABRIR NADA: en la tarjeta del tablero y en la barra fija de la ventana del proyecto, con su monto y su margen %",
+      "Si falta correr project_corte_utilidad.sql, el aviso al guardar ahora lo dice con todas sus letras en vez de mostrar el error crudo de la base de datos",
+    ]
+  },
   {
     version: "2.104.0",
     date: "2026-08-19",

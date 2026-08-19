@@ -719,6 +719,19 @@ function BoardView({ rows, buMap, progress, canWrite, isMobile, onOpen, onMove, 
                         {planPill(ev)}
                         <span className="num" style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{fechaLabel(ev)}</span>
                       </div>
+                      {(() => {
+                        const u = utilidadDe(ev)
+                        if (!u) return null
+                        return (
+                          <div className="num" style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 5, fontFamily: 'var(--font-mono)' }}>
+                            <span style={{ fontSize: 8.5, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Utilidad</span>
+                            <span style={{ fontSize: 11.5, fontWeight: 800, color: u.color }}>{mxn(u.utilidad)}</span>
+                            {u.margen !== null && (
+                              <span style={{ fontSize: 10, fontWeight: 800, color: u.color }}>{u.margen.toFixed(1)}%</span>
+                            )}
+                          </div>
+                        )
+                      })()}
                       {progress[ev.id] && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
                           <span style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--bg-base)', overflow: 'hidden' }}>
@@ -751,6 +764,21 @@ function BoardView({ rows, buMap, progress, canWrite, isMobile, onOpen, onMove, 
       })}
     </div>
   )
+}
+
+
+// ── Utilidad del proyecto ────────────────────────────────────────────────────
+// Un solo lugar donde se decide qué es "utilidad" y cómo se pinta, para que la
+// tarjeta del tablero, el encabezado y el corte digan exactamente lo mismo.
+function utilidadDe(ev: { actual_revenue?: number | null; actual_cost?: number | null }) {
+  const ing = ev.actual_revenue, gas = ev.actual_cost
+  if (ing == null && gas == null) return null
+  const utilidad = Number(ing ?? 0) - Number(gas ?? 0)
+  const margen = Number(ing ?? 0) > 0 ? (utilidad / Number(ing)) * 100 : null
+  return {
+    utilidad, margen,
+    color: utilidad > 0 ? 'var(--status-healthy)' : utilidad < 0 ? 'var(--status-risk)' : 'var(--text-secondary)',
+  }
 }
 
 // ── Calendario mensual: los planes del mes en cuadrícula ─────────────────────
@@ -1942,7 +1970,11 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const anchoVentana = chatEnColumna ? anchoBase + 330 : anchoBase
   // Corte post-evento: se abre cuando el plan terminó (Realizado o fecha pasada)
   const todayISO = new Date().toISOString().slice(0, 10)
-  const showCorte = !!event && (status === 'done' || !!((event.end_date ?? event.date) && (event.end_date ?? event.date)! < todayISO))
+  const eventoTermino = status === 'done' || !!((event?.end_date ?? event?.date) && (event!.end_date ?? event!.date)! < todayISO)
+  // El corte se muestra en CUALQUIER proyecto guardado: antes solo aparecía si
+  // ya había terminado, y quien quería capturar el resultado de un evento que
+  // no estaba marcado como Realizado simplemente no encontraba dónde hacerlo.
+  const showCorte = !!event
 
   // Plantilla elegida en modo creación: pre-carga tipo y bullets; recursos y
   // presupuesto se insertan al guardar (necesitan el id del plan)
@@ -2099,7 +2131,15 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
     if (event) {
       const { error } = await supabase.from('event_plans').update(row).eq('id', event.id)
       setSaving(false)
-      if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
+      if (error) {
+        // El error crudo de Postgres ("column ... does not exist") no le dice
+        // nada a quien lo lee: se traduce a la acción que lo resuelve.
+        const falta = /actual_revenue|actual_cost/.test(error.message)
+        showToast(falta
+          ? 'Falta correr project_corte_utilidad.sql en Supabase — sin eso el ingreso y el gasto no tienen dónde guardarse.'
+          : `No se pudo guardar: ${error.message}`, 'error')
+        return
+      }
       logActivity('event_updated', 'event', event.id, { name: row.name })
     } else {
       const { data, error } = await supabase.from('event_plans').insert({ ...row, created_by: userId ?? null }).select('id').single()
@@ -2194,10 +2234,24 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 </span>
               )}
               {tasks.length > 0 && (
-                <span className="num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>
+                <span className="num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
                   {tasks.filter(t => t.status === 'APPROVED').length}/{tasks.length} tareas
                 </span>
               )}
+              {/* La utilidad, en la barra fija: es el número por el que se
+                  pregunta primero cuando un evento ya pasó. */}
+              {(() => {
+                const u = utilidadDe({ actual_revenue: ingresoReal !== '' ? Number(ingresoReal) : null, actual_cost: gastoReal !== '' ? Number(gastoReal) : null })
+                if (!u) return null
+                return (
+                  <span className="num" title="Utilidad del evento (ingreso menos gasto)"
+                    style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'baseline', gap: 5, fontFamily: 'var(--font-mono)' }}>
+                    <span style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Utilidad</span>
+                    <span style={{ fontSize: 12.5, fontWeight: 800, color: u.color }}>{mxn(u.utilidad)}</span>
+                    {u.margen !== null && <span style={{ fontSize: 11, fontWeight: 800, color: u.color }}>{u.margen.toFixed(1)}%</span>}
+                  </span>
+                )
+              })()}
             </div>
           )}
         </div>
@@ -2418,6 +2472,11 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
               {showCorte && (
                 <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' }}>
                   <label style={{ ...lbl, marginBottom: 8 }}>📊 Corte post-evento</label>
+                  {!eventoTermino && (
+                    <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '0 0 8px', lineHeight: 1.45 }}>
+                      Este proyecto todavía no termina — puedes capturar el corte cuando quieras y se guarda igual.
+                    </p>
+                  )}
                   {kind === 'evento' && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                       <div>
