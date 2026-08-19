@@ -113,6 +113,13 @@ const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const DAY_COLORS = ['#5E9FB8', '#8FBF9F', '#D98C9F', '#DB9A6A', '#C9A76B', '#B08BC9', '#E8A33D']
 
 const mxn = (n: number) => `MX$${Number(n).toLocaleString('es-MX')}`
+// Texto de un input a número para la base: '' y cualquier cosa no numérica → null
+const num = (v: string): number | null => {
+  const t = String(v ?? '').replace(/[\s,$]/g, '')
+  if (t === '') return null
+  const n = Number(t)
+  return Number.isFinite(n) ? Math.max(0, n) : null
+}
 // Bullets → títulos de tarea: quita viñetas (-, •, *) y líneas vacías
 const parseBullets = (text: string) => text.split('\n').map(l => l.replace(/^[-•*]\s*/, '').trim()).filter(Boolean)
 
@@ -2122,14 +2129,21 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
       budget: budget !== '' ? Number(budget) : null,
       expected_attendance: expectedAtt !== '' ? Math.max(0, Number(expectedAtt)) : null,
       actual_attendance: actualAtt !== '' ? Math.max(0, Number(actualAtt)) : null,
-      actual_revenue: ingresoReal !== '' ? Math.max(0, Number(ingresoReal)) : null,
-      actual_cost: gastoReal !== '' ? Math.max(0, Number(gastoReal)) : null,
+      // num(): un valor no numérico (una coma de miles, un espacio) daba NaN,
+      // y NaN viaja a la base como null — el dato se perdía sin avisar.
+      actual_revenue: num(ingresoReal),
+      actual_cost: num(gastoReal),
       requirements: requirements.trim() || null,
       collaborators: collaborators.trim() || null,
       responsible: responsible || null, status,
     }
     if (event) {
-      const { error } = await supabase.from('event_plans').update(row).eq('id', event.id)
+      // .select() no es adorno: sin él, un UPDATE que la base RECHAZA por
+      // permisos no devuelve error NI filas — se ve como si hubiera guardado y
+      // el dato nunca entró. Con select sabemos si de verdad se escribió.
+      const { data: guardado, error } = await supabase.from('event_plans')
+        .update(row).eq('id', event.id)
+        .select('id, actual_revenue, actual_cost').maybeSingle()
       setSaving(false)
       if (error) {
         // El error crudo de Postgres ("column ... does not exist") no le dice
@@ -2140,6 +2154,14 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
           : `No se pudo guardar: ${error.message}`, 'error')
         return
       }
+      if (!guardado) {
+        showToast('La base no aceptó el cambio (permisos sobre este proyecto). Nada se guardó — avísale al Master.', 'error')
+        return
+      }
+      // Se re-sincroniza con lo que la base REALMENTE guardó: si algo no entró,
+      // se ve al instante en pantalla en vez de descubrirse al reabrir.
+      setIngresoReal(guardado.actual_revenue != null ? String(guardado.actual_revenue) : '')
+      setGastoReal(guardado.actual_cost != null ? String(guardado.actual_cost) : '')
       logActivity('event_updated', 'event', event.id, { name: row.name })
     } else {
       const { data, error } = await supabase.from('event_plans').insert({ ...row, created_by: userId ?? null }).select('id').single()
