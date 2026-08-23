@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.104.2"
+export const APP_VERSION = "2.105.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.105.0",
+    date: "2026-08-19",
+    type: "MINOR",
+    changes: [
+      "ZONA HORARIA POR VENUE — el holding opera en dos husos (Mazatlán y CDMX) y hasta hoy TODO lo que dependía de \'hoy\' y \'ahora\' usaba el reloj de quien mira, no el del venue. Quien abría desde Sinaloa un link de CDMX veía el día y los horarios corridos una hora",
+      "El formulario público ahora calcula el día y filtra las horas pasadas con la hora DE LA CASA, no la del teléfono",
+      "Si quien reserva está en otro huso, el formulario se lo dice: \'Horarios en hora de Mexico City — ahí son las 20:14\'",
+      "La zona horaria se valida al guardarla: un nombre inventado se rechaza con mensaje claro en vez de romper el formulario después. Y si un dato viejo trae uno inválido, el sistema degrada a hora de Mazatlán en lugar de caerse",
+      "Requiere venue_timezone.sql + redesplegar public-reservation",
+    ]
+  },
   {
     version: "2.104.2",
     date: "2026-08-19",
