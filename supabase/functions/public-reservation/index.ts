@@ -151,7 +151,7 @@ Deno.serve(async (req: Request) => {
     if (!code) return json({ error: 'Falta el venue.' }, 400)
 
     const { data: bu } = await admin.from('business_units')
-      .select('id, code, name, public_booking_enabled, venue_type, inventory_type').eq('code', code).maybeSingle()
+      .select('id, code, name, public_booking_enabled, venue_type, inventory_type, timezone').eq('code', code).maybeSingle()
     if (!bu) return json({ error: 'Venue no encontrado.' }, 404)
     if (!bu.public_booking_enabled) return json({ error: 'Este venue no tiene reservas en línea por ahora.', disabled: true }, 403)
 
@@ -164,9 +164,21 @@ Deno.serve(async (req: Request) => {
 
     // ── INFO: datos para pintar el formulario ──────────────────────────────
     if ((body.action ?? 'info') === 'info') {
+      // La hora que importa es la DEL VENUE, no la de quien mira: alguien en
+      // Sinaloa abriendo un venue de CDMX veía el día y los horarios corridos
+      // una hora. El servidor manda la fecha y la hora locales de la casa ya
+      // resueltas, para que el navegador no tenga que adivinarlas.
+      const tz = (bu as { timezone?: string }).timezone || 'America/Mazatlan'
+      const ahora = new Date()
+      const fmt = (opts: Intl.DateTimeFormatOptions) =>
+        new Intl.DateTimeFormat('en-CA', { timeZone: tz, ...opts }).format(ahora)
       return json({
         ok: true,
         venue: bu.name,
+        timezone: tz,
+        // 'YYYY-MM-DD' y 'HH:MM' en el huso del venue
+        venue_hoy: fmt({ year: 'numeric', month: '2-digit', day: '2-digit' }),
+        venue_hora: new Intl.DateTimeFormat('es-MX', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(ahora),
         // Solo el modelo por-noche (F&B/club) se soporta en el formulario web;
         // los demás tipos reservan por otros medios.
         supported: (bu.inventory_type ?? 'nightly_capacity') === 'nightly_capacity',

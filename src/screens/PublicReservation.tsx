@@ -12,6 +12,11 @@ interface Info {
   engine?: 'night' | 'tables'
   online_max_pax?: number | null
   deposit: { over_pax: number; per_person: number | null; fixed: number | null } | null
+  // La hora del VENUE, resuelta en el servidor: el reloj del visitante no
+  // sirve — puede estar en otro huso (Sinaloa vs CDMX) o en otro país.
+  timezone?: string
+  venue_hoy?: string
+  venue_hora?: string
 }
 interface Done {
   venue: string; fecha: string; hora: string; pax: number
@@ -113,8 +118,11 @@ export function PublicReservation({ code }: { code: string }) {
   // margen para llegar). Madrugada (<6:00) cuenta como la misma noche.
   const sinPasados = (list: string[], f: string) => {
     if (f !== hoyISO) return list
+    // venue_hora viene del servidor en el huso de la casa. Sin ella (aún
+    // cargando) cae al reloj del teléfono, que es mejor que no filtrar nada.
+    const hv = info?.venue_hora?.match(/^(\d{1,2}):(\d{2})$/)
     const now = new Date()
-    let nowMin = now.getHours() * 60 + now.getMinutes()
+    let nowMin = hv ? Number(hv[1]) * 60 + Number(hv[2]) : now.getHours() * 60 + now.getMinutes()
     if (nowMin < 360) nowMin += 1440
     return list.filter(s => {
       const [h, m] = s.split(':').map(Number)
@@ -161,11 +169,15 @@ export function PublicReservation({ code }: { code: string }) {
       })
   }, [code])
 
-  // Fecha local (no UTC: en Mazatlán toISOString brinca a "mañana" desde las ~5pm)
-  const hoyISO = (() => {
+  // "Hoy" es el día EN EL VENUE, no en el teléfono de quien mira. Alguien en
+  // Sinaloa abriendo un venue de CDMX está una hora atrás; alguien de viaje,
+  // varias. Mientras el servidor no responde se usa el reloj local como
+  // aproximación — es lo único disponible y se corrige al llegar la info.
+  const hoyLocal = (() => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   })()
+  const hoyISO = info?.venue_hoy ?? hoyLocal
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -314,6 +326,22 @@ export function PublicReservation({ code }: { code: string }) {
           </div>
           {(usePicker || slotsLoading) && (
             <div><span style={lbl}>Hora de llegada — horarios con lugar</span>
+              {/* Si quien reserva está en otro huso, se le dice: sin esto
+                  alguien en Sinaloa aparta las 19:00 creyendo que son las
+                  suyas y llega una hora tarde a un venue de CDMX. */}
+              {(() => {
+                if (!info?.timezone) return null
+                let miTz = ''
+                try { miTz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? '' } catch { /* sin Intl: se omite */ }
+                if (!miTz || miTz === info.timezone) return null
+                const ciudad = info.timezone.split('/').pop()?.replace(/_/g, ' ') ?? info.timezone
+                return (
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 6px' }}>
+                    Horarios en hora de <strong>{ciudad}</strong>
+                    {info.venue_hora ? <> — ahí son las {info.venue_hora}</> : null}.
+                  </span>
+                )
+              })()}
               {!fecha ? (
                 <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>Elige primero la fecha.</p>
               ) : slotsLoading ? (
