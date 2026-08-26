@@ -46,20 +46,27 @@ drop trigger if exists trg_bu_tz on business_units;
 create trigger trg_bu_tz before insert or update of timezone on business_units
   for each row execute function business_units_valida_tz();
 
--- ─── Los venues de CDMX ──────────────────────────────────────────────────────
--- Se detectan por nombre/ubicación (ROMA, CDMX, Ciudad de México, Condesa,
--- Polanco). Revisa el resultado al final y corrige a mano lo que falte: esto
--- es una ayuda, no un oráculo.
-update business_units
-   set timezone = 'America/Mexico_City'
- where timezone <> 'America/Mexico_City'
-   and (
-        name     ilike '%roma%'   or coalesce(location,'') ilike '%roma%'
-     or name     ilike '%cdmx%'   or coalesce(location,'') ilike '%cdmx%'
-     or name     ilike '%condesa%' or coalesce(location,'') ilike '%condesa%'
-     or name     ilike '%polanco%' or coalesce(location,'') ilike '%polanco%'
-     or coalesce(location,'') ilike '%ciudad de m%'
-   );
+-- ─── Asignación EXPLÍCITA por código ────────────────────────────────────────
+-- Se asigna por código y no adivinando por el nombre. Adivinar falla justo
+-- donde más duele: "Oyster CLUB" no dice en su nombre que está en la Condesa,
+-- así que una detección por texto lo habría dejado en Mazatlán —una hora
+-- corrida— y es el venue con más reservas por web.
+--
+-- Solo se tocan los venues de los que hay certeza. El resto queda en el
+-- default y sale marcado en la verificación de abajo para que lo revises.
+update business_units set timezone = 'America/Mexico_City'
+ where code in (
+   'OC',   -- Oyster CLUB · rooftop del Hotel Flow Condesa, Condesa Hipódromo
+   'PC',   -- POD Condesa
+   'AR'    -- Apricot ROMA
+ );
+
+update business_units set timezone = 'America/Mazatlan'
+ where code in (
+   'AM',   -- Apricot MZT
+   'BM',   -- Bruma MZT
+   'PM'    -- POD Mazatlan
+ );
 
 -- ─── Helpers: "hoy" y "ahora" EN EL VENUE ───────────────────────────────────
 -- Los helpers DEGRADAN en vez de reventar: si un venue quedó con un huso
@@ -85,9 +92,17 @@ grant execute on function public.fn_venue_tz(uuid)    to anon, authenticated;
 grant execute on function public.fn_venue_hoy(uuid)   to anon, authenticated;
 grant execute on function public.fn_venue_ahora(uuid) to anon, authenticated;
 
--- ─── Verificación: revisa esta lista y corrige lo que no cuadre ─────────────
+-- ─── Verificación ───────────────────────────────────────────────────────────
+-- La columna "revisar" marca los venues que NADIE asignó a mano y quedaron en
+-- el default. Para cada uno de esos, confirma su ciudad y corrígelo:
+--
 --   update business_units set timezone = 'America/Mexico_City' where code = 'XX';
-select code, name, location, timezone,
-       to_char(timezone(timezone, now()), 'HH24:MI') as hora_local_ahora
+--
+-- Un huso equivocado no se ve: simplemente las reservas salen una hora
+-- corridas y nadie sabe por qué.
+select code, name, timezone,
+       to_char(timezone(timezone, now()), 'HH24:MI') as hora_alla_ahora,
+       case when code in ('OC','PC','AR','AM','BM','PM') then ''
+            else '← REVISAR: quedó en el default' end as revisar
   from business_units
- order by timezone, code;
+ order by revisar desc, timezone, code;
