@@ -622,6 +622,40 @@ body {
      nota_pie / precio: renglones finales del grupo (p. ej. Los Oyster Shots)
    ========================================================================== */
 
+/* ============================================================================
+   RESERVAS — de dónde sale el botón "Reservar mesa"
+   ----------------------------------------------------------------------------
+   motor: "opentable" abre el widget de OpenTable en una ventana sobre el menú.
+          "hog" manda al formulario propio (/?reservar=OC).
+
+   Por qué el IFRAME directo y no el <script> loader que da OpenTable:
+   el loader escribe con document.write, y un document.write DESPUÉS de que la
+   página cargó borra el documento entero — el menú se quedaría en blanco. El
+   iframe "canvas" recibe exactamente los mismos parámetros y no tiene ese
+   problema. Si algún día OpenTable cambia esa ruta, se ajusta aquí y ya.
+
+   Se carga SOLO al abrir la ventana: casi nadie que consulta la carta va a
+   reservar en ese momento, y no hay razón para que todos paguen la descarga
+   de un script de terceros —ni sus cookies— por adelantado.
+   ========================================================================== */
+const RESERVAS = {
+  motor: "opentable",
+  rid: "1545349",
+  dominio: "commx",
+  urlPropia: "/?reservar=OC",
+  // Si el iframe no carga (bloqueador, red), el cliente igual puede reservar
+  urlDirecta: "https://www.opentable.com.mx/r/el-oyster-club-ciudad-de-mexico",
+  iframe(lang) {
+    const p = new URLSearchParams({
+      rid: this.rid, type: "standard", theme: "standard", color: "1",
+      dark: "false", iframe: "true", domain: this.dominio,
+      lang: lang === "en" ? "en-US" : "es-MX",
+      newtab: "false", ot_source: "Restaurant website", cfe: "true",
+    });
+    return `https://www.opentable.com.mx/widget/reservation/canvas?${p}`;
+  },
+};
+
 const MENU = {
 
   /* --------------------------------------------------------------------------
@@ -1900,6 +1934,7 @@ if (typeof module !== "undefined" && module.exports) {
     // CTA fija y botón de idioma. El botón enseña el idioma AL QUE cambias.
     const cta = document.getElementById("cta-reservar");
     if (cta) cta.textContent = tr("Reservar mesa");
+    montarReservas();
     const langBtn = document.getElementById("lang-toggle");
     if (langBtn) {
       langBtn.textContent = LANG === "en" ? "ES" : "EN";
@@ -1909,6 +1944,104 @@ if (typeof module !== "undefined" && module.exports) {
         location.reload();
       });
     }
+  }
+
+  /* ── Reservas ───────────────────────────────────────────────────────────
+     El widget se pide la PRIMERA vez que alguien abre la ventana, no al
+     cargar el menú: quien solo viene a ver la carta no descarga un iframe de
+     terceros ni sus cookies. */
+  function montarReservas() {
+    const cta = document.getElementById("cta-reservar");
+    if (!cta) return;
+
+    // Motor propio: el botón es un link normal y aquí no hay nada más que hacer
+    if (RESERVAS.motor !== "opentable") {
+      cta.addEventListener("click", () => { location.href = RESERVAS.urlPropia; });
+      return;
+    }
+
+    const fondo  = document.getElementById("rsv-fondo");
+    const cuerpo = document.getElementById("rsv-cuerpo");
+    const cerrar = document.getElementById("rsv-cerrar");
+    const titulo = document.getElementById("rsv-titulo");
+    if (!fondo || !cuerpo || !cerrar) return;
+    titulo.textContent = tr("Reservar mesa");
+    cerrar.setAttribute("aria-label", LANG === "en" ? "Close" : "Cerrar");
+
+    let cargado = false;
+    let previo = null;   // a dónde devolver el foco al cerrar
+
+    /* Un iframe de OTRO dominio no deja saber si cargó bien: el navegador
+       dispara "load" igual cuando la petición falló, y la política de origen
+       cruzado impide mirar adentro. Así que no se adivina — SIEMPRE hay una
+       salida visible al sitio de OpenTable. Si el widget carga, ese link
+       sobra y no estorba; si no carga, es lo que salva la reserva. */
+    function salida(texto) {
+      const pie = crear("div", "rsv-salida");
+      const a = document.createElement("a");
+      a.href = RESERVAS.urlDirecta;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = texto;
+      pie.appendChild(a);
+      return pie;
+    }
+
+    function cargar() {
+      if (cargado) return;
+      cargado = true;
+
+      const espera = crear("div", "rsv-estado");
+      espera.appendChild(crear("p", null, LANG === "en" ? "Loading availability\u2026" : "Cargando disponibilidad\u2026"));
+      espera.appendChild(salida(LANG === "en" ? "Or book on OpenTable" : "O reservar en OpenTable"));
+      cuerpo.appendChild(espera);
+
+      const fr = document.createElement("iframe");
+      fr.title = LANG === "en" ? "Book a table" : "Reservar mesa";
+      fr.setAttribute("referrerpolicy", "no-referrer-when-downgrade");
+      fr.style.display = "none";
+
+      // Si en 10 s ni siquiera hubo evento de carga, la espera se queda ahí
+      // para siempre: se cambia por un mensaje honesto con la salida.
+      const plazo = setTimeout(() => {
+        const p = espera.querySelector("p");
+        if (p) p.textContent = LANG === "en"
+          ? "The booking widget is taking too long."
+          : "El m\u00f3dulo de reservas est\u00e1 tardando demasiado.";
+      }, 10000);
+
+      fr.addEventListener("load", () => {
+        clearTimeout(plazo);
+        espera.remove();
+        fr.style.display = "block";
+        // La salida se queda abajo del widget, discreta
+        cuerpo.appendChild(salida(LANG === "en" ? "Trouble booking? Open OpenTable" : "\u00bfNo carga? Abrir OpenTable"));
+      });
+      fr.src = RESERVAS.iframe(LANG);
+      cuerpo.appendChild(fr);
+    }
+
+    function abrir() {
+      previo = document.activeElement;
+      fondo.dataset.abierto = "1";
+      // El fondo no debe scrollear detrás de la ventana
+      document.body.style.overflow = "hidden";
+      cargar();
+      cerrar.focus();
+    }
+    function cerrarVentana() {
+      delete fondo.dataset.abierto;
+      document.body.style.overflow = "";
+      if (previo && previo.focus) previo.focus();
+    }
+
+    cta.addEventListener("click", abrir);
+    cerrar.addEventListener("click", cerrarVentana);
+    // Tocar fuera cierra; tocar dentro del panel no
+    fondo.addEventListener("click", (e) => { if (e.target === fondo) cerrarVentana(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && fondo.dataset.abierto) cerrarVentana();
+    });
   }
 
   document.addEventListener("DOMContentLoaded", init);
@@ -1938,9 +2071,77 @@ if (typeof module !== "undefined" && module.exports) {
     display: flex; align-items: center; justify-content: center;
   }
   .lang-toggle:active { background: var(--tinta); color: var(--cielo); }
+
+  /* ── Ventana de reservas ────────────────────────────────────────────────
+     El widget de OpenTable trae su propio look; vive dentro de un marco con
+     la identidad del menú para que no se sienta una caja ajena pegada. */
+  .rsv-fondo {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(35,31,32,.55); backdrop-filter: blur(3px);
+    display: none; align-items: flex-end; justify-content: center;
+  }
+  .rsv-fondo[data-abierto="1"] { display: flex; }
+  @media (min-width: 700px) { .rsv-fondo { align-items: center; } }
+
+  .rsv-panel {
+    background: var(--cielo-claro, #dceafa); color: var(--tinta);
+    width: 100%; max-width: 460px; max-height: 92vh;
+    border-radius: 20px 20px 0 0; border: 2px solid var(--tinta);
+    display: flex; flex-direction: column; overflow: hidden;
+    animation: rsv-sube .26s cubic-bezier(.2,.8,.2,1);
+  }
+  @media (min-width: 700px) { .rsv-panel { border-radius: 20px; max-height: 88vh; } }
+  @keyframes rsv-sube { from { transform: translateY(26px); opacity: 0 } to { transform: none; opacity: 1 } }
+  @media (prefers-reduced-motion: reduce) { .rsv-panel { animation: none } }
+
+  .rsv-barra {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px; border-bottom: 1.5px solid var(--tinta); flex-shrink: 0;
+  }
+  .rsv-titulo {
+    flex: 1; margin: 0; font-family: var(--display); font-size: 15px;
+    letter-spacing: .12em; text-transform: uppercase;
+  }
+  .rsv-cerrar {
+    width: 40px; height: 40px; flex-shrink: 0; cursor: pointer;
+    background: none; border: 1.5px solid var(--tinta); border-radius: 50%;
+    color: var(--tinta); font-size: 17px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .rsv-cerrar:active { background: var(--tinta); color: var(--cielo); }
+
+  /* Alto reservado desde el inicio: sin esto la ventana da un brinco cuando
+     el iframe termina de cargar y aparece de golpe. */
+  .rsv-cuerpo { flex: 1; min-height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .rsv-cuerpo iframe { display: block; width: 100%; height: 100%; min-height: 420px; border: 0; }
+  .rsv-estado {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; height: 100%; min-height: 420px; padding: 24px; text-align: center;
+    font-size: 14px; line-height: 1.5;
+  }
+  .rsv-salida { padding: 10px 16px 14px; text-align: center; }
+  .rsv-salida a {
+    color: var(--tinta); font-size: 12.5px; text-decoration: underline;
+    text-underline-offset: 3px; opacity: .75;
+  }
+  .rsv-estado a {
+    color: var(--tinta); font-weight: 700;
+    padding: 12px 22px; border: 1.5px solid var(--tinta); border-radius: 999px;
+    text-decoration: none;
+  }
 </style>
 <button id="lang-toggle" class="lang-toggle" type="button"></button>
-<a id="cta-reservar" class="cta-reservar" href="/?reservar=OC">Reservar mesa</a>
+<button id="cta-reservar" class="cta-reservar" type="button">Reservar mesa</button>
+
+<div id="rsv-fondo" class="rsv-fondo" role="dialog" aria-modal="true" aria-labelledby="rsv-titulo">
+  <div class="rsv-panel">
+    <div class="rsv-barra">
+      <h2 id="rsv-titulo" class="rsv-titulo">Reservar mesa</h2>
+      <button id="rsv-cerrar" class="rsv-cerrar" type="button" aria-label="Cerrar">&#10005;</button>
+    </div>
+    <div id="rsv-cuerpo" class="rsv-cuerpo"></div>
+  </div>
+</div>
 
 </body>
 </html>
