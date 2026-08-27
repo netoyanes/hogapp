@@ -1993,9 +1993,20 @@ if (typeof module !== "undefined" && module.exports) {
          supuesto. Por eso queda un reintento discreto siempre a la mano: si el
          widget se ve, es una línea que nadie mira; si se quedó en blanco por
          una mala red, es lo único que hay. */
+      /* Altura en dos tiempos. El formulario inicial de OpenTable mide poco;
+         la vista de disponibilidad —a la que navega al tocar "Encuentra una
+         mesa"— necesita bastante más. Reservar la altura grande desde el
+         principio deja medio recuadro vacío; dejarla chica aprieta los
+         resultados.
+         La salida: una navegación DENTRO del iframe dispara "load" otra vez en
+         el elemento padre, aunque sea de otro dominio. Ese segundo load es la
+         señal de que el cliente ya buscó, y ahí se crece. */
+      let cargas = 0;
       fr.addEventListener("load", () => {
+        cargas += 1;
         espera.remove();
         fr.style.display = "block";
+        if (cargas > 1) fr.classList.add("rsv-iframe--amplio");
       });
       fr.src = RESERVAS.iframe(LANG);
       cuerpo.appendChild(fr);
@@ -2073,7 +2084,10 @@ if (typeof module !== "undefined" && module.exports) {
 
   .rsv-panel {
     background: var(--cielo-claro, #dceafa); color: var(--tinta);
-    width: 100%; max-width: 460px; max-height: 92vh;
+    /* Angosto a propósito: el widget de OpenTable es un formulario vertical de
+       ~240px. En un panel de 460 quedaba arrinconado arriba a la izquierda con
+       medio recuadro vacío alrededor. */
+    width: 100%; max-width: 360px; max-height: 92vh;
     border-radius: 20px 20px 0 0; border: 2px solid var(--tinta);
     display: flex; flex-direction: column; overflow: hidden;
     animation: rsv-sube .26s cubic-bezier(.2,.8,.2,1);
@@ -2100,11 +2114,23 @@ if (typeof module !== "undefined" && module.exports) {
 
   /* Alto reservado desde el inicio: sin esto la ventana da un brinco cuando
      el iframe termina de cargar y aparece de golpe. */
-  .rsv-cuerpo { flex: 1; min-height: 420px; display: flex; flex-direction: column; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-  .rsv-cuerpo iframe { display: block; width: 100%; flex: 1; min-height: 420px; border: 0; }
+  .rsv-cuerpo {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 14px 12px 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  /* Alto fijo y generoso: al elegir horario el widget navega dentro del mismo
+     iframe a la vista de disponibilidad, que necesita más espacio. Como es de
+     otro dominio no hay forma de medirlo desde aquí, así que se le reserva. */
+  .rsv-cuerpo iframe {
+    display: block; width: 100%; max-width: 280px; height: 260px;
+    border: 0; margin: 0 auto; transition: height .25s ease, max-width .25s ease;
+  }
+  /* Ya buscó horarios: la vista de disponibilidad pide más aire */
+  .rsv-cuerpo iframe.rsv-iframe--amplio { height: 62vh; max-width: 340px; }
+  @media (prefers-reduced-motion: reduce) { .rsv-cuerpo iframe { transition: none } }
   .rsv-estado {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 12px; height: 100%; min-height: 420px; padding: 24px; text-align: center;
+    gap: 12px; min-height: 260px; padding: 24px; text-align: center;
     font-size: 14px; line-height: 1.5;
   }
   .rsv-pie { padding: 8px 16px 12px; text-align: center; flex-shrink: 0; }
