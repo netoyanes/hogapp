@@ -643,8 +643,11 @@ const RESERVAS = {
   rid: "1545349",
   dominio: "commx",
   urlPropia: "/?reservar=OC",
-  // Si el iframe no carga (bloqueador, red), el cliente igual puede reservar
-  urlDirecta: "https://www.opentable.com.mx/r/el-oyster-club-ciudad-de-mexico",
+  // A PROPÓSITO no hay link al sitio de OpenTable: una reserva que entra por
+  // su marketplace se cobra más por cubierto sentado que una que entra por el
+  // widget del propio restaurante. El parámetro ot_source="Restaurant website"
+  // de abajo es justo lo que declara ese origen — mandarlos a opentable.com.mx
+  // tiraría esa distinción y saldría más caro.
   iframe(lang) {
     const p = new URLSearchParams({
       rid: this.rid, type: "standard", theme: "standard", color: "1",
@@ -1971,29 +1974,12 @@ if (typeof module !== "undefined" && module.exports) {
     let cargado = false;
     let previo = null;   // a dónde devolver el foco al cerrar
 
-    /* Un iframe de OTRO dominio no deja saber si cargó bien: el navegador
-       dispara "load" igual cuando la petición falló, y la política de origen
-       cruzado impide mirar adentro. Así que no se adivina — SIEMPRE hay una
-       salida visible al sitio de OpenTable. Si el widget carga, ese link
-       sobra y no estorba; si no carga, es lo que salva la reserva. */
-    function salida(texto) {
-      const pie = crear("div", "rsv-salida");
-      const a = document.createElement("a");
-      a.href = RESERVAS.urlDirecta;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.textContent = texto;
-      pie.appendChild(a);
-      return pie;
-    }
-
     function cargar() {
       if (cargado) return;
       cargado = true;
 
       const espera = crear("div", "rsv-estado");
       espera.appendChild(crear("p", null, LANG === "en" ? "Loading availability\u2026" : "Cargando disponibilidad\u2026"));
-      espera.appendChild(salida(LANG === "en" ? "Or book on OpenTable" : "O reservar en OpenTable"));
       cuerpo.appendChild(espera);
 
       const fr = document.createElement("iframe");
@@ -2001,24 +1987,26 @@ if (typeof module !== "undefined" && module.exports) {
       fr.setAttribute("referrerpolicy", "no-referrer-when-downgrade");
       fr.style.display = "none";
 
-      // Si en 10 s ni siquiera hubo evento de carga, la espera se queda ahí
-      // para siempre: se cambia por un mensaje honesto con la salida.
-      const plazo = setTimeout(() => {
-        const p = espera.querySelector("p");
-        if (p) p.textContent = LANG === "en"
-          ? "The booking widget is taking too long."
-          : "El m\u00f3dulo de reservas est\u00e1 tardando demasiado.";
-      }, 10000);
-
+      /* No se intenta detectar si el widget cargó: NO SE PUEDE. Con un iframe
+         de otro dominio el navegador dispara "load" igual cuando la petición
+         falló, y trata su página de error como origen cruzado — comprobado, no
+         supuesto. Por eso queda un reintento discreto siempre a la mano: si el
+         widget se ve, es una línea que nadie mira; si se quedó en blanco por
+         una mala red, es lo único que hay. */
       fr.addEventListener("load", () => {
-        clearTimeout(plazo);
         espera.remove();
         fr.style.display = "block";
-        // La salida se queda abajo del widget, discreta
-        cuerpo.appendChild(salida(LANG === "en" ? "Trouble booking? Open OpenTable" : "\u00bfNo carga? Abrir OpenTable"));
       });
       fr.src = RESERVAS.iframe(LANG);
       cuerpo.appendChild(fr);
+
+      const pie = crear("div", "rsv-pie");
+      const btn = crear("button", "rsv-reintentar",
+        LANG === "en" ? "Not loading? Retry" : "\u00bfNo carga? Reintentar");
+      btn.type = "button";
+      btn.addEventListener("click", () => { cuerpo.innerHTML = ""; cargado = false; cargar(); });
+      pie.appendChild(btn);
+      cuerpo.appendChild(pie);
     }
 
     function abrir() {
@@ -2112,23 +2100,20 @@ if (typeof module !== "undefined" && module.exports) {
 
   /* Alto reservado desde el inicio: sin esto la ventana da un brinco cuando
      el iframe termina de cargar y aparece de golpe. */
-  .rsv-cuerpo { flex: 1; min-height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-  .rsv-cuerpo iframe { display: block; width: 100%; height: 100%; min-height: 420px; border: 0; }
+  .rsv-cuerpo { flex: 1; min-height: 420px; display: flex; flex-direction: column; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .rsv-cuerpo iframe { display: block; width: 100%; flex: 1; min-height: 420px; border: 0; }
   .rsv-estado {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 12px; height: 100%; min-height: 420px; padding: 24px; text-align: center;
     font-size: 14px; line-height: 1.5;
   }
-  .rsv-salida { padding: 10px 16px 14px; text-align: center; }
-  .rsv-salida a {
-    color: var(--tinta); font-size: 12.5px; text-decoration: underline;
-    text-underline-offset: 3px; opacity: .75;
+  .rsv-pie { padding: 8px 16px 12px; text-align: center; flex-shrink: 0; }
+  .rsv-reintentar {
+    color: var(--tinta); background: none; font: inherit; font-size: 12.5px;
+    border: 0; padding: 6px; cursor: pointer; opacity: .7;
+    text-decoration: underline; text-underline-offset: 3px;
   }
-  .rsv-estado a {
-    color: var(--tinta); font-weight: 700;
-    padding: 12px 22px; border: 1.5px solid var(--tinta); border-radius: 999px;
-    text-decoration: none;
-  }
+  .rsv-reintentar:active { background: var(--tinta); color: var(--cielo); }
 </style>
 <button id="lang-toggle" class="lang-toggle" type="button"></button>
 <button id="cta-reservar" class="cta-reservar" type="button">Reservar mesa</button>
