@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.107.0"
+export const APP_VERSION = "2.107.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.107.1",
+    date: "2026-09-03",
+    type: "PATCH",
+    changes: [
+      "Fix: pantalla en blanco después de iniciar sesión. El listener de 'abrir proyecto desde una tarea' quedó declarado después del return de la pantalla de login; al entrar cambiaba el número de hooks y React abortaba el render. Se movió arriba, con los demás",
+    ]
+  },
   {
     version: "2.107.0",
     date: "2026-09-03",
