@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { Plus, X, Search, CheckSquare, ListPlus, ChevronLeft, ChevronRight, Save, Clock, CalendarDays, UserPlus, MessageCircle, Trash2, Copy, Archive, ArchiveRestore, Pencil, Link2, Unlink, Paperclip, Settings, ShieldCheck } from 'lucide-react'
+import { Plus, X, Search, CheckSquare, ListPlus, ChevronLeft, ChevronRight, ChevronDown, Save, Clock, CalendarDays, UserPlus, MessageCircle, Trash2, Copy, Archive, ArchiveRestore, Pencil, Link2, Unlink, Paperclip, Settings, ShieldCheck, LayoutList } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../hooks/useActivityLog'
 import { notifyUserDM } from '../hooks/useSlack'
@@ -9,9 +9,11 @@ import { FeedbackButton } from '../components/ui/FeedbackButton'
 import { useContextMenu, type CtxItem } from '../components/ui/ContextMenu'
 import { phaseOf, PhaseLegend } from '../components/ui/TaskPhase'
 import { BUChip, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
-import { KIND_META, ACTIVITY_COLOR, type PlanKind } from '../lib/projectKinds'
+import { KIND_META, ACTIVITY_COLOR, CATEGORIAS, type PlanKind } from '../lib/projectKinds'
 import { calcularSalud, esBloqueada, edadEnEstado, hoyISO, UMBRALES, type Salud } from '../lib/projectHealth'
-import { HealthBadge, Semaforo, DCounter, StatusRing, AgingChip, BlockedChip, DeadlineChip, ActivityChip } from '../components/ui/ProjectChip'
+import { HealthBadge, Semaforo, DCounter, StatusRing, AgingChip, BlockedChip, DeadlineChip, ActivityChip, ProjectChip } from '../components/ui/ProjectChip'
+import { ActivitySheet, ProjectFiles } from '../components/ui/ActivitySheet'
+import { MODULOS, DEFAULTS, EXTRA_CAMPOS, type ModuloId } from '../lib/projectModules'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EVENTOS — planeación de eventos multi-venue (estilo Asana):
@@ -50,6 +52,8 @@ interface EventPlan {
   requisition_task_id: string | null
   archived?: boolean | null
   client_kind?: 'interno' | 'externo' | null
+  modules?: string[] | null
+  extra?: Record<string, string> | null
 }
 // La tarea tal como la necesitan la lista, el timeline y el motor de salud.
 // activity_id la cuelga de una actividad; blocked_reason es el andon.
@@ -67,19 +71,8 @@ interface BudgetItem {
   is_income: boolean; deal_id: string | null
   category: string; area: string | null; qty: number; unit_cost: number | null
   quote_url: string | null; quote_type: string | null; responsible: string | null
+  activity_id?: string | null; task_id?: string | null
 }
-// Tipo de gasto — permite leer el presupuesto por naturaleza (cuánto es gente,
-// cuánto es mobiliario) y no solo como una lista plana de conceptos.
-const CATEGORIAS: { id: string; label: string; color: string }[] = [
-  { id: 'personal',   label: 'Personal',    color: '#A855F7' },
-  { id: 'mobiliario', label: 'Mobiliario',  color: '#E8A33D' },
-  { id: 'materiales', label: 'Materiales',  color: '#06B6D4' },
-  { id: 'equipo',     label: 'Equipo',      color: '#3B82F6' },
-  { id: 'servicios',  label: 'Servicios',   color: '#5FBF7A' },
-  { id: 'marketing',  label: 'Marketing',   color: '#EC4899' },
-  { id: 'operacion',  label: 'Operación',   color: '#F97316' },
-  { id: 'otro',       label: 'Otro',        color: '#8A8A8A' },
-]
 interface Approval { id: string; action: 'submitted' | 'approved' | 'returned'; comment: string | null; actor: string | null; created_at: string }
 interface Template {
   id: string; name: string; kind: PlanKind; event_type: EventType
@@ -185,8 +178,8 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
   const [creating, setCreating] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
   // Vistas del planeador: tabla, board, timeline, calendario y (aprobadores) su cabina
-  const [view, setView] = useState<'table' | 'board' | 'timeline' | 'calendar' | 'approvals'>(() =>
-    (localStorage.getItem('hog_projects_view') as 'table' | 'board' | 'timeline' | 'calendar' | 'approvals') || 'table')
+  const [view, setView] = useState<'table' | 'board' | 'timeline' | 'calendar' | 'agenda' | 'approvals'>(() =>
+    (localStorage.getItem('hog_projects_view') as 'table' | 'board' | 'timeline' | 'calendar' | 'agenda' | 'approvals') || 'table')
   useEffect(() => { localStorage.setItem('hog_projects_view', view) }, [view])
   const [templates, setTemplates] = useState<Template[]>([])
   const [calMonth, setCalMonth] = useState(() => {
@@ -406,7 +399,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 2, background: 'var(--bg-elevated)', borderRadius: 999, padding: 2 }}>
-            {([['table', isMobile ? 'Lista' : 'Tabla'], ['board', 'Board'], ['timeline', 'Timeline'], ['calendar', 'Calendario'],
+            {([['table', isMobile ? 'Lista' : 'Tabla'], ['board', 'Board'], ['timeline', 'Timeline'], ['calendar', 'Calendario'], ['agenda', 'Agenda'],
                ...(canApprove ? [['approvals', 'Aprobación'] as const] : [])] as const).map(([id, label]) => (
               <button key={id} onClick={() => setView(id as typeof view)}
                 style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === id ? 'var(--accent)' : 'transparent', color: view === id ? 'var(--on-accent)' : 'var(--text-tertiary)' }}>
@@ -460,6 +453,11 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
         ) : view === 'calendar' ? (
           <div style={{ padding: isMobile ? 0 : 16 }}>
             <CalendarView rows={filteredBase} month={calMonth} onMonth={setCalMonth} onOpen={ev => setEditing(ev)} isMobile={isMobile} buMap={buMap} />
+          </div>
+        ) : view === 'agenda' ? (
+          <div style={{ padding: isMobile ? 0 : 16 }}>
+            <AgendaView rows={filteredBase} acts={acts} planTasks={planTasks} salud={salud} buMap={buMap} showPast={showPast} isMobile={isMobile}
+              onOpen={(ev, actId) => { setEditing(ev); if (actId) setTimeout(() => window.dispatchEvent(new CustomEvent('hog:open-activity', { detail: actId })), 150) }} />
           </div>
         ) : view === 'timeline' ? (
           <div style={{ padding: isMobile ? '0' : 16 }}>
@@ -1169,7 +1167,7 @@ function TimelineView({ rows, buMap, progress, planTasks, acts, salud, onOpen, o
 // Cada fila trae su círculo de estado, HARD si aplica, edad si importa,
 // bloqueo si lo hay, adjuntos, fecha con semáforo y responsable (o el hueco
 // punteado rojo si no tiene). Captura inline por actividad: cero diálogos.
-function TareasAgrupadas({ tasks, acts, people, taskFollowers, taskAdjuntos, canWrite, onOpenTask, onMenu, onAdd }: {
+function TareasAgrupadas({ tasks, acts, people, taskFollowers, taskAdjuntos, canWrite, onOpenTask, onOpenActivity, onMenu, onAdd }: {
   tasks: TaskLite[]
   acts: ActLite[]
   people: { id: string; full_name: string | null }[]
@@ -1177,6 +1175,7 @@ function TareasAgrupadas({ tasks, acts, people, taskFollowers, taskAdjuntos, can
   taskAdjuntos: Record<string, number>
   canWrite: boolean
   onOpenTask?: (id: string) => void
+  onOpenActivity?: (id: string) => void
   onMenu?: (e: React.MouseEvent, t: TaskLite) => void
   onAdd?: (title: string, activityId: string | null) => Promise<void>
 }) {
@@ -1313,7 +1312,8 @@ function TareasAgrupadas({ tasks, acts, people, taskFollowers, taskAdjuntos, can
                 <div style={{ display: 'grid', gridTemplateColumns: '3px 1fr auto', gap: 9, alignItems: 'center', padding: '5px 0' }}>
                   <span style={{ width: 3, minHeight: 26, borderRadius: 2, background: col, alignSelf: 'stretch' }} />
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', minWidth: 0 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', textDecoration: a.status === 'cancelada' ? 'line-through' : 'none' }}>{a.title}</span>
+                    <button onClick={() => onOpenActivity?.(a.id)} title="Abrir la actividad: detalle, tareas, gastos y adjuntos"
+                      style={{ all: 'unset', fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', textDecoration: a.status === 'cancelada' ? 'line-through' : 'none', cursor: onOpenActivity ? 'pointer' : 'default' }}>{a.title}</button>
                     <ActivityChip label={cuando} tone={caliente ? 'risk' : 'act'} size="sm" />
                     {caliente && <span className="num" style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--status-risk)', background: 'color-mix(in srgb, var(--status-risk) 14%, transparent)', padding: '1px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)' }}>{d === 0 ? 'hoy' : `en ${d} d`} con {abiertas} {abiertas === 1 ? 'abierta' : 'abiertas'}</span>}
                     {a.status === 'hecha' && <span className="num" style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--status-healthy)', fontFamily: 'var(--font-mono)' }}>hecha</span>}
@@ -1459,6 +1459,124 @@ function ProjectTimeline({ plan, tasks, acts, onOpenTask, isMobile }: {
       <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '7px 0 0', lineHeight: 1.45 }}>
         <span style={{ color: 'var(--accent)', fontWeight: 700 }}>▬ proyecto</span> · <span style={{ color: ACTIVITY_COLOR, fontWeight: 700 }}>▬ actividad</span> en su día (roja a menos de {UMBRALES.zonaCaliente} d con tareas abiertas) · <b>◆ tarea</b> en su fecha límite: vacío abierta, verde hecha, rojo vencida o bloqueada · la línea roja es hoy y lo rayado son los próximos {UMBRALES.zonaCaliente} días.
       </p>
+    </div>
+  )
+}
+
+
+// ── AGENDA — todas las actividades de todos los proyectos, por día ───────────
+// El compendio de eventos que se meten a la app. Cada actividad ES un evento
+// en la agenda; un proyecto tipo evento de un solo día sin programa aparece él
+// mismo. No es otra tabla: es otra lectura de lo que ya existe.
+function AgendaView({ rows, acts, planTasks, salud, buMap, showPast, isMobile, onOpen }: {
+  rows: EventPlan[]
+  acts: Record<string, ActLite[]>
+  planTasks: Record<string, PlanTask[]>
+  salud: Record<string, Salud>
+  buMap: Record<string, string>
+  showPast: boolean
+  isMobile: boolean
+  onOpen: (ev: EventPlan, activityId?: string) => void
+}) {
+  const hoy = hoyISO()
+  type Item = { key: string; date: string; time: string | null; title: string; ev: EventPlan; act?: ActLite; abiertas: number; total: number }
+  const items: Item[] = []
+  for (const ev of rows) {
+    if (ev.status === 'cancelled') continue
+    const as = acts[ev.id] ?? []
+    const ts = planTasks[ev.id] ?? []
+    if (as.length) {
+      for (const a of as) {
+        if (a.status === 'cancelada') continue
+        const mias = ts.filter(t => t.activity_id === a.id)
+        items.push({ key: a.id, date: a.date, time: a.start_time?.slice(0, 5) ?? null, title: a.title, ev, act: a, abiertas: mias.filter(t => t.status !== 'APPROVED').length, total: mias.length })
+      }
+    } else if (ev.kind === 'evento' && ev.date) {
+      items.push({ key: ev.id, date: ev.date, time: ev.start_time?.slice(0, 5) ?? null, title: ev.name, ev, abiertas: ts.filter(t => t.status !== 'APPROVED').length, total: ts.length })
+    }
+  }
+  const visibles = items.filter(i => showPast || i.date >= hoy).sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '99').localeCompare(b.time ?? '99'))
+  const porDia = new Map<string, Item[]>()
+  for (const i of visibles) (porDia.get(i.date) ?? porDia.set(i.date, []).get(i.date)!).push(i)
+  const DAY = 86400000
+  const dias = (d: string) => Math.round((new Date(d + 'T00:00:00').getTime() - new Date(hoy + 'T00:00:00').getTime()) / DAY)
+
+  if (visibles.length === 0) return (
+    <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>
+      Sin actividades próximas. Las actividades se crean dentro de cada proyecto, en su Programa{showPast ? '' : ' — o activa "Pasados" para ver las que ya ocurrieron'}.
+    </p>
+  )
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {[...porDia.entries()].map(([dia, its]) => {
+        const d = dias(dia)
+        const dObj = new Date(dia + 'T00:00:00')
+        const esHoy = d === 0
+        return (
+          <div key={dia}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
+              <span className="num" style={{ fontSize: 22, fontWeight: 800, fontFamily: 'var(--font-mono)', color: esHoy ? 'var(--status-risk)' : 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1 }}>{dObj.getDate()}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: esHoy ? 'var(--status-risk)' : 'var(--text-secondary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>{DAYS_ES[dObj.getDay()]} · {dObj.toLocaleDateString('es-MX', { month: 'short' })}</span>
+              <span className="num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{esHoy ? 'HOY' : d > 0 ? `en ${d} d` : `hace ${-d} d`}</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+              <span className="num" style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{its.length}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {its.map(i => {
+                const sal = salud[i.ev.id]
+                const caliente = i.abiertas > 0 && d >= 0 && d <= UMBRALES.zonaCaliente
+                const col = i.act ? (caliente ? 'var(--status-risk)' : i.act.status === 'hecha' ? 'var(--status-healthy)' : ACTIVITY_COLOR) : planColor(i.ev)
+                return (
+                  <button key={i.key} onClick={() => onOpen(i.ev, i.act?.id)}
+                    style={{ display: 'grid', gridTemplateColumns: isMobile ? '54px 1fr' : '64px 1fr auto', gap: 10, alignItems: 'center', width: '100%', minHeight: 52, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${col}`, borderRadius: 'var(--radius-md)', padding: '8px 12px', cursor: 'pointer', textAlign: 'left' }}>
+                    <span className="num" style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: i.time ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{i.time ?? 'sin hora'}</span>
+                    <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                        {i.act ? <CalendarDays size={12} style={{ color: col, flexShrink: 0 }} /> : null}
+                        <span style={{ textDecoration: i.act?.status === 'hecha' ? 'line-through' : 'none', opacity: i.act?.status === 'hecha' ? 0.7 : 1 }}>{i.title}</span>
+                        {i.act?.status === 'confirmada' && <span className="num" style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>confirmada</span>}
+                        {caliente && <span className="num" style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--status-risk)', background: 'color-mix(in srgb, var(--status-risk) 14%, transparent)', padding: '1px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)' }}>{i.abiertas} {i.abiertas === 1 ? 'tarea abierta' : 'tareas abiertas'}</span>}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <BUChip code={buMap[i.ev.bu_id] ?? '?'} size="sm" />
+                        {i.act && <ProjectChip name={i.ev.name} kind={i.ev.kind} size="sm" maxWidth={220} />}
+                        {!i.act && planPill(i.ev)}
+                        {i.total > 0 && <span className="num" style={{ fontSize: 9.5, color: i.abiertas ? 'var(--text-tertiary)' : 'var(--status-healthy)', fontFamily: 'var(--font-mono)' }}>{i.total - i.abiertas}/{i.total} tareas</span>}
+                        {i.act?.status === 'hecha' && <span className="num" style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--status-healthy)', fontFamily: 'var(--font-mono)' }}>hecha</span>}
+                      </span>
+                    </span>
+                    {!isMobile && sal && <HealthBadge salud={sal} mode="compact" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+      <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: 0 }}>
+        <span style={{ color: ACTIVITY_COLOR, fontWeight: 700 }}>▎actividad</span> de un proyecto (clic abre el proyecto y la actividad) · <span style={{ color: '#E8A33D', fontWeight: 700 }}>▎evento</span> de un día sin programa · rojo = a menos de {UMBRALES.zonaCaliente} d con tareas abiertas.
+      </p>
+    </div>
+  )
+}
+
+// ── MÓDULO — una sección de la ventana del proyecto, plegable ────────────────
+// Encabezado uniforme: icono, nombre, resumen a la derecha y chevron. Se quita
+// desde la barra de secciones; los datos no se borran, solo se deja de ver.
+function Modulo({ id, label, hint, icon, summary, open, onToggle, children }: {
+  id: string; label: string; hint?: string; icon: React.ReactNode; summary?: React.ReactNode
+  open: boolean; onToggle: (id: string) => void; children: React.ReactNode
+}) {
+  return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: open ? 12 : '0 12px' }}>
+      <button onClick={() => onToggle(id)} aria-expanded={open} title={hint}
+        style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', minHeight: 40, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', marginBottom: open ? 8 : 0 }}>
+        {icon}
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>{label}</span>
+        {!open && summary && <span style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '55%' }}>{summary}</span>}
+        <ChevronDown size={13} style={{ color: 'var(--text-tertiary)', transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform .15s', flexShrink: 0 }} />
+      </button>
+      {open && children}
     </div>
   )
 }
@@ -1834,9 +1952,10 @@ const ACT_STATUS: Record<string, { label: string; color: string }> = {
 const diaLargo = (iso: string) =>
   new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' })
 
-function ProgramSection({ eventId, defaultDate, canWrite, userId }: {
+function ProgramSection({ eventId, defaultDate, canWrite, userId, onOpenActivity, reloadKey }: {
   eventId: string; defaultDate: string | null; canWrite: boolean; userId?: string
-  onOpenTask?: (id: string) => void
+  onOpenActivity?: (id: string) => void
+  reloadKey?: number
 }) {
   const [items, setItems] = useState<ProgramActivity[]>([])
   const [tableMissing, setTableMissing] = useState(false)
@@ -1864,7 +1983,7 @@ function ProgramSection({ eventId, defaultDate, canWrite, userId }: {
       setTaskCounts(c)
     }
   }, [eventId])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load, reloadKey])
 
   async function add() {
     if (!n.title.trim() || !n.date) return
@@ -1876,6 +1995,7 @@ function ProgramSection({ eventId, defaultDate, canWrite, userId }: {
     if (error) { showToast(`No se pudo agregar: ${error.message}`, 'error'); return }
     setN({ date: n.date, ini: '', fin: '', title: '', location: '', facilitator: '' })
     load()
+    window.dispatchEvent(new CustomEvent('hog:task-updated'))
   }
   async function setStatus(id: string, status: string) {
     await supabase.from('project_activities').update({ status }).eq('id', id)
@@ -1961,7 +2081,8 @@ function ProgramSection({ eventId, defaultDate, canWrite, userId }: {
                 </span>
                 <span style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: st.color, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', textDecoration: a.status === 'cancelada' ? 'line-through' : 'none', opacity: a.status === 'cancelada' ? 0.6 : 1 }}>{a.title}</div>
+                  <button onClick={() => onOpenActivity?.(a.id)} title="Abrir la actividad: detalle, tareas, gastos y adjuntos"
+                    style={{ all: 'unset', display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', textDecoration: a.status === 'cancelada' ? 'line-through' : 'none', opacity: a.status === 'cancelada' ? 0.6 : 1, cursor: onOpenActivity ? 'pointer' : 'default' }}>{a.title}</button>
                   {(a.location || a.facilitator || tc) && (
                     <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 1, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {a.location && <span>📍 {a.location}</span>}
@@ -2029,9 +2150,13 @@ const SEL: React.CSSProperties = {
   color: 'var(--text-primary)', padding: '0 8px', fontSize: 12, outline: 'none', minHeight: 40, cursor: 'pointer', boxSizing: 'border-box',
 }
 
-function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = false, onTotals }: {
+function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = false, onTotals, acts = [], tasks = [], onOpenActivity, onOpenTask, reloadKey }: {
   event: EventPlan; buCode: string; canWrite: boolean; userId?: string
   people: { id: string; full_name: string | null }[]; showCorte?: boolean
+  // Para ligar una partida a una actividad o a una tarea (project_manager_v2.sql)
+  acts?: ActLite[]; tasks?: TaskLite[]
+  onOpenActivity?: (id: string) => void; onOpenTask?: (id: string) => void
+  reloadKey?: number
   // La sección de Aprobación de arriba lee de aquí; así el monto que se aprueba
   // es exactamente el que se ve en la lista, siempre.
   onTotals?: (t: { gastos: number; ingresos: number; n: number }) => void
@@ -2047,17 +2172,24 @@ function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = fa
   const [subiendo, setSubiendo] = useState<string | null>(null)
   const quoteRef = useRef<HTMLInputElement>(null)
   const [quoteFor, setQuoteFor] = useState<string | null>(null)
+  // "Ligar a": '' · 'a:<activity_id>' · 't:<task_id>'
+  const [nLink, setNLink] = useState('')
+  const [ligasOk, setLigasOk] = useState(true)
 
-  const load = useCallback(() => {
-    supabase.from('project_budget_items')
-      .select('id, concept, amount, actual_amount, is_income, deal_id, category, area, qty, unit_cost, quote_url, quote_type, responsible')
+  const load = useCallback(async () => {
+    const base = 'id, concept, amount, actual_amount, is_income, deal_id, category, area, qty, unit_cost, quote_url, quote_type, responsible'
+    let r: { data: unknown; error: { message: string } | null } = await supabase.from('project_budget_items').select(`${base}, activity_id, task_id`)
       .eq('event_id', event.id).order('category').order('created_at')
-      .then(({ data, error }) => {
-        if (error) { setTableMissing(true); return }
-        setTableMissing(false); setItems((data ?? []) as BudgetItem[])
-      })
+    if (r.error && /activity_id|task_id/.test(r.error.message)) {
+      // Sin project_manager_v2.sql las ligas no existen: se carga el resto igual
+      setLigasOk(false)
+      r = await supabase.from('project_budget_items').select(base).eq('event_id', event.id).order('category').order('created_at')
+    } else setLigasOk(true)
+    if (r.error) { setTableMissing(true); return }
+    setTableMissing(false); setItems((r.data ?? []) as BudgetItem[])
   }, [event.id])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load, reloadKey])
+  const parseLink = (v: string) => v.startsWith('a:') ? { activity_id: v.slice(2), task_id: null } : v.startsWith('t:') ? { activity_id: null, task_id: v.slice(2) } : { activity_id: null, task_id: null }
 
   // Cotización: imagen o PDF al bucket 'proofs', ligada a la partida
   async function subirCotizacion(file: File) {
@@ -2102,9 +2234,10 @@ function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = fa
       event_id: event.id, concept: nConcept.trim(), amount: unit * qty, is_income: nIncome,
       category: nIncome ? 'otro' : nCat, area: nArea.trim() || null,
       qty, unit_cost: unit, created_by: userId ?? null,
+      ...(ligasOk && nLink ? parseLink(nLink) : {}),
     })
     if (error) { showToast(`No se pudo agregar: ${error.message}`, 'error'); return }
-    setNConcept(''); setNAmount(''); setNIncome(false); setNQty('1')
+    setNConcept(''); setNAmount(''); setNIncome(false); setNQty('1'); setNLink('')
     load()
   }
   async function remove(id: string) {
@@ -2165,6 +2298,32 @@ function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = fa
         {i.area && <span style={{ fontSize: 10, color: 'var(--text-tertiary)', marginLeft: 6, fontFamily: 'var(--font-mono)' }}>· {i.area}</span>}
         {i.unit_cost != null && i.qty > 1 && <span className="num" style={{ fontSize: 10, color: 'var(--text-tertiary)', marginLeft: 6, fontFamily: 'var(--font-mono)' }}>({mxn(i.unit_cost)} c/u)</span>}
       </span>
+
+      {/* A qué actividad o tarea pertenece — la partida "sabe" para qué es */}
+      {ligasOk && (i.activity_id || i.task_id) && (() => {
+        const a = i.activity_id ? acts.find(x => x.id === i.activity_id) : undefined
+        const t = i.task_id ? tasks.find(x => x.id === i.task_id) : undefined
+        if (a) return (
+          <button onClick={() => onOpenActivity?.(a.id)} title={`Actividad: ${a.title}`} style={{ all: 'unset', cursor: onOpenActivity ? 'pointer' : 'default' }}>
+            <ActivityChip label={a.title.length > 22 ? a.title.slice(0, 21) + '…' : a.title} size="sm" />
+          </button>
+        )
+        if (t) return (
+          <button onClick={() => onOpenTask?.(t.id)} title={`Tarea: ${t.title}`}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 6px', borderRadius: 4, background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', color: 'var(--accent)', fontSize: 9.5, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: onOpenTask ? 'pointer' : 'default', maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <CheckSquare size={10} /> {t.title}
+          </button>
+        )
+        return null
+      })()}
+      {ligasOk && canWrite && !i.activity_id && !i.task_id && (acts.length > 0 || tasks.length > 0) && (
+        <select value="" onChange={e => { if (e.target.value) setCampo(i.id, parseLink(e.target.value)) }} title="Ligar esta partida a una actividad o tarea"
+          style={{ ...SEL, minHeight: 28, fontSize: 10, maxWidth: 86, color: 'var(--text-tertiary)' }}>
+          <option value="">ligar a…</option>
+          {acts.length > 0 && <optgroup label="Actividades">{acts.map(a => <option key={a.id} value={`a:${a.id}`}>{a.title}</option>)}</optgroup>}
+          {tasks.length > 0 && <optgroup label="Tareas">{tasks.filter(t => t.status !== 'APPROVED').map(t => <option key={t.id} value={`t:${t.id}`}>{t.title}</option>)}</optgroup>}
+        </select>
+      )}
 
       {/* Responsable de la partida */}
       {canWrite ? (
@@ -2275,6 +2434,13 @@ function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = fa
           )}
           <input value={nArea} onChange={e => setNArea(e.target.value)} placeholder="Zona" title="Zona o área (bar, cocina, terraza…)"
             style={{ ...inp, width: 90 }} />
+          {ligasOk && (acts.length > 0 || tasks.length > 0) && (
+            <select value={nLink} onChange={e => setNLink(e.target.value)} style={{ ...SEL, width: 128 }} title="Ligar a una actividad o tarea (opcional)">
+              <option value="">Del proyecto</option>
+              {acts.length > 0 && <optgroup label="Actividad">{acts.map(a => <option key={a.id} value={`a:${a.id}`}>{a.title}</option>)}</optgroup>}
+              {tasks.length > 0 && <optgroup label="Tarea">{tasks.filter(t => t.status !== 'APPROVED').map(t => <option key={t.id} value={`t:${t.id}`}>{t.title}</option>)}</optgroup>}
+            </select>
+          )}
           <input type="number" inputMode="numeric" min={0} value={nAmount} onChange={e => setNAmount(e.target.value)}
             placeholder="$ c/u" className="num" style={{ ...inp, width: 88 }} title="Costo unitario" />
           <button onClick={() => setNIncome(v => !v)} title="Gasto o patrocinio (ingreso)"
@@ -2343,6 +2509,18 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   // en la app instalada (PWA standalone en iOS lo ignora en silencio).
   const [tplNaming, setTplNaming] = useState(false)
   const [tplName, setTplName] = useState('')
+  // Ventana MODULAR: qué secciones están activas en este proyecto. El tipo da
+  // el default; el usuario agrega o quita. Se guarda en event_plans.modules.
+  // Una sección con datos se activa sola aunque no esté en la lista: nunca se
+  // esconde información que ya existe.
+  const [activos, setActivos] = useState<ModuloId[]>(() => (event?.modules as ModuloId[] | null | undefined) ?? DEFAULTS[event?.kind ?? 'evento'])
+  const [colapsados, setColapsados] = useState<Set<string>>(new Set())
+  const [secMenu, setSecMenu] = useState(false)
+  // Campos que dependen del tipo (canales/KPI, cliente externo, área interna)
+  const [extra, setExtra] = useState<Record<string, string>>(() => (event?.extra as Record<string, string> | null | undefined) ?? {})
+  // Subventana de actividad apilada encima
+  const [openAct, setOpenAct] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
   // Menú de opciones por tarea (clic derecho o botón ⋯ — táctil no tiene
   // clic derecho): Abrir · Archivar · Desvincular
   const { openMenu: openTaskMenu, menuElement: taskMenuElement } = useContextMenu()
@@ -2402,6 +2580,33 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const saludSheet = useMemo(() => event
     ? calcularSalud({ date: date || null, end_date: endDate || null, status, budget: budget !== '' ? Number(budget) : null, actual_cost: gastoReal !== '' ? Number(gastoReal) : (totales?.gastos || null) }, tasks, actsSheet, (id) => people.find(p => p.id === id)?.full_name ?? null)
     : null, [event, date, endDate, status, budget, gastoReal, totales, tasks, actsSheet, people])
+
+  // Módulo visible = activado por el usuario, o con datos que no se deben esconder
+  const conDatos: Partial<Record<ModuloId, boolean>> = {
+    brief: !!description.trim(), asistencia: hasCover || !!expectedAtt || !!actualAtt,
+    requerimientos: !!requirements.trim() || !!collaborators.trim(), equipo: related.length > 0,
+    tareas: tasks.length > 0, programa: actsSheet.length > 0, presupuesto: !!(totales && totales.n > 0),
+    corte: ingresoReal !== '' || gastoReal !== '', cliente: clientKind === 'externo',
+    campana: kind === 'campana' && Object.keys(extra).some(k => EXTRA_CAMPOS.campana.some(c => c.key === k && extra[k])),
+  }
+  const activo = (id: ModuloId) => activos.includes(id) || !!conDatos[id]
+  const toggleSeccion = (id: ModuloId) => setActivos(a => a.includes(id) ? a.filter(x => x !== id) : [...a, id])
+  const toggleColapso = (id: string) => setColapsados(c => { const n = new Set(c); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const abierto = (id: string) => !colapsados.has(id)
+  // Al cambiar el tipo de un proyecto NUEVO, la plantilla de secciones cambia con él
+  useEffect(() => { if (!event) setActivos(DEFAULTS[kind]) }, [kind, event])
+  // Desde la Agenda: abrir el proyecto y luego su actividad. La actividad puede
+  // pedirse antes de que el programa termine de cargar: queda pendiente y se
+  // abre en cuanto aparece en la lista.
+  const [pendingAct, setPendingAct] = useState<string | null>(null)
+  useEffect(() => {
+    const open = (e: Event) => { const id = (e as CustomEvent<string>).detail; if (id) setPendingAct(id) }
+    window.addEventListener('hog:open-activity', open)
+    return () => window.removeEventListener('hog:open-activity', open)
+  }, [])
+  useEffect(() => {
+    if (pendingAct && actsSheet.some(a => a.id === pendingAct)) { setOpenAct(pendingAct); setPendingAct(null) }
+  }, [pendingAct, actsSheet])
 
   // Alta inline de una tarea (del proyecto o de una actividad): sin diálogos.
   // Las de actividad nacen HARD con la fecha de la actividad: si se pasan,
@@ -2580,20 +2785,28 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
       collaborators: collaborators.trim() || null,
       responsible: responsible || null, status,
       client_kind: clientKind,
+      modules: activos,
+      extra,
     }
-    // Si project_manager_v1.sql no se ha corrido, client_kind no existe: se
-    // reintenta sin él para que el resto del proyecto sí se guarde.
-    const sinCliente = (r: typeof row) => { const { client_kind: _ck, ...rest } = r; return rest }
+    // Si project_manager_v1/v2.sql no se han corrido, client_kind / modules /
+    // extra no existen: se reintenta SIN la columna que la base no conoce,
+    // para que el resto del proyecto sí se guarde. Hasta 3 columnas.
+    const columnaFaltante = (msg: string) => msg.match(/'(\w+)' column|column "?(\w+)"? (?:of relation \S+ )?does not exist/)?.slice(1).find(Boolean) ?? null
+    const sinColumna = (r: Record<string, unknown>, col: string) => { const { [col]: _omit, ...rest } = r; return rest }
     if (event) {
       // .select() no es adorno: sin él, un UPDATE que la base RECHAZA por
       // permisos no devuelve error NI filas — se ve como si hubiera guardado y
       // el dato nunca entró. Con select sabemos si de verdad se escribió.
+      let fila: Record<string, unknown> = row
       let { data: guardado, error } = await supabase.from('event_plans')
-        .update(row).eq('id', event.id)
+        .update(fila).eq('id', event.id)
         .select('id, actual_revenue, actual_cost').maybeSingle()
-      if (error && /client_kind/.test(error.message)) {
+      for (let i = 0; i < 3 && error; i++) {
+        const col = columnaFaltante(error.message)
+        if (!col || !(col in fila) || ['actual_revenue', 'actual_cost'].includes(col)) break
+        fila = sinColumna(fila, col)
         ;({ data: guardado, error } = await supabase.from('event_plans')
-          .update(sinCliente(row)).eq('id', event.id)
+          .update(fila).eq('id', event.id)
           .select('id, actual_revenue, actual_cost').maybeSingle())
       }
       setSaving(false)
@@ -2616,9 +2829,13 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
       setGastoReal(guardado.actual_cost != null ? String(guardado.actual_cost) : '')
       logActivity('event_updated', 'event', event.id, { name: row.name })
     } else {
-      let { data, error } = await supabase.from('event_plans').insert({ ...row, created_by: userId ?? null }).select('id').single()
-      if (error && /client_kind/.test(error.message)) {
-        ;({ data, error } = await supabase.from('event_plans').insert({ ...sinCliente(row), created_by: userId ?? null }).select('id').single())
+      let fila: Record<string, unknown> = { ...row, created_by: userId ?? null }
+      let { data, error } = await supabase.from('event_plans').insert(fila).select('id').single()
+      for (let i = 0; i < 3 && error; i++) {
+        const col = columnaFaltante(error.message)
+        if (!col || !(col in fila)) break
+        fila = sinColumna(fila, col)
+        ;({ data, error } = await supabase.from('event_plans').insert(fila).select('id').single())
       }
       setSaving(false)
       if (error || !data) { showToast(`No se pudo crear: ${error?.message}`, 'error'); return }
@@ -2813,6 +3030,46 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             </div>
           </div>
 
+          {/* Campos que dependen del tipo: viven en extra (jsonb), sin abrir columnas.
+              Una campaña para un cliente externo trae los dos bloques. */}
+          {([
+            ...(kind === 'campana' && activo('campana') ? ['campana' as const] : []),
+            ...(clientKind === 'externo' && activo('cliente') ? ['cliente' as const] : []),
+            ...(kind === 'interno' ? ['interno' as const] : []),
+          ]).map(grupo => {
+            const campos = EXTRA_CAMPOS[grupo]
+            const titulo = grupo === 'campana' ? 'Canales y KPI' : grupo === 'cliente' ? 'Cliente externo' : 'Proyecto interno'
+            return (
+              <Modulo key={grupo} id={`extra:${grupo}`} label={titulo} icon={<LayoutList size={13} style={{ color: 'var(--accent)' }} />}
+                open={abierto(`extra:${grupo}`)} onToggle={toggleColapso}
+                summary={campos.map(c => extra[c.key]).filter(Boolean).join(' · ')}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8 }}>
+                  {campos.map(c => (
+                    <div key={c.key} style={{ gridColumn: c.tipo === 'textarea' ? '1 / -1' : undefined }}>
+                      <label style={lbl}>{c.label}</label>
+                      {c.tipo === 'textarea' ? (
+                        <textarea value={extra[c.key] ?? ''} onChange={e => setExtra(x => ({ ...x, [c.key]: e.target.value }))} rows={2} disabled={!canWrite} placeholder={c.placeholder} style={{ ...inp, minHeight: 56, padding: '9px 12px', resize: 'vertical' }} />
+                      ) : (
+                        <input type={c.tipo === 'number' ? 'number' : 'text'} inputMode={c.tipo === 'number' ? 'numeric' : undefined} value={extra[c.key] ?? ''} onChange={e => setExtra(x => ({ ...x, [c.key]: e.target.value }))} disabled={!canWrite} placeholder={c.placeholder} className={c.tipo === 'number' ? 'num' : undefined} style={inp} />
+                      )}
+                    </div>
+                  ))}
+                  {grupo === 'cliente' && extra.precio_venta && (totales?.gastos || gastoReal) && (() => {
+                    const venta = Number(extra.precio_venta) || 0
+                    const costo = gastoReal !== '' ? Number(gastoReal) : (totales?.gastos ?? 0)
+                    const margen = venta > 0 ? ((venta - costo) / venta) * 100 : null
+                    return (
+                      <div style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--text-secondary)' }}>
+                        Venta {mxn(venta)} − costo {mxn(costo)} = <b style={{ color: venta - costo >= 0 ? 'var(--status-healthy)' : 'var(--status-risk)' }}>{mxn(venta - costo)}</b>{margen != null && <> · margen <b style={{ color: margen >= 15 ? 'var(--status-healthy)' : margen >= 0 ? 'var(--status-attention)' : 'var(--status-risk)' }}>{margen.toFixed(1)}%</b></>}
+                        <span style={{ color: 'var(--text-tertiary)' }}> — el costo sale del presupuesto (o del gasto real del corte si ya lo capturaste)</span>
+                      </div>
+                    )
+                  })()}
+                </div>
+              </Modulo>
+            )
+          })}
+
           <div>
             <label style={lbl}>Nombre *</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder={kind === 'evento' ? 'Colombian Night, Art Talk…' : 'Remodelación terraza, Adecuación barra…'} style={inp} disabled={!canWrite} />
@@ -2855,13 +3112,16 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             </div>
           </div>
 
-          <div>
-            <label style={lbl}>Descripción / caption</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} disabled={!canWrite}
-              placeholder="Concepto, line-up, copy del evento…" style={{ ...inp, minHeight: 60, padding: '10px 12px', resize: 'vertical' }} />
-          </div>
+          {activo('brief') && (
+            <Modulo id="brief" label="Brief" hint="Concepto, copy, contexto" icon={<Pencil size={13} style={{ color: 'var(--accent)' }} />} open={abierto('brief')} onToggle={toggleColapso} summary={description.trim().slice(0, 80)}>
+              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} disabled={!canWrite}
+                placeholder={kind === 'evento' ? 'Concepto, line-up, copy del evento…' : kind === 'campana' ? 'Mensaje, tono, a quién le hablamos…' : 'De qué va, por qué ahora, qué cambia cuando termine…'} style={{ ...inp, minHeight: 72, padding: '10px 12px', resize: 'vertical' }} />
+            </Modulo>
+          )}
 
-          {kind === 'evento' && (
+          {kind === 'evento' && activo('asistencia') && (
+            <Modulo id="asistencia" label="Asistencia y cover" icon={<UserPlus size={13} style={{ color: 'var(--accent)' }} />} open={abierto('asistencia')} onToggle={toggleColapso}
+              summary={`${hasCover ? `cover ${coverPrice ? mxn(Number(coverPrice)) : ''}` : 'sin cover'}${expectedAtt ? ` · ${expectedAtt} esperados` : ''}`}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, alignItems: 'end' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minHeight: 44 }}>
                 <input type="checkbox" checked={hasCover} onChange={e => setHasCover(e.target.checked)} disabled={!canWrite} style={{ accentColor: 'var(--accent)', width: 18, height: 18 }} />
@@ -2878,6 +3138,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 <input type="number" inputMode="numeric" min={0} value={expectedAtt} onChange={e => setExpectedAtt(e.target.value)} className="num" style={inp} disabled={!canWrite} placeholder="0" />
               </div>
             </div>
+            </Modulo>
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -2904,7 +3165,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
               arriba van los elegidos y abajo se busca por nombre; la gente sin
               nombre capturado (chips "—") ya no aparece: no se puede elegir a
               alguien que no se puede identificar. */}
-          {event && (() => {
+          {event && activo('equipo') && (() => {
             const elegibles = people.filter(p => p.id !== responsible && (p.full_name ?? '').trim())
             const q = relQ.trim().toLowerCase()
             const sugeridos = elegibles
@@ -2920,8 +3181,9 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
               </button>
             )
             return (
-              <div>
-                <label style={lbl}>Relacionados del equipo {related.length > 0 && `· ${related.length}`}</label>
+              <Modulo id="equipo" label={`Equipo${related.length ? ` · ${related.length}` : ''}`} hint="Relacionados del equipo interno" icon={<UserPlus size={13} style={{ color: 'var(--accent)' }} />} open={abierto('equipo')} onToggle={toggleColapso}
+                summary={related.map(id => elegibles.find(p => p.id === id)?.full_name?.split(' ')[0]).filter(Boolean).join(', ')}>
+                <label style={lbl}>Relacionados del equipo</label>
                 {related.length > 0 && (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                     {related.map(id => elegibles.find(p => p.id === id)).filter(Boolean).map(p => chip(p!, true))}
@@ -2946,10 +3208,13 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                     </div>
                   </>
                 )}
-              </div>
+              </Modulo>
             )
           })()}
 
+          {activo('requerimientos') && (
+          <Modulo id="requerimientos" label="Requerimientos y talento" icon={<ListPlus size={13} style={{ color: 'var(--accent)' }} />} open={abierto('requerimientos')} onToggle={toggleColapso}
+            summary={[requirements.trim(), collaborators.trim()].filter(Boolean).join(' · ').slice(0, 80)}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div>
               <label style={lbl}>Requerimientos</label>
@@ -2962,6 +3227,8 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 placeholder="DJs, artistas, marcas invitadas…" style={{ ...inp, minHeight: 60, padding: '10px 12px', resize: 'vertical' }} />
             </div>
           </div>
+          </Modulo>
+          )}
 
           <div>
             <label style={lbl}>Estado</label>
@@ -2981,8 +3248,29 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             </div>
           </div>
 
+          {/* Secciones activas — la ventana es modular: el tipo da la plantilla,
+              aquí se agrega o quita lo que este proyecto necesita. Las que
+              tienen datos no se pueden esconder. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', marginRight: 2 }}>Secciones</span>
+            {MODULOS.filter(m => (m.id !== 'cliente' || clientKind === 'externo') && (m.id !== 'campana' || kind === 'campana') && (m.id !== 'corte' || !!event) && (m.id !== 'programa' && m.id !== 'presupuesto' && m.id !== 'documentos' && m.id !== 'timeline' && m.id !== 'equipo' || !!event) && (activo(m.id) || secMenu)).map(m => {
+              const on = activo(m.id)
+              const fijo = !!conDatos[m.id]
+              return (
+                <button key={m.id} onClick={() => !fijo && toggleSeccion(m.id)} title={fijo ? `${m.hint} — tiene datos, no se puede quitar` : on ? `Quitar ${m.label}` : m.hint}
+                  style={{ minHeight: 28, padding: '0 9px', borderRadius: 999, border: `1px solid ${on ? 'var(--accent-border)' : 'var(--border-default)'}`, background: on ? 'var(--accent-bg)' : 'transparent', color: on ? 'var(--accent)' : 'var(--text-tertiary)', fontSize: 10.5, fontWeight: 700, cursor: fijo ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, opacity: fijo ? 0.85 : 1 }}>
+                  {on && !fijo && canWrite ? <X size={10} /> : !on ? <Plus size={10} /> : null}{m.label}
+                </button>
+              )
+            })}
+            <button onClick={() => setSecMenu(v => !v)} title={secMenu ? 'Ocultar las secciones disponibles' : 'Agregar una sección'}
+              style={{ minHeight: 28, padding: '0 9px', borderRadius: 999, border: '1px dashed var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 10.5, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {secMenu ? <><ChevronDown size={11} /> Listo</> : <><Plus size={11} /> Sección</>}
+            </button>
+          </div>
+
           {/* Tareas — lo que el equipo en piso gestiona a diario: va ANTES del corte, el programa y el presupuesto */}
-          {canWrite && (
+          {canWrite && activo('tareas') && (
             <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                 <CheckSquare size={13} style={{ color: 'var(--accent)' }} />
@@ -2990,7 +3278,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 {saludSheet && saludSheet.sinDueno > 0 && <span className="num" style={{ fontSize: 10, fontWeight: 800, color: 'var(--status-risk)', fontFamily: 'var(--font-mono)' }}>{saludSheet.sinDueno} sin dueño</span>}
               </div>
               <TareasAgrupadas tasks={tasks} acts={actsSheet} people={people} taskFollowers={taskFollowers} taskAdjuntos={taskAdjuntos}
-                canWrite={canWrite && !!event} onOpenTask={onOpenTask}
+                canWrite={canWrite && !!event} onOpenTask={onOpenTask} onOpenActivity={event ? setOpenAct : undefined}
                 onMenu={event && canWrite ? (e, t) => openTaskMenu(e, taskMenu(t)) : undefined}
                 onAdd={event ? addTaskInline : undefined} />
               <div style={{ height: 8 }} />
@@ -3047,7 +3335,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
           {event ? (
             <>
               {/* Corte post-evento: real vs presupuesto (aparece al terminar) */}
-              {showCorte && (
+              {showCorte && activo('corte') && (
                 <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' }}>
                   <label style={{ ...lbl, marginBottom: 8 }}>📊 Corte post-evento</label>
                   {!eventoTermino && (
@@ -3123,9 +3411,10 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                   </p>
                 </div>
               )}
-              <ProgramSection eventId={event.id} defaultDate={event.date} canWrite={canWrite} userId={userId} onOpenTask={onOpenTask} />
-              <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} people={people} showCorte={showCorte} onTotals={setTotales} />
-              {(tasks.length > 0 || actsSheet.length > 0 || event.date) && (
+              {activo('programa') && <ProgramSection eventId={event.id} defaultDate={event.date} canWrite={canWrite} userId={userId} onOpenActivity={setOpenAct} reloadKey={reloadKey} />}
+              {activo('presupuesto') && <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} people={people} showCorte={showCorte} onTotals={setTotales} acts={actsSheet} tasks={tasks} onOpenActivity={setOpenAct} onOpenTask={onOpenTask} reloadKey={reloadKey} />}
+              {activo('documentos') && <ProjectFiles eventId={event.id} canWrite={canWrite} userId={userId} people={people} />}
+              {activo('timeline') && (tasks.length > 0 || actsSheet.length > 0 || event.date) && (
                 <ProjectTimeline plan={{ date: date || null, end_date: endDate || null, name: name }} tasks={tasks} acts={actsSheet} onOpenTask={onOpenTask} isMobile={isMobile} />
               )}
             </>
@@ -3185,6 +3474,12 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
       </div>
 
         {taskMenuElement}
+        {/* Subventana de actividad: detalle, tareas, gastos y adjuntos, apilada encima */}
+        {event && openAct && (
+          <ActivitySheet activityId={openAct} eventId={event.id} eventName={event.name} buId={event.bu_id} canWrite={canWrite} userId={userId} people={people} isMobile={isMobile}
+            onOpenTask={onOpenTask} onClose={() => setOpenAct(null)}
+            onChanged={() => { setReloadKey(k => k + 1); loadTasks(); window.dispatchEvent(new CustomEvent('hog:task-updated')) }} />
+        )}
         {/* Riel de conversación — fijo mientras el proyecto se scrollea al lado */}
         {chatEnColumna && event && (
           <aside style={{ width: 330, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
