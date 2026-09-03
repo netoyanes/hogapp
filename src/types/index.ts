@@ -114,6 +114,14 @@ export interface Task {
   is_private: boolean
   // Proyecto (event_plans) al que pertenece — null si es tarea suelta
   event_id?: string | null
+  // Actividad del programa del proyecto de la que cuelga (project_activities)
+  activity_id?: string | null
+  // Andon: bloqueo explícito con causa (project_manager_v1.sql)
+  blocked_reason?: string | null
+  blocked_at?: string | null
+  blocked_by?: string | null
+  // Cuándo cambió por última vez de estado — para la edad en el mismo estado
+  status_changed_at?: string | null
   created_at: string
   updated_at: string
 }

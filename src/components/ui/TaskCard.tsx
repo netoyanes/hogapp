@@ -1,6 +1,7 @@
 import { Lock, Paperclip } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { BUChip, PriorityEdge } from '../v2'
+import { ProjectChip, BlockedChip } from './ProjectChip'
 import type { Task } from '../../types'
 
 interface Props {
@@ -8,13 +9,16 @@ interface Props {
   buName?: string          // BU code (monogram source)
   assigneeName?: string
   proofCount?: number
+  // Proyecto (y actividad) al que pertenece — se pinta como chip bajo el título
+  project?: { name: string; kind: string | null; activity: string | null } | null
   onClick?: () => void
 }
 
 // v2 card — compressed: title, assignee avatar, BU chip, due date;
 // priority as a thin left edge bar, evidence as a paperclip count.
-export function TaskCard({ task, buName, assigneeName, proofCount = 0, onClick }: Props) {
+export function TaskCard({ task, buName, assigneeName, proofCount = 0, project, onClick }: Props) {
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'APPROVED'
+  const blocked = !!task.blocked_reason && task.status !== 'APPROVED'
 
   return (
     <div
@@ -38,6 +42,15 @@ export function TaskCard({ task, buName, assigneeName, proofCount = 0, onClick }
         </span>
         {task.is_private && <Lock size={10} style={{ color: 'var(--text-tertiary)', flexShrink: 0, marginTop: 3 }} />}
       </div>
+
+      {/* A qué proyecto pertenece + si está bloqueada: los dos datos que
+          cambian qué hace quien la ve, antes de abrirla */}
+      {(project || blocked) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8, alignItems: 'flex-start' }}>
+          {project && <ProjectChip name={project.name} kind={project.kind} activity={project.activity} size="sm" maxWidth={220} />}
+          {blocked && <BlockedChip reason={task.blocked_reason!} />}
+        </div>
+      )}
 
       {/* Footer: avatar · BU chip · clip count · due date */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

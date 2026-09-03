@@ -272,6 +272,23 @@ export default function App() {
     setActiveView(view)
   }
 
+  // "Abrir proyecto" desde el chip de una tarea (board, Mi Semana, la propia
+  // tarea): se cierra la tarea, se aterriza en Project Manager y éste abre el
+  // proyecto pendiente — el mismo mecanismo que el deep-link ?project=.
+  useEffect(() => {
+    const open = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail
+      if (!id) return
+      localStorage.setItem('hog_pending_project', id)
+      setOverlayTaskId(null)
+      setActiveView('events')
+      // Si Project Manager ya está montado, que lo abra sin recargar
+      window.dispatchEvent(new CustomEvent('hog:open-project-now', { detail: id }))
+    }
+    window.addEventListener('hog:open-project', open)
+    return () => window.removeEventListener('hog:open-project', open)
+  }, [])
+
   function renderView() {
     switch (activeView) {
       case 'dashboard':
