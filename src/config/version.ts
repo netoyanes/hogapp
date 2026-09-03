@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.108.0"
+export const APP_VERSION = "2.108.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.108.1",
+    date: "2026-09-03",
+    type: "PATCH",
+    changes: [
+      "Las actividades ya se identifican en el Timeline sin desplegar: una marca azul debajo de la barra del proyecto por cada día que ocurre algo, con su conteo si son varias, roja a menos de 7 días con tareas abiertas y verde si ya se hicieron. Antes solo se veían los rombos de tareas y había que abrir el proyecto para saber que tenía programa",
+      "La etiqueta del proyecto dice cuántas actividades trae (12 act) y clic en una marca abre esa actividad",
+    ]
+  },
   {
     version: "2.108.0",
     date: "2026-09-03",
