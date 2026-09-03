@@ -1272,7 +1272,11 @@ function TareasAgrupadas({ tasks, acts, people, taskFollowers, taskAdjuntos, can
   }
 
   const delProyecto = tasks.filter(t => !t.activity_id || !acts.some(a => a.id === t.activity_id))
-  const porAct = acts.map(a => ({ a, ts: tasks.filter(t => t.activity_id === a.id) })).filter(x => x.ts.length > 0 || addFor === x.a.id || canWrite)
+  // Solo las actividades CON tareas (o a la que se le está agregando una) se
+  // despliegan; las demás van en una sola fila de chips — con 12 actividades
+  // sin tareas, doce bloques vacíos eran puro ruido.
+  const porAct = acts.map(a => ({ a, ts: tasks.filter(t => t.activity_id === a.id) })).filter(x => x.ts.length > 0 || addFor === x.a.id)
+  const sinTareas = acts.filter(a => !porAct.some(p => p.a.id === a.id) && a.status !== 'cancelada')
   const hechas = (ts: TaskLite[]) => ts.filter(t => t.status === 'APPROVED').length
   const secTitle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', paddingBottom: 4 }
 
@@ -1282,24 +1286,24 @@ function TareasAgrupadas({ tasks, acts, people, taskFollowers, taskAdjuntos, can
       <div>
         <div style={secTitle}>
           <CheckSquare size={13} style={{ color: 'var(--accent)' }} />
-          <span style={{ flex: 1 }}>Tareas del proyecto{delProyecto.length ? ` · ${delProyecto.length}` : ''}</span>
+          <span style={{ flex: 1 }}>Del proyecto{delProyecto.length ? ` · ${delProyecto.length}` : ''}</span>
           {delProyecto.length > 0 && <span className="num" style={{ textTransform: 'none' }}>{hechas(delProyecto)} hechas</span>}
           {addBtn('proyecto', 'Tarea')}
         </div>
         {delProyecto.map(t => fila(t, false))}
         {delProyecto.length === 0 && addFor !== 'proyecto' && (
-          <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>Sin tareas generales aún — lo que hay que hacer antes, sin importar en qué actividad cae.</p>
+          <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>Sin tareas generales aún.</p>
         )}
         {addRow('proyecto', 'Nueva tarea del proyecto…')}
       </div>
 
       {/* ── Por actividad ── */}
-      {porAct.length > 0 && (
+      {(porAct.length > 0 || sinTareas.length > 0) && (
         <div>
           <div style={secTitle}>
             <CalendarDays size={13} style={{ color: ACTIVITY_COLOR }} />
-            <span style={{ flex: 1 }}>Tareas por actividad · {tasks.length - delProyecto.length}</span>
-            <span className="num" style={{ textTransform: 'none' }}>{porAct.length} {porAct.length === 1 ? 'actividad' : 'actividades'}</span>
+            <span style={{ flex: 1 }}>Por actividad{tasks.length - delProyecto.length ? ` · ${tasks.length - delProyecto.length}` : ''}</span>
+            <span className="num" style={{ textTransform: 'none' }}>{porAct.length}/{acts.length} con tareas</span>
           </div>
           {porAct.map(({ a, ts }) => {
             const abiertas = ts.filter(t => t.status !== 'APPROVED').length
@@ -1332,12 +1336,27 @@ function TareasAgrupadas({ tasks, acts, people, taskFollowers, taskAdjuntos, can
                 </div>
                 <div style={{ marginLeft: 12, borderLeft: `1px solid color-mix(in srgb, ${col} 45%, transparent)`, paddingLeft: 10 }}>
                   {ts.map(t => fila(t, true))}
-                  {ts.length === 0 && addFor !== a.id && <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '2px 0 4px' }}>Sin tareas de preparación.</p>}
                   {addRow(a.id, `Nueva tarea para ${a.title}…`)}
                 </div>
               </div>
             )
           })}
+          {/* Las que aún no tienen tareas, en una sola fila: clic en una y se
+              abre su captura ahí mismo */}
+          {sinTareas.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: porAct.length ? 10 : 4 }}>
+              <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginRight: 2 }}>Sin tareas aún:</span>
+              {sinTareas.map(a => (
+                <button key={a.id} onClick={() => { if (canWrite && onAdd) { setAddFor(a.id); setAddTitle('') } else onOpenActivity?.(a.id) }}
+                  title={canWrite && onAdd ? `Agregar una tarea a ${a.title}` : a.title}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 26, padding: '0 8px', borderRadius: 999, border: '1px dashed color-mix(in srgb, var(--text-primary) 18%, transparent)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                  <span className="num" style={{ fontSize: 9.5, color: ACTIVITY_COLOR, fontFamily: 'var(--font-mono)' }}>{DAYS_ES[new Date(a.date + 'T00:00:00').getDay()].toLowerCase()} {Number(a.date.slice(8, 10))}</span>
+                  {a.title.length > 28 ? a.title.slice(0, 27) + '…' : a.title}
+                  {canWrite && onAdd && <Plus size={10} style={{ opacity: 0.6 }} />}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2007,23 +2026,8 @@ function ProgramSection({ eventId, defaultDate, canWrite, userId, onOpenActivity
   }
   // Tarea de preparación colgada de la actividad: se gestiona individual sin
   // sacarla del conjunto del evento.
-  // Captura inline (window.prompt no existe en la app instalada: la PWA en iOS
-  // lo ignora en silencio — era el "el botón no agrega").
-  const [prepFor, setPrepFor] = useState<string | null>(null)
-  const [prepTitle, setPrepTitle] = useState('')
-  async function addPrepTask(a: ProgramActivity) {
-    const titulo = prepTitle.trim()
-    if (!titulo) return
-    const { error } = await supabase.from('tasks').insert({
-      title: titulo, event_id: eventId, activity_id: a.id, status: 'OPEN',
-      due_date: a.date, deadline_type: 'HARD', client_impact: 'internal',
-      created_by: userId ?? null, priority: 'MEDIUM', proof_required: false,
-    }).select('id').single()
-    if (error) { showToast(`No se pudo crear: ${error.message}`, 'error'); return }
-    setPrepTitle('')
-    load()
-    window.dispatchEvent(new CustomEvent('hog:task-updated'))
-  }
+  // Las tareas de preparación se capturan en la sección Tareas (por actividad)
+  // o dentro de la actividad — aquí el programa es solo lo que OCURRE.
 
   const porDia = useMemo(() => {
     const m = new Map<string, ProgramActivity[]>()
@@ -2075,8 +2079,8 @@ function ProgramSection({ eventId, defaultDate, canWrite, userId, onOpenActivity
             const tc = taskCounts[a.id]
             return (
               <Fragment key={a.id}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '7px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                <span className="num" style={{ width: 78, flexShrink: 0, fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', paddingTop: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0', borderBottom: '1px solid var(--border-subtle)', minHeight: 40 }}>
+                <span className="num" style={{ width: 92, flexShrink: 0, fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                   {a.start_time ? `${a.start_time.slice(0, 5)}${a.end_time ? `–${a.end_time.slice(0, 5)}` : ''}` : 'sin hora'}
                 </span>
                 <span style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: st.color, flexShrink: 0 }} />
@@ -2093,25 +2097,16 @@ function ProgramSection({ eventId, defaultDate, canWrite, userId, onOpenActivity
                 </div>
                 {canWrite && (
                   <>
-                    <select value={a.status} onChange={e => setStatus(a.id, e.target.value)} aria-label="Estado"
-                      style={{ background: 'none', border: 'none', color: st.color, fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer', outline: 'none', flexShrink: 0 }}>
+                    {/* "Planeada" es el default: se muestra tenue para que solo resalte lo que cambió */}
+                    <select value={a.status} onChange={e => setStatus(a.id, e.target.value)} aria-label="Estado" title="Estado de la actividad"
+                      style={{ background: 'none', border: 'none', color: st.color, fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer', outline: 'none', flexShrink: 0, opacity: a.status === 'planeada' ? 0.5 : 1 }}>
                       {Object.entries(ACT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                     </select>
-                    <button onClick={() => { setPrepFor(prepFor === a.id ? null : a.id); setPrepTitle('') }} title="Agregar tarea de preparación para esta actividad"
-                      style={{ width: 28, height: 28, border: 'none', background: prepFor === a.id ? 'var(--accent-bg)' : 'none', borderRadius: 6, color: prepFor === a.id ? 'var(--accent)' : 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0 }}><ListPlus size={12} /></button>
                     <button onClick={() => remove(a.id)} aria-label="Quitar actividad"
-                      style={{ width: 28, height: 28, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0 }}><Trash2 size={12} /></button>
+                      style={{ width: 26, height: 26, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0, opacity: 0.6 }}><Trash2 size={12} /></button>
                   </>
                 )}
               </div>
-              {canWrite && prepFor === a.id && (
-                <div key={`${a.id}-prep`} style={{ display: 'flex', gap: 6, padding: '6px 0 6px 90px' }}>
-                  <input autoFocus value={prepTitle} onChange={e => setPrepTitle(e.target.value)} placeholder={`Tarea de preparación para ${a.title}…`} aria-label="Nueva tarea"
-                    onKeyDown={e => { if (e.key === 'Enter') addPrepTask(a); if (e.key === 'Escape') setPrepFor(null) }} style={{ ...inp, flex: 1 }} />
-                  <button onClick={() => addPrepTask(a)} disabled={!prepTitle.trim()}
-                    style={{ minHeight: 38, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: prepTitle.trim() ? 'var(--accent)' : 'var(--bg-base)', color: prepTitle.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', fontWeight: 700, fontSize: 12, cursor: prepTitle.trim() ? 'pointer' : 'not-allowed' }}>Agregar</button>
-                </div>
-              )}
               </Fragment>
             )
           })}
@@ -2509,6 +2504,8 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   // en la app instalada (PWA standalone en iOS lo ignora en silencio).
   const [tplNaming, setTplNaming] = useState(false)
   const [tplName, setTplName] = useState('')
+  // Vincular existente / pegar lista: escondidos hasta que se piden
+  const [masOpciones, setMasOpciones] = useState(false)
   // Ventana MODULAR: qué secciones están activas en este proyecto. El tipo da
   // el default; el usuario agrega o quita. Se guarda en event_plans.modules.
   // Una sección con datos se activa sola aunque no esté en la lista: nunca se
@@ -3001,34 +2998,58 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             </div>
           )}
 
+          {/* Tipo y cliente: la decisión grande se toma al crear (pastillas);
+              ya guardado, dos selects en una fila — diez botones para algo que
+              se eligió una vez eran media pantalla. */}
+          {event ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <label style={lbl}>Tipo de proyecto</label>
+                <select value={kind} onChange={e => setKind(e.target.value as PlanKind)} style={{ ...inp, cursor: 'pointer' }} disabled={!canWrite}>
+                  {(Object.keys(KIND_META) as PlanKind[]).map(k => <option key={k} value={k}>{KIND_META[k].label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>Para quién</label>
+                <select value={clientKind} onChange={e => setClientKind(e.target.value as 'interno' | 'externo')} style={{ ...inp, cursor: 'pointer' }} disabled={!canWrite}>
+                  <option value="interno">Cliente interno</option>
+                  <option value="externo">Cliente externo</option>
+                </select>
+              </div>
+            </div>
+          ) : (
+            <>
           {/* ¿Evento o proyecto? — cambia los campos relevantes */}
-          <div>
-            <label style={lbl}>¿Qué planeas?</label>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button onClick={() => canWrite && setKind('evento')}
-                style={{ minHeight: 40, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700, background: kind === 'evento' ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${kind === 'evento' ? 'var(--accent)' : 'var(--border-default)'}`, color: kind === 'evento' ? 'var(--accent)' : 'var(--text-secondary)' }}>
-                Evento
-              </button>
-              {(Object.keys(KIND_META) as PlanKind[]).filter(k => k !== 'evento').map(k => (
-                <button key={k} onClick={() => canWrite && setKind(k)}
-                  style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: kind === k ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${kind === k ? 'var(--accent)' : 'var(--border-default)'}`, color: kind === k ? 'var(--accent)' : 'var(--text-secondary)' }}>
-                  {KIND_META[k].label}
+            <div>
+              <label style={lbl}>¿Qué planeas?</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button onClick={() => canWrite && setKind('evento')}
+                  style={{ minHeight: 40, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700, background: kind === 'evento' ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${kind === 'evento' ? 'var(--accent)' : 'var(--border-default)'}`, color: kind === 'evento' ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                  Evento
                 </button>
-              ))}
+                {(Object.keys(KIND_META) as PlanKind[]).filter(k => k !== 'evento').map(k => (
+                  <button key={k} onClick={() => canWrite && setKind(k)}
+                    style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: kind === k ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${kind === k ? 'var(--accent)' : 'var(--border-default)'}`, color: kind === k ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                    {KIND_META[k].label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label style={lbl}>¿Para quién?</label>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {([['interno', 'Cliente interno', 'Una casa o un área del grupo'], ['externo', 'Cliente externo', 'Alguien de fuera nos contrata — aquí el corte es utilidad de verdad']] as const).map(([id, label, hint]) => (
-                <button key={id} onClick={() => canWrite && setClientKind(id)} title={hint}
-                  style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: clientKind === id ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${clientKind === id ? 'var(--accent)' : 'var(--border-default)'}`, color: clientKind === id ? 'var(--accent)' : 'var(--text-secondary)' }}>
-                  {label}
-                </button>
-              ))}
+            <div>
+              <label style={lbl}>¿Para quién?</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {([['interno', 'Cliente interno', 'Una casa o un área del grupo'], ['externo', 'Cliente externo', 'Alguien de fuera nos contrata — aquí el corte es utilidad de verdad']] as const).map(([id, label, hint]) => (
+                  <button key={id} onClick={() => canWrite && setClientKind(id)} title={hint}
+                    style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: clientKind === id ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${clientKind === id ? 'var(--accent)' : 'var(--border-default)'}`, color: clientKind === id ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+
+            </>
+          )}
 
           {/* Campos que dependen del tipo: viven en extra (jsonb), sin abrir columnas.
               Una campaña para un cliente externo trae los dos bloques. */}
@@ -3114,7 +3135,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
 
           {activo('brief') && (
             <Modulo id="brief" label="Brief" hint="Concepto, copy, contexto" icon={<Pencil size={13} style={{ color: 'var(--accent)' }} />} open={abierto('brief')} onToggle={toggleColapso} summary={description.trim().slice(0, 80)}>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} disabled={!canWrite}
+              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={Math.min(14, Math.max(3, description.split('\n').length + Math.floor(description.length / 95)))} disabled={!canWrite}
                 placeholder={kind === 'evento' ? 'Concepto, line-up, copy del evento…' : kind === 'campana' ? 'Mensaje, tono, a quién le hablamos…' : 'De qué va, por qué ahora, qué cambia cuando termine…'} style={{ ...inp, minHeight: 72, padding: '10px 12px', resize: 'vertical' }} />
             </Modulo>
           )}
@@ -3281,9 +3302,16 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 canWrite={canWrite && !!event} onOpenTask={onOpenTask} onOpenActivity={event ? setOpenAct : undefined}
                 onMenu={event && canWrite ? (e, t) => openTaskMenu(e, taskMenu(t)) : undefined}
                 onAdd={event ? addTaskInline : undefined} />
-              <div style={{ height: 8 }} />
-              {/* Vincular una tarea que YA existe en el Task Manager */}
+              {/* Con alta inline por grupo, vincular y pegar lista son la
+                  excepción: viven detrás de un enlace, no ocupan media pantalla */}
               {event && (
+                <button onClick={() => setMasOpciones(v => !v)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, minHeight: 28, padding: '0 6px', border: 'none', background: 'none', color: masOpciones ? 'var(--accent)' : 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                  <ListPlus size={12} /> {masOpciones ? 'Ocultar' : 'Vincular existente · pegar lista'}
+                </button>
+              )}
+              {/* Vincular una tarea que YA existe en el Task Manager */}
+              {event && masOpciones && (
                 <div style={{ position: 'relative', marginBottom: 8 }}>
                   <Link2 size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
                   <input value={linkQ} onChange={e => setLinkQ(e.target.value)}
@@ -3306,10 +3334,12 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                   )}
                 </div>
               )}
+              {(!event || masOpciones) && (
               <textarea value={bulkTasks} onChange={e => setBulkTasks(e.target.value)} rows={4}
                 placeholder={'Una tarea por línea (bullets):\n- Confirmar DJ y rider\n- Diseñar flyer\n- Brief a cocina'}
                 style={{ ...inp, minHeight: 88, padding: '10px 12px', resize: 'vertical', fontSize: 13, marginBottom: 8 }} />
-              {event ? (
+              )}
+              {event ? masOpciones && (
                 <button onClick={() => pushBulkTasks(event.id, event.name, event.bu_id, event.date)} disabled={bulkPending === 0}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 44, borderRadius: 999, border: 'none', background: bulkPending ? 'var(--accent)' : 'var(--bg-base)', color: bulkPending ? 'var(--on-accent)' : 'var(--text-tertiary)', fontSize: 13, fontWeight: 700, cursor: bulkPending ? 'pointer' : 'not-allowed' }}>
                   <ListPlus size={15} /> Pasar {bulkPending || ''} tarea{bulkPending === 1 ? '' : 's'} a Tareas
