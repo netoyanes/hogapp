@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.107.1"
+export const APP_VERSION = "2.107.2"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.107.2",
+    date: "2026-09-03",
+    type: "PATCH",
+    changes: [
+      "Fix definitivo de la pantalla en blanco después del login. El 2.107.1 movió el hook arriba del return de login, pero seguía debajo del return de 'Loading': al terminar de cargar el perfil cambiaba el número de hooks y React abortaba. Ahora va antes de cualquier return, y se comprobó con la app corriendo contra un Supabase simulado: dashboard, Project Manager, ventana de proyecto, agenda, board y timeline sin errores",
+    ]
+  },
   {
     version: "2.107.1",
     date: "2026-09-03",
