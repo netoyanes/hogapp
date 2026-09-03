@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.107.3"
+export const APP_VERSION = "2.108.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.108.0",
+    date: "2026-09-03",
+    type: "MINOR",
+    changes: [
+      "CALENDARIO nuevo. Un proyecto de varios días ahora es una BANDA que cruza los días que dura, con su nombre una vez por semana. Antes pintaba una barra anónima en cada celda: con tres proyectos de mes completo el calendario quedaba tapado de barras que no decían nada",
+      "El calendario ya muestra las ACTIVIDADES del programa como chips con su hora, no solo los proyectos. Un calendario mensual sirve para ver qué ocurre cada día, y eso es lo que ocurre. Clic abre el proyecto y su actividad",
+      "AGENDA sin repeticiones: cuando todo lo del día es del mismo proyecto (un retiro, un festival), el nombre y la salud van una vez en el encabezado del día. Antes 'Atorado' se repetía en las doce actividades del retiro. Las filas bajan de 70 a 42 px y el ancho se acota para que el semáforo no quede a media pantalla del nombre",
+      "Un solo indicador de tareas por fila en Agenda — antes se decía dos veces, como chip y como contador",
+      "Timeline con filas más densas: 58 a 48 px, y la columna de nombre más angosta",
+    ]
+  },
   {
     version: "2.107.3",
     date: "2026-09-03",
