@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.107.2"
+export const APP_VERSION = "2.107.3"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.107.3",
+    date: "2026-09-03",
+    type: "PATCH",
+    changes: [
+      "Ventana del proyecto más compacta. Tareas por actividad solo despliega las actividades que tienen tareas; las demás van en una fila de chips (clic abre su captura). Con 12 actividades eran doce bloques vacíos",
+      "Programa: filas más densas, horario en una línea, 'Planeada' tenue para que solo resalte lo que cambió, y sin botón de tarea duplicado (la tarea se agrega en Tareas o dentro de la actividad)",
+      "Tipo de proyecto y cliente: pastillas solo al crear; ya guardado, dos selects en una fila",
+      "Vincular tarea existente y pegar lista quedan detrás de un enlace: con alta inline por grupo son la excepción",
+      "El brief crece con el texto en vez de scrollear a media frase",
+    ]
+  },
   {
     version: "2.107.2",
     date: "2026-09-03",
