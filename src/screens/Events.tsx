@@ -452,7 +452,8 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
           </div>
         ) : view === 'calendar' ? (
           <div style={{ padding: isMobile ? 0 : 16 }}>
-            <CalendarView rows={filteredBase} month={calMonth} onMonth={setCalMonth} onOpen={ev => setEditing(ev)} isMobile={isMobile} buMap={buMap} />
+            <CalendarView rows={filteredBase} acts={acts} month={calMonth} onMonth={setCalMonth} isMobile={isMobile} buMap={buMap}
+              onOpen={(ev, actId) => { setEditing(ev); if (actId) setTimeout(() => window.dispatchEvent(new CustomEvent('hog:open-activity', { detail: actId })), 150) }} />
           </div>
         ) : view === 'agenda' ? (
           <div style={{ padding: isMobile ? 0 : 16 }}>
@@ -573,7 +574,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
               <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', margin: '0 0 8px' }}>
                 {g.label} <span style={{ fontWeight: 400 }}>· {g.items.length}</span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {g.items.map(ev => {
                   const d = ev.date ? new Date(ev.date + 'T00:00:00') : null
                   const respName = nameOf(ev.responsible)
@@ -836,11 +837,12 @@ function utilidadDe(ev: { actual_revenue?: number | null; actual_cost?: number |
 }
 
 // ── Calendario mensual: los planes del mes en cuadrícula ─────────────────────
-function CalendarView({ rows, month, onMonth, onOpen, isMobile, buMap }: {
+function CalendarView({ rows, acts, month, onMonth, onOpen, isMobile, buMap }: {
   rows: EventPlan[]
+  acts: Record<string, ActLite[]>
   month: string
   onMonth: (m: string) => void
-  onOpen: (ev: EventPlan) => void
+  onOpen: (ev: EventPlan, activityId?: string) => void
   isMobile: boolean
   buMap: Record<string, string>
 }) {
@@ -849,16 +851,43 @@ function CalendarView({ rows, month, onMonth, onOpen, isMobile, buMap }: {
   const daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate()
   const startDow = first.getDay()
   const isoOf = (day: number) => `${month}-${String(day).padStart(2, '0')}`
-  const now = new Date()
-  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  // Los proyectos multi-día aparecen en cada día de su rango
-  const eventsOn = (d: string) => rows.filter(r => r.date && (r.end_date ? r.date <= d && d <= r.end_date : r.date === d))
+  const todayISO = hoyISO()
   const shift = (n: number) => {
     const d = new Date(first); d.setMonth(d.getMonth() + n)
     onMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
+
+  // Semanas completas (con huecos al inicio y al final del mes)
+  const celdas: (number | null)[] = [...Array(startDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+  while (celdas.length % 7 !== 0) celdas.push(null)
+  const semanas: (number | null)[][] = []
+  for (let i = 0; i < celdas.length; i += 7) semanas.push(celdas.slice(i, i + 7))
+
+  // Un proyecto de varios días es una BANDA que CRUZA los días que ocupa, con
+  // su nombre una vez por semana. Antes se pintaba una barra anónima en cada
+  // celda: con tres proyectos de mes completo, el calendario quedaba tapado de
+  // barras que no decían nada.
+  const vivos = rows.filter(r => r.status !== 'cancelled' && r.date)
+  const esBanda = (r: EventPlan) => !!r.end_date && r.end_date > r.date!
+  const bandas = vivos.filter(esBanda)
+  // Lo PUNTUAL de cada día: eventos de un día y las actividades del programa —
+  // lo que de verdad ocurre, que es lo que se busca en un calendario mensual.
+  type Punto = { key: string; label: string; color: string; ev: EventPlan; actId?: string; time: string | null }
+  const puntosDe = (d: string): Punto[] => {
+    const out: Punto[] = []
+    for (const r of vivos) if (!esBanda(r) && r.date === d) out.push({ key: r.id, label: r.name, color: planColor(r), ev: r, time: r.start_time?.slice(0, 5) ?? null })
+    for (const r of vivos) for (const a of acts[r.id] ?? []) {
+      if (a.date === d && a.status !== 'cancelada') out.push({ key: a.id, label: a.title, color: a.status === 'hecha' ? 'var(--status-healthy)' : ACTIVITY_COLOR, ev: r, actId: a.id, time: a.start_time?.slice(0, 5) ?? null })
+    }
+    return out.sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99'))
+  }
+
   const maxChips = isMobile ? 2 : 3
-  const cells: (number | null)[] = [...Array(startDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+  const GAP = 3, BANDA_H = isMobile ? 15 : 17, TOP = isMobile ? 17 : 19
+  // Ancho exacto de k columnas en una rejilla de 7 con separación GAP
+  const anchoDe = (k: number) => `calc((100% - ${6 * GAP}px) * ${k} / 7 + ${(k - 1) * GAP}px)`
+  const izqDe = (i: number) => i === 0 ? '0px' : `calc((100% - ${6 * GAP}px) * ${i} / 7 + ${i * GAP}px)`
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -866,40 +895,65 @@ function CalendarView({ rows, month, onMonth, onOpen, isMobile, buMap }: {
         <span style={{ flex: 1, textAlign: 'center', fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{label}</span>
         <button onClick={() => shift(1)} aria-label="Mes siguiente" style={{ width: 40, height: 40, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={15} /></button>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: GAP, marginBottom: 4 }}>
         {DAYS_ES.map(d => (
-          <div key={d} style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', textAlign: 'center', padding: '4px 0' }}>{d}</div>
+          <div key={d} style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>{d}</div>
         ))}
-        {cells.map((day, i) => {
-          if (day === null) return <div key={`e${i}`} />
-          const dISO = isoOf(day)
-          const evs = eventsOn(dISO)
-          const isToday = dISO === todayISO
-          // Multi-día estilo Google Calendar: el nombre solo el PRIMER día del
-          // rango (o al arrancar la semana); los demás días, banda de color
-          const dow = new Date(dISO + 'T00:00:00').getDay()
-          const starts = evs.filter(ev => ev.date === dISO || dow === 0)
-          const conts = evs.filter(ev => !(ev.date === dISO || dow === 0))
-          return (
-            <div key={dISO} style={{ minHeight: isMobile ? 62 : 88, background: 'var(--bg-surface)', border: `1px solid ${isToday ? 'var(--accent)' : 'var(--border-subtle)'}`, borderRadius: 6, padding: 3, overflow: 'hidden' }}>
-              <div className="num" style={{ fontSize: 10, fontWeight: isToday ? 800 : 400, color: isToday ? 'var(--accent)' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', padding: '0 2px' }}>{day}</div>
-              {conts.map(ev => (
-                <button key={`c${ev.id}`} onClick={() => onOpen(ev)} title={`${ev.name} · ${buMap[ev.bu_id] ?? ''} (continúa)`} aria-label={ev.name}
-                  style={{ display: 'block', width: '100%', height: 7, marginTop: 3, borderRadius: 3, border: 'none', cursor: 'pointer', background: `color-mix(in srgb, ${planColor(ev)} 45%, transparent)`, padding: 0 }} />
-              ))}
-              {starts.slice(0, maxChips).map(ev => (
-                <button key={ev.id} onClick={() => onOpen(ev)} title={`${ev.name} · ${buMap[ev.bu_id] ?? ''}`}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 2, padding: '2px 4px', borderRadius: 4, border: 'none', cursor: 'pointer', background: `color-mix(in srgb, ${planColor(ev)} 18%, transparent)`, borderLeft: `2px solid ${planColor(ev)}`, color: 'var(--text-primary)', fontSize: isMobile ? 8.5 : 10, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {ev.name}
-                </button>
-              ))}
-              {starts.length > maxChips && (
-                <div style={{ fontSize: 8.5, color: 'var(--text-tertiary)', padding: '1px 4px' }}>+{starts.length - maxChips} más</div>
-              )}
-            </div>
-          )
-        })}
       </div>
+
+      {semanas.map((semana, w) => {
+        // Tramo de cada banda dentro de ESTA semana
+        const segs = bandas.map(b => {
+          let ini = -1, fin = -1
+          for (let c = 0; c < 7; c++) {
+            const day = semana[c]
+            if (day === null) continue
+            const d = isoOf(day)
+            if (b.date! <= d && d <= b.end_date!) { if (ini === -1) ini = c; fin = c }
+          }
+          return ini === -1 ? null : { b, ini, fin, abre: isoOf(semana[ini]!) === b.date }
+        }).filter(Boolean) as { b: EventPlan; ini: number; fin: number; abre: boolean }[]
+        segs.sort((x, y) => x.ini - y.ini || (y.fin - y.ini) - (x.fin - x.ini))
+        const altoBandas = segs.length * BANDA_H
+
+        return (
+          <div key={w} style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: GAP, marginBottom: GAP }}>
+            {semana.map((day, c) => {
+              if (day === null) return <div key={`e${c}`} />
+              const dISO = isoOf(day)
+              const puntos = puntosDe(dISO)
+              const isToday = dISO === todayISO
+              return (
+                <div key={dISO} style={{ minHeight: (isMobile ? 54 : 74) + altoBandas, background: 'var(--bg-surface)', border: `1px solid ${isToday ? 'var(--accent)' : 'var(--border-subtle)'}`, borderRadius: 6, padding: 3, overflow: 'hidden' }}>
+                  <div className="num" style={{ fontSize: 10, fontWeight: isToday ? 800 : 400, color: isToday ? 'var(--accent)' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', padding: '0 2px', lineHeight: '14px' }}>{day}</div>
+                  <div style={{ height: altoBandas }} />
+                  {puntos.slice(0, maxChips).map(p => (
+                    <button key={p.key} onClick={() => onOpen(p.ev, p.actId)} title={`${p.time ? p.time + ' · ' : ''}${p.label}${p.actId ? ` · ${p.ev.name}` : ''} · ${buMap[p.ev.bu_id] ?? ''}`}
+                      style={{ display: 'flex', alignItems: 'center', gap: 3, width: '100%', textAlign: 'left', marginTop: 2, padding: '2px 4px', borderRadius: 4, border: 'none', cursor: 'pointer', background: `color-mix(in srgb, ${p.color} 16%, transparent)`, borderLeft: `2px solid ${p.color}`, color: 'var(--text-primary)', fontSize: isMobile ? 8.5 : 10, fontWeight: 600, overflow: 'hidden' }}>
+                      {p.time && <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: isMobile ? 7.5 : 8.5, color: 'var(--text-tertiary)', flexShrink: 0 }}>{p.time}</span>}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label}</span>
+                    </button>
+                  ))}
+                  {puntos.length > maxChips && (
+                    <div style={{ fontSize: 8.5, color: 'var(--text-tertiary)', padding: '1px 4px' }}>+{puntos.length - maxChips} más</div>
+                  )}
+                </div>
+              )
+            })}
+            {/* Bandas de los proyectos en curso, encima de la semana */}
+            {segs.map((sg, r) => (
+              <button key={sg.b.id} onClick={() => onOpen(sg.b)} title={`${sg.b.name} · ${buMap[sg.b.bu_id] ?? ''} · ${fechaLabel(sg.b)}`}
+                style={{ position: 'absolute', top: TOP + r * BANDA_H, left: izqDe(sg.ini), width: anchoDe(sg.fin - sg.ini + 1), height: BANDA_H - 3, display: 'flex', alignItems: 'center', gap: 4, padding: '0 5px', borderRadius: sg.abre ? '4px 3px 3px 4px' : 3, border: 'none', borderLeft: sg.abre ? `2px solid ${planColor(sg.b)}` : 'none', background: `color-mix(in srgb, ${planColor(sg.b)} 22%, transparent)`, color: 'var(--text-primary)', fontSize: isMobile ? 8.5 : 9.5, fontWeight: 700, cursor: 'pointer', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', zIndex: 2 }}>
+                {!sg.abre && <span style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}>‹</span>}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{sg.b.name}</span>
+              </button>
+            ))}
+          </div>
+        )
+      })}
+      <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: '8px 0 0' }}>
+        Las <b>bandas</b> son proyectos en curso — cruzan los días que duran y el nombre se repite una vez por semana. Los <b>chips</b> del día son lo que ocurre: eventos de un día y <span style={{ color: ACTIVITY_COLOR, fontWeight: 700 }}>actividades</span> del programa.
+      </p>
     </div>
   )
 }
@@ -948,8 +1002,8 @@ function TimelineView({ rows, buMap, progress, planTasks, acts, salud, onOpen, o
     .sort((a, b) => a.date!.localeCompare(b.date!))
 
   const fmt = (dISO: string) => toD(dISO).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
-  const labelW = isMobile ? 118 : 220
-  const rowH = isMobile ? 56 : 58
+  const labelW = isMobile ? 112 : 190
+  const rowH = isMobile ? 48 : 48
   const activos = items.filter(r => r.date! <= todayISO && (r.end_date ?? r.date)! >= todayISO).length
 
   return (
@@ -1526,17 +1580,31 @@ function AgendaView({ rows, acts, planTasks, salud, buMap, showPast, isMobile, o
     </p>
   )
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    // Ancho acotado: a 1900px el semáforo quedaba a media pantalla del nombre
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 900 }}>
       {[...porDia.entries()].map(([dia, its]) => {
         const d = dias(dia)
         const dObj = new Date(dia + 'T00:00:00')
         const esHoy = d === 0
+        // Si TODO lo del día es del mismo proyecto (el caso normal de un retiro
+        // o un festival), el proyecto se nombra una vez en el encabezado
+        const ids = new Set(its.map(i => i.ev.id))
+        const unico = ids.size === 1 && its.every(i => i.act) ? its[0].ev : null
+        const saludUnica = unico ? salud[unico.id] : null
         return (
           <div key={dia}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
-              <span className="num" style={{ fontSize: 22, fontWeight: 800, fontFamily: 'var(--font-mono)', color: esHoy ? 'var(--status-risk)' : 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1 }}>{dObj.getDate()}</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, marginBottom: 4 }}>
+              <span className="num" style={{ fontSize: 19, fontWeight: 800, fontFamily: 'var(--font-mono)', color: esHoy ? 'var(--status-risk)' : 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1 }}>{dObj.getDate()}</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: esHoy ? 'var(--status-risk)' : 'var(--text-secondary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>{DAYS_ES[dObj.getDay()]} · {dObj.toLocaleDateString('es-MX', { month: 'short' })}</span>
               <span className="num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{esHoy ? 'HOY' : d > 0 ? `en ${d} d` : `hace ${-d} d`}</span>
+              {/* Día de un solo proyecto: su nombre y su salud van AQUÍ, una vez.
+                  Antes cada actividad repetía el chip y el "Atorado" del proyecto. */}
+              {unico && (
+                <>
+                  <ProjectChip name={unico.name} kind={unico.kind} size="sm" maxWidth={260} onClick={() => onOpen(unico)} />
+                  {saludUnica && <HealthBadge salud={saludUnica} mode="compact" />}
+                </>
+              )}
               <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
               <span className="num" style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{its.length}</span>
             </div>
@@ -1547,24 +1615,28 @@ function AgendaView({ rows, acts, planTasks, salud, buMap, showPast, isMobile, o
                 const col = i.act ? (caliente ? 'var(--status-risk)' : i.act.status === 'hecha' ? 'var(--status-healthy)' : ACTIVITY_COLOR) : planColor(i.ev)
                 return (
                   <button key={i.key} onClick={() => onOpen(i.ev, i.act?.id)}
-                    style={{ display: 'grid', gridTemplateColumns: isMobile ? '54px 1fr' : '64px 1fr auto', gap: 10, alignItems: 'center', width: '100%', minHeight: 52, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${col}`, borderRadius: 'var(--radius-md)', padding: '8px 12px', cursor: 'pointer', textAlign: 'left' }}>
-                    <span className="num" style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: i.time ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{i.time ?? 'sin hora'}</span>
-                    <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                        {i.act ? <CalendarDays size={12} style={{ color: col, flexShrink: 0 }} /> : null}
-                        <span style={{ textDecoration: i.act?.status === 'hecha' ? 'line-through' : 'none', opacity: i.act?.status === 'hecha' ? 0.7 : 1 }}>{i.title}</span>
-                        {i.act?.status === 'confirmada' && <span className="num" style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>confirmada</span>}
-                        {caliente && <span className="num" style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--status-risk)', background: 'color-mix(in srgb, var(--status-risk) 14%, transparent)', padding: '1px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)' }}>{i.abiertas} {i.abiertas === 1 ? 'tarea abierta' : 'tareas abiertas'}</span>}
+                    style={{ display: 'grid', gridTemplateColumns: isMobile ? '46px 1fr' : '52px 1fr auto', gap: 9, alignItems: 'center', width: '100%', minHeight: 42, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${col}`, borderRadius: 'var(--radius-sm)', padding: '5px 10px', cursor: 'pointer', textAlign: 'left' }}>
+                    <span className="num" style={{ fontSize: 11.5, fontWeight: 700, fontFamily: 'var(--font-mono)', color: i.time ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{i.time ?? '—'}</span>
+                    <span style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        {i.act ? <CalendarDays size={11} style={{ color: col, flexShrink: 0 }} /> : null}
+                        <span style={{ textDecoration: i.act?.status === 'hecha' ? 'line-through' : 'none', opacity: i.act?.status === 'hecha' ? 0.7 : 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.title}</span>
                       </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <BUChip code={buMap[i.ev.bu_id] ?? '?'} size="sm" />
-                        {i.act && <ProjectChip name={i.ev.name} kind={i.ev.kind} size="sm" maxWidth={220} />}
-                        {!i.act && planPill(i.ev)}
-                        {i.total > 0 && <span className="num" style={{ fontSize: 9.5, color: i.abiertas ? 'var(--text-tertiary)' : 'var(--status-healthy)', fontFamily: 'var(--font-mono)' }}>{i.total - i.abiertas}/{i.total} tareas</span>}
-                        {i.act?.status === 'hecha' && <span className="num" style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--status-healthy)', fontFamily: 'var(--font-mono)' }}>hecha</span>}
-                      </span>
+                      {!unico && <BUChip code={buMap[i.ev.bu_id] ?? '?'} size="sm" />}
+                      {i.act && !unico && <ProjectChip name={i.ev.name} kind={i.ev.kind} size="sm" maxWidth={190} />}
+                      {!i.act && planPill(i.ev)}
+                      {/* Un solo indicador de tareas: rojo si la actividad está
+                          en zona caliente. Antes se repetía como chip y como contador. */}
+                      {i.total > 0 && (
+                        <span className="num" title={caliente ? `${i.abiertas} abiertas y faltan pocos días` : undefined}
+                          style={{ fontSize: 9.5, fontWeight: caliente ? 800 : 500, color: caliente ? 'var(--status-risk)' : i.abiertas ? 'var(--text-tertiary)' : 'var(--status-healthy)', fontFamily: 'var(--font-mono)' }}>
+                          {i.total - i.abiertas}/{i.total} tareas
+                        </span>
+                      )}
+                      {i.act?.status === 'confirmada' && <span className="num" style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>confirmada</span>}
+                      {i.act?.status === 'hecha' && <span className="num" style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--status-healthy)', fontFamily: 'var(--font-mono)' }}>hecha</span>}
                     </span>
-                    {!isMobile && sal && <HealthBadge salud={sal} mode="compact" />}
+                    {!isMobile && sal && !unico && <HealthBadge salud={sal} mode="compact" />}
                   </button>
                 )
               })}
