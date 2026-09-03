@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.106.0"
+export const APP_VERSION = "2.107.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,20 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.107.0",
+    date: "2026-09-03",
+    type: "MINOR",
+    changes: [
+      "PROJECT MANAGER, VENTANA MODULAR — el tipo de proyecto (evento, campaña, remodelación, adecuación, apertura, mantenimiento, interno, proyecto) define qué secciones vienen abiertas; la barra 'Secciones' agrega o quita el resto. Una sección con datos no se puede esconder. Cada sección se pliega con su resumen a la vista",
+      "Campos por tipo sin abrir columnas: canales, objetivo, KPI y piezas en una campaña; cliente, contacto, precio de venta y condiciones si es cliente externo (con margen calculado contra el presupuesto); área solicitante y qué resuelve si es interno",
+      "SUBVENTANA DE ACTIVIDAD — clic en una actividad (en Programa o en Tareas por actividad) abre su ventana apilada: detalle editable, tareas de preparación con alta inline, gastos ligados y adjuntos. Las tareas se abren encima, tercera capa",
+      "Gastos ligados: cada partida del presupuesto puede colgar de una actividad o de una tarea ('ligar a…'); la actividad muestra cuánto cuesta y la partida muestra para qué es",
+      "Documentos del proyecto y de la actividad: planos, renders, contratos, fotos — arrastrar o elegir, o pegar un link de Drive/Figma/Canva. Se archivan, no se borran",
+      "AGENDA — vista nueva en Project Manager: todas las actividades de todos los proyectos por día, con hora, venue, proyecto, tareas abiertas y salud. Un evento de un día sin programa aparece él mismo. Clic abre el proyecto y su actividad",
+      "Requiere project_manager_v2.sql (modules, extra, ligas de gasto, project_files). Sin él la app sigue funcionando: guarda lo que puede y avisa qué falta",
+    ]
+  },
   {
     version: "2.106.0",
     date: "2026-09-03",

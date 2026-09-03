@@ -24,3 +24,16 @@ export const kindLabel = (k: string | null | undefined) => KIND_META[(k as PlanK
 // Es distinto al de cualquier tipo de proyecto a propósito: en el timeline y
 // en la lista de tareas, azul = actividad, y nunca se confunde con el proyecto.
 export const ACTIVITY_COLOR = '#5E9FB8'
+
+// Tipo de gasto de una partida del presupuesto — permite leer el presupuesto
+// por naturaleza (cuánto es gente, cuánto es mobiliario), no como lista plana.
+export const CATEGORIAS: { id: string; label: string; color: string }[] = [
+  { id: 'personal',   label: 'Personal',    color: '#A855F7' },
+  { id: 'mobiliario', label: 'Mobiliario',  color: '#E8A33D' },
+  { id: 'materiales', label: 'Materiales',  color: '#06B6D4' },
+  { id: 'equipo',     label: 'Equipo',      color: '#3B82F6' },
+  { id: 'servicios',  label: 'Servicios',   color: '#5FBF7A' },
+  { id: 'marketing',  label: 'Marketing',   color: '#EC4899' },
+  { id: 'operacion',  label: 'Operación',   color: '#F97316' },
+  { id: 'otro',       label: 'Otro',        color: '#8A8A8A' },
+]
