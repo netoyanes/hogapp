@@ -389,7 +389,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
       {/* Header */}
       <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <h1 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 800, margin: 0, flex: isMobile ? '1 0 100%' : undefined }}>Proyectos</h1>
+          <h1 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 800, margin: 0, flex: isMobile ? '1 0 100%' : undefined }}>Project Manager</h1>
           <div style={{ display: 'flex', gap: 2, background: 'var(--bg-elevated)', borderRadius: 999, padding: 2 }}>
             {([['all', 'Todos'], ['eventos', 'Eventos'], ['proyectos', 'Proyectos']] as const).map(([id, label]) => (
               <button key={id} onClick={() => setKindFilter(id)}
@@ -1770,7 +1770,7 @@ export function ApprovalSection({ event, buCode, canWrite, canApprove, userId, p
         type: 'approval_requested', entity_id: event.id,
       })))
       const f = fin ?? { gastos: 0, patroc: 0, neto: 0 }
-      const msg = `🧮 *Aprobación pendiente* — ${event.name} (${buCode})\nGastos ${mxn(f.gastos)} · Patrocinios ${mxn(f.patroc)} · *Neto ${mxn(f.neto)}* · ${nPartidas} partidas\n👉 HOG APP → Proyectos`
+      const msg = `🧮 *Aprobación pendiente* — ${event.name} (${buCode})\nGastos ${mxn(f.gastos)} · Patrocinios ${mxn(f.patroc)} · *Neto ${mxn(f.neto)}* · ${nPartidas} partidas\n👉 HOG APP → Project Manager`
       ;[...ids].forEach(uid => notifyUserDM(uid, msg))
     }
     logActivity('event_updated', 'event', event.id, { name: event.name, via: 'enviado_a_aprobacion', neto: fin?.neto })
@@ -2251,7 +2251,7 @@ function BudgetSection({ event, buCode, canWrite, userId, people, showCorte = fa
     const { data: deal, error } = await supabase.from('crm_deals').insert({
       title, deal_type: 'EVENT', stage: 'LEAD', probability: 50, value: item.amount || null,
       event_date: event.date, close_date: event.date, bu_id: event.bu_id,
-      description: `Patrocinio del plan "${event.name}" (${buCode}) — creado desde Proyectos`,
+      description: `Patrocinio del plan "${event.name}" (${buCode}) — creado desde Project Manager`,
       created_by: userId ?? null,
     }).select('id').single()
     if (error || !deal) { showToast(`No se pudo crear el deal: ${error?.message}`, 'error'); return }
