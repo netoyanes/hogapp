@@ -462,7 +462,8 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
           </div>
         ) : view === 'timeline' ? (
           <div style={{ padding: isMobile ? '0' : 16 }}>
-            <TimelineView rows={filteredBase} buMap={buMap} progress={progress} planTasks={planTasks} acts={acts} salud={salud} onOpen={ev => setEditing(ev)} onOpenTask={onOpenTask} isMobile={isMobile} />
+            <TimelineView rows={filteredBase} buMap={buMap} progress={progress} planTasks={planTasks} acts={acts} salud={salud} onOpenTask={onOpenTask} isMobile={isMobile}
+              onOpen={(ev, actId) => { setEditing(ev); if (actId) setTimeout(() => window.dispatchEvent(new CustomEvent('hog:open-activity', { detail: actId })), 150) }} />
           </div>
         ) : view === 'board' ? (
           <div style={{ padding: isMobile ? 0 : 16 }}>
@@ -968,7 +969,7 @@ function TimelineView({ rows, buMap, progress, planTasks, acts, salud, onOpen, o
   planTasks: Record<string, PlanTask[]>
   acts: Record<string, ActLite[]>
   salud: Record<string, Salud>
-  onOpen: (ev: EventPlan) => void
+  onOpen: (ev: EventPlan, activityId?: string) => void
   onOpenTask?: (id: string) => void
   isMobile: boolean
 }) {
@@ -1079,6 +1080,14 @@ function TimelineView({ rows, buMap, progress, planTasks, acts, salud, onOpen, o
               }
               const tareas = planTasks[ev.id] ?? []
               const actividades = acts[ev.id] ?? []
+              // Actividades agrupadas por día, para marcarlas BAJO la barra del
+              // proyecto: se ve dónde cae cada una sin tener que desplegar.
+              const actsByDate = new Map<string, ActLite[]>()
+              for (const a of actividades) {
+                if (a.status === 'cancelada' || a.date < start || a.date > endISO) continue
+                const arr = actsByDate.get(a.date) ?? []
+                arr.push(a); actsByDate.set(a.date, arr)
+              }
               const isOpen = expanded.has(ev.id)
               const sal = salud[ev.id]
               return (
@@ -1100,6 +1109,12 @@ function TimelineView({ rows, buMap, progress, planTasks, acts, salud, onOpen, o
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }} title={sal?.causas.map(c => c.texto).join('\n')}>
                         <BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" />
                         <span className="num" style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{durDays} d · {resta}</span>
+                        {actividades.length > 0 && (
+                          <span className="num" title={`${actividades.length} actividades en el programa`}
+                            style={{ fontSize: 9, fontWeight: 700, color: ACTIVITY_COLOR, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                            {actividades.length} act
+                          </span>
+                        )}
                       </div>
                     </button>
                   </div>
@@ -1132,6 +1147,26 @@ function TimelineView({ rows, buMap, progress, planTasks, acts, salud, onOpen, o
                         </span>
                       )
                     })}
+                    {/* ACTIVIDADES bajo la barra: una marca azul por día. Es lo
+                        que OCURRE durante el proyecto — distinto del rombo de
+                        tarea, que es trabajo con fecha límite. */}
+                    {[...actsByDate.entries()].map(([d2, as]) => {
+                      const abiertas = as.reduce((n, a) => n + tareas.filter(t => t.activity_id === a.id && t.status !== 'APPROVED').length, 0)
+                      const dd = Math.round((toD(d2).getTime() - toD(todayISO).getTime()) / DAY)
+                      const caliente = abiertas > 0 && dd >= 0 && dd <= UMBRALES.zonaCaliente
+                      const todasHechas = as.every(a => a.status === 'hecha')
+                      const col = caliente ? 'var(--status-risk)' : todasHechas ? 'var(--status-healthy)' : ACTIVITY_COLOR
+                      return (
+                        <button key={`a${d2}`} onClick={() => onOpen(ev, as.length === 1 ? as[0].id : undefined)}
+                          title={`${d2.slice(5)} · ${as.map(a => `${a.start_time ? a.start_time.slice(0, 5) + ' ' : ''}${a.title}`).join(' · ')}${caliente ? ` · ${abiertas} tareas abiertas` : ''}`}
+                          style={{ position: 'absolute', left: `calc(${pctOf(d2, true)}% - 2.5px)`, top: `calc(50% + ${isMobile ? 10 : 12}px)`, width: 5, height: 10, borderRadius: 2, border: 'none', padding: 0, background: col, cursor: 'pointer', zIndex: 2, boxShadow: '0 0 0 1.5px var(--bg-surface)' }}>
+                          {/* El contador va al LADO, no abajo: debajo se salía de la fila */}
+                          {as.length > 1 && (
+                            <span className="num" style={{ position: 'absolute', top: -1, left: 7, fontSize: 8, fontWeight: 800, color: col, fontFamily: 'var(--font-mono)', lineHeight: '10px' }}>{as.length}</span>
+                          )}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -1145,7 +1180,7 @@ function TimelineView({ rows, buMap, progress, planTasks, acts, salud, onOpen, o
                   const col = caliente ? 'var(--status-risk)' : a.status === 'hecha' ? 'var(--status-healthy)' : ACTIVITY_COLOR
                   return (
                     <div key={a.id} style={{ display: 'flex', minHeight: 32, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-base)', alignItems: 'stretch' }}>
-                      <button onClick={() => onOpen(ev)} title={`Actividad · ${a.title} · ${a.date.slice(5)}${a.start_time ? ` ${a.start_time.slice(0, 5)}` : ''}${abiertas ? ` · ${abiertas} tareas abiertas` : ''}`}
+                      <button onClick={() => onOpen(ev, a.id)} title={`Actividad · ${a.title} · ${a.date.slice(5)}${a.start_time ? ` ${a.start_time.slice(0, 5)}` : ''}${abiertas ? ` · ${abiertas} tareas abiertas` : ''}`}
                         style={{ width: labelW, flexShrink: 0, padding: '4px 8px 4px 22px', background: 'none', border: 'none', textAlign: 'left', overflow: 'hidden', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                         <CalendarDays size={11} style={{ color: col, flexShrink: 0 }} />
                         <span style={{ fontSize: isMobile ? 10 : 11, fontWeight: 600, color: caliente ? 'var(--status-risk)' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: a.status === 'cancelada' ? 'line-through' : 'none' }}>{a.title}</span>
@@ -1206,7 +1241,7 @@ function TimelineView({ rows, buMap, progress, planTasks, acts, salud, onOpen, o
       <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
         <PhaseLegend />
         <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: 0 }}>
-          ◆ hitos sobre la barra del proyecto · la línea roja es hoy · abre ▸ para ver el detalle: <span style={{ color: ACTIVITY_COLOR, fontWeight: 700 }}>▬ actividad</span> (barra azul en su día, roja si está a menos de {UMBRALES.zonaCaliente} d con tareas abiertas) y <span style={{ fontWeight: 700 }}>◆ tarea</span> (rombo en su fecha límite: verde hecha, rojo vencida o bloqueada).
+<span style={{ fontWeight: 700 }}>◆ tareas</span> encima de la barra (fecha límite) · <span style={{ color: ACTIVITY_COLOR, fontWeight: 700 }}>▮ actividades</span> debajo (el día que ocurren, rojas a menos de {UMBRALES.zonaCaliente} d con tareas abiertas, verdes si ya se hicieron) · la línea roja es hoy · abre ▸ para ver cada una en su propia fila.
         </p>
       </div>
     </div>
