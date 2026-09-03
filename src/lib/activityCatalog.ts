@@ -20,7 +20,7 @@ export type ModuleId =
 
 export const MODULES: Record<ModuleId, { label: string; color: string; icon: React.ElementType }> = {
   tareas:    { label: 'Tareas',     color: '#7FA3C2', icon: CheckSquare },
-  proyectos: { label: 'Proyectos',  color: '#E8A33D', icon: FolderKanban },
+  proyectos: { label: 'Project Manager', color: '#E8A33D', icon: FolderKanban },
   concierge: { label: 'Concierge',  color: '#5FBF7A', icon: Shell },
   comercial: { label: 'Comercial',  color: '#8FBF9F', icon: Handshake },
   clientes:  { label: 'Clientes',   color: '#06B6D4', icon: Users },

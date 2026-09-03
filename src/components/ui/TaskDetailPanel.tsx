@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check, Link2, Plus, Trash2, ExternalLink, Copy, FolderKanban, MessageCircle } from 'lucide-react'
+import { X, Calendar, Clock, User, Building2, CheckCircle2, Paperclip, Upload, Archive, ArchiveRestore, Lock, Globe, Share2, Check, Link2, Plus, Trash2, ExternalLink, Copy, FolderKanban, MessageCircle, Ban } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifySlack, proofUploadedMessage, taskAssignedMessage, notifyUserDM, taskLink } from '../../hooks/useSlack'
 import { changeTaskStatus } from '../../lib/taskActions'
@@ -13,6 +13,8 @@ import { HtmlFrame } from './HtmlFrame'
 import { Avatar } from './Avatar'
 import { EntityChat } from './EntityChat'
 import { FeedbackButton } from './FeedbackButton'
+import { ProjectChip, BlockedChip } from './ProjectChip'
+import { abrirProyecto } from '../../lib/projectLabels'
 import type { Task, TaskStatus, TaskPriority, TaskArea, ClientImpact, DeadlineType } from '../../types'
 import { TASK_AREA_LABELS, TASK_AREA_GROUPS, CLIENT_IMPACT_LABELS } from '../../lib/taskAreas'
 
@@ -239,7 +241,14 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
   const [addingLink, setAddingLink] = useState(false)
 
   const [followers, setFollowers] = useState<{ userId: string; name: string }[]>([])
-  const [, setCurrentUserId] = useState<string | undefined>(undefined)
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined)
+  // Proyecto › actividad a la que pertenece: se pinta bajo el título. Antes la
+  // tarea no decía en ningún lado que era parte de un proyecto.
+  const [projectInfo, setProjectInfo] = useState<{ id: string; name: string; kind: string | null; activity: string | null } | null>(null)
+  // Andon: "Estoy atorado" pide una línea de causa
+  const [blockOpen, setBlockOpen] = useState(false)
+  const [blockReason, setBlockReason] = useState('')
+  const [blockSaving, setBlockSaving] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [previewProof, setPreviewProof] = useState<{ url: string; type: string } | null>(null)
   const [copied, setCopied] = useState(false)
@@ -289,6 +298,13 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
       const { data: t } = await supabase.from('tasks').select('*').eq('id', taskId).single()
       if (!t) return
       setTask(t)
+      if (t.event_id) {
+        const [{ data: p }, { data: a }] = await Promise.all([
+          supabase.from('event_plans').select('id, name, kind').eq('id', t.event_id).maybeSingle(),
+          t.activity_id ? supabase.from('project_activities').select('title').eq('id', t.activity_id).maybeSingle() : Promise.resolve({ data: null as { title: string } | null }),
+        ])
+        setProjectInfo(p ? { id: p.id, name: p.name, kind: p.kind ?? null, activity: a?.title ?? null } : null)
+      } else setProjectInfo(null)
       setTitle(t.title)
       setDescription(t.description ?? '')
       setDueDate(t.due_date ?? '')
@@ -364,8 +380,39 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
     if (!task) return
     // Shared action = DB update + Slack/DM/log/notifications (same as board swipe)
     await changeTaskStatus(task, status, buName)
-    setTask((t) => t ? { ...t, status, ...(status === 'APPROVED' ? { priority: 'LOW' } : {}) } : t)
+    setTask((t) => t ? { ...t, status, ...(status === 'APPROVED' ? { priority: 'LOW', blocked_reason: null, blocked_at: null } : {}) } : t)
     setPriority(status === 'APPROVED' ? 'LOW' : priority)
+    notifyUpdated()
+  }
+
+  // ── Andon: bloquear con causa / liberar ──────────────────────────────────
+  // El proyecto entero se pone en rojo mientras haya una tarea bloqueada.
+  async function bloquear() {
+    if (!task || !blockReason.trim()) return
+    setBlockSaving(true)
+    const row = { blocked_reason: blockReason.trim(), blocked_at: new Date().toISOString(), blocked_by: currentUserId ?? null }
+    const { data, error } = await supabase.from('tasks').update(row).eq('id', taskId).select('id').maybeSingle()
+    setBlockSaving(false)
+    if (error || !data) {
+      showToast(error?.message?.includes('blocked_reason')
+        ? 'Falta correr project_manager_v1.sql en Supabase — sin eso el bloqueo no tiene dónde guardarse.'
+        : `No se pudo marcar: ${error?.message ?? 'sin permiso'}`, 'error')
+      return
+    }
+    setTask(t => t ? { ...t, ...row } : t)
+    setBlockOpen(false); setBlockReason('')
+    logActivity('task_blocked', 'task', taskId, { title: task.title, reason: row.blocked_reason })
+    showToast('Marcada como bloqueada — el proyecto lo verá en rojo hasta que la liberes.', 'success')
+    notifyUpdated()
+  }
+  async function liberar() {
+    if (!task) return
+    const row = { blocked_reason: null, blocked_at: null, blocked_by: null }
+    const { error } = await supabase.from('tasks').update(row).eq('id', taskId)
+    if (error) { showToast(`No se pudo liberar: ${error.message}`, 'error'); return }
+    setTask(t => t ? { ...t, ...row } : t)
+    logActivity('task_unblocked', 'task', taskId, { title: task.title })
+    showToast('Liberada.', 'success')
     notifyUpdated()
   }
 
@@ -665,6 +712,16 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
           </div>
 
           {/* Status row */}
+          {/* A qué proyecto pertenece — clic abre el proyecto */}
+          {projectInfo && (
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <ProjectChip name={projectInfo.name} kind={projectInfo.kind} activity={projectInfo.activity} onClick={() => abrirProyecto(projectInfo.id)} maxWidth={420} />
+              {task.blocked_reason && task.status !== 'APPROVED' && <BlockedChip reason={task.blocked_reason} />}
+            </div>
+          )}
+          {!projectInfo && task.blocked_reason && task.status !== 'APPROVED' && (
+            <div style={{ marginTop: 8 }}><BlockedChip reason={task.blocked_reason} /></div>
+          )}
           <div className="flex items-center gap-2 mt-3 flex-wrap">
             <StatusBadge status={task.status} />
             <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>{task.area ? TASK_AREA_LABELS[task.area] : '—'}</span>
@@ -716,6 +773,34 @@ export function TaskDetailPanel({ taskId, onClose, onUpdated, onOpenTask, userRo
               </button>
             ))}
           </div>
+          {/* Andon: quien se atora jala el cordón y dice por qué */}
+          {task.status !== 'APPROVED' && (
+            <div style={{ marginTop: 10 }}>
+              {task.blocked_reason ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 10px', borderRadius: 6, background: 'color-mix(in srgb, var(--status-risk) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--status-risk) 40%, transparent)' }}>
+                  <Ban size={13} style={{ color: 'var(--status-risk)', flexShrink: 0 }} />
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--text-primary)' }}>
+                    <b style={{ color: 'var(--status-risk)' }}>Bloqueada</b> · {task.blocked_reason}
+                    {task.blocked_at && <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 10, marginLeft: 6 }}>{new Date(task.blocked_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</span>}
+                  </span>
+                  <button onClick={liberar} style={{ minHeight: 30, padding: '0 10px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Liberar</button>
+                </div>
+              ) : blockOpen ? (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input autoFocus value={blockReason} onChange={e => setBlockReason(e.target.value)} placeholder="¿Qué te detiene? Ej. esperan cita, la dan hasta el 8"
+                    onKeyDown={e => { if (e.key === 'Enter') bloquear(); if (e.key === 'Escape') setBlockOpen(false) }}
+                    style={{ ...inputStyle, flex: 1 }} />
+                  <button onClick={bloquear} disabled={!blockReason.trim() || blockSaving} style={{ minHeight: 34, padding: '0 12px', borderRadius: 6, border: 'none', background: blockReason.trim() ? 'var(--status-risk)' : 'var(--bg-elevated)', color: blockReason.trim() ? '#fff' : 'var(--text-tertiary)', fontSize: 11, fontWeight: 700, cursor: blockReason.trim() ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>Marcar</button>
+                  <button onClick={() => setBlockOpen(false)} style={{ minHeight: 34, padding: '0 8px', borderRadius: 6, border: 'none', background: 'none', color: 'var(--text-tertiary)', fontSize: 11, cursor: 'pointer' }}>Cancelar</button>
+                </div>
+              ) : (
+                <button onClick={() => setBlockOpen(true)} title="Marca la tarea como bloqueada con su causa — el proyecto se pone en rojo hasta que se libere"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 30, padding: '0 10px', borderRadius: 6, border: '1px dashed color-mix(in srgb, var(--status-risk) 50%, transparent)', background: 'none', color: 'var(--status-risk)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                  <Ban size={12} /> Estoy atorado
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Meta info — collapsible so comments/evidence get the space */}

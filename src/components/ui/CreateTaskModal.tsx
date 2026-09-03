@@ -13,9 +13,12 @@ interface Props {
   onCreated: () => void
   defaultBuId?: string
   userRole?: string
+  // Abierto desde un proyecto: la tarea nace ligada (y a su actividad, si aplica)
+  defaultEventId?: string
+  defaultActivityId?: string
 }
 
-export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: Props) {
+export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole, defaultEventId, defaultActivityId }: Props) {
   // Cualquiera puede asignar tareas a cualquiera (decisión de producto).
   // Para roles no-directivos el campo arranca en "yo" como default cómodo.
   const defaultsToSelf = !(userRole === 'MASTER' || userRole === 'C_LEVEL')
@@ -39,6 +42,11 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
   const [error, setError] = useState<string | null>(null)
   const [teamMembers, setTeamMembers] = useState<{ id: string; full_name: string | null; email: string | null }[]>([])
   const [buList, setBuList] = useState<{ id: string; code: string; name: string }[]>([])
+  // Proyecto › actividad: la liga que hace que la tarea no parezca suelta
+  const [eventId, setEventId] = useState(defaultEventId ?? '')
+  const [activityId, setActivityId] = useState(defaultActivityId ?? '')
+  const [projects, setProjects] = useState<{ id: string; name: string; kind: string | null; bu_id: string; date: string | null }[]>([])
+  const [activities, setActivities] = useState<{ id: string; title: string; date: string }[]>([])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -54,6 +62,10 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
         supabase.auth.getUser(),
         supabase.from('task_templates').select('*').order('name'),
       ])
+      // Proyectos vivos (no archivados, no cerrados) para ligar la tarea
+      supabase.from('event_plans').select('id, name, kind, bu_id, date').eq('archived', false)
+        .not('status', 'in', '("done","cancelled")').order('date', { ascending: false, nullsFirst: false })
+        .then(({ data }) => setProjects((data ?? []) as typeof projects))
       setTeamMembers(profiles ?? [])
       setBuList(buses ?? [])
       setTemplates(tpls ?? [])
@@ -62,6 +74,16 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
     }
     load()
   }, [defaultBuId, defaultsToSelf])
+
+  // Actividades del proyecto elegido (si el programa existe en la base)
+  useEffect(() => {
+    if (!eventId) { setActivities([]); setActivityId(''); return }
+    supabase.from('project_activities').select('id, title, date').eq('event_id', eventId).order('date')
+      .then(({ data }) => setActivities((data ?? []) as typeof activities))
+    // Al cambiar de proyecto, la tarea hereda su venue si no se eligió otro
+    const p = projects.find(x => x.id === eventId)
+    if (p?.bu_id && !defaultBuId) setBuId(p.bu_id)
+  }, [eventId, projects, defaultBuId])
 
   function applyTemplate(templateId: string) {
     const t = templates.find(t => t.id === templateId)
@@ -98,6 +120,8 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
       proof_required: proofRequired,
       estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null,
       is_private: isPrivate,
+      event_id: eventId || null,
+      activity_id: activityId || null,
     }).select('id').single()
     setSaving(false)
     if (error) { setError(error.message); return }
@@ -218,6 +242,34 @@ export function CreateTaskModal({ onClose, onCreated, defaultBuId, userRole }: P
             <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>
               {isPrivate ? 'Solo asignado y seguidores la ven' : 'Visible para todo el equipo'}
             </span>
+          </div>
+
+          {/* Proyecto › actividad — la liga se elige aquí, no después */}
+          <div className="grid grid-cols-2 gap-3">
+            <div style={{ gridColumn: activities.length ? undefined : '1 / -1' }}>
+              {label('Proyecto')}
+              <select value={eventId} onChange={(e) => { setEventId(e.target.value); setActivityId('') }} style={selectStyle}
+                onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+              >
+                <option value="">— Tarea suelta —</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}{p.date ? ` · ${p.date.slice(5)}` : ''}</option>
+                ))}
+              </select>
+            </div>
+            {activities.length > 0 && (
+              <div>
+                {label('Actividad (opcional)')}
+                <select value={activityId} onChange={(e) => setActivityId(e.target.value)} style={selectStyle}
+                  onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                  onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+                >
+                  <option value="">— Del proyecto en general —</option>
+                  {activities.map(a => <option key={a.id} value={a.id}>{a.title} · {a.date.slice(5)}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* BU + Área + Impacto */}

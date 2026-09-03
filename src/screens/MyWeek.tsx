@@ -5,6 +5,8 @@ import { useIsMobile } from '../hooks/useIsMobile'
 import { BUChip, KPITile } from '../components/v2'
 import { Avatar } from '../components/ui/Avatar'
 import { TASK_PHASE as PHASE, phaseOf, FunnelBar, PhaseLegend } from '../components/ui/TaskPhase'
+import { loadProjectLabels, chipDe, abrirProyecto, type ProjectLabels } from '../lib/projectLabels'
+import { ProjectChip } from '../components/ui/ProjectChip'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MI RESUMEN — el dashboard personal orientado a PRODUCTIVIDAD.
@@ -19,6 +21,8 @@ interface MyTask {
   id: string; title: string; status: string; priority: string
   due_date: string | null; estimated_hours: number | null; bu_id: string | null
   assigned_to: string | null
+  event_id?: string | null
+  activity_id?: string | null
   mine?: boolean // asignada a mí (vs. solo relacionado/seguidor)
 }
 interface UnreadRow { scope: 'task' | 'event' | 'deal'; entity_id: string; title: string; unread: number; last_at: string }
@@ -171,6 +175,7 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
 }) {
   const isMobile = useIsMobile()
   const [tasks, setTasks] = useState<MyTask[]>([])
+  const [labels, setLabels] = useState<ProjectLabels>({ projects: {}, activities: {} })
   const [unread, setUnread] = useState<UnreadRow[]>([])
   const [plans, setPlans] = useState<MyPlan[]>([])
   const [buList, setBuList] = useState<{ id: string; code: string }[]>([])
@@ -206,7 +211,7 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
       : `assigned_to.eq.${userId}`
 
     const [{ data: tk }, { data: pl }, { data: bus }, rpc, { data: myActs }, { data: allDeals }, { data: doneTasks }, { data: reads }, { data: profs }] = await Promise.all([
-      supabase.from('tasks').select('id, title, status, priority, due_date, estimated_hours, bu_id, assigned_to')
+      supabase.from('tasks').select('id, title, status, priority, due_date, estimated_hours, bu_id, assigned_to, event_id, activity_id')
         .or(taskFilter).eq('archived', false).neq('status', 'APPROVED').order('due_date', { ascending: true, nullsFirst: false }),
       supabase.from('event_plans').select('id, name, date, end_date, bu_id, status')
         .or(`responsible.eq.${userId},created_by.eq.${userId}`)
@@ -226,6 +231,7 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
       supabase.from('profiles').select('id, full_name, email'),
     ])
     setTasks(((tk ?? []) as MyTask[]).map(t => ({ ...t, mine: t.assigned_to === userId })))
+    loadProjectLabels((tk ?? []) as MyTask[]).then(setLabels)
     const misPlanes = ((pl ?? []) as MyPlan[]).filter(p => p.date && (p.end_date ?? p.date)! >= todayISO).slice(0, 6)
     setPlans(misPlanes)
     setBuList(bus ?? [])
@@ -456,7 +462,10 @@ export function MyWeek({ userId, userName, onOpenTask, onNavigate }: {
                     <span className="num" style={{ fontSize: 10, fontWeight: overdue ? 800 : 600, fontFamily: 'var(--font-mono)', color: overdue ? 'var(--status-risk)' : 'var(--text-tertiary)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                       <CalendarDays size={10} /> {fmtDay(t.due_date!)}
                     </span>
-                    <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', fontWeight: t.mine ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: t.mine ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                      {(() => { const c = chipDe(t, labels); return c ? <ProjectChip name={c.name} kind={c.kind} activity={c.activity} size="sm" maxWidth={isMobile ? 160 : 260} onClick={() => abrirProyecto(c.id)} /> : null })()}
+                    </span>
                     {t.estimated_hours != null && !isMobile && (
                       <span className="num" style={{ fontSize: 10, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0 }}><Clock size={10} /> {t.estimated_hours}h</span>
                     )}

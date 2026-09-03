@@ -7,8 +7,11 @@ import { useIsMobile } from '../hooks/useIsMobile'
 import { EntityChat } from '../components/ui/EntityChat'
 import { FeedbackButton } from '../components/ui/FeedbackButton'
 import { useContextMenu, type CtxItem } from '../components/ui/ContextMenu'
-import { phaseOf, FunnelBar, PhaseLegend } from '../components/ui/TaskPhase'
+import { phaseOf, PhaseLegend } from '../components/ui/TaskPhase'
 import { BUChip, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../components/v2'
+import { KIND_META, ACTIVITY_COLOR, type PlanKind } from '../lib/projectKinds'
+import { calcularSalud, esBloqueada, edadEnEstado, hoyISO, UMBRALES, type Salud } from '../lib/projectHealth'
+import { HealthBadge, Semaforo, DCounter, StatusRing, AgingChip, BlockedChip, DeadlineChip, ActivityChip } from '../components/ui/ProjectChip'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EVENTOS — planeación de eventos multi-venue (estilo Asana):
@@ -21,7 +24,6 @@ import { BUChip, Sheet, StatusBadgeV2, showToast, type StatusTone } from '../com
 
 type EventStatus = 'idea' | 'planning' | 'review' | 'approved' | 'done' | 'cancelled'
 type EventType = 'musica' | 'arte' | 'performance' | 'workshop' | 'comunidad' | 'comercial' | 'deporte' | 'privado' | 'otro'
-type PlanKind = 'evento' | 'adecuacion' | 'remodelacion' | 'apertura' | 'mantenimiento' | 'otro'
 
 interface EventPlan {
   id: string
@@ -47,12 +49,19 @@ interface EventPlan {
   status: EventStatus
   requisition_task_id: string | null
   archived?: boolean | null
+  client_kind?: 'interno' | 'externo' | null
 }
+// La tarea tal como la necesitan la lista, el timeline y el motor de salud.
+// activity_id la cuelga de una actividad; blocked_reason es el andon.
 interface TaskLite {
   id: string; title: string; status: string
   assigned_to?: string | null; due_date?: string | null; estimated_hours?: number | null
+  activity_id?: string | null; deadline_type?: string | null
+  updated_at?: string | null; status_changed_at?: string | null; blocked_reason?: string | null
 }
-interface PlanTask { id: string; title: string; status: string; due_date: string | null; assigned_to?: string | null }
+type PlanTask = TaskLite & { due_date: string | null }
+// Actividad tal como la ven el timeline y la salud (el programa completo vive en ProgramSection)
+interface ActLite { id: string; event_id: string; title: string; date: string; start_time: string | null; status: string | null }
 interface BudgetItem {
   id: string; concept: string; amount: number; actual_amount: number | null
   is_income: boolean; deal_id: string | null
@@ -79,15 +88,6 @@ interface Template {
   task_bullets: string | null
 }
 
-// Disciplinas de proyecto (no-evento): adecuación, remodelación, apertura…
-const KIND_META: Record<PlanKind, { label: string; color: string }> = {
-  evento:        { label: 'Evento',        color: '#E8A33D' },
-  adecuacion:    { label: 'Adecuación',    color: '#7FA3C2' },
-  remodelacion:  { label: 'Remodelación',  color: '#D98C9F' },
-  apertura:      { label: 'Apertura',      color: '#5FBF7A' },
-  mantenimiento: { label: 'Mantenimiento', color: '#C9A76B' },
-  otro:          { label: 'Proyecto',      color: '#9C9488' },
-}
 
 const TYPE_META: Record<EventType, { label: string; color: string }> = {
   musica:      { label: 'Música',      color: '#D98C9F' },
@@ -197,15 +197,27 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
   const [progress, setProgress] = useState<Record<string, { done: number; total: number }>>({})
   // Tareas por plan (título + fecha límite) — hitos sobre la barra del Timeline
   const [planTasks, setPlanTasks] = useState<Record<string, PlanTask[]>>({})
+  const [acts, setActs] = useState<Record<string, ActLite[]>>({})
 
   const load = useCallback(async () => {
     const [{ data: ev }, { data: bus }, { data: ppl }, { data: tk }, { data: tpl }] = await Promise.all([
       supabase.from('event_plans').select('*').order('date', { ascending: true, nullsFirst: false }),
       supabase.from('business_units').select('id, code, name').order('name'),
       supabase.from('profiles').select('id, full_name').order('full_name'),
-      supabase.from('tasks').select('id, event_id, status, title, due_date, assigned_to').not('event_id', 'is', null).eq('archived', false),
+      // select('*'): la salud del proyecto necesita deadline_type, activity_id,
+      // updated_at y (si ya existen) blocked_reason / status_changed_at — pedir
+      // columnas por nombre truena cuando alguna todavía no se creó.
+      supabase.from('tasks').select('*').not('event_id', 'is', null).eq('archived', false),
       supabase.from('project_templates').select('*').order('name'),
     ])
+    // Actividades de todos los proyectos (timeline + zona caliente). Si el
+    // programa no existe en la base, simplemente no hay actividades.
+    supabase.from('project_activities').select('id, event_id, title, date, start_time, status').order('date').order('start_time', { nullsFirst: true })
+      .then(({ data }) => {
+        const m: Record<string, ActLite[]> = {}
+        for (const a of (data ?? []) as ActLite[]) (m[a.event_id] = m[a.event_id] ?? []).push(a)
+        setActs(m)
+      })
     setTemplates((tpl ?? []) as Template[])
     setRows((ev ?? []) as EventPlan[])
     setBuList(bus ?? [])
@@ -216,7 +228,7 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
       const p = (pm[t.event_id] = pm[t.event_id] ?? { done: 0, total: 0 })
       p.total++
       if (t.status === 'APPROVED') p.done++ // estado terminal real de tasks
-      ;(tm[t.event_id] = tm[t.event_id] ?? []).push({ id: t.id, title: t.title, status: t.status, due_date: t.due_date, assigned_to: t.assigned_to })
+      ;(tm[t.event_id] = tm[t.event_id] ?? []).push(t)
     }
     setProgress(pm)
     setPlanTasks(tm)
@@ -244,6 +256,24 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
 
   const buMap = useMemo(() => Object.fromEntries(buList.map(b => [b.id, b.code])), [buList])
   const nameOf = useCallback((id: string | null) => people.find(p => p.id === id)?.full_name ?? null, [people])
+  // El andon de cada proyecto: UNA fuente, pintada igual en tabla, board,
+  // timeline y ventana. Nadie captura el semáforo — se deriva.
+  const salud = useMemo(() => {
+    const m: Record<string, Salud> = {}
+    for (const r of rows) m[r.id] = calcularSalud(r, planTasks[r.id] ?? [], acts[r.id] ?? [], nameOf)
+    return m
+  }, [rows, planTasks, acts, nameOf])
+
+  // "Abrir proyecto" desde el chip de una tarea cuando Project Manager ya está montado
+  useEffect(() => {
+    const open = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail
+      const r = rows.find(x => x.id === id)
+      if (r) { localStorage.removeItem('hog_pending_project'); setEditing(r) }
+    }
+    window.addEventListener('hog:open-project-now', open)
+    return () => window.removeEventListener('hog:open-project-now', open)
+  }, [rows])
 
   const monthStart = useMemo(() => {
     const d = new Date()
@@ -433,14 +463,14 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
           </div>
         ) : view === 'timeline' ? (
           <div style={{ padding: isMobile ? '0' : 16 }}>
-            <TimelineView rows={filteredBase} buMap={buMap} progress={progress} planTasks={planTasks} onOpen={ev => setEditing(ev)} onOpenTask={onOpenTask} isMobile={isMobile} />
+            <TimelineView rows={filteredBase} buMap={buMap} progress={progress} planTasks={planTasks} acts={acts} salud={salud} onOpen={ev => setEditing(ev)} onOpenTask={onOpenTask} isMobile={isMobile} />
           </div>
         ) : view === 'board' ? (
           <div style={{ padding: isMobile ? 0 : 16 }}>
             {filtered.length === 0 ? (
               <p style={{ color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>Sin planes con estos filtros.</p>
             ) : (
-              <BoardView rows={filtered} buMap={buMap} progress={progress} canWrite={canWrite} isMobile={isMobile} onOpen={ev => setEditing(ev)} onMove={moveStatus} onMoveTo={moveTo} onCtx={(e, ev) => canWrite && openMenu(e, planMenu(ev))} />
+              <BoardView rows={filtered} buMap={buMap} progress={progress} salud={salud} canWrite={canWrite} isMobile={isMobile} onOpen={ev => setEditing(ev)} onMove={moveStatus} onMoveTo={moveTo} onCtx={(e, ev) => canWrite && openMenu(e, planMenu(ev))} />
             )}
           </div>
         ) : groups.length === 0 ? (
@@ -484,7 +514,17 @@ export function Events({ userRole, userId, caps, onOpenTask }: Props) {
                             <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>{ev.name}</span>
                             {ev.description && <span style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>{ev.description}</span>}
                           </td>
-                          <td style={td}><StatusBadgeV2 tone={STATUS_META[ev.status].tone} label={STATUS_META[ev.status].label} /></td>
+                          <td style={td}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                              <StatusBadgeV2 tone={STATUS_META[ev.status].tone} label={STATUS_META[ev.status].label} />
+                              {salud[ev.id] && (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                  <HealthBadge salud={salud[ev.id]} mode="compact" />
+                                  <DCounter salud={salud[ev.id]} size="sm" />
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td style={td}>
                             {progress[ev.id] ? (
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -674,10 +714,11 @@ function ApproversConfigSheet({ people, userId, isMobile, onClose }: {
 }
 
 // ── Board por estado: Idea → En planeación → Aprobado → Realizado ────────────
-function BoardView({ rows, buMap, progress, canWrite, isMobile, onOpen, onMove, onMoveTo, onCtx }: {
+function BoardView({ rows, buMap, progress, salud, canWrite, isMobile, onOpen, onMove, onMoveTo, onCtx }: {
   rows: EventPlan[]
   buMap: Record<string, string>
   progress: Record<string, { done: number; total: number }>
+  salud: Record<string, Salud>
   canWrite: boolean
   isMobile: boolean
   onOpen: (ev: EventPlan) => void
@@ -720,12 +761,19 @@ function BoardView({ rows, buMap, progress, canWrite, isMobile, onOpen, onMove, 
                     onContextMenu={onCtx ? e => onCtx(e, ev) : undefined}
                     style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', borderLeft: `3px solid ${planColor(ev)}`, cursor: canWrite ? 'grab' : undefined }}>
                     <button onClick={() => onOpen(ev)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: '100%', textAlign: 'left' }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{ev.name}</div>
+                      {/* Se lee de arriba a abajo: qué es · cómo está · cuánto falta · cuánto va */}
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                        {salud[ev.id] && <Semaforo nivel={salud[ev.id].nivel} pulse />}
+                        <span style={{ minWidth: 0 }}>{ev.name}</span>
+                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
                         <BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" />
                         {planPill(ev)}
                         <span className="num" style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{fechaLabel(ev)}</span>
                       </div>
+                      {salud[ev.id] && ev.status !== 'done' && ev.status !== 'cancelled' && (
+                        <HealthBadge salud={salud[ev.id]} style={{ marginTop: 6 }} />
+                      )}
                       {(() => {
                         const u = utilidadDe(ev)
                         if (!u) return null
@@ -740,7 +788,8 @@ function BoardView({ rows, buMap, progress, canWrite, isMobile, onOpen, onMove, 
                         )
                       })()}
                       {progress[ev.id] && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                          {salud[ev.id] && <DCounter salud={salud[ev.id]} size="sm" />}
                           <span style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--bg-base)', overflow: 'hidden' }}>
                             <span style={{ display: 'block', height: '100%', width: `${Math.round((progress[ev.id].done / progress[ev.id].total) * 100)}%`, background: progress[ev.id].done === progress[ev.id].total ? 'var(--status-healthy)' : 'var(--accent)' }} />
                           </span>
@@ -860,11 +909,13 @@ function CalendarView({ rows, month, onMonth, onOpen, isMobile, buMap }: {
 // ── Timeline (Gantt): una barra por proyecto sobre una ventana de semanas, con
 // hitos de tareas (rombos por fecha límite), avance dentro de la barra y la
 // línea de HOY — el "general" para medir tiempos de un vistazo ────────────────
-function TimelineView({ rows, buMap, progress, planTasks, onOpen, onOpenTask, isMobile }: {
+function TimelineView({ rows, buMap, progress, planTasks, acts, salud, onOpen, onOpenTask, isMobile }: {
   rows: EventPlan[]
   buMap: Record<string, string>
   progress: Record<string, { done: number; total: number }>
   planTasks: Record<string, PlanTask[]>
+  acts: Record<string, ActLite[]>
+  salud: Record<string, Salud>
   onOpen: (ev: EventPlan) => void
   onOpenTask?: (id: string) => void
   isMobile: boolean
@@ -975,21 +1026,26 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, onOpenTask, is
                 }
               }
               const tareas = planTasks[ev.id] ?? []
+              const actividades = acts[ev.id] ?? []
               const isOpen = expanded.has(ev.id)
+              const sal = salud[ev.id]
               return (
                 <Fragment key={ev.id}>
                 <div className="hover:bg-[var(--bg-base)]" style={{ display: 'flex', minHeight: rowH, borderBottom: '1px solid var(--border-subtle)', alignItems: 'stretch' }}>
                   <div style={{ width: labelW, flexShrink: 0, display: 'flex', alignItems: 'stretch', overflow: 'hidden' }}>
-                    {tareas.length > 0 && (
+                    {(tareas.length > 0 || actividades.length > 0) && (
                       <button onClick={() => toggleExpand(ev.id)} aria-expanded={isOpen}
-                        title={isOpen ? 'Ocultar tareas' : `Ver sus ${tareas.length} tareas en el timeline`}
+                        title={isOpen ? 'Ocultar detalle' : `Ver ${actividades.length ? `${actividades.length} actividades y ` : ''}${tareas.length} tareas en el timeline`}
                         style={{ width: 20, flexShrink: 0, border: 'none', background: 'none', color: isOpen ? 'var(--accent)' : 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
                         <ChevronRight size={13} style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
                       </button>
                     )}
                     <button onClick={() => onOpen(ev)} style={{ flex: 1, minWidth: 0, padding: tareas.length ? '6px 8px 6px 2px' : '6px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', overflow: 'hidden' }}>
-                      <div style={{ fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {sal && <Semaforo nivel={sal.nivel} size={8} pulse />}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.name}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }} title={sal?.causas.map(c => c.texto).join('\n')}>
                         <BUChip code={buMap[ev.bu_id] ?? '?'} size="sm" />
                         <span className="num" style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{durDays} d · {resta}</span>
                       </div>
@@ -1027,22 +1083,56 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, onOpenTask, is
                   </div>
                 </div>
 
-                {/* Timeline POR TAREAS: cada tarea, su fase y su fecha */}
+                {/* ACTIVIDADES: barra azul en su día — es lo que OCURRE. Se
+                    distingue de la tarea (rombo) por forma y color. */}
+                {isOpen && actividades.map(a => {
+                  const enVentana = a.date >= start && a.date <= endISO
+                  const abiertas = tareas.filter(t => t.activity_id === a.id && t.status !== 'APPROVED').length
+                  const dAct = Math.round((toD(a.date).getTime() - toD(todayISO).getTime()) / DAY)
+                  const caliente = abiertas > 0 && dAct >= 0 && dAct <= UMBRALES.zonaCaliente && a.status !== 'cancelada' && a.status !== 'hecha'
+                  const col = caliente ? 'var(--status-risk)' : a.status === 'hecha' ? 'var(--status-healthy)' : ACTIVITY_COLOR
+                  return (
+                    <div key={a.id} style={{ display: 'flex', minHeight: 32, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-base)', alignItems: 'stretch' }}>
+                      <button onClick={() => onOpen(ev)} title={`Actividad · ${a.title} · ${a.date.slice(5)}${a.start_time ? ` ${a.start_time.slice(0, 5)}` : ''}${abiertas ? ` · ${abiertas} tareas abiertas` : ''}`}
+                        style={{ width: labelW, flexShrink: 0, padding: '4px 8px 4px 22px', background: 'none', border: 'none', textAlign: 'left', overflow: 'hidden', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <CalendarDays size={11} style={{ color: col, flexShrink: 0 }} />
+                        <span style={{ fontSize: isMobile ? 10 : 11, fontWeight: 600, color: caliente ? 'var(--status-risk)' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: a.status === 'cancelada' ? 'line-through' : 'none' }}>{a.title}</span>
+                      </button>
+                      <div style={{ flex: 1, position: 'relative' }}>
+                        {enVentana ? (
+                          <span title={`${a.title} · ${a.date.slice(5)}`}
+                            style={{ position: 'absolute', left: `${pctOf(a.date)}%`, width: `${Math.max(100 / totalDays, isMobile ? 4 : 2.5)}%`, top: '50%', transform: 'translateY(-50%)', height: 14, borderRadius: 3, background: `color-mix(in srgb, ${col} 35%, transparent)`, border: `1px solid ${col}`, zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                            {abiertas > 0 && <span className="num" style={{ fontSize: 8.5, fontWeight: 800, color: col, fontFamily: 'var(--font-mono)' }}>{abiertas}</span>}
+                          </span>
+                        ) : (
+                          <span className="num" style={{ position: 'absolute', [a.date < start ? 'left' : 'right']: 4, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: col, fontFamily: 'var(--font-mono)', opacity: 0.75 }}>
+                            {a.date < start ? '‹' : '›'} {a.date.slice(5)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+                {/* TAREAS: rombo en su fecha límite — es lo que se COMPLETA.
+                    Verde hecha · rojo vencida o bloqueada · color de fase el resto. */}
                 {isOpen && tareas.map(t => {
                   const ph = phaseOf(t.status)
                   const enVentana = !!t.due_date && t.due_date >= start && t.due_date <= endISO
                   const vencida = !!t.due_date && t.due_date < todayISO && t.status !== 'APPROVED'
+                  const bloqueada = esBloqueada(t)
+                  const rojo = vencida || bloqueada
+                  const act = t.activity_id ? actividades.find(a => a.id === t.activity_id) : undefined
                   return (
                     <div key={t.id} style={{ display: 'flex', minHeight: 32, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-base)', alignItems: 'stretch' }}>
-                      <button onClick={() => onOpenTask?.(t.id)} title={`${t.title} · ${ph.label}${t.due_date ? ` · vence ${t.due_date.slice(5)}` : ' · sin fecha'}`}
-                        style={{ width: labelW, flexShrink: 0, padding: '4px 8px 4px 26px', background: 'none', border: 'none', textAlign: 'left', overflow: 'hidden', cursor: onOpenTask ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: ph.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: isMobile ? 10 : 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                      <button onClick={() => onOpenTask?.(t.id)} title={`Tarea · ${t.title} · ${ph.label}${t.due_date ? ` · vence ${t.due_date.slice(5)}` : ' · sin fecha'}${act ? ` · de ${act.title}` : ''}${bloqueada ? ` · BLOQUEADA: ${t.blocked_reason}` : ''}`}
+                        style={{ width: labelW, flexShrink: 0, padding: `4px 8px 4px ${act ? 34 : 26}px`, background: 'none', border: 'none', textAlign: 'left', overflow: 'hidden', cursor: onOpenTask ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <StatusRing status={t.status} blocked={bloqueada} size={9} />
+                        <span style={{ fontSize: isMobile ? 10 : 11, color: rojo ? 'var(--status-risk)' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
                       </button>
                       <div style={{ flex: 1, position: 'relative' }}>
                         {enVentana ? (
                           <button onClick={() => onOpenTask?.(t.id)} title={`${t.title} · ${ph.label} · vence ${t.due_date!.slice(5)}`}
-                            style={{ position: 'absolute', left: `calc(${pctOf(t.due_date!, true)}% - 7px)`, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, borderRadius: '50%', background: ph.color, border: `1.5px solid ${vencida ? 'var(--status-risk)' : 'var(--bg-surface)'}`, cursor: onOpenTask ? 'pointer' : 'default', padding: 0, zIndex: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
+                            style={{ position: 'absolute', left: `calc(${pctOf(t.due_date!, true)}% - 6px)`, top: '50%', transform: 'translateY(-50%) rotate(45deg)', width: 11, height: 11, borderRadius: 2, background: t.status === 'APPROVED' ? 'var(--status-healthy)' : rojo ? 'var(--status-risk)' : ph.color, border: `1.5px solid ${rojo ? 'var(--status-risk)' : 'var(--bg-surface)'}`, cursor: onOpenTask ? 'pointer' : 'default', padding: 0, zIndex: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
                         ) : t.due_date ? (
                           // Fuera de la ventana: flecha al borde por donde queda
                           <span className="num" title={`Vence ${t.due_date}`} style={{ position: 'absolute', [t.due_date < start ? 'left' : 'right']: 4, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: ph.color, fontFamily: 'var(--font-mono)', opacity: 0.75 }}>
@@ -1064,9 +1154,311 @@ function TimelineView({ rows, buMap, progress, planTasks, onOpen, onOpenTask, is
       <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
         <PhaseLegend />
         <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: 0 }}>
-          ◆ hitos sobre la barra del proyecto · la línea roja es hoy · abre ▸ para ver sus tareas en el timeline (el punto marca su fecha límite, con borde rojo si va tarde).
+          ◆ hitos sobre la barra del proyecto · la línea roja es hoy · abre ▸ para ver el detalle: <span style={{ color: ACTIVITY_COLOR, fontWeight: 700 }}>▬ actividad</span> (barra azul en su día, roja si está a menos de {UMBRALES.zonaCaliente} d con tareas abiertas) y <span style={{ fontWeight: 700 }}>◆ tarea</span> (rombo en su fecha límite: verde hecha, rojo vencida o bloqueada).
         </p>
       </div>
+    </div>
+  )
+}
+
+
+// ── TAREAS AGRUPADAS — las del proyecto y las de cada actividad ──────────────
+// Dos códigos fijos: carpeta ámbar = del proyecto · calendario azul = de una
+// actividad (anidadas bajo su actividad con un riel del color de actividad, que
+// se pone rojo cuando la actividad está a menos de 7 días con tareas abiertas).
+// Cada fila trae su círculo de estado, HARD si aplica, edad si importa,
+// bloqueo si lo hay, adjuntos, fecha con semáforo y responsable (o el hueco
+// punteado rojo si no tiene). Captura inline por actividad: cero diálogos.
+function TareasAgrupadas({ tasks, acts, people, taskFollowers, taskAdjuntos, canWrite, onOpenTask, onMenu, onAdd }: {
+  tasks: TaskLite[]
+  acts: ActLite[]
+  people: { id: string; full_name: string | null }[]
+  taskFollowers: Record<string, string[]>
+  taskAdjuntos: Record<string, number>
+  canWrite: boolean
+  onOpenTask?: (id: string) => void
+  onMenu?: (e: React.MouseEvent, t: TaskLite) => void
+  onAdd?: (title: string, activityId: string | null) => Promise<void>
+}) {
+  const hoy = hoyISO()
+  const [addFor, setAddFor] = useState<string | null>(null) // 'proyecto' | activity id
+  const [addTitle, setAddTitle] = useState('')
+  const [adding, setAdding] = useState(false)
+  const DAY = 86400000
+  const dias = (a: string, b: string) => Math.round((new Date(b + 'T00:00:00').getTime() - new Date(a + 'T00:00:00').getTime()) / DAY)
+
+  async function confirmar() {
+    if (!addTitle.trim() || !onAdd || adding) return
+    setAdding(true)
+    await onAdd(addTitle.trim(), addFor === 'proyecto' ? null : addFor)
+    setAdding(false)
+    setAddTitle('') // el foco se queda: la siguiente tarea se escribe de corrido
+  }
+
+  const inp: React.CSSProperties = {
+    flex: 1, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
+    color: 'var(--text-primary)', padding: '0 9px', fontSize: 12.5, outline: 'none', minHeight: 36, boxSizing: 'border-box',
+  }
+  const addRow = (key: string, placeholder: string) => addFor === key ? (
+    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+      <input autoFocus value={addTitle} onChange={e => setAddTitle(e.target.value)} placeholder={placeholder} aria-label="Nueva tarea"
+        onKeyDown={e => { if (e.key === 'Enter') confirmar(); if (e.key === 'Escape') { setAddFor(null); setAddTitle('') } }} style={inp} />
+      <button onClick={confirmar} disabled={!addTitle.trim() || adding}
+        style={{ minHeight: 36, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: addTitle.trim() ? 'var(--accent)' : 'var(--bg-base)', color: addTitle.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', fontWeight: 700, fontSize: 12, cursor: addTitle.trim() ? 'pointer' : 'not-allowed' }}>Agregar</button>
+      <button onClick={() => { setAddFor(null); setAddTitle('') }} aria-label="Cancelar" style={{ minHeight: 36, padding: '0 8px', border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><X size={13} /></button>
+    </div>
+  ) : null
+  const addBtn = (key: string, label: string) => canWrite && onAdd && addFor !== key ? (
+    <button onClick={() => { setAddFor(key); setAddTitle('') }}
+      style={{ minHeight: 28, padding: '0 9px', borderRadius: 999, border: '1px dashed var(--border-default)', background: 'transparent', color: 'var(--text-tertiary)', fontSize: 10.5, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <Plus size={11} /> {label}
+    </button>
+  ) : null
+
+  const fila = (t: TaskLite, nested: boolean) => {
+    const done = t.status === 'APPROVED'
+    const bloqueada = esBloqueada(t)
+    const asig = t.assigned_to ? people.find(p => p.id === t.assigned_to)?.full_name ?? null : null
+    const rel = (taskFollowers[t.id] ?? []).filter(uid => uid !== t.assigned_to).map(uid => people.find(p => p.id === uid)?.full_name ?? '¿?')
+    const dueDays = t.due_date ? dias(hoy, t.due_date) : null
+    const dueColor = done || dueDays === null ? 'var(--text-tertiary)' : dueDays < 0 ? 'var(--status-risk)' : dueDays <= UMBRALES.porVencer ? 'var(--status-attention)' : 'var(--text-tertiary)'
+    const dueLabel = t.due_date ? (dueDays! < 0 && !done ? `venció hace ${-dueDays!} d` : dueDays === 0 && !done ? 'hoy' : dueDays! <= UMBRALES.porVencer && dueDays! > 0 && !done ? `en ${dueDays} d` : new Date(t.due_date + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })) : null
+    const edad = done ? null : edadEnEstado(t, hoy)
+    const enRevision = t.status === 'PROOF_SUBMITTED' || t.status === 'REVISION'
+    const aging = edad != null && ((enRevision && edad > UMBRALES.revisionDias) || (t.status === 'IN_PROGRESS' && edad > UMBRALES.quietaDias))
+    return (
+      <div key={t.id} role="button" tabIndex={0} onClick={() => onOpenTask?.(t.id)} onKeyDown={e => { if (e.key === 'Enter') onOpenTask?.(t.id) }}
+        onContextMenu={e => onMenu?.(e, t)}
+        style={{ display: 'grid', gridTemplateColumns: '14px 1fr auto', gap: 9, alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border-subtle)', minHeight: 40, cursor: 'pointer', paddingLeft: nested ? 0 : 2 }}>
+        <StatusRing status={t.status} blocked={bloqueada} />
+        <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: done ? 500 : 600, color: done ? 'var(--text-tertiary)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none' }}>{t.title}</span>
+          {!done && t.deadline_type === 'HARD' && <DeadlineChip type="HARD" />}
+          {!done && aging && <AgingChip dias={edad!} estado={enRevision ? 'en revisión' : 'en progreso'} hot={enRevision} />}
+          {bloqueada && <BlockedChip reason={t.blocked_reason!} />}
+          {(taskAdjuntos[t.id] ?? 0) > 0 && (
+            <span title={`${taskAdjuntos[t.id]} ${taskAdjuntos[t.id] === 1 ? 'adjunto' : 'adjuntos'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: 'var(--accent)' }}>
+              <Paperclip size={11} />{taskAdjuntos[t.id] > 1 && <span className="num" style={{ fontSize: 9.5, fontWeight: 800, fontFamily: 'var(--font-mono)' }}>{taskAdjuntos[t.id]}</span>}
+            </span>
+          )}
+          {rel.length > 0 && (
+            <span title={`Relacionados: ${rel.join(', ')}`} style={{ display: 'inline-flex', alignItems: 'center' }}>
+              {rel.slice(0, 3).map((nm, i) => (
+                <span key={i} style={{ width: 15, height: 15, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', color: 'var(--text-secondary)', fontSize: 7, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: i === 0 ? 0 : -5 }}>{initialsOf(nm)}</span>
+              ))}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {t.estimated_hours != null && <span className="num" style={{ fontSize: 9.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{t.estimated_hours}h</span>}
+          {done ? (
+            <span className="num" style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--status-healthy)', background: 'color-mix(in srgb, var(--status-healthy) 13%, transparent)', padding: '1px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)' }}>hecha</span>
+          ) : dueLabel ? (
+            <span className="num" title={t.due_date!} style={{ fontSize: 10.5, fontWeight: dueDays! <= UMBRALES.porVencer ? 800 : 500, color: dueColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{dueLabel}</span>
+          ) : (
+            <span className="num" style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>sin fecha</span>
+          )}
+          {asig ? (
+            <span title={`Responsable: ${asig}`} style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-overlay)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: 8.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)' }}>{initialsOf(asig)}</span>
+          ) : (
+            <span title="Sin responsable — la ausencia es una señal" style={{ width: 20, height: 20, borderRadius: '50%', border: `1px dashed ${done ? 'var(--border-strong)' : 'var(--status-risk)'}`, color: done ? 'var(--text-tertiary)' : 'var(--status-risk)', fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)' }}>?</span>
+          )}
+          {canWrite && onMenu && (
+            <span role="button" title="Opciones (abrir · desvincular · archivar)" onClick={e => { e.stopPropagation(); onMenu(e, t) }}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 6, color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 14, fontWeight: 800 }}>⋯</span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const delProyecto = tasks.filter(t => !t.activity_id || !acts.some(a => a.id === t.activity_id))
+  const porAct = acts.map(a => ({ a, ts: tasks.filter(t => t.activity_id === a.id) })).filter(x => x.ts.length > 0 || addFor === x.a.id || canWrite)
+  const hechas = (ts: TaskLite[]) => ts.filter(t => t.status === 'APPROVED').length
+  const secTitle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', paddingBottom: 4 }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* ── Del proyecto ── */}
+      <div>
+        <div style={secTitle}>
+          <CheckSquare size={13} style={{ color: 'var(--accent)' }} />
+          <span style={{ flex: 1 }}>Tareas del proyecto{delProyecto.length ? ` · ${delProyecto.length}` : ''}</span>
+          {delProyecto.length > 0 && <span className="num" style={{ textTransform: 'none' }}>{hechas(delProyecto)} hechas</span>}
+          {addBtn('proyecto', 'Tarea')}
+        </div>
+        {delProyecto.map(t => fila(t, false))}
+        {delProyecto.length === 0 && addFor !== 'proyecto' && (
+          <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>Sin tareas generales aún — lo que hay que hacer antes, sin importar en qué actividad cae.</p>
+        )}
+        {addRow('proyecto', 'Nueva tarea del proyecto…')}
+      </div>
+
+      {/* ── Por actividad ── */}
+      {porAct.length > 0 && (
+        <div>
+          <div style={secTitle}>
+            <CalendarDays size={13} style={{ color: ACTIVITY_COLOR }} />
+            <span style={{ flex: 1 }}>Tareas por actividad · {tasks.length - delProyecto.length}</span>
+            <span className="num" style={{ textTransform: 'none' }}>{porAct.length} {porAct.length === 1 ? 'actividad' : 'actividades'}</span>
+          </div>
+          {porAct.map(({ a, ts }) => {
+            const abiertas = ts.filter(t => t.status !== 'APPROVED').length
+            const d = dias(hoy, a.date)
+            const caliente = abiertas > 0 && d >= 0 && d <= UMBRALES.zonaCaliente && a.status !== 'cancelada' && a.status !== 'hecha'
+            const col = caliente ? 'var(--status-risk)' : ACTIVITY_COLOR
+            const cuando = `${DAYS_ES[new Date(a.date + 'T00:00:00').getDay()].toLowerCase()} ${Number(a.date.slice(8, 10))}${a.start_time ? ` · ${a.start_time.slice(0, 5)}` : ''}`
+            return (
+              <div key={a.id} style={{ marginTop: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '3px 1fr auto', gap: 9, alignItems: 'center', padding: '5px 0' }}>
+                  <span style={{ width: 3, minHeight: 26, borderRadius: 2, background: col, alignSelf: 'stretch' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', minWidth: 0 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', textDecoration: a.status === 'cancelada' ? 'line-through' : 'none' }}>{a.title}</span>
+                    <ActivityChip label={cuando} tone={caliente ? 'risk' : 'act'} size="sm" />
+                    {caliente && <span className="num" style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--status-risk)', background: 'color-mix(in srgb, var(--status-risk) 14%, transparent)', padding: '1px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)' }}>{d === 0 ? 'hoy' : `en ${d} d`} con {abiertas} {abiertas === 1 ? 'abierta' : 'abiertas'}</span>}
+                    {a.status === 'hecha' && <span className="num" style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--status-healthy)', fontFamily: 'var(--font-mono)' }}>hecha</span>}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {ts.length > 0 && (
+                      <>
+                        <span style={{ width: 60, height: 4, borderRadius: 2, background: 'var(--bg-base)', overflow: 'hidden', display: 'inline-block' }}>
+                          <span style={{ display: 'block', height: '100%', width: `${Math.round((hechas(ts) / ts.length) * 100)}%`, background: hechas(ts) === ts.length ? 'var(--status-healthy)' : 'var(--accent)' }} />
+                        </span>
+                        <span className="num" style={{ fontSize: 9.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{hechas(ts)}/{ts.length}</span>
+                      </>
+                    )}
+                    {addBtn(a.id, 'Tarea')}
+                  </div>
+                </div>
+                <div style={{ marginLeft: 12, borderLeft: `1px solid color-mix(in srgb, ${col} 45%, transparent)`, paddingLeft: 10 }}>
+                  {ts.map(t => fila(t, true))}
+                  {ts.length === 0 && addFor !== a.id && <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '2px 0 4px' }}>Sin tareas de preparación.</p>}
+                  {addRow(a.id, `Nueva tarea para ${a.title}…`)}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── TIMELINE DEL PROYECTO — dentro de la ventana ─────────────────────────────
+// Cuatro semanas. La barra del proyecto arriba, una fila por actividad (barra
+// azul en su día) y las tareas como rombos en su fecha límite. Lo que queda a
+// la izquierda de HOY y no es verde es deuda; los próximos 7 días van rayados:
+// la zona caliente, donde se decide el evento.
+function ProjectTimeline({ plan, tasks, acts, onOpenTask, isMobile }: {
+  plan: { date: string | null; end_date: string | null; name: string }
+  tasks: TaskLite[]
+  acts: ActLite[]
+  onOpenTask?: (id: string) => void
+  isMobile: boolean
+}) {
+  const DAY = 86400000
+  const toD = (s: string) => new Date(s + 'T00:00:00')
+  const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const WEEKS = isMobile ? 3 : 4
+  const totalDays = WEEKS * 7
+  const todayISO = hoyISO()
+  // Arranca el lunes de esta semana; si el proyecto es futuro y no cabe, se
+  // navega con ‹ ›
+  const [start, setStart] = useState(() => {
+    const m = new Date(); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return isoOf(m)
+  })
+  const startD = toD(start)
+  const endISO = isoOf(new Date(startD.getTime() + (totalDays - 1) * DAY))
+  const shift = (n: number) => { const d = toD(start); d.setDate(d.getDate() + n * 7); setStart(isoOf(d)) }
+  const pctOf = (dISO: string, center = false) => (((toD(dISO).getTime() - startD.getTime()) / DAY + (center ? 0.5 : 0)) / totalDays) * 100
+  const dayW = 100 / totalDays
+  const labelW = isMobile ? 96 : 150
+  const fmt = (dISO: string) => toD(dISO).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
+  const enVentana = (d: string) => d >= start && d <= endISO
+  const calienteFin = isoOf(new Date(toD(todayISO).getTime() + UMBRALES.zonaCaliente * DAY))
+
+  const rombo = (t: TaskLite, key: string) => {
+    if (!t.due_date) return null
+    const done = t.status === 'APPROVED'
+    const rojo = !done && (t.due_date < todayISO || esBloqueada(t))
+    const ph = phaseOf(t.status)
+    const fill = done ? 'var(--status-healthy)' : rojo ? 'var(--status-risk)' : t.status === 'OPEN' ? 'var(--bg-surface)' : ph.color
+    if (!enVentana(t.due_date)) return (
+      <span key={key} className="num" title={`${t.title} · vence ${t.due_date}`} style={{ position: 'absolute', [t.due_date < start ? 'left' : 'right']: 4, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: rojo ? 'var(--status-risk)' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+        {t.due_date < start ? '‹' : '›'} {t.due_date.slice(5)}
+      </span>
+    )
+    return (
+      <button key={key} onClick={() => onOpenTask?.(t.id)} title={`Tarea · ${t.title} · vence ${t.due_date.slice(5)}${esBloqueada(t) ? ` · BLOQUEADA: ${t.blocked_reason}` : ''}`}
+        style={{ position: 'absolute', left: `calc(${pctOf(t.due_date, true)}% - 5.5px)`, top: '50%', transform: 'translateY(-50%) rotate(45deg)', width: 11, height: 11, borderRadius: esBloqueada(t) ? '50%' : 2, background: fill, border: `1.5px solid ${done ? 'var(--status-healthy)' : rojo ? 'var(--status-risk)' : ph.color}`, cursor: onOpenTask ? 'pointer' : 'default', padding: 0, zIndex: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
+    )
+  }
+  const lane = (children: React.ReactNode, key: string) => (
+    <div key={key} style={{ position: 'relative', minHeight: 36, borderBottom: '1px solid var(--border-subtle)' }}>
+      {Array.from({ length: WEEKS }, (_, w) => <span key={w} style={{ position: 'absolute', left: `${(w / WEEKS) * 100}%`, top: 0, bottom: 0, width: 1, background: 'var(--border-subtle)' }} />)}
+      {todayISO <= endISO && calienteFin >= start && (
+        <span style={{ position: 'absolute', left: `${Math.max(0, pctOf(todayISO))}%`, width: `${Math.min(100, pctOf(calienteFin) + dayW) - Math.max(0, pctOf(todayISO))}%`, top: 0, bottom: 0, background: 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--status-risk) 10%, transparent) 0 4px, transparent 4px 10px)', zIndex: 1 }} />
+      )}
+      {enVentana(todayISO) && <span style={{ position: 'absolute', left: `${pctOf(todayISO, true)}%`, top: 0, bottom: 0, width: 2, background: 'var(--status-risk)', zIndex: 3 }} />}
+      {children}
+    </div>
+  )
+  const delProyecto = tasks.filter(t => !t.activity_id || !acts.some(a => a.id === t.activity_id))
+  const pFin = plan.end_date ?? plan.date
+
+  return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <Clock size={13} style={{ color: 'var(--accent)' }} />
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Timeline</span>
+        <button onClick={() => shift(-1)} aria-label="Semana anterior" style={{ width: 28, height: 28, border: '1px solid var(--border-subtle)', borderRadius: 6, background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><ChevronLeft size={13} /></button>
+        <span className="num" style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{fmt(start)} – {fmt(endISO)}</span>
+        <button onClick={() => shift(1)} aria-label="Semana siguiente" style={{ width: 28, height: 28, border: '1px solid var(--border-subtle)', borderRadius: 6, background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={13} /></button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: `${labelW}px 1fr`, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+        {/* encabezado */}
+        <div style={{ padding: '5px 8px', fontSize: 9.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border-default)' }}>semana</div>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${WEEKS}, 1fr)`, borderBottom: '1px solid var(--border-default)' }}>
+          {Array.from({ length: WEEKS }, (_, w) => (
+            <span key={w} className="num" style={{ padding: '5px 6px', fontSize: 9.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', borderLeft: '1px solid var(--border-subtle)' }}>{fmt(isoOf(new Date(startD.getTime() + w * 7 * DAY)))}</span>
+          ))}
+        </div>
+        {/* proyecto */}
+        <div style={{ padding: '6px 8px', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid var(--border-subtle)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>Proyecto</div>
+        {lane(<>
+          {plan.date && pFin && pFin >= start && plan.date <= endISO && (
+            <span title={`${plan.name} · ${plan.date}${pFin !== plan.date ? ` – ${pFin}` : ''}`} style={{ position: 'absolute', left: `${Math.max(0, pctOf(plan.date))}%`, width: `${Math.max(Math.min(100, pctOf(pFin) + dayW) - Math.max(0, pctOf(plan.date)), dayW)}%`, top: '50%', transform: 'translateY(-50%)', height: 16, borderRadius: 4, background: 'color-mix(in srgb, var(--accent) 28%, transparent)', border: '1px solid var(--accent)', zIndex: 2 }} />
+          )}
+          {delProyecto.map(t => rombo(t, t.id))}
+        </>, 'proyecto')}
+        {/* actividades */}
+        {acts.map(a => {
+          const ts = tasks.filter(t => t.activity_id === a.id)
+          const abiertas = ts.filter(t => t.status !== 'APPROVED').length
+          const d = Math.round((toD(a.date).getTime() - toD(todayISO).getTime()) / DAY)
+          const caliente = abiertas > 0 && d >= 0 && d <= UMBRALES.zonaCaliente && a.status !== 'cancelada' && a.status !== 'hecha'
+          const col = caliente ? 'var(--status-risk)' : a.status === 'hecha' ? 'var(--status-healthy)' : ACTIVITY_COLOR
+          return (
+            <Fragment key={a.id}>
+              <div style={{ padding: '6px 8px 6px 14px', fontSize: 11.5, fontWeight: 500, color: caliente ? 'var(--status-risk)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5, borderBottom: '1px solid var(--border-subtle)', overflow: 'hidden', whiteSpace: 'nowrap' }} title={`Actividad · ${a.title} · ${a.date}`}>
+                <CalendarDays size={11} style={{ color: col, flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.title}</span>
+              </div>
+              {lane(<>
+                {enVentana(a.date) ? (
+                  <span title={`${a.title} · ${a.date.slice(5)}${a.start_time ? ` ${a.start_time.slice(0, 5)}` : ''}`} style={{ position: 'absolute', left: `${pctOf(a.date)}%`, width: `${Math.max(dayW, 2.5)}%`, top: '50%', transform: 'translateY(-50%)', height: 14, borderRadius: 3, background: `color-mix(in srgb, ${col} 35%, transparent)`, border: `1px solid ${col}`, zIndex: 2 }} />
+                ) : (
+                  <span className="num" style={{ position: 'absolute', [a.date < start ? 'left' : 'right']: 4, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: col, fontFamily: 'var(--font-mono)', opacity: 0.8 }}>{a.date < start ? '‹' : '›'} {a.date.slice(5)}</span>
+                )}
+                {ts.map(t => rombo(t, t.id))}
+              </>, a.id)}
+            </Fragment>
+          )
+        })}
+      </div>
+      <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '7px 0 0', lineHeight: 1.45 }}>
+        <span style={{ color: 'var(--accent)', fontWeight: 700 }}>▬ proyecto</span> · <span style={{ color: ACTIVITY_COLOR, fontWeight: 700 }}>▬ actividad</span> en su día (roja a menos de {UMBRALES.zonaCaliente} d con tareas abiertas) · <b>◆ tarea</b> en su fecha límite: vacío abierta, verde hecha, rojo vencida o bloqueada · la línea roja es hoy y lo rayado son los próximos {UMBRALES.zonaCaliente} días.
+      </p>
     </div>
   )
 }
@@ -1442,7 +1834,7 @@ const ACT_STATUS: Record<string, { label: string; color: string }> = {
 const diaLargo = (iso: string) =>
   new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' })
 
-function ProgramSection({ eventId, defaultDate, canWrite, userId, onOpenTask }: {
+function ProgramSection({ eventId, defaultDate, canWrite, userId }: {
   eventId: string; defaultDate: string | null; canWrite: boolean; userId?: string
   onOpenTask?: (id: string) => void
 }) {
@@ -1495,18 +1887,22 @@ function ProgramSection({ eventId, defaultDate, canWrite, userId, onOpenTask }: 
   }
   // Tarea de preparación colgada de la actividad: se gestiona individual sin
   // sacarla del conjunto del evento.
+  // Captura inline (window.prompt no existe en la app instalada: la PWA en iOS
+  // lo ignora en silencio — era el "el botón no agrega").
+  const [prepFor, setPrepFor] = useState<string | null>(null)
+  const [prepTitle, setPrepTitle] = useState('')
   async function addPrepTask(a: ProgramActivity) {
-    const titulo = prompt(`Tarea de preparación para "${a.title}":`)
-    if (!titulo?.trim()) return
-    const { data, error } = await supabase.from('tasks').insert({
-      title: titulo.trim(), event_id: eventId, activity_id: a.id, status: 'OPEN',
+    const titulo = prepTitle.trim()
+    if (!titulo) return
+    const { error } = await supabase.from('tasks').insert({
+      title: titulo, event_id: eventId, activity_id: a.id, status: 'OPEN',
       due_date: a.date, deadline_type: 'HARD', client_impact: 'internal',
       created_by: userId ?? null, priority: 'MEDIUM', proof_required: false,
     }).select('id').single()
     if (error) { showToast(`No se pudo crear: ${error.message}`, 'error'); return }
-    showToast('Tarea creada y ligada a la actividad.', 'success')
+    setPrepTitle('')
     load()
-    if (data) onOpenTask?.(data.id)
+    window.dispatchEvent(new CustomEvent('hog:task-updated'))
   }
 
   const porDia = useMemo(() => {
@@ -1558,7 +1954,8 @@ function ProgramSection({ eventId, defaultDate, canWrite, userId, onOpenTask }: 
             const st = ACT_STATUS[a.status] ?? ACT_STATUS.planeada
             const tc = taskCounts[a.id]
             return (
-              <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '7px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+              <Fragment key={a.id}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '7px 0', borderBottom: '1px solid var(--border-subtle)' }}>
                 <span className="num" style={{ width: 78, flexShrink: 0, fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', paddingTop: 2 }}>
                   {a.start_time ? `${a.start_time.slice(0, 5)}${a.end_time ? `–${a.end_time.slice(0, 5)}` : ''}` : 'sin hora'}
                 </span>
@@ -1579,13 +1976,22 @@ function ProgramSection({ eventId, defaultDate, canWrite, userId, onOpenTask }: 
                       style={{ background: 'none', border: 'none', color: st.color, fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer', outline: 'none', flexShrink: 0 }}>
                       {Object.entries(ACT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                     </select>
-                    <button onClick={() => addPrepTask(a)} title="Agregar tarea de preparación para esta actividad"
-                      style={{ width: 28, height: 28, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0 }}><ListPlus size={12} /></button>
+                    <button onClick={() => { setPrepFor(prepFor === a.id ? null : a.id); setPrepTitle('') }} title="Agregar tarea de preparación para esta actividad"
+                      style={{ width: 28, height: 28, border: 'none', background: prepFor === a.id ? 'var(--accent-bg)' : 'none', borderRadius: 6, color: prepFor === a.id ? 'var(--accent)' : 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0 }}><ListPlus size={12} /></button>
                     <button onClick={() => remove(a.id)} aria-label="Quitar actividad"
                       style={{ width: 28, height: 28, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0 }}><Trash2 size={12} /></button>
                   </>
                 )}
               </div>
+              {canWrite && prepFor === a.id && (
+                <div key={`${a.id}-prep`} style={{ display: 'flex', gap: 6, padding: '6px 0 6px 90px' }}>
+                  <input autoFocus value={prepTitle} onChange={e => setPrepTitle(e.target.value)} placeholder={`Tarea de preparación para ${a.title}…`} aria-label="Nueva tarea"
+                    onKeyDown={e => { if (e.key === 'Enter') addPrepTask(a); if (e.key === 'Escape') setPrepFor(null) }} style={{ ...inp, flex: 1 }} />
+                  <button onClick={() => addPrepTask(a)} disabled={!prepTitle.trim()}
+                    style={{ minHeight: 38, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: prepTitle.trim() ? 'var(--accent)' : 'var(--bg-base)', color: prepTitle.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', fontWeight: 700, fontSize: 12, cursor: prepTitle.trim() ? 'pointer' : 'not-allowed' }}>Agregar</button>
+                </div>
+              )}
+              </Fragment>
             )
           })}
         </div>
@@ -1927,7 +2333,16 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   const [relQ, setRelQ] = useState('')
   // Los totales viven aquí para que Aprobación y Presupuesto muestren SIEMPRE
   // la misma cifra — antes cada uno consultaba por su cuenta y se desfasaban
-  const [, setTotales] = useState<{ gastos: number; ingresos: number; n: number } | null>(null)
+  const [totales, setTotales] = useState<{ gastos: number; ingresos: number; n: number } | null>(null)
+  // Cliente interno / externo. Externo es donde el corte (ingreso, gasto,
+  // utilidad) cobra sentido pleno.
+  const [clientKind, setClientKind] = useState<'interno' | 'externo'>(event?.client_kind ?? 'interno')
+  // Actividades del programa: para agrupar las tareas y para el timeline
+  const [actsSheet, setActsSheet] = useState<ActLite[]>([])
+  // "Guardar como plantilla" pide el nombre inline — window.prompt no existe
+  // en la app instalada (PWA standalone en iOS lo ignora en silencio).
+  const [tplNaming, setTplNaming] = useState(false)
+  const [tplName, setTplName] = useState('')
   // Menú de opciones por tarea (clic derecho o botón ⋯ — táctil no tiene
   // clic derecho): Abrir · Archivar · Desvincular
   const { openMenu: openTaskMenu, menuElement: taskMenuElement } = useContextMenu()
@@ -1983,6 +2398,28 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   // no estaba marcado como Realizado simplemente no encontraba dónde hacerlo.
   const showCorte = !!event
 
+  // El andon de ESTE proyecto — misma función que la tarjeta y el timeline
+  const saludSheet = useMemo(() => event
+    ? calcularSalud({ date: date || null, end_date: endDate || null, status, budget: budget !== '' ? Number(budget) : null, actual_cost: gastoReal !== '' ? Number(gastoReal) : (totales?.gastos || null) }, tasks, actsSheet, (id) => people.find(p => p.id === id)?.full_name ?? null)
+    : null, [event, date, endDate, status, budget, gastoReal, totales, tasks, actsSheet, people])
+
+  // Alta inline de una tarea (del proyecto o de una actividad): sin diálogos.
+  // Las de actividad nacen HARD con la fecha de la actividad: si se pasan,
+  // atoran el proyecto — que es exactamente lo que pasa en la vida real.
+  async function addTaskInline(title: string, activityId: string | null) {
+    if (!event) return
+    const act = activityId ? actsSheet.find(a => a.id === activityId) : null
+    const { data, error } = await supabase.from('tasks').insert({
+      title, event_id: event.id, activity_id: activityId, status: 'OPEN', priority: 'MEDIUM',
+      due_date: act?.date ?? event.date ?? null, deadline_type: act ? 'HARD' : 'SOFT',
+      client_impact: 'internal', proof_required: false, bu_id: event.bu_id, created_by: userId ?? null,
+    }).select('id').single()
+    if (error || !data) { showToast(`No se pudo crear: ${error?.message}`, 'error'); return }
+    logActivity('task_created', 'event', event.id, { via: act ? 'actividad' : 'proyecto_inline', event: event.name, actividad: act?.title ?? null, title })
+    await loadTasks()
+    window.dispatchEvent(new CustomEvent('hog:task-updated'))
+  }
+
   // Plantilla elegida en modo creación: pre-carga tipo y bullets; recursos y
   // presupuesto se insertan al guardar (necesitan el id del plan)
   function applyTemplate(id: string) {
@@ -1997,8 +2434,9 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
   // Guardar el plan actual (recursos + partidas + tareas) como plantilla
   async function saveAsTemplate() {
     if (!event) return
-    const tname = window.prompt('Nombre de la plantilla:', `${kind === 'evento' ? TYPE_META[type].label : KIND_META[kind].label} — ${name}`)
-    if (!tname?.trim()) return
+    const tname = tplName
+    if (!tname.trim()) return
+    setTplNaming(false)
     const [{ data: res }, { data: bud }, { data: tks }] = await Promise.all([
       supabase.from('project_resources').select('name, qty, unit_cost').eq('event_id', event.id),
       supabase.from('project_budget_items').select('concept, amount, is_income').eq('event_id', event.id),
@@ -2019,9 +2457,14 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
     if (!event) return
     // Sin este filtro, archivar una tarea la ocultaba en Tareas pero seguía
     // apareciendo dentro del proyecto — el bug del "todavía me aparece"
-    const { data } = await supabase.from('tasks').select('id, title, status, assigned_to, due_date, estimated_hours').eq('event_id', event.id).eq('archived', false).order('created_at')
+    // select('*'): la salud y la lista agrupada necesitan activity_id,
+    // deadline_type, updated_at y (si ya existen) blocked_reason /
+    // status_changed_at — nombrarlas truena cuando alguna aún no se creó.
+    const { data } = await supabase.from('tasks').select('*').eq('event_id', event.id).eq('archived', false).order('created_at')
     const ts = (data ?? []) as TaskLite[]
     setTasks(ts)
+    supabase.from('project_activities').select('id, event_id, title, date, start_time, status').eq('event_id', event.id).order('date').order('start_time', { nullsFirst: true })
+      .then(({ data: a }) => setActsSheet((a ?? []) as ActLite[]))
     if (!ts.length) return
     // Relacionados (seguidores) de cada tarea — para los círculos apilados
     const ids = ts.map(t => t.id)
@@ -2136,14 +2579,23 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
       requirements: requirements.trim() || null,
       collaborators: collaborators.trim() || null,
       responsible: responsible || null, status,
+      client_kind: clientKind,
     }
+    // Si project_manager_v1.sql no se ha corrido, client_kind no existe: se
+    // reintenta sin él para que el resto del proyecto sí se guarde.
+    const sinCliente = (r: typeof row) => { const { client_kind: _ck, ...rest } = r; return rest }
     if (event) {
       // .select() no es adorno: sin él, un UPDATE que la base RECHAZA por
       // permisos no devuelve error NI filas — se ve como si hubiera guardado y
       // el dato nunca entró. Con select sabemos si de verdad se escribió.
-      const { data: guardado, error } = await supabase.from('event_plans')
+      let { data: guardado, error } = await supabase.from('event_plans')
         .update(row).eq('id', event.id)
         .select('id, actual_revenue, actual_cost').maybeSingle()
+      if (error && /client_kind/.test(error.message)) {
+        ;({ data: guardado, error } = await supabase.from('event_plans')
+          .update(sinCliente(row)).eq('id', event.id)
+          .select('id, actual_revenue, actual_cost').maybeSingle())
+      }
       setSaving(false)
       if (error) {
         // El error crudo de Postgres ("column ... does not exist") no le dice
@@ -2164,7 +2616,10 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
       setGastoReal(guardado.actual_cost != null ? String(guardado.actual_cost) : '')
       logActivity('event_updated', 'event', event.id, { name: row.name })
     } else {
-      const { data, error } = await supabase.from('event_plans').insert({ ...row, created_by: userId ?? null }).select('id').single()
+      let { data, error } = await supabase.from('event_plans').insert({ ...row, created_by: userId ?? null }).select('id').single()
+      if (error && /client_kind/.test(error.message)) {
+        ;({ data, error } = await supabase.from('event_plans').insert({ ...sinCliente(row), created_by: userId ?? null }).select('id').single())
+      }
       setSaving(false)
       if (error || !data) { showToast(`No se pudo crear: ${error?.message}`, 'error'); return }
       logActivity('event_created', 'event', data.id, { name: row.name })
@@ -2260,6 +2715,7 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                   {tasks.filter(t => t.status === 'APPROVED').length}/{tasks.length} tareas
                 </span>
               )}
+              {saludSheet && <DCounter salud={saludSheet} size="md" />}
               {/* La utilidad, en la barra fija: es el número por el que se
                   pregunta primero cuando un evento ya pasó. */}
               {(() => {
@@ -2272,6 +2728,38 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                     <span style={{ fontSize: 12.5, fontWeight: 800, color: u.color }}>{mxn(u.utilidad)}</span>
                     {u.margen !== null && <span style={{ fontSize: 11, fontWeight: 800, color: u.color }}>{u.margen.toFixed(1)}%</span>}
                   </span>
+                )
+              })()}
+            </div>
+          )}
+          {/* El andon del proyecto, fijo arriba: "¿en qué va?" sin bajar. Cuatro
+              tiles: salud (con causa), esta semana, avance, presupuesto. */}
+          {event && saludSheet && status !== 'done' && status !== 'cancelled' && (
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 6, marginTop: 8 }}>
+              {(() => {
+                const s0 = saludSheet
+                const tile = (tone: 'bad' | 'warn' | 'ok' | 'none', k: string, v: React.ReactNode, w: React.ReactNode, title?: string) => {
+                  const col = tone === 'bad' ? 'var(--status-risk)' : tone === 'warn' ? 'var(--status-attention)' : tone === 'ok' ? 'var(--status-healthy)' : 'var(--border-default)'
+                  return (
+                    <div title={title} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '6px 9px', display: 'grid', gap: 1, borderTop: `3px solid ${col}`, minWidth: 0 }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>{k}</span>
+                      <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 800, lineHeight: 1.15, color: tone === 'none' ? 'var(--text-primary)' : col }}>{v}</span>
+                      <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w}</span>
+                    </div>
+                  )
+                }
+                const nivelTone = s0.nivel === 'atorado' ? 'bad' : s0.nivel === 'riesgo' ? 'warn' : s0.nivel === 'fluye' ? 'ok' : 'none'
+                const causa = s0.causas[0]?.texto ?? (s0.nivel === 'fluye' ? 'nada vencido, nada bloqueado' : 'sin tareas o sin fecha')
+                const gasto = gastoReal !== '' ? Number(gastoReal) : (totales?.gastos ?? 0)
+                const pres = budget !== '' ? Number(budget) : 0
+                const pct = pres > 0 ? Math.round((gasto / pres) * 100) : null
+                return (
+                  <>
+                    {tile(nivelTone, 'Salud', <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Semaforo nivel={s0.nivel} size={9} pulse />{({ atorado: 'Atorado', riesgo: 'En riesgo', fluye: 'Fluye', sin_senal: 'Sin señal' })[s0.nivel]}</span>, causa, s0.causas.map(c => c.texto).join('\n'))}
+                    {tile(s0.vencidas ? 'bad' : s0.estaSemana ? 'warn' : 'none', s0.vencidas ? 'Vencidas' : 'Esta semana', s0.vencidas || s0.estaSemana, s0.vencidas ? `${s0.estaSemana} vencen esta semana · ${s0.sinDueno} sin dueño` : `${s0.estaSemana === 1 ? 'tarea vence' : 'tareas vencen'} · ${s0.sinDueno} sin dueño`)}
+                    {tile(s0.total > 0 && s0.hechas === s0.total ? 'ok' : 'none', 'Avance', `${s0.hechas}/${s0.total}`, s0.total ? `${Math.round((s0.hechas / s0.total) * 100)}%${s0.ritmo != null ? ` · ritmo ${s0.ritmo}/sem` : ''}` : 'sin tareas')}
+                    {tile(pct != null && pct > 100 ? 'bad' : pct != null && pct > 85 ? 'warn' : 'none', 'Presupuesto', pct != null ? `${pct}%` : '—', pres > 0 ? `${mxn(gasto)} de ${mxn(pres)}` : 'sin presupuesto')}
+                  </>
                 )
               })()}
             </div>
@@ -2308,6 +2796,18 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
                 <button key={k} onClick={() => canWrite && setKind(k)}
                   style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: kind === k ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${kind === k ? 'var(--accent)' : 'var(--border-default)'}`, color: kind === k ? 'var(--accent)' : 'var(--text-secondary)' }}>
                   {KIND_META[k].label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={lbl}>¿Para quién?</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {([['interno', 'Cliente interno', 'Una casa o un área del grupo'], ['externo', 'Cliente externo', 'Alguien de fuera nos contrata — aquí el corte es utilidad de verdad']] as const).map(([id, label, hint]) => (
+                <button key={id} onClick={() => canWrite && setClientKind(id)} title={hint}
+                  style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: clientKind === id ? 'var(--accent-bg)' : 'transparent', border: `1px solid ${clientKind === id ? 'var(--accent)' : 'var(--border-default)'}`, color: clientKind === id ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                  {label}
                 </button>
               ))}
             </div>
@@ -2481,6 +2981,62 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
             </div>
           </div>
 
+          {/* Tareas — lo que el equipo en piso gestiona a diario: va ANTES del corte, el programa y el presupuesto */}
+          {canWrite && (
+            <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <CheckSquare size={13} style={{ color: 'var(--accent)' }} />
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', flex: 1 }}>Tareas{tasks.length ? ` · ${tasks.filter(t => t.status === 'APPROVED').length}/${tasks.length}` : ''}</span>
+                {saludSheet && saludSheet.sinDueno > 0 && <span className="num" style={{ fontSize: 10, fontWeight: 800, color: 'var(--status-risk)', fontFamily: 'var(--font-mono)' }}>{saludSheet.sinDueno} sin dueño</span>}
+              </div>
+              <TareasAgrupadas tasks={tasks} acts={actsSheet} people={people} taskFollowers={taskFollowers} taskAdjuntos={taskAdjuntos}
+                canWrite={canWrite && !!event} onOpenTask={onOpenTask}
+                onMenu={event && canWrite ? (e, t) => openTaskMenu(e, taskMenu(t)) : undefined}
+                onAdd={event ? addTaskInline : undefined} />
+              <div style={{ height: 8 }} />
+              {/* Vincular una tarea que YA existe en el Task Manager */}
+              {event && (
+                <div style={{ position: 'relative', marginBottom: 8 }}>
+                  <Link2 size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+                  <input value={linkQ} onChange={e => setLinkQ(e.target.value)}
+                    placeholder="Vincular tarea existente — busca por título…"
+                    style={{ ...inp, minHeight: 40, fontSize: 12, paddingLeft: 30 }} />
+                  {linkResults.length > 0 && (
+                    <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, overflow: 'hidden', zIndex: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
+                      {linkResults.map(r => (
+                        <button key={r.id} onMouseDown={e => { e.preventDefault(); linkTask(r.id) }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 40, padding: '0 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                          <Link2 size={11} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                          <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+                          <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{r.status}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {linkQ.trim().length >= 2 && linkResults.length === 0 && (
+                    <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>Sin tareas sueltas con ese título (solo se listan las que no pertenecen a otro proyecto).</p>
+                  )}
+                </div>
+              )}
+              <textarea value={bulkTasks} onChange={e => setBulkTasks(e.target.value)} rows={4}
+                placeholder={'Una tarea por línea (bullets):\n- Confirmar DJ y rider\n- Diseñar flyer\n- Brief a cocina'}
+                style={{ ...inp, minHeight: 88, padding: '10px 12px', resize: 'vertical', fontSize: 13, marginBottom: 8 }} />
+              {event ? (
+                <button onClick={() => pushBulkTasks(event.id, event.name, event.bu_id, event.date)} disabled={bulkPending === 0}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 44, borderRadius: 999, border: 'none', background: bulkPending ? 'var(--accent)' : 'var(--bg-base)', color: bulkPending ? 'var(--on-accent)' : 'var(--text-tertiary)', fontSize: 13, fontWeight: 700, cursor: bulkPending ? 'pointer' : 'not-allowed' }}>
+                  <ListPlus size={15} /> Pasar {bulkPending || ''} tarea{bulkPending === 1 ? '' : 's'} a Tareas
+                </button>
+              ) : (
+                bulkPending > 0 && (
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
+                    {bulkPending} tarea{bulkPending === 1 ? '' : 's'} se crearán en Tareas al guardar el evento.
+                  </p>
+                )
+              )}
+            </div>
+          )}
+
+
           {/* El flujo de aprobación se retiró de la ventana: por ahora la
               autorización del presupuesto se lleva fuera de la app. El
               componente ApprovalSection y su historial siguen en el código —
@@ -2569,132 +3125,14 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
               )}
               <ProgramSection eventId={event.id} defaultDate={event.date} canWrite={canWrite} userId={userId} onOpenTask={onOpenTask} />
               <BudgetSection event={event} buCode={buCode} canWrite={canWrite} userId={userId} people={people} showCorte={showCorte} onTotals={setTotales} />
+              {(tasks.length > 0 || actsSheet.length > 0 || event.date) && (
+                <ProjectTimeline plan={{ date: date || null, end_date: endDate || null, name: name }} tasks={tasks} acts={actsSheet} onOpenTask={onOpenTask} isMobile={isMobile} />
+              )}
             </>
           ) : (
             <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
               💡 Al guardar podrás agregar <strong>recursos</strong> (bartenders, meseros, seguridad, equipo) y el <strong>presupuesto por partidas</strong> con patrocinios ligados al CRM.
             </p>
-          )}
-
-          {/* Tareas del evento — por bullets, con botón directo al Task Manager */}
-          {canWrite && (
-            <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                <CheckSquare size={13} style={{ color: 'var(--accent)' }} />
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Tareas del evento{tasks.length ? ` (${tasks.length})` : ''}</span>
-              </div>
-              {tasks.map(t => {
-                const done = t.status === 'APPROVED'
-                const asigName = t.assigned_to ? (people.find(p => p.id === t.assigned_to)?.full_name ?? null) : null
-                const rel = (taskFollowers[t.id] ?? []).filter(uid => uid !== t.assigned_to)
-                const relNames = rel.map(uid => people.find(p => p.id === uid)?.full_name ?? '¿?')
-                const n = new Date()
-                const hoy = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
-                const dueDays = t.due_date ? Math.round((new Date(t.due_date + 'T00:00:00').getTime() - new Date(hoy + 'T00:00:00').getTime()) / 86400000) : null
-                // Semáforo del deadline: rojo vencida · ámbar ≤2 días · gris con margen
-                const dueColor = done || dueDays === null ? 'var(--text-tertiary)'
-                  : dueDays < 0 ? 'var(--status-risk)' : dueDays <= 2 ? '#E8A33D' : 'var(--text-tertiary)'
-                const dueLabel = t.due_date ? new Date(t.due_date + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : null
-                const ph = phaseOf(t.status)
-                return (
-                  <button key={t.id} onClick={() => onOpenTask?.(t.id)}
-                    onContextMenu={e => canWrite && openTaskMenu(e, taskMenu(t))}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 5, width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${ph.color}`, borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: 'pointer', textAlign: 'left', minHeight: 44, marginBottom: 6 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }}>{t.title}</span>
-                      {(taskAdjuntos[t.id] ?? 0) > 0 && (
-                        <span title={`${taskAdjuntos[t.id]} ${taskAdjuntos[t.id] === 1 ? 'adjunto' : 'adjuntos'} — ábrela para verlos`}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 2, flexShrink: 0, color: 'var(--accent)' }}>
-                          <Paperclip size={12} />
-                          {taskAdjuntos[t.id] > 1 && (
-                            <span className="num" style={{ fontSize: 9.5, fontWeight: 800, fontFamily: 'var(--font-mono)' }}>{taskAdjuntos[t.id]}</span>
-                          )}
-                        </span>
-                      )}
-                      <FunnelBar status={t.status} />
-                      {event && canWrite && (
-                        <span role="button" title="Opciones (abrir · desvincular · archivar)"
-                          onClick={e => { e.stopPropagation(); openTaskMenu(e, taskMenu(t)) }}
-                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0, fontSize: 14, fontWeight: 800 }}>
-                          ⋯
-                        </span>
-                      )}
-                    </span>
-                    {/* Iconografía: asignado · relacionados · estimado · deadline */}
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      {asigName ? (
-                        <span title={`Asignada a ${asigName}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                          <span style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--accent-bg)', border: '1px solid var(--accent)', color: 'var(--accent)', fontSize: 8, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initialsOf(asigName)}</span>
-                          <span style={{ fontSize: 10, color: 'var(--text-secondary)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asigName}</span>
-                        </span>
-                      ) : (
-                        <span title="Sin asignar" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                          <span style={{ width: 18, height: 18, borderRadius: '50%', border: '1px dashed var(--border-strong)', color: 'var(--text-tertiary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><UserPlus size={9} /></span>
-                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Sin asignar</span>
-                        </span>
-                      )}
-                      {relNames.length > 0 && (
-                        <span title={`Relacionados: ${relNames.join(', ')}`} style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          {relNames.slice(0, 3).map((nm, i) => (
-                            <span key={i} style={{ width: 16, height: 16, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', color: 'var(--text-secondary)', fontSize: 7.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: i === 0 ? 0 : -5, flexShrink: 0 }}>{initialsOf(nm)}</span>
-                          ))}
-                          {relNames.length > 3 && <span className="num" style={{ fontSize: 9, color: 'var(--text-tertiary)', marginLeft: 3, fontFamily: 'var(--font-mono)' }}>+{relNames.length - 3}</span>}
-                        </span>
-                      )}
-                      {t.estimated_hours != null && (
-                        <span title={`Tiempo estimado: ${t.estimated_hours} h`} className="num" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                          <Clock size={10} /> {t.estimated_hours}h
-                        </span>
-                      )}
-                      {dueLabel && (
-                        <span title={dueDays! < 0 && !done ? `Deadline vencido (${dueLabel})` : `Deadline: ${dueLabel}`} className="num" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: dueColor, fontWeight: dueDays! < 0 && !done ? 800 : 600, fontFamily: 'var(--font-mono)' }}>
-                          <CalendarDays size={10} /> {dueLabel}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                )
-              })}
-              {/* Vincular una tarea que YA existe en el Task Manager */}
-              {event && (
-                <div style={{ position: 'relative', marginBottom: 8 }}>
-                  <Link2 size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
-                  <input value={linkQ} onChange={e => setLinkQ(e.target.value)}
-                    placeholder="Vincular tarea existente — busca por título…"
-                    style={{ ...inp, minHeight: 40, fontSize: 12, paddingLeft: 30 }} />
-                  {linkResults.length > 0 && (
-                    <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, overflow: 'hidden', zIndex: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
-                      {linkResults.map(r => (
-                        <button key={r.id} onMouseDown={e => { e.preventDefault(); linkTask(r.id) }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 40, padding: '0 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-                          <Link2 size={11} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                          <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
-                          <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{r.status}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {linkQ.trim().length >= 2 && linkResults.length === 0 && (
-                    <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>Sin tareas sueltas con ese título (solo se listan las que no pertenecen a otro proyecto).</p>
-                  )}
-                </div>
-              )}
-              <textarea value={bulkTasks} onChange={e => setBulkTasks(e.target.value)} rows={4}
-                placeholder={'Una tarea por línea (bullets):\n- Confirmar DJ y rider\n- Diseñar flyer\n- Brief a cocina'}
-                style={{ ...inp, minHeight: 88, padding: '10px 12px', resize: 'vertical', fontSize: 13, marginBottom: 8 }} />
-              {event ? (
-                <button onClick={() => pushBulkTasks(event.id, event.name, event.bu_id, event.date)} disabled={bulkPending === 0}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 44, borderRadius: 999, border: 'none', background: bulkPending ? 'var(--accent)' : 'var(--bg-base)', color: bulkPending ? 'var(--on-accent)' : 'var(--text-tertiary)', fontSize: 13, fontWeight: 700, cursor: bulkPending ? 'pointer' : 'not-allowed' }}>
-                  <ListPlus size={15} /> Pasar {bulkPending || ''} tarea{bulkPending === 1 ? '' : 's'} a Tareas
-                </button>
-              ) : (
-                bulkPending > 0 && (
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
-                    {bulkPending} tarea{bulkPending === 1 ? '' : 's'} se crearán en Tareas al guardar el evento.
-                  </p>
-                )
-              )}
-            </div>
           )}
 
           {/* Chat inline solo cuando NO cabe como columna (móvil o ventana
@@ -2727,8 +3165,18 @@ function EventSheet({ event, templates, buList, people, canWrite, canApprove, us
           {/* Hasta el fondo y en voz baja: guardar como plantilla es algo que se
               hace UNA vez, cuando el proyecto ya quedó bien — no compite con el
               trabajo de armarlo. */}
-          {canWrite && event && (
-            <button onClick={saveAsTemplate}
+          {canWrite && event && tplNaming && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input autoFocus value={tplName} onChange={e => setTplName(e.target.value)} placeholder="Nombre de la plantilla"
+                onKeyDown={e => { if (e.key === 'Enter') saveAsTemplate(); if (e.key === 'Escape') setTplNaming(false) }}
+                style={{ ...inp, flex: 1 }} />
+              <button onClick={saveAsTemplate} disabled={!tplName.trim()}
+                style={{ minHeight: 44, padding: '0 14px', borderRadius: 999, border: 'none', background: tplName.trim() ? 'var(--accent)' : 'var(--bg-base)', color: tplName.trim() ? 'var(--on-accent)' : 'var(--text-tertiary)', fontWeight: 700, fontSize: 12, cursor: tplName.trim() ? 'pointer' : 'not-allowed' }}>Guardar</button>
+              <button onClick={() => setTplNaming(false)} style={{ minHeight: 44, padding: '0 10px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
+            </div>
+          )}
+          {canWrite && event && !tplNaming && (
+            <button onClick={() => { setTplName(`${kind === 'evento' ? TYPE_META[type].label : KIND_META[kind].label} — ${name}`); setTplNaming(true) }}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', minHeight: 42, borderRadius: 999, border: '1px dashed var(--border-default)', background: 'none', color: 'var(--text-tertiary)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
               <Save size={13} /> Guardar este proyecto como plantilla
             </button>

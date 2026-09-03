@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.105.0"
+export const APP_VERSION = "2.106.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,22 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.106.0",
+    date: "2026-09-03",
+    type: "MINOR",
+    changes: [
+      "PROJECT MANAGER (antes Proyectos) — el proyecto dice solo en qué va. Cada proyecto trae un semáforo DERIVADO (Atorado · En riesgo · Fluye · Sin señal) con su causa y su persona: 'Atorado · permiso venció hace 2 d · Rodrigo'. Nadie lo captura: sale de fechas límite, tipo de deadline, responsable, estado y fechas de actividad",
+      "La tarjeta del tablero lo muestra con la cuenta regresiva D-9; la tabla y el timeline también. La ventana del proyecto abre con cuatro tiles fijos: salud, esta semana, avance y presupuesto",
+      "Toda tarea dice a qué proyecto pertenece — chip 'Proyecto › Actividad' en la ventana de la tarea, en el board, en la lista y en Mi Semana; clic abre el proyecto. Al crear una tarea se elige proyecto y actividad",
+      "Las tareas del proyecto y las de cada actividad ya no se mezclan: dos grupos con código fijo (carpeta ámbar = del proyecto, calendario azul = de una actividad, anidadas bajo su actividad con riel que se pone rojo a menos de 7 días con tareas abiertas). Círculo de estado, HARD, edad en el mismo estado, bloqueo, fecha con semáforo y responsable (o hueco rojo si no hay)",
+      "Andon: botón 'Estoy atorado' en la tarea pide la causa y pone el proyecto en rojo hasta que se libera",
+      "Timeline dentro de la ventana y en la vista global: barra ámbar = proyecto, barra azul = actividad en su día, rombo = tarea en su fecha límite (verde hecha, rojo vencida o bloqueada), línea roja = hoy y zona rayada = próximos 7 días",
+      "Corregido: el botón de tarea en una actividad no agregaba nada en la app instalada (usaba un diálogo que iOS ignora). Ahora se captura inline, igual que 'guardar como plantilla'",
+      "Proyecto para cliente interno o externo, y dos tipos nuevos: Campaña e Interno",
+      "Requiere project_manager_v1.sql",
+    ]
+  },
   {
     version: "2.105.0",
     date: "2026-08-19",

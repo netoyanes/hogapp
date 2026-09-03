@@ -10,6 +10,8 @@ import { useContextMenu, type CtxItem } from '../components/ui/ContextMenu'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { changeTaskStatus } from '../lib/taskActions'
+import { loadProjectLabels, chipDe, type ProjectLabels } from '../lib/projectLabels'
+import { ProjectChip } from '../components/ui/ProjectChip'
 import { logActivity } from '../hooks/useActivityLog'
 import type { Task, TaskStatus, TaskPriority, TaskArea } from '../types'
 import { TASK_AREA_LABELS, TASK_AREA_GROUPS } from '../lib/taskAreas'
@@ -44,6 +46,8 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
   const [profileMap, setProfileMap] = useState<Record<string, string>>({})
   const [followerMap, setFollowerMap] = useState<Record<string, Set<string>>>({})
   const [proofCounts, setProofCounts] = useState<Record<string, number>>({})
+  // Proyecto › actividad de cada tarea (para el chip): una consulta por carga
+  const [labels, setLabels] = useState<ProjectLabels>({ projects: {}, activities: {} })
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
@@ -76,6 +80,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
     ])
     setTasks(taskData ?? [])
     setBuList(buses ?? [])
+    loadProjectLabels(taskData ?? []).then(setLabels)
     const bm: Record<string, string> = {}
     buses?.forEach((b) => { bm[b.id] = `${b.code}` })
     setBuMap(bm)
@@ -350,7 +355,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
       {view === 'list' ? (
         <TaskListView
           tasks={filtered} loading={loading} isMobile={isMobile}
-          buMap={buMap} profileMap={profileMap} proofCounts={proofCounts}
+          buMap={buMap} profileMap={profileMap} proofCounts={proofCounts} labels={labels}
           onOpen={id => setSelectedTaskId(id)} onQuickAdd={quickAdd}
         />
       ) : isMobile ? (
@@ -382,6 +387,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
                       buName={task.bu_id ? buMap[task.bu_id] : undefined}
                       assigneeName={task.assigned_to ? profileMap[task.assigned_to] : undefined}
                       proofCount={proofCounts[task.id] ?? 0}
+                      project={chipDe(task, labels)}
                       onClick={() => setSelectedTaskId(task.id)}
                     />
                   </div>
@@ -434,6 +440,7 @@ export function TaskBoard({ userRole, defaultBuFilter, userId }: Props) {
                             buName={task.bu_id ? buMap[task.bu_id] : undefined}
                             assigneeName={task.assigned_to ? profileMap[task.assigned_to] : undefined}
                             proofCount={proofCounts[task.id] ?? 0}
+                            project={chipDe(task, labels)}
                             onClick={() => setSelectedTaskId(task.id)}
                           />
                         </div>
@@ -561,8 +568,9 @@ function SwipeableRow({ children, onSwipeRight, onSwipeLeft }: {
 // Vista LISTA — grupos colapsables por estatus (estilo tabla), ordenados por
 // fecha límite, con alta rápida por grupo. Misma data y filtros que el kanban.
 // ─────────────────────────────────────────────────────────────────────────────
-function TaskListView({ tasks, loading, isMobile, buMap, profileMap, proofCounts, onOpen, onQuickAdd }: {
+function TaskListView({ tasks, loading, isMobile, buMap, profileMap, proofCounts, labels, onOpen, onQuickAdd }: {
   tasks: Task[]
+  labels: ProjectLabels
   loading: boolean
   isMobile: boolean
   buMap: Record<string, string>
@@ -666,6 +674,7 @@ function TaskListView({ tasks, loading, isMobile, buMap, profileMap, proofCounts
                             <Paperclip size={10} />{proofCounts[t.id]}
                           </span>
                         )}
+                        {(() => { const c = chipDe(t, labels); return c ? <ProjectChip name={c.name} kind={c.kind} activity={c.activity} size="sm" maxWidth={isMobile ? 150 : 220} /> : null })()}
                       </span>
                       {isMobile ? (
                         <span style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', fontSize: '11px', color: 'var(--text-tertiary)', paddingLeft: '15px' }}>
