@@ -223,21 +223,9 @@ export default function App() {
     setActiveView('tasks')
   }
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-base)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          <div className="animate-pulse-green">
-            <AppLogoBadge size={32} radius={8} />
-          </div>
-          <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>Loading HOG APP…</span>
-        </div>
-      </div>
-    )
-  }
-
-  // (Va ANTES del return de login: un hook después de un return condicional
-  // cambia el orden de hooks al iniciar sesión y deja la pantalla en blanco.)
+  // (Va ANTES de CUALQUIER return condicional — el de loading y el de login:
+  // un hook después de un return cambia el orden de hooks entre renders y
+  // React aborta con la pantalla en blanco.)
   // "Abrir proyecto" desde el chip de una tarea (board, Mi Semana, la propia
   // tarea): se cierra la tarea, se aterriza en Project Manager y éste abre el
   // proyecto pendiente — el mismo mecanismo que el deep-link ?project=.
@@ -254,6 +242,19 @@ export default function App() {
     window.addEventListener('hog:open-project', open)
     return () => window.removeEventListener('hog:open-project', open)
   }, [])
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-base)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+          <div className="animate-pulse-green">
+            <AppLogoBadge size={32} radius={8} />
+          </div>
+          <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>Loading HOG APP…</span>
+        </div>
+      </div>
+    )
+  }
 
   if (!session) return <Auth onSignIn={signIn} accessDenied={accessDenied} />
 
