@@ -154,8 +154,10 @@ create or replace function public.fn_wellness_reset_password(p_phone text, p_pas
 returns jsonb language plpgsql security definer set search_path = public as $fn$
 declare v_id uuid; v_tel text;
 begin
-  if hog_role() not in ('MASTER', 'ADMIN') then
-    return jsonb_build_object('error', 'Solo el equipo puede reponer contraseñas.');
+  -- La misma puerta que el resto de la operación de wellness, no un rol
+  -- global: quien atiende el mostrador puede no ser MASTER.
+  if not fn_wellness_admin() then
+    return jsonb_build_object('error', 'Solo el equipo de Wellness puede reponer contraseñas.');
   end if;
   if length(coalesce(p_password, '')) < 6 then
     return jsonb_build_object('error', 'La contraseña necesita al menos 6 caracteres.');

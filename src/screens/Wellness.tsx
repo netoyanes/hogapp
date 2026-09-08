@@ -36,6 +36,14 @@ interface Booking {
   status: string; paid: boolean; paid_via: string | null; amount: number | null
   instructor_pct: number | null
 }
+/** Un paquete, membresía o semana de prueba que alguien compró. */
+interface Purchase {
+  id: string; student_id: string; product_id: string; code: string | null
+  precio: number; creditos_totales: number | null; creditos_usados: number
+  inicia: string | null; vence: string | null; status: string
+  paid: boolean; paid_via: string | null; created_at: string
+  wellness_products?: { nombre: string; tipo: string } | null
+}
 
 const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const mxn = (n: number) => `$${Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
@@ -51,6 +59,7 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
   const [slots, setSlots] = useState<WSlot[]>([])
   const [students, setStudents] = useState<Student[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [purchases, setPurchases] = useState<Purchase[]>([])
   const [missing, setMissing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [classSheet, setClassSheet] = useState<WClass | 'new' | null>(null)
@@ -75,6 +84,12 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
       supabase.from('wellness_students').select('id, full_name, phone, email, created_at').order('created_at', { ascending: false }),
       supabase.from('wellness_bookings').select('*').gte('class_date', iso(desde)),
     ])
+    // Opcional: sin wellness_productos.sql la tabla no existe y el tab de
+    // alumnos simplemente no muestra paquetes.
+    supabase.from('wellness_purchases')
+      .select('*, wellness_products(nombre, tipo)')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setPurchases((data ?? []) as Purchase[]))
     if (insErr) { setMissing(true); setLoading(false); return }
     setMissing(false)
     // Estas dos son opcionales: si wellness_operacion.sql no se ha corrido, la
@@ -168,7 +183,7 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
           <ClasesTab classes={classes} slots={slots} instructors={instructors} buList={buList}
             onNew={() => setClassSheet('new')} onEdit={c => setClassSheet(c)} onChange={load} />
         )}
-        {tab === 'alumnos' && isManager && <AlumnosTab students={students} bookings={bookings} />}
+        {tab === 'alumnos' && isManager && <AlumnosTab students={students} bookings={bookings} purchases={purchases} onChange={load} />}
         {tab === 'ingresos' && isManager && <IngresosTab bookings={bookings} classes={classes} slots={slots} instructors={instructors} />}
       </div>
 
@@ -191,6 +206,12 @@ const inp: React.CSSProperties = {
   color: 'var(--text-primary)', padding: '0 10px', fontSize: 13, outline: 'none', minHeight: 40, boxSizing: 'border-box',
 }
 const lbl: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
+/** Botón chico de acción en listas: cobrar, reponer, cancelar. */
+const btnMini: React.CSSProperties = {
+  minHeight: 32, padding: '0 11px', borderRadius: 999, background: 'none',
+  border: '1px solid var(--border-default)', color: 'var(--text-secondary)',
+  fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+}
 const navBtn: React.CSSProperties = {
   width: 30, height: 30, borderRadius: 7, border: '1px solid var(--border-default)', background: 'none',
   color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -514,25 +535,118 @@ function ClassSheet({ cls, buList, instructors, slots, isMobile, onClose, onSave
 }
 
 // ── ALUMNOS (gerente): la base que se va construyendo sola ───────────────────
-function AlumnosTab({ students, bookings }: { students: Student[]; bookings: Booking[] }) {
+function AlumnosTab({ students, bookings, purchases, onChange }: {
+  students: Student[]; bookings: Booking[]; purchases: Purchase[]; onChange: () => void
+}) {
   const [q, setQ] = useState('')
+  const [abierto, setAbierto] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [aviso, setAviso] = useState<string | null>(null)
+  // Reponer contraseña: se escribe una temporal delante de la persona.
+  const [reset, setReset] = useState<{ id: string; phone: string; pw: string } | null>(null)
+
   const rows = students.filter(s => !q.trim()
     || s.full_name.toLowerCase().includes(q.toLowerCase()) || s.phone.includes(q.trim()))
+
+  /**
+   * Marcar una compra como pagada es lo que cierra el circuito: el portal la
+   * crea sin pagar porque el cobro ocurre en la caja del primer piso. Sin este
+   * botón, todo lo vendido se queda para siempre en "por pagar".
+   */
+  async function marcarPagada(pu: Purchase) {
+    setBusy(true)
+    const { error } = await supabase.from('wellness_purchases')
+      .update({ paid: true, paid_via: 'caja', paid_at: new Date().toISOString() })
+      .eq('id', pu.id)
+    setBusy(false)
+    setAviso(error ? `No se pudo: ${error.message}` : `Cobrada ${pu.wellness_products?.nombre ?? 'la compra'}.`)
+    if (!error) onChange()
+  }
+
+  async function reponerPassword() {
+    if (!reset) return
+    setBusy(true)
+    const { data, error } = await supabase.rpc('fn_wellness_reset_password', {
+      p_phone: reset.phone, p_password: reset.pw,
+    })
+    setBusy(false)
+    if (error || data?.error) { setAviso(error?.message ?? data.error); return }
+    setAviso(`Contraseña repuesta. Dísela ahora: ${reset.pw}`)
+    setReset(null)
+  }
+
+  const fmt = (d: string | null) => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '—'
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nombre o teléfono…" style={{ ...inp, maxWidth: 320 }} />
+      {aviso && (
+        <div onClick={() => setAviso(null)} style={{ fontSize: 12.5, padding: '9px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+          {aviso}
+        </div>
+      )}
       <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12 }}>
         {rows.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>Sin alumnos aún — se registran solos desde el portal.</p>}
         {rows.map(s => {
           const suyas = bookings.filter(b => b.student_id === s.id && b.status !== 'cancelada')
           const gastado = suyas.filter(b => b.paid).reduce((sum, b) => sum + Number(b.amount ?? 0), 0)
+          const misCompras = purchases.filter(pu => pu.student_id === s.id)
+          const porCobrar = misCompras.filter(pu => !pu.paid && pu.status !== 'cancelada')
+          const abiertoAqui = abierto === s.id
           return (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
-              <span style={{ flex: 1, minWidth: 140, fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{s.full_name}</span>
-              <span className="num" style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{s.phone}</span>
-              {s.email && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{s.email}</span>}
-              <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', width: 66, textAlign: 'right' }}>{suyas.length} clases</span>
-              <span className="num" style={{ fontSize: 12, fontWeight: 700, color: 'var(--status-healthy)', fontFamily: 'var(--font-mono)', width: 80, textAlign: 'right' }}>{mxn(gastado)}</span>
+            <div key={s.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <button onClick={() => setAbierto(abiertoAqui ? null : s.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', flexWrap: 'wrap', width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ flex: 1, minWidth: 140, fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{s.full_name}</span>
+                {/* Lo que debe es lo primero que necesita ver quien cobra. */}
+                {porCobrar.length > 0 && (
+                  <span className="num" style={{ fontSize: 11, fontWeight: 700, color: 'var(--status-warning)', fontFamily: 'var(--font-mono)' }}>
+                    debe {mxn(porCobrar.reduce((t, pu) => t + Number(pu.precio), 0))}
+                  </span>
+                )}
+                <span className="num" style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{s.phone}</span>
+                <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', width: 66, textAlign: 'right' }}>{suyas.length} clases</span>
+                <span className="num" style={{ fontSize: 12, fontWeight: 700, color: 'var(--status-healthy)', fontFamily: 'var(--font-mono)', width: 80, textAlign: 'right' }}>{mxn(gastado)}</span>
+              </button>
+
+              {abiertoAqui && (
+                <div style={{ padding: '4px 0 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {misCompras.length === 0
+                    ? <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>Sin paquetes ni membresías — solo clases sueltas.</p>
+                    : misCompras.map(pu => (
+                      <div key={pu.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <span className="num" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)' }}>{pu.code ?? '—'}</span>
+                        <span style={{ flex: 1, minWidth: 130, color: 'var(--text-primary)' }}>{pu.wellness_products?.nombre ?? 'Compra'}</span>
+                        <span className="num" style={{ fontFamily: 'var(--font-mono)' }}>
+                          {pu.creditos_totales == null
+                            ? 'ilimitado'
+                            : `${pu.creditos_totales - pu.creditos_usados}/${pu.creditos_totales}`}
+                        </span>
+                        <span style={{ color: 'var(--text-tertiary)' }}>vence {fmt(pu.vence)}</span>
+                        <span className="num" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{mxn(Number(pu.precio))}</span>
+                        {pu.paid
+                          ? <span style={{ fontSize: 11, color: 'var(--status-healthy)', fontWeight: 600 }}>Pagada</span>
+                          : <button onClick={() => marcarPagada(pu)} disabled={busy}
+                              style={{ ...btnMini, borderColor: 'var(--status-warning)', color: 'var(--status-warning)' }}>
+                              Cobrar {mxn(Number(pu.precio))}
+                            </button>}
+                      </div>
+                    ))}
+
+                  {reset?.id === s.id ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <input value={reset.pw} onChange={e => setReset(r => r && ({ ...r, pw: e.target.value }))}
+                        placeholder="Contraseña temporal (6+)" style={{ ...inp, maxWidth: 220 }} autoFocus />
+                      <button onClick={reponerPassword} disabled={busy || reset.pw.length < 6} style={btnMini}>Guardar</button>
+                      <button onClick={() => setReset(null)} style={btnMini}>Cancelar</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setReset({ id: s.id, phone: s.phone, pw: '' })} style={{ ...btnMini, alignSelf: 'flex-start' }}>
+                      Reponer contraseña
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
