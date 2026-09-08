@@ -5,10 +5,9 @@
 -- opera POD Wellness hoy. Sin esto la app está vacía y el portal público no
 -- tiene nada que mostrar.
 --
---   ⚠️  ANTES DE CORRER: pon abajo el CÓDIGO del venue de POD Wellness tal
---       como está en HOG APP (Casas → el código de tres letras). Si el código
---       no existe, el script se detiene y te lo dice, en vez de crear las
---       clases colgando de la casa equivocada.
+-- El venue va fijado abajo en v_code. Si el código no existe, el script se
+-- detiene y te lista los que sí hay, en vez de crear las clases colgando de
+-- la casa equivocada.
 --
 -- Es idempotente: correrlo dos veces no duplica nada. Si ya editaste un
 -- horario a mano, la segunda corrida respeta lo que hay (usa on conflict).
@@ -18,8 +17,8 @@
 
 do $$
 declare
-  -- ⚠️  ⬇️  EL ÚNICO VALOR QUE TIENES QUE CAMBIAR  ⬇️
-  v_code   text := 'PC';
+  -- La casa de POD Wellness en HOG APP
+  v_code   text := 'NUEVOLEON108';
   -- wellness.sql sembró un Dharma Yoga de ejemplo en martes y jueves 07:30.
   -- Con esto en true, cualquier horario de estas clases que NO esté en la
   -- parrilla oficial queda EN PAUSA (no se borra: se reactiva desde

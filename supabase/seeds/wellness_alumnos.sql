@@ -141,22 +141,47 @@ end $$;
 -- ─── 3. El cierre de turno cobra dos precios ─────────────────────────────────
 -- Registrados al precio con descuento, walk-ins al regular. Con un solo precio
 -- el ingreso del turno quedaba mal desde el día que entró la regla.
-alter table wellness_sessions add column if not exists precio_walkin numeric check (precio_walkin is null or precio_walkin >= 0);
+--
+-- OJO: recrear una columna generada pide un ACCESS EXCLUSIVE sobre la tabla.
+-- Si otra sesión la tiene tomada (por ejemplo, una corrida anterior que se
+-- cortó y dejó una transacción abierta), esto se quedaría esperando hasta que
+-- la conexión muera — que es justo el "connection timeout" que no dice nada.
+-- Con lock_timeout falla en 5 segundos y con un mensaje que sí sirve.
+set lock_timeout = '5s';
 
-do $$ begin
-  if exists (select 1 from information_schema.columns
-              where table_name = 'wellness_sessions' and column_name = 'ingresos') then
-    alter table wellness_sessions drop column ingresos;
+do $$
+begin
+  alter table wellness_sessions add column if not exists precio_walkin numeric
+    check (precio_walkin is null or precio_walkin >= 0);
+
+  -- Solo se recrea si todavía tiene la fórmula vieja: en la segunda corrida
+  -- no toca nada y ni siquiera pide el lock.
+  if exists (
+    select 1 from pg_attrdef d
+      join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
+     where d.adrelid = 'wellness_sessions'::regclass and a.attname = 'ingresos'
+       and pg_get_expr(d.adbin, d.adrelid) not like '%walk_ins%'
+  ) or not exists (
+    select 1 from information_schema.columns
+     where table_name = 'wellness_sessions' and column_name = 'ingresos'
+  ) then
+    if exists (select 1 from information_schema.columns
+                where table_name = 'wellness_sessions' and column_name = 'ingresos') then
+      alter table wellness_sessions drop column ingresos;
+    end if;
+    -- Los registrados son los cobrados que no fueron walk-in. Sin precio de
+    -- walk-in se usa el mismo, así una operación de un solo precio sigue
+    -- dando exactamente el mismo número que antes.
+    alter table wellness_sessions add column ingresos numeric
+      generated always as (
+        greatest(total_cobrados - walk_ins, 0) * precio_aplicado
+        + walk_ins * coalesce(precio_walkin, precio_aplicado)
+      ) stored;
   end if;
+exception when lock_not_available then
+  raise exception 'No se pudo tomar el lock de wellness_sessions: otra sesión la tiene ocupada. Corre el diagnóstico de bloqueos, termina esa sesión y vuelve a intentar.';
 end $$;
 
--- Los registrados son los cobrados que no fueron walk-in. Si no se capturó
--- precio de walk-in, se usa el mismo — así una operación de un solo precio
--- sigue dando exactamente el mismo número que antes.
-alter table wellness_sessions add column ingresos numeric
-  generated always as (
-    greatest(total_cobrados - walk_ins, 0) * precio_aplicado
-    + walk_ins * coalesce(precio_walkin, precio_aplicado)
-  ) stored;
+reset lock_timeout;
 
 notify pgrst, 'reload schema';
