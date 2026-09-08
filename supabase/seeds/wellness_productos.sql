@@ -111,16 +111,27 @@ comment on column wellness_config.tope_membresias is 'Máximo de membresías viv
 alter table wellness_products  enable row level security;
 alter table wellness_purchases enable row level security;
 
--- El catálogo y las compras se leen por RPC security-definer, no por tabla.
--- Sin políticas, anon no ve nada directo — que es justo lo que se quiere.
+-- El alumno lee catálogo y compras por RPC security-definer, nunca por tabla.
+-- Para el equipo, estas tablas siguen el MISMO criterio que wellness_bookings
+-- y wellness_students: ver con fn_can_wellness(), escribir con
+-- fn_wellness_admin(). Un using(true) dejaría a cualquier usuario autenticado
+-- de HOG APP leer todas las compras de todos los alumnos.
 do $g$ begin
   if exists (select 1 from pg_roles where rolname = 'authenticated') then
     drop policy if exists wellness_products_lectura on wellness_products;
-    create policy wellness_products_lectura on wellness_products
-      for select to authenticated using (true);
     drop policy if exists wellness_purchases_lectura on wellness_purchases;
-    create policy wellness_purchases_lectura on wellness_purchases
-      for select to authenticated using (true);
+    drop policy if exists wellness_products_sel on wellness_products;
+    drop policy if exists wellness_products_wr  on wellness_products;
+    drop policy if exists wellness_purchases_sel on wellness_purchases;
+    drop policy if exists wellness_purchases_wr  on wellness_purchases;
+    create policy wellness_products_sel on wellness_products
+      for select to authenticated using (fn_can_wellness());
+    create policy wellness_products_wr on wellness_products
+      for all to authenticated using (fn_wellness_admin()) with check (fn_wellness_admin());
+    create policy wellness_purchases_sel on wellness_purchases
+      for select to authenticated using (fn_can_wellness());
+    create policy wellness_purchases_wr on wellness_purchases
+      for all to authenticated using (fn_wellness_admin()) with check (fn_wellness_admin());
   end if;
 end $g$;
 
