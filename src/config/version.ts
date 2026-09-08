@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.109.0"
+export const APP_VERSION = "2.110.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.110.0",
+    date: "2026-09-08",
+    type: "MINOR",
+    changes: [
+      "IDENTIDAD POD EN EL PORTAL PÚBLICO — el portal de Wellness deja de hablar en la marca de HOG APP y habla en la de POD, con los tokens tomados del manual de marca en Figma",
+      "Color: fondo cream 500 (#EFEFE0), texto obsidian 500 (#0D0D0D) y verde Wellness 500 (#1D9E75) como acento, respetando la proporción 70/20/10 del manual. La banda superior usa el degradado del espacio (#1D9E75 → #04342C) con el logotipo en cream, que es como el manual pide usar el ícono sobre color",
+      "Tipografía: Poppins para display y cuerpo, IBM Plex Sans para encabezados y etiquetas, con los pesos y el tracking del archivo (el logotipo va en Poppins SemiBold con 7.5% de tracking)",
+      "Logotipo POD WELLNESS en el encabezado, en el registro y en el pie. Si dejas el SVG oficial en public/pod-wellness-icon.svg, se usa ese en lugar del dibujado, sin tocar código",
+      "El portal ya anuncia la promoción de apertura: precio regular tachado y precio vigente, tomados de la configuración del venue (300 con -40 = 260). Antes mostraba el precio de la clase sin saber de la promoción",
+      "Requiere wellness_portal_identidad.sql",
+    ]
+  },
   {
     version: "2.109.0",
     date: "2026-09-08",
