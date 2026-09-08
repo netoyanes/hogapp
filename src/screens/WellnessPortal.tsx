@@ -35,7 +35,7 @@ const LUGAR = {
   nombre: 'POD Condesa',
   calle: 'Nuevo León 108',
   colonia: 'Condesa, CDMX',
-  mapa: 'https://share.google/fsz5ugWZOe5x6Wv',
+  mapa: 'https://maps.app.goo.gl/AmEqutekz1gGPEZD6',
   pisoEstudio: 'segundo piso',
   pisoCaja: 'POD Art House, primer piso',
 } as const
@@ -459,14 +459,10 @@ export function WellnessPortal({ code }: { code: string }) {
             Yoga y Pilates<br />en la Condesa
           </h1>
 
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, flexWrap: 'wrap', margin: '14px 0 0' }}>
-            {regular != null && (
-              <span style={{ fontFamily: POPPINS, fontSize: 20, fontWeight: 600, color: CREAM[500] }}>{mxn(regular)}</span>
-            )}
-            <span style={{ fontFamily: PLEX, fontWeight: 300, fontSize: 13.5, color: 'rgba(239,239,224,0.8)' }}>
-              por clase, sin mensualidades
-            </span>
-          </div>
+          {/* El precio de la clase suelta ya no va en la portada: la barra fija
+              de arriba lleva la oferta de entrada, y el precio por clase se ve
+              en cada renglón de la cartelera y en la sección de paquetes.
+              Repetirlo aquí solo alargaba la portada. */}
           {/* La promoción solo se anuncia a quien todavía puede usarla: a quien
               ya tiene cuenta y ya la gastó, ofrecerle "tu primera clase con
               descuento" es prometer algo que no va a recibir en la caja. */}
