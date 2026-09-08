@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { PodWellnessLogo, PodIcon } from '../components/ui/PodWellnessLogo'
 import { CREAM, OBSIDIAN, ESPACIO, WELLNESS_GRADIENT, POPPINS, PLEX } from '../lib/podBrand'
@@ -6,27 +6,28 @@ import { CREAM, OBSIDIAN, ESPACIO, WELLNESS_GRADIENT, POPPINS, PLEX } from '../l
 // ─────────────────────────────────────────────────────────────────────────────
 // PORTAL WELLNESS — la cara pública (?wellness=CODIGO)
 //
-// ESTE LINK SE PEGA EN REDES. Quien lo abre puede no saber qué es POD, dónde
-// está ni cuánto cuesta, y lo abre en el teléfono, de pie, con una mano. Todo
-// lo que sigue está ordenado por esa realidad: qué es y dónde → cuánto y por
-// qué registrarse → cuándo hay clases → cómo llego.
+// ESTE LINK SE PEGA EN REDES. Quien lo abre no sabe qué es POD ni dónde está,
+// y lo abre en el teléfono. El orden es: qué y dónde → qué clases hay → aparto.
 //
-// Para el alumno no hay cuenta de HOG APP ni contraseñas: se registra una vez
-// con nombre y teléfono, y su acceso queda en el navegador. La fricción mata la
-// asistencia a una clase de 7:30 am.
+// DOS DECISIONES QUE MANDAN SOBRE EL DISEÑO:
 //
-// Los datos viajan por RPCs security-definer (patrón fn_shared_task): el anon
-// key solo puede ver horario/cupo y operar SU cuenta vía token.
+// 1. El registro NO se pide por adelantado. La cartelera se ve sin dar nada, y
+//    los datos se piden en el momento de apartar — cuando ya hay una razón para
+//    darlos. Un formulario antes de mostrar el producto ahuyenta.
+//
+// 2. La lista se recorre con el pulgar. Filtro por clase y una semana a la vez,
+//    porque catorce días de cartelera son cincuenta tarjetas de scroll.
+//
+// El precio de lista es el que se anuncia. El descuento aparece al apartar,
+// que es donde puede cambiar la decisión: ahí se ven las dos opciones —con
+// cuenta y sin cuenta— y la diferencia de precio entre ellas.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * El cobro en línea todavía NO está listo: falta el alta de producción de
- * Blumon y validar el origen en la edge function wellness-pay, que hoy acepta
- * peticiones de cualquier dominio. Mientras tanto se cobra en caja y el portal
- * lo dice claro, en vez de ofrecer un botón que falla.
- *
- * Para encenderlo: cerrar esos dos pendientes y poner esto en true. La ruta de
- * pago (`pagar`) ya está escrita y probada contra el checkout.
+ * Blumon y autenticar el webhook de wellness-pay, que hoy marca una reserva
+ * como pagada sin verificar quién llama. Mientras tanto se cobra en caja.
+ * Para encenderlo: cerrar esos dos pendientes y poner esto en true.
  */
 const PAGO_EN_LINEA = false
 
@@ -35,7 +36,7 @@ const LUGAR = {
   calle: 'Nuevo León 108',
   colonia: 'Condesa, CDMX',
   mapa: 'https://share.google/fsz5ugWZOe5x6Wv',
-  pisoEstudio: 'Segundo piso',
+  pisoEstudio: 'segundo piso',
   pisoCaja: 'POD Art House, primer piso',
 } as const
 
@@ -49,6 +50,11 @@ interface MyBooking {
   booking_id: string; code: string | null; class: string; class_date: string; start_time: string
   instructor: string | null; status: string; paid: boolean; paid_via: string | null; amount: number | null
 }
+interface Info {
+  venue?: string; precio_regular?: number | null; descuento?: number | null
+  precio_vigente?: number | null; promocion?: boolean
+  promo_hasta?: string | null; promo_solo_primera?: boolean
+}
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const TOKEN_KEY = 'hog_wellness_token'
@@ -60,30 +66,33 @@ export function WellnessPortal({ code }: { code: string }) {
   const [occ, setOcc] = useState<Occ[]>([])
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
   const [myName, setMyName] = useState('')
-  const [perfil, setPerfil] = useState<{ phone?: string; email?: string | null; since?: string; tomadas?: number } | null>(null)
-  const [acc, setAcc] = useState({ phone: '', name: '', email: '' })
-  const [accNuevo, setAccNuevo] = useState(false)
-  const [cuentaOpen, setCuentaOpen] = useState(false)
-  const [historialOpen, setHistorialOpen] = useState(false)
-  const [correoEdit, setCorreoEdit] = useState('')
+  const [perfil, setPerfil] = useState<{ phone?: string; email?: string | null; since?: string; tomadas?: number; primera_disponible?: boolean } | null>(null)
   const [mine, setMine] = useState<MyBooking[]>([])
+  const [info, setInfo] = useState<Info | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null)
-  const [regOpen, setRegOpen] = useState<{ slot: SlotDef; date: string } | null>(null)
-  const [rName, setRName] = useState('')
-  const [rPhone, setRPhone] = useState('')
-  const [rEmail, setREmail] = useState('')
-  // El ticket que se muestra al terminar de reservar: es el comprobante que se
-  // enseña en caja, así que se abre solo y ocupa la pantalla.
+
+  // Cartelera: filtro por clase y cuántos días se muestran
+  const [filtro, setFiltro] = useState<string | null>(null)
+  const [dias, setDias] = useState(7)
+
+  // Ventanas
+  const [loginOpen, setLoginOpen] = useState(false)
+  const [reservaOpen, setReservaOpen] = useState<{ slot: SlotDef; date: string } | null>(null)
   const [ticket, setTicket] = useState<MyBooking | null>(null)
-  const [info, setInfo] = useState<{ venue?: string; precio_regular?: number | null; descuento?: number | null; precio_vigente?: number | null; promocion?: boolean } | null>(null)
-  const accesoRef = useRef<HTMLDivElement>(null)
+  const [cuentaOpen, setCuentaOpen] = useState(false)
+  const [historialOpen, setHistorialOpen] = useState(false)
+
+  // Un solo formulario para las dos rutas de reserva: cambia el botón que se
+  // aprieta, no los campos.
+  const [f, setF] = useState({ name: '', phone: '', email: '' })
+  const [correoEdit, setCorreoEdit] = useState('')
 
   const hoy = new Date()
-  const hasta = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 13)
 
   const load = useCallback(async () => {
+    const hasta = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 13)
     const [{ data: sch }, { data: oc }] = await Promise.all([
       supabase.rpc('fn_wellness_schedule', { p_code: code }),
       supabase.rpc('fn_wellness_occupancy', { p_code: code, p_from: iso(hoy), p_to: iso(hasta) }),
@@ -97,21 +106,47 @@ export function WellnessPortal({ code }: { code: string }) {
   useEffect(() => { load() }, [load])
 
   const loadMine = useCallback(async () => {
-    if (!token) { setMine([]); setMyName(''); return }
+    if (!token) { setMine([]); setMyName(''); setPerfil(null); return }
     const { data } = await supabase.rpc('fn_wellness_me', { p_token: token })
     if (!data) { localStorage.removeItem(TOKEN_KEY); setToken(null); return }
     setMyName(data.name ?? '')
-    setPerfil({ phone: data.phone, email: data.email, since: data.since, tomadas: data.tomadas })
+    setPerfil({ phone: data.phone, email: data.email, since: data.since, tomadas: data.tomadas, primera_disponible: data.primera_disponible })
     setCorreoEdit(data.email ?? '')
     setMine((data.bookings ?? []) as MyBooking[])
   }, [token])
   useEffect(() => { loadMine() }, [loadMine])
 
+  // ── Precio ────────────────────────────────────────────────────────────────
+  // El de lista es el que se anuncia. El descuento es de PRIMERA CLASE y con
+  // fecha límite, así que no es "el precio": es una condición que se cumple o
+  // no, y se evalúa contra la clase concreta que se está apartando.
+  const regular = Number(info?.precio_regular) > 0 ? Number(info!.precio_regular) : null
+  const conDescuento = Number(info?.precio_vigente) > 0 ? Number(info!.precio_vigente) : null
+  const promoViva = !!info?.promocion && regular != null && conDescuento != null && conDescuento < regular
+  const ahorro = promoViva ? regular! - conDescuento! : 0
+  const promoHasta = info?.promo_hasta ?? null
+  const soloPrimera = info?.promo_solo_primera !== false
+  // Con sesión sabemos si ya la usó; sin sesión, quien está por registrarse
+  // estrena cuenta y por definición es su primera.
+  const primeraDisponible = token ? perfil?.primera_disponible !== false : true
+
+  /** ¿Esta clase concreta califica para el descuento, con cuenta? */
+  const aplicaDescuento = (fecha: string) =>
+    promoViva && (!promoHasta || fecha <= promoHasta) && (!soloPrimera || primeraDisponible)
+
+  const precioLista = (p: number) => regular ?? p
+
+  // ── Cartelera ─────────────────────────────────────────────────────────────
+  const clases = useMemo(
+    () => [...new Set(slots.map(s => s.class))].sort((a, b) => a.localeCompare(b, 'es')),
+    [slots])
+
   const proximas = useMemo(() => {
     const out: { slot: SlotDef; date: string; booked: number }[] = []
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < dias; i++) {
       const d = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + i)
       for (const s of slots.filter(s => s.weekday === d.getDay())) {
+        if (filtro && s.class !== filtro) continue
         if (i === 0) {
           const [h, m] = s.start_time.split(':').map(Number)
           if (d.getHours() * 60 + d.getMinutes() > h * 60 + m - 30) continue
@@ -122,62 +157,89 @@ export function WellnessPortal({ code }: { code: string }) {
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots, occ])
+  }, [slots, occ, filtro, dias])
+
+  const porDia = useMemo(() => {
+    const m = new Map<string, typeof proximas>()
+    for (const p of proximas) { const arr = m.get(p.date) ?? []; arr.push(p); m.set(p.date, arr) }
+    return [...m.entries()]
+  }, [proximas])
 
   const yaReserve = (slotId: string, date: string) =>
     mine.some(b => b.class_date === date && b.status !== 'cancelada'
       && proximas.some(p => p.slot.slot_id === slotId && p.date === date && p.slot.class === b.class && p.slot.start_time === b.start_time))
 
-  // Tras reservar hay que releer la cuenta para tener el ticket completo (con
-  // su código); el RPC de reserva solo devuelve el código, no la clase ni la
-  // hora, y el ticket los necesita.
-  async function abrirTicket(bookingId: string, fallback: Partial<MyBooking>) {
-    const { data } = await supabase.rpc('fn_wellness_me', { p_token: token })
-    const lista = (data?.bookings ?? []) as MyBooking[]
-    setMine(lista)
-    setTicket(lista.find(b => b.booking_id === bookingId) ?? ({ ...fallback, booking_id: bookingId } as MyBooking))
+  const vigentes = mine.filter(b => b.status !== 'cancelada' && b.class_date >= iso(hoy))
+  const pasadas = mine.filter(b => b.status !== 'cancelada' && b.class_date < iso(hoy))
+
+  // ── Acciones ──────────────────────────────────────────────────────────────
+  function abrirReserva(slot: SlotDef, date: string) {
+    // Con sesión no hay nada que preguntar: se aparta y se muestra el ticket.
+    if (token) { reservarConCuenta(slot, date); return }
+    setF({ name: '', phone: '', email: '' })
+    setReservaOpen({ slot, date })
   }
 
-  async function reservar(slot: SlotDef, date: string) {
-    if (!token) { setRegOpen({ slot, date }); return }
+  async function reservarConCuenta(slot: SlotDef, date: string, tok = token) {
     setBusy(true)
-    const { data } = await supabase.rpc('fn_wellness_book', { p_token: token, p_slot: slot.slot_id, p_date: date })
+    const { data } = await supabase.rpc('fn_wellness_book', { p_token: tok, p_slot: slot.slot_id, p_date: date })
     setBusy(false)
     if (data?.error) { setMsg({ text: data.error, error: true }); return }
-    await abrirTicket(data.booking_id, {
-      code: data.code, class: slot.class, class_date: date, start_time: slot.start_time,
-      instructor: slot.instructor, status: 'reservada', paid: false, amount: data.amount,
+    setReservaOpen(null)
+    setTicket({
+      booking_id: data.booking_id, code: data.code, class: slot.class, class_date: date,
+      start_time: slot.start_time, instructor: slot.instructor,
+      status: 'reservada', paid: false, paid_via: null, amount: data.amount,
+    })
+    load(); loadMine()
+  }
+
+  /** Ruta CON cuenta: crea (o recupera) la cuenta y aparta. */
+  async function registrarYApartar() {
+    if (!reservaOpen) return
+    setBusy(true)
+    const { data } = await supabase.rpc('fn_wellness_register', {
+      p_name: f.name, p_phone: f.phone, p_email: f.email,
+    })
+    if (data?.error) { setBusy(false); setMsg({ text: data.error, error: true }); return }
+    localStorage.setItem(TOKEN_KEY, data.token)
+    setToken(data.token)
+    setBusy(false)
+    await reservarConCuenta(reservaOpen.slot, reservaOpen.date, data.token)
+  }
+
+  /** Ruta SIN cuenta: aparta al precio de lista y no entrega acceso. */
+  async function apartarSinCuenta() {
+    if (!reservaOpen) return
+    setBusy(true)
+    const { data } = await supabase.rpc('fn_wellness_book_guest', {
+      p_name: f.name, p_phone: f.phone, p_slot: reservaOpen.slot.slot_id, p_date: reservaOpen.date,
+    })
+    setBusy(false)
+    if (data?.error) { setMsg({ text: data.error, error: true }); return }
+    const { slot, date } = reservaOpen
+    setReservaOpen(null)
+    setTicket({
+      booking_id: data.booking_id, code: data.code, class: slot.class, class_date: date,
+      start_time: slot.start_time, instructor: slot.instructor,
+      status: 'reservada', paid: false, paid_via: null, amount: data.amount,
     })
     load()
   }
 
   async function entrar() {
     setBusy(true)
-    const { data } = await supabase.rpc('fn_wellness_login', { p_phone: acc.phone, p_name: acc.name })
+    const { data } = await supabase.rpc('fn_wellness_login', { p_phone: f.phone, p_name: f.name })
     setBusy(false)
     if (data?.error) { setMsg({ text: data.error, error: true }); return }
     if (data?.nuevo) {
-      setAccNuevo(true)
-      setMsg({ text: 'Ese teléfono todavía no está registrado. Completa tus datos y creamos tu cuenta — así se te aplica el descuento.' })
+      setMsg({ text: 'Ese teléfono todavía no tiene cuenta. Se crea sola la primera vez que apartas una clase.', error: true })
       return
     }
     localStorage.setItem(TOKEN_KEY, data.token)
     setToken(data.token)
-    setAccNuevo(false)
-    setMsg({ text: `Qué gusto verte de nuevo, ${String(data.name).split(' ')[0]}.` })
-  }
-
-  async function crearCuenta() {
-    setBusy(true)
-    const { data } = await supabase.rpc('fn_wellness_register', {
-      p_name: acc.name, p_phone: acc.phone, p_email: acc.email,
-    })
-    setBusy(false)
-    if (data?.error) { setMsg({ text: data.error, error: true }); return }
-    localStorage.setItem(TOKEN_KEY, data.token)
-    setToken(data.token)
-    setAccNuevo(false)
-    setMsg({ text: hayDescuento ? `¡Listo! Tu descuento quedó activo: pagas ${mxn(conDescuento!)} por clase.` : '¡Listo! Tu cuenta quedó creada.' })
+    setLoginOpen(false)
+    setMsg({ text: `Qué gusto verte, ${String(data.name).split(' ')[0]}.` })
   }
 
   async function guardarCorreo() {
@@ -189,42 +251,10 @@ export function WellnessPortal({ code }: { code: string }) {
     setMsg({ text: 'Correo actualizado.' })
   }
 
-  async function registrar() {
-    setBusy(true)
-    const { data } = await supabase.rpc('fn_wellness_register', {
-      p_name: rName, p_phone: rPhone, p_email: rEmail,
-    })
-    if (data?.error) { setBusy(false); setMsg({ text: data.error, error: true }); return }
-    localStorage.setItem(TOKEN_KEY, data.token)
-    setToken(data.token)
-    const pend = regOpen
-    setRegOpen(null)
-    if (pend) {
-      const { data: bk } = await supabase.rpc('fn_wellness_book', { p_token: data.token, p_slot: pend.slot.slot_id, p_date: pend.date })
-      setBusy(false)
-      if (bk?.error) { setMsg({ text: bk.error, error: true }); return }
-      // El token del estado todavía no se propaga en este tick, así que el
-      // ticket se arma con lo que ya se sabe en vez de releer la cuenta.
-      setTicket({
-        booking_id: bk.booking_id, code: bk.code, class: pend.slot.class, class_date: pend.date,
-        start_time: pend.slot.start_time, instructor: pend.slot.instructor,
-        status: 'reservada', paid: false, paid_via: null, amount: bk.amount,
-      })
-      load()
-      return
-    }
-    setBusy(false)
-    setMsg({ text: hayDescuento ? `¡Listo! Tu descuento quedó activo: pagas ${mxn(conDescuento!)} por clase.` : '¡Listo! Tu cuenta quedó creada.' })
-  }
-
   async function pagar(b: MyBooking) {
     setBusy(true)
     try {
-      const { data, error } = await supabase.functions.invoke('wellness-pay', {
-        body: { token, booking_id: b.booking_id },
-      })
-      // Cuando la función responde 4xx/5xx, invoke() NO entrega el cuerpo en
-      // data: el JSON real viene dentro de error.context.
+      const { data, error } = await supabase.functions.invoke('wellness-pay', { body: { token, booking_id: b.booking_id } })
       let payload = data as { pay_url?: string; error?: string } | null
       if (error && !payload) {
         try { payload = await (error as { context?: Response }).context?.json() ?? null } catch { payload = null }
@@ -234,7 +264,7 @@ export function WellnessPortal({ code }: { code: string }) {
         return
       }
       window.open(payload.pay_url, '_blank', 'noopener')
-      setMsg({ text: 'Se abrió la página de pago seguro. Al terminar, tu clase aparecerá como pagada.' })
+      setMsg({ text: 'Se abrió la página de pago seguro.' })
     } finally { setBusy(false) }
   }
 
@@ -250,34 +280,21 @@ export function WellnessPortal({ code }: { code: string }) {
     const d = new Date(s + 'T00:00:00')
     return `${DIAS[d.getDay()]} ${d.getDate()} de ${d.toLocaleDateString('es-MX', { month: 'long' })}`
   }
+  const fmtDia = (s: string) => {
+    const d = new Date(s + 'T00:00:00')
+    return `${DIAS[d.getDay()]} ${d.getDate()}`
+  }
   const fmtCorto = (s: string) => {
     const d = new Date(s + 'T00:00:00')
     return `${d.getDate()} ${d.toLocaleDateString('es-MX', { month: 'short' }).replace('.', '')}`
   }
-  const esMismoDia = (a: string, b: Date) => a === iso(b)
-
-  const porDia = useMemo(() => {
-    const m = new Map<string, typeof proximas>()
-    for (const p of proximas) { const arr = m.get(p.date) ?? []; arr.push(p); m.set(p.date, arr) }
-    return [...m.entries()]
-  }, [proximas])
-
-  const vigentes = mine.filter(b => b.status !== 'cancelada' && b.class_date >= iso(hoy))
-  const pasadas = mine.filter(b => b.status !== 'cancelada' && b.class_date < iso(hoy))
-
-  const regular = Number(info?.precio_regular) > 0 ? Number(info!.precio_regular) : null
-  const conDescuento = Number(info?.precio_vigente) > 0 ? Number(info!.precio_vigente) : null
-  const hayDescuento = !!info?.promocion && Number(info?.descuento) > 0 && regular != null && conDescuento != null
-  const ahorro = hayDescuento ? regular! - conDescuento! : 0
-  const precioDe = (p: number) => {
-    if (!hayDescuento) return conDescuento ?? p
-    return token ? conDescuento! : regular!
+  const fmtHasta = (s: string) => {
+    const d = new Date(s + 'T00:00:00')
+    return `${d.getDate()} de ${d.toLocaleDateString('es-MX', { month: 'long' })}`
   }
 
-  const irAAcceso = () => accesoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-
-  // ── Identidad POD (manual de marca): 70% cream · 20% obsidian · 10% verde ──
-  const inpPod: React.CSSProperties = {
+  // ── Estilos ───────────────────────────────────────────────────────────────
+  const inp: React.CSSProperties = {
     width: '100%', minHeight: 52, background: CREAM[300], border: `1px solid ${CREAM[600]}`,
     borderRadius: 12, padding: '0 14px', fontSize: 16, color: OBSIDIAN[500], outline: 'none',
     boxSizing: 'border-box', fontFamily: POPPINS, fontWeight: 300,
@@ -286,262 +303,185 @@ export function WellnessPortal({ code }: { code: string }) {
     background: CREAM[300], border: `1px solid ${CREAM[600]}`, borderRadius: 16,
   }
   const rotulo: React.CSSProperties = {
-    fontFamily: PLEX, fontSize: 12, fontWeight: 600, textTransform: 'uppercase',
-    letterSpacing: '0.12em', color: OBSIDIAN[100], margin: '0 0 10px',
+    fontFamily: PLEX, fontSize: 11.5, fontWeight: 600, textTransform: 'uppercase',
+    letterSpacing: '0.13em', color: OBSIDIAN[100], margin: '0 0 9px',
   }
-  const btnPrimario: React.CSSProperties = {
-    minHeight: 54, borderRadius: 999, border: 'none', background: OBSIDIAN[500], color: CREAM[500],
-    fontFamily: PLEX, fontSize: 16, fontWeight: 600, cursor: 'pointer', width: '100%',
+  const btn: React.CSSProperties = {
+    minHeight: 52, borderRadius: 999, border: 'none', background: OBSIDIAN[500], color: CREAM[500],
+    fontFamily: PLEX, fontSize: 15.5, fontWeight: 600, cursor: 'pointer', width: '100%',
   }
+  const camposReserva = f.name.trim().length >= 3 && f.phone.trim().length >= 10
 
   return (
-    // Página independiente y SIEMPRE clara: es la cara al cliente, y habla en
-    // la marca de POD, no en la de HOG APP.
     <div style={{ minHeight: '100vh', background: CREAM[500], color: OBSIDIAN[500], fontFamily: POPPINS }}>
 
-      {/* ── PORTADA ──────────────────────────────────────────────────────────
-          El degradado del espacio con la marca en cream, que es como el manual
-          pide usar el logotipo sobre color. Quien llega de redes no sabe qué es
-          esto: por eso lo primero que se lee es qué se hace y dónde. */}
-      <header style={{ background: WELLNESS_GRADIENT, padding: '30px 18px 30px', textAlign: 'center' }}>
-        <div style={{ maxWidth: 560, margin: '0 auto' }}>
-          <PodWellnessLogo color={CREAM[500]} />
-          <p style={{ fontFamily: PLEX, fontWeight: 300, fontSize: 12.5, letterSpacing: '0.18em', color: 'rgba(239,239,224,0.75)', margin: '16px 0 0' }}>
+      {/* ── PORTADA ── Mínima: quién, dónde, cuánto. Y la puerta de entrada a
+          la cuenta, que antes no existía en ningún lado. */}
+      <header style={{ background: WELLNESS_GRADIENT, padding: '18px 18px 26px' }}>
+        <div style={{ maxWidth: 620, margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <PodWellnessLogo size="clamp(15px, 4.4vw, 21px)" color={CREAM[500]} />
+            <button onClick={() => (token ? setCuentaOpen(v => !v) : (setF({ name: '', phone: '', email: '' }), setLoginOpen(true)))}
+              style={{ flexShrink: 0, minHeight: 38, padding: '0 15px', borderRadius: 999, background: 'rgba(239,239,224,0.16)', border: '1px solid rgba(239,239,224,0.35)', color: CREAM[500], fontFamily: PLEX, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              {token ? `Hola, ${myName.split(' ')[0]}` : 'Entrar'}
+            </button>
+          </div>
+
+          <p style={{ fontFamily: PLEX, fontWeight: 300, fontSize: 11.5, letterSpacing: '0.18em', color: 'rgba(239,239,224,0.72)', margin: '22px 0 0' }}>
             {LUGAR.calle.toUpperCase()} · {LUGAR.colonia.toUpperCase()}
           </p>
-
-          <h1 style={{ fontFamily: POPPINS, fontSize: 'clamp(27px, 8vw, 38px)', fontWeight: 800, letterSpacing: '-0.015em', lineHeight: 1.1, color: CREAM[500], margin: '20px 0 0' }}>
+          <h1 style={{ fontFamily: POPPINS, fontSize: 'clamp(25px, 7.4vw, 34px)', fontWeight: 800, letterSpacing: '-0.015em', lineHeight: 1.12, color: CREAM[500], margin: '8px 0 0' }}>
             Yoga y Pilates<br />en la Condesa
           </h1>
-          <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 16, lineHeight: 1.55, color: 'rgba(239,239,224,0.88)', margin: '12px 0 0' }}>
-            Clase por clase, sin mensualidades. Reservas solo la que vas a tomar.
-          </p>
 
-          {/* El precio va en la portada: es la primera pregunta de cualquiera
-              que llegue de una historia de Instagram. */}
-          {hayDescuento && (
-            <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 9, margin: '20px 0 0', padding: '9px 18px', borderRadius: 999, background: 'rgba(239,239,224,0.14)', border: '1px solid rgba(239,239,224,0.3)' }}>
-              <span style={{ fontFamily: PLEX, fontSize: 14, fontWeight: 300, color: 'rgba(239,239,224,0.65)', textDecoration: 'line-through' }}>{mxn(regular!)}</span>
-              <span style={{ fontFamily: POPPINS, fontSize: 26, fontWeight: 700, color: CREAM[500], lineHeight: 1 }}>{mxn(conDescuento!)}</span>
-              <span style={{ fontFamily: PLEX, fontSize: 12.5, fontWeight: 300, color: 'rgba(239,239,224,0.8)' }}>por clase</span>
-            </div>
-          )}
-
-          {!token && (
-            <>
-              <button onClick={irAAcceso}
-                style={{ ...btnPrimario, background: CREAM[500], color: OBSIDIAN[500], marginTop: 18, maxWidth: 360 }}>
-                {hayDescuento ? `Registrarme y pagar ${mxn(conDescuento!)}` : 'Crear mi cuenta'}
-              </button>
-              {hayDescuento && (
-                <p style={{ fontFamily: PLEX, fontWeight: 300, fontSize: 12.5, color: 'rgba(239,239,224,0.72)', margin: '10px 0 0' }}>
-                  Te registras una vez y el descuento de {mxn(ahorro)} queda activo para siempre.
-                </p>
-              )}
-            </>
-          )}
-          {token && (
-            <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 15, color: CREAM[500], margin: '20px 0 0' }}>
-              Hola de nuevo, <strong style={{ fontWeight: 600 }}>{myName.split(' ')[0]}</strong>
-              {hayDescuento ? <> — tu precio es {mxn(conDescuento!)}.</> : '.'}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, flexWrap: 'wrap', margin: '14px 0 0' }}>
+            {regular != null && (
+              <span style={{ fontFamily: POPPINS, fontSize: 20, fontWeight: 600, color: CREAM[500] }}>{mxn(regular)}</span>
+            )}
+            <span style={{ fontFamily: PLEX, fontWeight: 300, fontSize: 13.5, color: 'rgba(239,239,224,0.8)' }}>
+              por clase, sin mensualidades
+            </span>
+          </div>
+          {/* La promoción solo se anuncia a quien todavía puede usarla: a quien
+              ya tiene cuenta y ya la gastó, ofrecerle "tu primera clase con
+              descuento" es prometer algo que no va a recibir en la caja. */}
+          {promoViva && primeraDisponible && (
+            <p style={{ fontFamily: PLEX, fontWeight: 300, fontSize: 13, color: 'rgba(239,239,224,0.85)', margin: '7px 0 0' }}>
+              Tu primera clase <strong style={{ fontWeight: 600, color: CREAM[500] }}>{mxn(conDescuento!)}</strong>
+              {token ? '' : ' si creas cuenta'}
+              {promoHasta ? <> — hasta el {fmtHasta(promoHasta)}</> : null}.
             </p>
           )}
+
+          <a href={LUGAR.mapa} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'inline-block', marginTop: 16, fontFamily: PLEX, fontSize: 13, color: CREAM[500], textDecoration: 'underline', textUnderlineOffset: 3 }}>
+            {LUGAR.calle} · Cómo llegar
+          </a>
         </div>
       </header>
 
-      <main style={{ maxWidth: 640, margin: '0 auto', padding: '24px 18px 60px' }}>
+      <main style={{ maxWidth: 620, margin: '0 auto', padding: '20px 18px 56px' }}>
 
         {msg && (
-          <div onClick={() => setMsg(null)} style={{ padding: '13px 15px', borderRadius: 12, marginBottom: 18, cursor: 'pointer', fontFamily: POPPINS, fontWeight: 300, background: msg.error ? '#F7E9E4' : 'rgba(29,158,117,0.10)', border: `1px solid ${msg.error ? '#DFB6A8' : 'rgba(29,158,117,0.35)'}`, color: msg.error ? '#7A2E1B' : '#0F5B43', fontSize: 14, lineHeight: 1.5 }}>
+          <div onClick={() => setMsg(null)} style={{ padding: '12px 15px', borderRadius: 12, marginBottom: 16, cursor: 'pointer', fontFamily: POPPINS, fontWeight: 300, background: msg.error ? '#F7E9E4' : 'rgba(29,158,117,0.10)', border: `1px solid ${msg.error ? '#DFB6A8' : 'rgba(29,158,117,0.35)'}`, color: msg.error ? '#7A2E1B' : '#0F5B43', fontSize: 14, lineHeight: 1.5 }}>
             {msg.text}
           </div>
         )}
 
-        {/* ── ACCESO ── Sin cuenta no hay descuento, así que va antes de la
-            cartelera y no escondido detrás de un intento de reserva. */}
-        {!token && (
-          <section ref={accesoRef} style={{ ...tarjeta, padding: 18, marginBottom: 22, scrollMarginTop: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6 }}>
-              <PodIcon size={24} color={ESPACIO.wellness} />
-              <h2 style={{ fontFamily: PLEX, fontSize: 19, fontWeight: 700, margin: 0 }}>
-                {accNuevo ? 'Solo falta esto' : hayDescuento ? `Activa tu precio de ${mxn(conDescuento!)}` : 'Entra o crea tu cuenta'}
-              </h2>
+        {/* ── MI CUENTA ── Se abre desde el botón de arriba, no ocupa espacio. */}
+        {token && cuentaOpen && (
+          <section style={{ ...tarjeta, padding: 16, marginBottom: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontFamily: POPPINS, fontWeight: 300, fontSize: 13 }}>
+              <span><span style={{ color: OBSIDIAN[100] }}>Teléfono</span><br /><strong style={{ fontWeight: 600 }}>{perfil?.phone ?? '—'}</strong></span>
+              <span><span style={{ color: OBSIDIAN[100] }}>Clases tomadas</span><br /><strong style={{ fontWeight: 600 }}>{perfil?.tomadas ?? 0}</strong></span>
             </div>
-            <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 14, color: OBSIDIAN[100], margin: '0 0 15px', lineHeight: 1.55 }}>
-              {accNuevo
-                ? 'Tu teléfono será tu acceso. No hay contraseñas que recordar.'
-                : hayDescuento
-                  ? <>Nombre y teléfono, nada más. El descuento de <strong style={{ color: ESPACIO.wellness, fontWeight: 600 }}>{mxn(ahorro)}</strong> se aplica solo en todas tus reservas. ¿Ya te registraste? Entra con tu teléfono.</>
-                  : 'Tu teléfono es tu acceso. Si es la primera vez, te creamos la cuenta al momento.'}
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <input value={acc.name} onChange={e => setAcc(a => ({ ...a, name: e.target.value }))}
-                placeholder="Tu nombre" style={inpPod} autoComplete="name"
-                onKeyDown={e => { if (e.key === 'Enter' && !accNuevo) entrar() }} />
-              <input value={acc.phone} onChange={e => { setAcc(a => ({ ...a, phone: e.target.value })); setAccNuevo(false) }}
-                placeholder="Tu teléfono (10 dígitos)" type="tel" inputMode="numeric" autoComplete="tel" style={inpPod}
-                onKeyDown={e => { if (e.key === 'Enter' && !accNuevo) entrar() }} />
-              {accNuevo && (
-                <input value={acc.email} onChange={e => setAcc(a => ({ ...a, email: e.target.value }))}
-                  placeholder="Tu correo (para tu comprobante)" type="email" inputMode="email" autoComplete="email" style={inpPod} />
-              )}
-              <button onClick={() => accNuevo ? crearCuenta() : entrar()} disabled={busy || acc.phone.trim().length < 10 || acc.name.trim().length < 3}
-                style={{ ...btnPrimario, opacity: busy || acc.phone.trim().length < 10 || acc.name.trim().length < 3 ? 0.45 : 1 }}>
-                {busy ? 'Un momento…' : accNuevo ? 'Crear mi cuenta' : hayDescuento ? `Activar mi precio de ${mxn(conDescuento!)}` : 'Entrar'}
-              </button>
+            <div style={{ marginTop: 12 }}>
+              <label style={{ display: 'block', fontFamily: PLEX, fontSize: 11.5, color: OBSIDIAN[100], marginBottom: 5 }}>
+                Correo {perfil?.email ? '' : '— para tu comprobante'}
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input value={correoEdit} onChange={e => setCorreoEdit(e.target.value)} placeholder="tucorreo@ejemplo.com"
+                  type="email" inputMode="email" style={inp} onKeyDown={e => { if (e.key === 'Enter') guardarCorreo() }} />
+                <button onClick={guardarCorreo} disabled={busy || correoEdit === (perfil?.email ?? '')}
+                  style={{ minHeight: 52, padding: '0 16px', borderRadius: 999, border: 'none', background: correoEdit !== (perfil?.email ?? '') ? ESPACIO.wellness : CREAM[600], color: correoEdit !== (perfil?.email ?? '') ? CREAM[500] : OBSIDIAN[100], fontFamily: PLEX, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Guardar
+                </button>
+              </div>
             </div>
-          </section>
-        )}
-
-        {/* ── MI CUENTA ── */}
-        {token && (
-          <section style={{ ...tarjeta, marginBottom: 22, overflow: 'hidden' }}>
-            <button onClick={() => setCuentaOpen(v => !v)}
-              style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '14px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-              <PodIcon size={28} color={ESPACIO.wellness} />
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontFamily: PLEX, fontSize: 15.5, fontWeight: 600 }}>{myName}</span>
-                <span style={{ display: 'block', fontFamily: POPPINS, fontWeight: 300, fontSize: 12.5, color: OBSIDIAN[100] }}>
-                  {perfil?.tomadas ? `${perfil.tomadas} ${perfil.tomadas === 1 ? 'clase tomada' : 'clases tomadas'}` : 'Mi cuenta'}
-                  {hayDescuento ? ` · pagas ${mxn(conDescuento!)}` : ''}
-                </span>
-              </span>
-              <span style={{ fontFamily: PLEX, fontSize: 12, color: OBSIDIAN[100] }}>{cuentaOpen ? 'Ocultar' : 'Ver'}</span>
-            </button>
-            {cuentaOpen && (
-              <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontFamily: POPPINS, fontWeight: 300, fontSize: 13 }}>
-                  <span><span style={{ color: OBSIDIAN[100] }}>Teléfono</span><br /><strong style={{ fontWeight: 600 }}>{perfil?.phone ?? '—'}</strong></span>
-                  <span><span style={{ color: OBSIDIAN[100] }}>Desde</span><br /><strong style={{ fontWeight: 600 }}>{perfil?.since ? new Date(perfil.since).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' }) : '—'}</strong></span>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontFamily: PLEX, fontSize: 11.5, color: OBSIDIAN[100], marginBottom: 5 }}>
-                    Correo {perfil?.email ? '' : '— para recibir tu comprobante'}
-                  </label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input value={correoEdit} onChange={e => setCorreoEdit(e.target.value)} placeholder="tucorreo@ejemplo.com"
-                      type="email" inputMode="email" style={inpPod} onKeyDown={e => { if (e.key === 'Enter') guardarCorreo() }} />
-                    <button onClick={guardarCorreo} disabled={busy || correoEdit === (perfil?.email ?? '')}
-                      style={{ minHeight: 52, padding: '0 16px', borderRadius: 999, border: 'none', background: correoEdit !== (perfil?.email ?? '') ? ESPACIO.wellness : CREAM[600], color: correoEdit !== (perfil?.email ?? '') ? CREAM[500] : OBSIDIAN[100], fontFamily: PLEX, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                      Guardar
-                    </button>
-                  </div>
-                </div>
-                {pasadas.length > 0 && (
-                  <div>
-                    <button onClick={() => setHistorialOpen(v => !v)}
-                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: PLEX, fontSize: 13, fontWeight: 600, color: ESPACIO.wellness }}>
-                      {historialOpen ? 'Ocultar historial' : `Ver mis ${pasadas.length} ${pasadas.length === 1 ? 'clase anterior' : 'clases anteriores'}`}
-                    </button>
-                    {historialOpen && (
-                      <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 7 }}>
-                        {pasadas.map(b => (
-                          <li key={b.booking_id} style={{ display: 'flex', alignItems: 'baseline', gap: 9, fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[100] }}>
-                            <span style={{ fontFamily: PLEX, fontVariantNumeric: 'tabular-nums', minWidth: 52, color: OBSIDIAN[200] }}>{fmtCorto(b.class_date)}</span>
-                            <span style={{ flex: 1, minWidth: 0, color: OBSIDIAN[500] }}>{b.class}</span>
-                            <span style={{ fontFamily: PLEX, fontSize: 11.5, color: b.status === 'asistio' ? ESPACIO.wellness : OBSIDIAN[100] }}>
-                              {b.status === 'asistio' ? 'Asististe' : b.status === 'no_asistio' ? 'No fuiste' : 'Reservada'}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+            {pasadas.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <button onClick={() => setHistorialOpen(v => !v)}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: PLEX, fontSize: 13, fontWeight: 600, color: ESPACIO.wellness }}>
+                  {historialOpen ? 'Ocultar historial' : `Ver mis ${pasadas.length} ${pasadas.length === 1 ? 'clase anterior' : 'clases anteriores'}`}
+                </button>
+                {historialOpen && (
+                  <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    {pasadas.map(b => (
+                      <li key={b.booking_id} style={{ display: 'flex', alignItems: 'baseline', gap: 9, fontFamily: POPPINS, fontWeight: 300, fontSize: 13 }}>
+                        <span style={{ fontFamily: PLEX, fontVariantNumeric: 'tabular-nums', minWidth: 52, color: OBSIDIAN[100] }}>{fmtCorto(b.class_date)}</span>
+                        <span style={{ flex: 1, minWidth: 0 }}>{b.class}</span>
+                        <span style={{ fontFamily: PLEX, fontSize: 11.5, color: b.status === 'asistio' ? ESPACIO.wellness : OBSIDIAN[100] }}>
+                          {b.status === 'asistio' ? 'Asististe' : b.status === 'no_asistio' ? 'No fuiste' : 'Reservada'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             )}
+            <button onClick={() => { localStorage.removeItem(TOKEN_KEY); setToken(null); setCuentaOpen(false) }}
+              style={{ marginTop: 14, background: 'none', border: 'none', padding: 0, color: OBSIDIAN[100], fontFamily: PLEX, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
+              Salir en este dispositivo
+            </button>
           </section>
         )}
 
-        {/* ── MIS PRÓXIMAS CLASES ── Arriba de la cartelera: si ya reservaste,
-            lo que buscas al volver a abrir el link es tu código, no el horario. */}
+        {/* ── MIS PRÓXIMAS CLASES ── Lo que buscas al volver: tu código. */}
         {token && vigentes.length > 0 && (
-          <section style={{ marginBottom: 26 }}>
+          <section style={{ marginBottom: 24 }}>
             <h2 style={rotulo}>Mis próximas clases</h2>
             {vigentes.map(b => (
-              <div key={b.booking_id} style={{ ...tarjeta, padding: '13px 16px', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 150 }}>
-                    <div style={{ fontFamily: PLEX, fontSize: 15.5, fontWeight: 600 }}>{b.class} · {b.start_time}</div>
-                    <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[100] }}>{fmtFecha(b.class_date)}</div>
+              <div key={b.booking_id} style={{ ...tarjeta, padding: '12px 15px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: PLEX, fontSize: 15, fontWeight: 600 }}>{b.class}</div>
+                  <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12.5, color: OBSIDIAN[100] }}>
+                    {fmtDia(b.class_date)} · {b.start_time}
                   </div>
-                  {b.paid
-                    ? <span style={{ fontFamily: PLEX, fontSize: 12, fontWeight: 600, color: ESPACIO.wellness, background: 'rgba(29,158,117,0.10)', border: '1px solid rgba(29,158,117,0.3)', borderRadius: 999, padding: '6px 13px' }}>Pagada</span>
-                    : PAGO_EN_LINEA && Number(b.amount) > 0
-                      ? <button onClick={() => pagar(b)} disabled={busy} style={{ minHeight: 40, padding: '0 16px', borderRadius: 999, border: 'none', background: ESPACIO.wellness, color: CREAM[500], fontFamily: PLEX, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Pagar {mxn(Number(b.amount))}</button>
-                      : <span style={{ fontFamily: PLEX, fontSize: 12, color: OBSIDIAN[100] }}>Pagas al llegar</span>}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 11, paddingTop: 11, borderTop: `1px solid ${CREAM[600]}`, flexWrap: 'wrap' }}>
-                  {/* nowrap en los dos: sin esto, a 390px el rótulo se parte en
-                      dos renglones y el código se corta a la mitad — que es
-                      justo el dato que la persona va a leer en voz alta. */}
-                  <button onClick={() => setTicket(b)}
-                    style={{ display: 'flex', alignItems: 'baseline', gap: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', flexShrink: 0 }}>
-                    <span style={{ fontFamily: PLEX, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: OBSIDIAN[100], whiteSpace: 'nowrap' }}>Código</span>
-                    <span style={{ fontFamily: PLEX, fontSize: 15, fontWeight: 700, letterSpacing: '0.05em', color: ESPACIO.wellness, whiteSpace: 'nowrap' }}>{b.code ?? '—'}</span>
-                  </button>
-                  <span style={{ flex: 1 }} />
-                  <button onClick={() => setTicket(b)} style={{ background: 'none', border: `1px solid ${CREAM[600]}`, borderRadius: 999, padding: '7px 13px', fontFamily: PLEX, fontSize: 12.5, cursor: 'pointer', color: OBSIDIAN[500] }}>Ver ticket</button>
-                  <button onClick={() => cancelar(b)} disabled={busy}
-                    style={{ background: 'none', border: 'none', color: OBSIDIAN[100], fontFamily: PLEX, fontSize: 12.5, cursor: 'pointer', textDecoration: 'underline' }}>Cancelar</button>
-                </div>
+                <button onClick={() => setTicket(b)}
+                  style={{ background: 'rgba(29,158,117,0.10)', border: '1px solid rgba(29,158,117,0.3)', borderRadius: 999, padding: '8px 14px', cursor: 'pointer', fontFamily: PLEX, fontSize: 13.5, fontWeight: 700, letterSpacing: '0.04em', color: ESPACIO.wellness, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {b.code ?? 'Ver'}
+                </button>
               </div>
             ))}
-            <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12.5, color: OBSIDIAN[100], lineHeight: 1.6, marginTop: 10 }}>
-              Puedes cancelar hasta 3 horas antes de la clase.
-            </p>
           </section>
+        )}
+
+        {/* ── FILTRO POR CLASE ── */}
+        {clases.length > 1 && (
+          <div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 4, marginBottom: 14, scrollbarWidth: 'none' }}>
+            {[null, ...clases].map(c => {
+              const on = filtro === c
+              return (
+                <button key={c ?? '·todas'} onClick={() => setFiltro(c)}
+                  style={{ flexShrink: 0, minHeight: 36, padding: '0 14px', borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: PLEX, fontSize: 13, fontWeight: on ? 600 : 400, border: `1px solid ${on ? OBSIDIAN[500] : CREAM[600]}`, background: on ? OBSIDIAN[500] : 'transparent', color: on ? CREAM[500] : OBSIDIAN[200] }}>
+                  {c ?? 'Todas'}
+                </button>
+              )
+            })}
+          </div>
         )}
 
         {/* ── CARTELERA ── */}
-        <h2 style={{ ...rotulo, marginBottom: 12 }}>Próximas clases</h2>
         {loading ? (
           <p style={{ textAlign: 'center', color: OBSIDIAN[100], fontWeight: 300 }}>Cargando horarios…</p>
         ) : porDia.length === 0 ? (
-          <p style={{ textAlign: 'center', color: OBSIDIAN[100], fontWeight: 300 }}>Sin clases programadas por ahora.</p>
+          <p style={{ textAlign: 'center', color: OBSIDIAN[100], fontWeight: 300, padding: '20px 0' }}>
+            {filtro ? `No hay ${filtro} en los próximos ${dias} días.` : 'Sin clases programadas por ahora.'}
+          </p>
         ) : porDia.map(([date, rows]) => (
-          <section key={date} style={{ marginBottom: 22 }}>
-            <h3 style={rotulo}>
-              {esMismoDia(date, hoy) ? 'Hoy · ' : ''}{fmtFecha(date)}
-            </h3>
+          <section key={date} style={{ marginBottom: 18 }}>
+            <h3 style={rotulo}>{date === iso(hoy) ? 'Hoy' : fmtDia(date)}</h3>
             {rows.map(({ slot, booked }) => {
               const libres = slot.capacity - booked
               const lleno = libres <= 0
               const reservada = yaReserve(slot.slot_id, date)
-              const precio = precioDe(slot.price)
               return (
-                <div key={slot.slot_id + date} style={{ ...tarjeta, display: 'flex', alignItems: 'center', gap: 13, padding: '14px 15px', marginBottom: 8 }}>
-                  <div style={{ textAlign: 'center', minWidth: 50 }}>
-                    <div style={{ fontFamily: PLEX, fontSize: 18, fontWeight: 700, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{slot.start_time}</div>
-                    <div style={{ fontFamily: PLEX, fontSize: 11, fontWeight: 300, color: OBSIDIAN[100] }}>{slot.duration_min} min</div>
+                <div key={slot.slot_id + date} style={{ ...tarjeta, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', marginBottom: 7 }}>
+                  <div style={{ fontFamily: PLEX, fontSize: 15.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', minWidth: 44 }}>
+                    {slot.start_time}
                   </div>
-                  {/* Filete del color del espacio: el 10% de acento del manual */}
-                  <span style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: ESPACIO.wellness, flexShrink: 0, opacity: lleno ? 0.3 : 1 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: PLEX, fontSize: 16, fontWeight: 600 }}>{slot.class}</div>
-                    {/* Maestro, precio y cupo en renglones propios. Juntos en
-                        una sola línea se parten en tres a 390px de ancho, que
-                        es donde va a vivir esta página. */}
-                    {slot.instructor && (
-                      <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[100], marginTop: 1 }}>
-                        con {slot.instructor}
-                      </div>
-                    )}
-                    <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[100], marginTop: 1 }}>
-                      {precio > 0 ? (
-                        hayDescuento
-                          ? (token
-                              ? <strong style={{ color: ESPACIO.wellness, fontWeight: 600 }}>{mxn(conDescuento!)}</strong>
-                              : <><span style={{ textDecoration: 'line-through' }}>{mxn(regular!)}</span> <strong style={{ color: ESPACIO.wellness, fontWeight: 600 }}>{mxn(conDescuento!)}</strong> registrado</>)
-                          : mxn(precio)
-                      ) : 'sin costo'}
+                    <div style={{ fontFamily: PLEX, fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {slot.class}
                     </div>
-                    <div style={{ fontFamily: PLEX, fontSize: 11.5, marginTop: 3, fontWeight: 600, letterSpacing: '0.03em', color: lleno ? '#8C2F1F' : libres <= 3 ? '#8A6206' : ESPACIO.wellness }}>
-                      {lleno ? 'Llena' : libres <= 3 ? `Quedan ${libres} lugares` : `${libres} lugares`}
+                    <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12, color: lleno ? '#8C2F1F' : OBSIDIAN[100], whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {slot.instructor ? `${slot.instructor} · ` : ''}
+                      {lleno ? 'Llena' : libres <= 3 ? `quedan ${libres}` : mxn(precioLista(slot.price))}
                     </div>
                   </div>
-                  <button disabled={lleno || reservada || busy} onClick={() => reservar(slot, date)}
-                    style={{ minHeight: 44, padding: '0 17px', borderRadius: 999, border: reservada ? `1px solid ${ESPACIO.wellness}` : 'none', fontFamily: PLEX, fontSize: 13.5, fontWeight: 600, letterSpacing: '0.02em', cursor: lleno || reservada ? 'default' : 'pointer', background: reservada ? 'rgba(29,158,117,0.10)' : lleno ? CREAM[600] : OBSIDIAN[500], color: reservada ? ESPACIO.wellness : lleno ? OBSIDIAN[100] : CREAM[500], flexShrink: 0 }}>
+                  <button disabled={lleno || reservada || busy} onClick={() => abrirReserva(slot, date)}
+                    style={{ minHeight: 40, padding: '0 15px', borderRadius: 999, border: reservada ? `1px solid ${ESPACIO.wellness}` : 'none', fontFamily: PLEX, fontSize: 13, fontWeight: 600, cursor: lleno || reservada ? 'default' : 'pointer', background: reservada ? 'rgba(29,158,117,0.10)' : lleno ? CREAM[600] : OBSIDIAN[500], color: reservada ? ESPACIO.wellness : lleno ? OBSIDIAN[100] : CREAM[500], flexShrink: 0 }}>
                     {reservada ? 'Voy' : lleno ? 'Llena' : 'Reservar'}
                   </button>
                 </div>
@@ -550,130 +490,176 @@ export function WellnessPortal({ code }: { code: string }) {
           </section>
         ))}
 
-        {/* ── CÓMO LLEGAR ── Dos pisos distintos, y eso confunde a quien viene
-            por primera vez: el estudio arriba, la caja abajo. Va explícito. */}
-        <section style={{ ...tarjeta, padding: 18, marginTop: 30 }}>
-          <h2 style={{ ...rotulo, marginBottom: 12 }}>Cómo llegar</h2>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-            <PodIcon size={26} color={ESPACIO.wellness} />
+        {dias < 14 && !loading && porDia.length > 0 && (
+          <button onClick={() => setDias(14)}
+            style={{ width: '100%', minHeight: 46, borderRadius: 999, border: `1px solid ${CREAM[600]}`, background: 'none', color: OBSIDIAN[200], fontFamily: PLEX, fontSize: 13.5, cursor: 'pointer', marginTop: 4 }}>
+            Ver dos semanas
+          </button>
+        )}
+
+        {/* ── CÓMO LLEGAR ── Compacto, pero con los dos pisos: es lo que más
+            confunde a quien viene por primera vez. */}
+        <section style={{ ...tarjeta, padding: 16, marginTop: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+            <PodIcon size={24} color={ESPACIO.wellness} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: PLEX, fontSize: 17, fontWeight: 700 }}>{LUGAR.nombre}</div>
-              <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 14.5, color: OBSIDIAN[200], marginTop: 2 }}>
-                {LUGAR.calle}, {LUGAR.colonia}
-              </div>
+              <div style={{ fontFamily: PLEX, fontSize: 15.5, fontWeight: 700 }}>{LUGAR.nombre}</div>
+              <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[100] }}>{LUGAR.calle}, {LUGAR.colonia}</div>
             </div>
+            <a href={LUGAR.mapa} target="_blank" rel="noopener noreferrer"
+              style={{ flexShrink: 0, minHeight: 40, display: 'flex', alignItems: 'center', padding: '0 15px', borderRadius: 999, background: ESPACIO.wellness, color: CREAM[500], fontFamily: PLEX, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+              Mapa
+            </a>
           </div>
-          <a href={LUGAR.mapa} target="_blank" rel="noopener noreferrer"
-            style={{ ...btnPrimario, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', marginTop: 14, background: ESPACIO.wellness }}>
-            Abrir en Google Maps
-          </a>
-          <ul style={{ listStyle: 'none', margin: '16px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <li style={{ display: 'flex', gap: 10, fontFamily: POPPINS, fontWeight: 300, fontSize: 13.5, lineHeight: 1.5 }}>
-              <span style={{ fontFamily: PLEX, fontWeight: 700, color: ESPACIO.wellness, minWidth: 18 }}>2º</span>
-              <span><strong style={{ fontWeight: 600 }}>El estudio.</strong> {LUGAR.pisoEstudio} — ahí se toman todas las clases.</span>
-            </li>
-            <li style={{ display: 'flex', gap: 10, fontFamily: POPPINS, fontWeight: 300, fontSize: 13.5, lineHeight: 1.5 }}>
-              <span style={{ fontFamily: PLEX, fontWeight: 700, color: ESPACIO.wellness, minWidth: 18 }}>1º</span>
-              <span><strong style={{ fontWeight: 600 }}>La caja.</strong> {LUGAR.pisoCaja} — ahí pagas tu clase con tu código.</span>
-            </li>
-          </ul>
-          <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12.5, color: OBSIDIAN[100], lineHeight: 1.6, margin: '14px 0 0' }}>
-            Llega 10 minutos antes si es tu primera vez. Trae ropa cómoda; los tapetes están en el estudio.
+          <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[200], lineHeight: 1.6, margin: '13px 0 0' }}>
+            Las clases son en el <strong style={{ fontWeight: 600 }}>{LUGAR.pisoEstudio}</strong>. Pagas con tu código en la caja de <strong style={{ fontWeight: 600 }}>{LUGAR.pisoCaja}</strong>.
           </p>
         </section>
-
-        {/* Pie */}
-        <footer style={{ marginTop: 36, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-          <PodIcon size={36} color={CREAM[700]} />
-          {!token ? (
-            <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[100], margin: 0, maxWidth: 380, lineHeight: 1.6 }}>
-              Tu teléfono es tu acceso. Si cambias de celular, entra con el mismo número y tu cuenta te sigue.
-            </p>
-          ) : (
-            <button onClick={() => { localStorage.removeItem(TOKEN_KEY); setToken(null); setMine([]); setPerfil(null); setCuentaOpen(false) }}
-              style={{ fontFamily: PLEX, fontSize: 12, color: OBSIDIAN[100], background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-              Salir de esta cuenta en este dispositivo
-            </button>
-          )}
-        </footer>
       </main>
+
+      {/* ── RESERVA ── Aquí y solo aquí se piden datos, y aquí aparece el
+          descuento: con cuenta o sin cuenta, con la diferencia a la vista. */}
+      {reservaOpen && (() => {
+        const conDesc = aplicaDescuento(reservaOpen.date)
+        const precioCuenta = conDesc ? conDescuento! : precioLista(reservaOpen.slot.price)
+        const precioInvitado = precioLista(reservaOpen.slot.price)
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50, overflowY: 'auto' }}>
+            <div style={{ background: CREAM[500], borderRadius: 20, padding: 22, width: '100%', maxWidth: 400, margin: 'auto' }}>
+              <div style={{ fontFamily: PLEX, fontSize: 19, fontWeight: 700, lineHeight: 1.2 }}>{reservaOpen.slot.class}</div>
+              <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 14, color: OBSIDIAN[100], marginTop: 3 }}>
+                {fmtFecha(reservaOpen.date)} · {reservaOpen.slot.start_time}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 18 }}>
+                <input value={f.name} onChange={e => setF(v => ({ ...v, name: e.target.value }))}
+                  placeholder="Tu nombre" autoComplete="name" style={inp} autoFocus />
+                <input value={f.phone} onChange={e => setF(v => ({ ...v, phone: e.target.value }))}
+                  placeholder="Tu teléfono (10 dígitos)" type="tel" inputMode="numeric" autoComplete="tel" style={inp} />
+                <input value={f.email} onChange={e => setF(v => ({ ...v, email: e.target.value }))}
+                  placeholder="Tu correo (opcional)" type="email" inputMode="email" autoComplete="email" style={inp} />
+              </div>
+
+              {/* Con cuenta primero: es la opción que queremos que tomen, y con
+                  descuento vigente es además la más barata. */}
+              <button onClick={registrarYApartar} disabled={busy || !camposReserva}
+                style={{ ...btn, marginTop: 16, opacity: busy || !camposReserva ? 0.45 : 1 }}>
+                {busy ? 'Un momento…' : `Crear cuenta y apartar · ${mxn(precioCuenta)}`}
+              </button>
+              <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12.5, color: OBSIDIAN[100], lineHeight: 1.55, margin: '8px 0 0', textAlign: 'center' }}>
+                {conDesc
+                  ? <>Ahorras {mxn(ahorro)} en esta clase{soloPrimera ? ' — es el descuento de primera clase' : ''}. Guardas tus reservas y tu código.</>
+                  : 'Guardas tus reservas, tu código y tu historial de clases.'}
+              </p>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0 12px' }}>
+                <span style={{ flex: 1, height: 1, background: CREAM[600] }} />
+                <span style={{ fontFamily: PLEX, fontSize: 11.5, color: OBSIDIAN[100] }}>o</span>
+                <span style={{ flex: 1, height: 1, background: CREAM[600] }} />
+              </div>
+
+              <button onClick={apartarSinCuenta} disabled={busy || !camposReserva}
+                style={{ ...btn, background: 'none', border: `1px solid ${CREAM[600]}`, color: OBSIDIAN[500], fontWeight: 400, opacity: busy || !camposReserva ? 0.45 : 1 }}>
+                Apartar sin cuenta · {mxn(precioInvitado)}
+              </button>
+
+              <button onClick={() => setReservaOpen(null)}
+                style={{ width: '100%', minHeight: 40, background: 'none', border: 'none', color: OBSIDIAN[100], fontFamily: PLEX, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>
+                Ahora no
+              </button>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── ENTRAR ── */}
+      {loginOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50, overflowY: 'auto' }}>
+          <div style={{ background: CREAM[500], borderRadius: 20, padding: 22, width: '100%', maxWidth: 380, margin: 'auto' }}>
+            <PodIcon size={32} color={ESPACIO.wellness} />
+            <h3 style={{ fontFamily: POPPINS, fontSize: 21, fontWeight: 800, margin: '13px 0 5px', letterSpacing: '-0.01em' }}>Entra a tus clases</h3>
+            <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13.5, color: OBSIDIAN[100], margin: '0 0 16px', lineHeight: 1.55 }}>
+              Tu teléfono es tu acceso — no hay contraseña. Aquí ves tus reservas, tus códigos y a qué clases has ido.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input value={f.name} onChange={e => setF(v => ({ ...v, name: e.target.value }))}
+                placeholder="Tu nombre" autoComplete="name" style={inp} autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') entrar() }} />
+              <input value={f.phone} onChange={e => setF(v => ({ ...v, phone: e.target.value }))}
+                placeholder="Tu teléfono (10 dígitos)" type="tel" inputMode="numeric" autoComplete="tel" style={inp}
+                onKeyDown={e => { if (e.key === 'Enter') entrar() }} />
+              <button onClick={entrar} disabled={busy || !camposReserva}
+                style={{ ...btn, opacity: busy || !camposReserva ? 0.45 : 1 }}>
+                {busy ? 'Un momento…' : 'Entrar'}
+              </button>
+              <button onClick={() => setLoginOpen(false)}
+                style={{ minHeight: 40, background: 'none', border: 'none', color: OBSIDIAN[100], fontFamily: PLEX, fontSize: 13, cursor: 'pointer' }}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── TICKET ── El comprobante que se enseña en caja. */}
       {ticket && (
         <div onClick={() => setTicket(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, zIndex: 60, overflowY: 'auto' }}>
+          style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 60, overflowY: 'auto' }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ background: CREAM[300], borderRadius: 20, width: '100%', maxWidth: 380, overflow: 'hidden', margin: 'auto' }}>
-            <div style={{ background: WELLNESS_GRADIENT, padding: '20px 22px 18px', textAlign: 'center' }}>
-              <PodWellnessLogo size={17} color={CREAM[500]} />
-              <p style={{ fontFamily: PLEX, fontSize: 11.5, letterSpacing: '0.14em', color: 'rgba(239,239,224,0.8)', margin: '12px 0 0' }}>
+            style={{ background: CREAM[300], borderRadius: 20, width: '100%', maxWidth: 370, overflow: 'hidden', margin: 'auto' }}>
+            <div style={{ background: WELLNESS_GRADIENT, padding: '18px 22px 16px', textAlign: 'center' }}>
+              <PodWellnessLogo size={15} color={CREAM[500]} />
+              <p style={{ fontFamily: PLEX, fontSize: 11, letterSpacing: '0.14em', color: 'rgba(239,239,224,0.8)', margin: '11px 0 0' }}>
                 TU LUGAR ESTÁ APARTADO
               </p>
             </div>
-            <div style={{ padding: '20px 22px 22px' }}>
-              <div style={{ fontFamily: PLEX, fontSize: 21, fontWeight: 700, lineHeight: 1.2 }}>{ticket.class}</div>
-              <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 14.5, color: OBSIDIAN[200], marginTop: 3 }}>
+            <div style={{ padding: '18px 22px 22px' }}>
+              <div style={{ fontFamily: PLEX, fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>{ticket.class}</div>
+              <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 14, color: OBSIDIAN[200], marginTop: 3 }}>
                 {fmtFecha(ticket.class_date)} · {ticket.start_time}
-                {ticket.instructor ? ` · con ${ticket.instructor}` : ''}
+                {ticket.instructor ? ` · ${ticket.instructor}` : ''}
               </div>
 
-              {/* El código en grande: es lo único que hay que enseñar en caja. */}
-              <div style={{ margin: '18px 0', padding: '16px 14px', borderRadius: 14, background: CREAM[500], border: `1px dashed ${ESPACIO.wellness}`, textAlign: 'center' }}>
+              <div style={{ margin: '16px 0', padding: '15px 14px', borderRadius: 14, background: CREAM[500], border: `1px dashed ${ESPACIO.wellness}`, textAlign: 'center' }}>
                 <div style={{ fontFamily: PLEX, fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: OBSIDIAN[100] }}>Código de tu reserva</div>
-                <div style={{ fontFamily: PLEX, fontSize: 30, fontWeight: 700, letterSpacing: '0.08em', color: ESPACIO.wellness, marginTop: 5, fontVariantNumeric: 'tabular-nums' }}>
+                <div style={{ fontFamily: PLEX, fontSize: 29, fontWeight: 700, letterSpacing: '0.08em', color: ESPACIO.wellness, marginTop: 4 }}>
                   {ticket.code ?? '—'}
                 </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontFamily: POPPINS, fontSize: 14, fontWeight: 300 }}>
                 <span style={{ color: OBSIDIAN[100] }}>Total a pagar</span>
-                <strong style={{ fontFamily: POPPINS, fontSize: 22, fontWeight: 700 }}>{Number(ticket.amount) > 0 ? mxn(Number(ticket.amount)) : 'Sin costo'}</strong>
+                <strong style={{ fontSize: 21, fontWeight: 700 }}>{Number(ticket.amount) > 0 ? mxn(Number(ticket.amount)) : 'Sin costo'}</strong>
               </div>
 
-              <div style={{ marginTop: 16, padding: '13px 15px', borderRadius: 12, background: 'rgba(29,158,117,0.08)', border: '1px solid rgba(29,158,117,0.25)' }}>
-                <div style={{ fontFamily: PLEX, fontSize: 12.5, fontWeight: 600, color: '#0F5B43', marginBottom: 5 }}>
-                  {ticket.paid ? 'Ya está pagada' : 'Paga al llegar'}
-                </div>
-                <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[200], margin: 0, lineHeight: 1.55 }}>
-                  {ticket.paid
-                    ? <>Solo preséntate en el estudio, {LUGAR.pisoEstudio.toLowerCase()}.</>
-                    : <>Enseña este código en la caja de <strong style={{ fontWeight: 600 }}>{LUGAR.pisoCaja}</strong>. La clase es en el {LUGAR.pisoEstudio.toLowerCase()}.</>}
-                </p>
-              </div>
-
-              <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12, color: OBSIDIAN[100], lineHeight: 1.55, margin: '14px 0 0' }}>
-                Guarda tu código. Lo vuelves a ver cuando quieras en “Mis próximas clases”, desde este mismo link.
+              <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[200], margin: '14px 0 0', lineHeight: 1.55, padding: '12px 14px', borderRadius: 12, background: 'rgba(29,158,117,0.08)', border: '1px solid rgba(29,158,117,0.25)' }}>
+                {ticket.paid
+                  ? <>Ya está pagada. Preséntate en el estudio, {LUGAR.pisoEstudio}.</>
+                  : <>Enseña este código en la caja de <strong style={{ fontWeight: 600 }}>{LUGAR.pisoCaja}</strong>. La clase es en el {LUGAR.pisoEstudio}.</>}
               </p>
 
-              <button onClick={() => setTicket(null)} style={{ ...btnPrimario, marginTop: 16 }}>Listo</button>
-            </div>
-          </div>
-        </div>
-      )}
+              {/* Sin cuenta no hay dónde volver a consultarlo: hay que decirlo
+                  antes de que cierre la ventana, no después. */}
+              {!token && (
+                <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12.5, color: OBSIDIAN[100], lineHeight: 1.55, margin: '12px 0 0' }}>
+                  Reservaste sin cuenta: <strong style={{ fontWeight: 600, color: OBSIDIAN[500] }}>toma captura de este código</strong>, porque no hay dónde volver a verlo. Con cuenta se te guarda solo.
+                </p>
+              )}
 
-      {/* ── REGISTRO al intentar reservar sin cuenta ── */}
-      {regOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, zIndex: 50, overflowY: 'auto' }}>
-          <div style={{ background: CREAM[500], borderRadius: 20, padding: 24, width: '100%', maxWidth: 400, margin: 'auto' }}>
-            <PodIcon size={38} color={ESPACIO.wellness} />
-            <h3 style={{ fontFamily: POPPINS, fontSize: 22, fontWeight: 800, margin: '14px 0 6px', letterSpacing: '-0.01em' }}>
-              {hayDescuento ? `Regístrate y paga ${mxn(conDescuento!)}` : 'Un paso y listo'}
-            </h3>
-            <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 14, color: OBSIDIAN[100], margin: '0 0 18px', lineHeight: 1.55 }}>
-              Apartas tu lugar en <strong style={{ fontWeight: 600, color: OBSIDIAN[500] }}>{regOpen.slot.class}</strong> ({fmtFecha(regOpen.date)}, {regOpen.slot.start_time})
-              {hayDescuento ? <> con tu descuento de {mxn(ahorro)} ya aplicado.</> : '.'} Sin contraseñas.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <input value={rName} onChange={e => setRName(e.target.value)} placeholder="Tu nombre completo" autoComplete="name" style={inpPod} autoFocus />
-              <input value={rPhone} onChange={e => setRPhone(e.target.value)} placeholder="Tu teléfono (10 dígitos)" type="tel" inputMode="numeric" autoComplete="tel" style={inpPod} />
-              <input value={rEmail} onChange={e => setREmail(e.target.value)} placeholder="Tu correo (opcional)" type="email" inputMode="email" autoComplete="email" style={inpPod} />
-              <button onClick={registrar} disabled={busy || rPhone.trim().length < 10 || rName.trim().length < 3}
-                style={{ ...btnPrimario, marginTop: 4, opacity: busy || rPhone.trim().length < 10 || rName.trim().length < 3 ? 0.45 : 1 }}>
-                {busy ? 'Un momento…' : 'Apartar mi lugar'}
-              </button>
-              <button onClick={() => setRegOpen(null)} style={{ minHeight: 40, background: 'none', border: 'none', color: OBSIDIAN[100], fontFamily: PLEX, fontSize: 13, cursor: 'pointer' }}>
-                Ahora no
-              </button>
+              {PAGO_EN_LINEA && !ticket.paid && Number(ticket.amount) > 0 && (
+                <button onClick={() => pagar(ticket)} disabled={busy}
+                  style={{ ...btn, background: ESPACIO.wellness, marginTop: 12 }}>
+                  Pagar ahora {mxn(Number(ticket.amount))}
+                </button>
+              )}
+
+              {token && vigentes.some(b => b.booking_id === ticket.booking_id) && (
+                <button onClick={() => { const b = ticket; setTicket(null); cancelar(b) }}
+                  style={{ width: '100%', minHeight: 40, background: 'none', border: 'none', color: OBSIDIAN[100], fontFamily: PLEX, fontSize: 12.5, cursor: 'pointer', marginTop: 10, textDecoration: 'underline' }}>
+                  Cancelar esta reserva
+                </button>
+              )}
+              <button onClick={() => setTicket(null)} style={{ ...btn, marginTop: 12 }}>Listo</button>
             </div>
           </div>
         </div>
