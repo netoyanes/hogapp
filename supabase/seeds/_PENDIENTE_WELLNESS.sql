@@ -8,15 +8,17 @@
 -- "if not exists", las columnas "add column if not exists" y las funciones
 -- "create or replace". Probado dos veces seguidas contra PostgreSQL 16.
 --
---   ⚠️  UNA SOLA COSA QUE EDITAR: hasta el final, en el bloque 4, cambia
---       v_code := 'PC'  por el código real de POD Wellness en HOG APP.
---       Si el código no existe, el script se detiene y te dice cuáles hay.
+-- SI DA "connection timeout": el editor de Supabase corta pegadas grandes, y
+-- el bloque 3 pide un lock exclusivo sobre wellness_sessions para recrear la
+-- columna calculada de ingresos. Córrelos por separado desde supabase/seeds/,
+-- en este mismo orden. El bloque 3 falla en 5 segundos con mensaje claro si
+-- otra sesión tiene la tabla ocupada, en vez de quedarse esperando.
 --
 -- Contenido:
 --   1. Parrilla, cierre de turno, tablero, maestros y configuración
 --   2. Precio vigente hacia el portal público
 --   3. Cuenta de alumno y precio por registro
---   4. Maestros y horarios reales de POD Wellness
+--   4. Maestros y horarios reales de POD Wellness (casa NUEVOLEON108)
 -- ═════════════════════════════════════════════════════════════════════════════
 
 
@@ -389,23 +391,48 @@ end $$;
 -- ─── 3. El cierre de turno cobra dos precios ─────────────────────────────────
 -- Registrados al precio con descuento, walk-ins al regular. Con un solo precio
 -- el ingreso del turno quedaba mal desde el día que entró la regla.
-alter table wellness_sessions add column if not exists precio_walkin numeric check (precio_walkin is null or precio_walkin >= 0);
+--
+-- OJO: recrear una columna generada pide un ACCESS EXCLUSIVE sobre la tabla.
+-- Si otra sesión la tiene tomada (por ejemplo, una corrida anterior que se
+-- cortó y dejó una transacción abierta), esto se quedaría esperando hasta que
+-- la conexión muera — que es justo el "connection timeout" que no dice nada.
+-- Con lock_timeout falla en 5 segundos y con un mensaje que sí sirve.
+set lock_timeout = '5s';
 
-do $$ begin
-  if exists (select 1 from information_schema.columns
-              where table_name = 'wellness_sessions' and column_name = 'ingresos') then
-    alter table wellness_sessions drop column ingresos;
+do $$
+begin
+  alter table wellness_sessions add column if not exists precio_walkin numeric
+    check (precio_walkin is null or precio_walkin >= 0);
+
+  -- Solo se recrea si todavía tiene la fórmula vieja: en la segunda corrida
+  -- no toca nada y ni siquiera pide el lock.
+  if exists (
+    select 1 from pg_attrdef d
+      join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
+     where d.adrelid = 'wellness_sessions'::regclass and a.attname = 'ingresos'
+       and pg_get_expr(d.adbin, d.adrelid) not like '%walk_ins%'
+  ) or not exists (
+    select 1 from information_schema.columns
+     where table_name = 'wellness_sessions' and column_name = 'ingresos'
+  ) then
+    if exists (select 1 from information_schema.columns
+                where table_name = 'wellness_sessions' and column_name = 'ingresos') then
+      alter table wellness_sessions drop column ingresos;
+    end if;
+    -- Los registrados son los cobrados que no fueron walk-in. Sin precio de
+    -- walk-in se usa el mismo, así una operación de un solo precio sigue
+    -- dando exactamente el mismo número que antes.
+    alter table wellness_sessions add column ingresos numeric
+      generated always as (
+        greatest(total_cobrados - walk_ins, 0) * precio_aplicado
+        + walk_ins * coalesce(precio_walkin, precio_aplicado)
+      ) stored;
   end if;
+exception when lock_not_available then
+  raise exception 'No se pudo tomar el lock de wellness_sessions: otra sesión la tiene ocupada. Corre el diagnóstico de bloqueos, termina esa sesión y vuelve a intentar.';
 end $$;
 
--- Los registrados son los cobrados que no fueron walk-in. Si no se capturó
--- precio de walk-in, se usa el mismo — así una operación de un solo precio
--- sigue dando exactamente el mismo número que antes.
-alter table wellness_sessions add column ingresos numeric
-  generated always as (
-    greatest(total_cobrados - walk_ins, 0) * precio_aplicado
-    + walk_ins * coalesce(precio_walkin, precio_aplicado)
-  ) stored;
+reset lock_timeout;
 
 notify pgrst, 'reload schema';
 
@@ -423,10 +450,9 @@ notify pgrst, 'reload schema';
 -- opera POD Wellness hoy. Sin esto la app está vacía y el portal público no
 -- tiene nada que mostrar.
 --
---   ⚠️  ANTES DE CORRER: pon abajo el CÓDIGO del venue de POD Wellness tal
---       como está en HOG APP (Casas → el código de tres letras). Si el código
---       no existe, el script se detiene y te lo dice, en vez de crear las
---       clases colgando de la casa equivocada.
+-- El venue va fijado abajo en v_code. Si el código no existe, el script se
+-- detiene y te lista los que sí hay, en vez de crear las clases colgando de
+-- la casa equivocada.
 --
 -- Es idempotente: correrlo dos veces no duplica nada. Si ya editaste un
 -- horario a mano, la segunda corrida respeta lo que hay (usa on conflict).
@@ -436,8 +462,8 @@ notify pgrst, 'reload schema';
 
 do $$
 declare
-  -- ⚠️  ⬇️  EL ÚNICO VALOR QUE TIENES QUE CAMBIAR  ⬇️
-  v_code   text := 'PC';
+  -- La casa de POD Wellness en HOG APP
+  v_code   text := 'NUEVOLEON108';
   -- wellness.sql sembró un Dharma Yoga de ejemplo en martes y jueves 07:30.
   -- Con esto en true, cualquier horario de estas clases que NO esté en la
   -- parrilla oficial queda EN PAUSA (no se borra: se reactiva desde
