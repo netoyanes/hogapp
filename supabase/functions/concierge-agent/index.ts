@@ -317,6 +317,21 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
   console.log('[agent] turno', conversationId, 'canal', conv?.channel, 'status', conv?.status ?? 'no-encontrada', isFollowup ? '(seguimiento)' : '')
   if (!conv || conv.status !== 'bot' || conv.is_simulated) { console.log('[agent] skip: status/simulada'); return } // respeta handoff; el simulador no toca Meta
 
+  // El kill switch se consulta ANTES de cargar el contexto, y al salir se apaga
+  // el reloj de la conversación. Antes iba después de las 6 consultas de abajo
+  // y hacía return dejando next_bot_reply_at vencido: el dispatcher la volvía a
+  // mandar al minuto siguiente, para siempre. Con el switch apagado desde el 22
+  // de agosto eso dio 17 días de reintentos que tumbaron la Data API.
+  const { data: settings } = await supabaseAdmin.from('app_settings').select('key, value').in('key', ['bot_model', 'bot_enabled', 'app_public_url'])
+  const settingsMap = Object.fromEntries((settings ?? []).map((s: { key: string; value: string }) => [s.key, s.value]))
+  if (settingsMap.bot_enabled !== 'true') {
+    console.log('[agent] skip: kill switch global apagado')
+    await supabaseAdmin.from('bot_conversations')
+      .update({ next_bot_reply_at: null, next_followup_at: null })
+      .eq('id', conversationId)
+    return
+  }
+
   const [{ data: bu }, { data: cfg }, { data: history }, { data: venues }, { data: pay }, { data: botInfo }] = await Promise.all([
     conv.bu_id ? supabaseAdmin.from('business_units').select('id, code, name, venue_type, inventory_type, reservation_policy').eq('id', conv.bu_id).maybeSingle() : { data: null },
     conv.bu_id ? supabaseAdmin.from('bot_venue_config').select('*').eq('bu_id', conv.bu_id).eq('channel', conv.channel).maybeSingle() : { data: null },
@@ -325,10 +340,6 @@ async function runTurn(supabaseAdmin: any, conversationId: string, isFollowup: b
     conv.bu_id ? supabaseAdmin.from('venue_payment_config').select('*').eq('bu_id', conv.bu_id).maybeSingle() : { data: null },
     conv.bu_id ? supabaseAdmin.from('venue_bot_info').select('faq').eq('bu_id', conv.bu_id).maybeSingle() : { data: null },
   ])
-
-  const { data: settings } = await supabaseAdmin.from('app_settings').select('key, value').in('key', ['bot_model', 'bot_enabled', 'app_public_url'])
-  const settingsMap = Object.fromEntries((settings ?? []).map((s: { key: string; value: string }) => [s.key, s.value]))
-  if (settingsMap.bot_enabled !== 'true') { console.log('[agent] skip: kill switch global apagado'); return }
 
   // La config por canal manda: venue identificado con el canal apagado (o sin
   // configurar) → el bot no atiende; pasa al equipo con aviso al cliente.
