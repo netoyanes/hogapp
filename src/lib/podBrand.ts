@@ -57,7 +57,9 @@ export const TIPO = {
  *   · el ícono nunca baja de 40px de ancho
  *   · el ícono va en cream 500 u obsidian 500 — sobre el degradado del espacio
  *     va en cream, que es como se ve el lockup de cada casa
- *   · el texto del logo nunca baja de 32px, con 7.5% de tracking
+ *   · el texto del logo nunca baja de 32px, con 7.5px de tracking sobre 36px
  *   · el texto suele ser el primer elemento de arriba a abajo, con 16px de aire
  */
-export const LOGO = { iconMin: 40, textMin: 32, tracking: '0.075em', padding: 16 } as const
+// El tracking del logotipo es 7.5 PÍXELES sobre 36px de texto — 0.2083em —,
+// no 7.5%: es lo que dice la nota del manual y lo que trae el archivo.
+export const LOGO = { iconMin: 40, textMin: 32, tracking: '0.2083em', padding: 16 } as const

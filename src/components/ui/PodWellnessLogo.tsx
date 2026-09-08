@@ -7,13 +7,13 @@
 //
 // SOBRE EL ÍCONO: el SVG oficial vive en Figma, pero la política de red de la
 // organización bloquea las descargas desde figma.com, así que la geometría
-// está reconstruida: cuatro círculos tangentes inscritos en los cuadrantes del
-// lienzo. Los cuatro puntos de tangencia forman la estrella de cuatro picos
-// del negativo. Si prefieres el archivo original, deja el SVG exportado en
+// está reconstruida contra el logotipo de referencia — contorno circular,
+// cuatro muescas delgadas en los ejes y la estrella de cuatro picos al centro.
+// Si prefieres el archivo original, deja el SVG exportado en
 // public/pod-wellness-icon.svg y esta pieza lo usa en su lugar, sin tocar
 // código: PodIcon lo intenta primero y solo dibuja si no existe.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { ESPACIO, POPPINS, LOGO } from '../../lib/podBrand'
 
 const ICONO_OFICIAL = '/pod-wellness-icon.svg'
@@ -24,6 +24,9 @@ export function PodIcon({ size = LOGO.iconMin, color = ESPACIO.wellness, title }
 }) {
   // Si alguien deja el SVG oficial en public/, gana sobre el dibujo
   const [oficial, setOficial] = useState<boolean | null>(null)
+  // El clipPath necesita id propio: con dos logos en la misma página, un id
+  // compartido hace que el segundo recorte contra el primero.
+  const clipId = useId()
   useEffect(() => {
     let vivo = true
     fetch(ICONO_OFICIAL, { method: 'HEAD' })
@@ -35,15 +38,24 @@ export function PodIcon({ size = LOGO.iconMin, color = ESPACIO.wellness, title }
   if (oficial) {
     return <img src={ICONO_OFICIAL} alt={title ?? 'POD Wellness'} width={size} height={size} style={{ display: 'block' }} />
   }
-  // Cuatro círculos tangentes: r = 25 centrados en los cuadrantes de 100×100.
-  // Se tocan en los puntos medios de cada lado y dejan la estrella al centro.
+  // Geometría: cuatro círculos tangentes entre sí sobre las diagonales,
+  // RECORTADOS por el círculo envolvente. De ahí salen las tres cosas que
+  // definen la marca: contorno circular, cuatro muescas delgadas en los ejes
+  // y la estrella de cuatro picos en el negativo.
+  //   k = 44/√2 → centros a 44 del centro, radio igual a la mitad de la
+  //   separación entre vecinos (tangentes), y todo dentro de r = 50.
+  const k = 31.11
+  const centros: [number, number][] = [[50 + k, 50 - k], [50 + k, 50 + k], [50 - k, 50 + k], [50 - k, 50 - k]]
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" fill="none" role="img"
       aria-label={title ?? 'POD Wellness'} style={{ display: 'block' }}>
       {title && <title>{title}</title>}
-      {([[25, 25], [75, 25], [75, 75], [25, 75]] as const).map(([cx, cy]) => (
-        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={25} fill={color} />
-      ))}
+      <defs>
+        <clipPath id={clipId}><circle cx="50" cy="50" r="50" /></clipPath>
+      </defs>
+      <g clipPath={`url(#${clipId})`} fill={color}>
+        {centros.map(([cx, cy]) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={k} />)}
+      </g>
     </svg>
   )
 }
