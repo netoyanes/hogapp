@@ -20,6 +20,13 @@ do $$
 declare
   -- ⚠️  ⬇️  EL ÚNICO VALOR QUE TIENES QUE CAMBIAR  ⬇️
   v_code   text := 'PC';
+  -- wellness.sql sembró un Dharma Yoga de ejemplo en martes y jueves 07:30.
+  -- Con esto en true, cualquier horario de estas clases que NO esté en la
+  -- parrilla oficial queda EN PAUSA (no se borra: se reactiva desde
+  -- Wellness → Parrilla si de verdad lo usas). Ponlo en false si prefieres
+  -- que no se toque nada de lo que ya existe.
+  v_pausar_sobrantes boolean := true;
+  v_sobrantes text;
   v_bu     uuid;
   v_rafa   uuid; v_alma uuid; v_yanni uuid; v_salva uuid; v_shanti uuid;
   v_dharma uuid; v_runners uuid; v_hatha uuid; v_sculpt uuid;
@@ -67,6 +74,17 @@ begin
     ) as x(nombre, maestro)
    where not exists (select 1 from wellness_classes c where c.bu_id = v_bu and lower(c.name) = lower(x.nombre));
 
+  -- Si la clase ya existía sin maestro (o con otro), se le pone el de la
+  -- parrilla real: es la fuente de verdad de quién imparte qué.
+  update wellness_classes c set instructor_id = x.maestro
+    from (values
+      ('Dharma Yoga', v_rafa), ('Yoga para Runners 🌈', v_rafa), ('Hatha Yoga', v_alma),
+      ('Sculpt n Burn Pilates', v_yanni), ('Power Yoga', v_salva), ('Pilates de piso', v_salva),
+      ('Vinyasa Yoga', v_shanti), ('Yin Yoga', v_shanti)
+    ) as x(nombre, maestro)
+   where c.bu_id = v_bu and lower(c.name) = lower(x.nombre)
+     and c.instructor_id is distinct from x.maestro;
+
   select id into v_dharma  from wellness_classes where bu_id = v_bu and name = 'Dharma Yoga';
   select id into v_runners from wellness_classes where bu_id = v_bu and name = 'Yoga para Runners 🌈';
   select id into v_hatha   from wellness_classes where bu_id = v_bu and name = 'Hatha Yoga';
@@ -105,7 +123,39 @@ begin
       -- Sábado
       (6, time '11:00', v_dharma,  v_rafa,   null)
     ) as x(dia, hora, clase, maestro, nota)
-  on conflict (class_id, weekday, start_time) do nothing;
+  -- do update, no do nothing: un horario que ya existía de una carga previa
+  -- se completa con su maestro y su turno en vez de quedarse a medias.
+  on conflict (class_id, weekday, start_time) do update set
+    instructor_id = excluded.instructor_id,
+    turno         = excluded.turno,
+    estatus       = 'activa',
+    active        = true,
+    duration_min  = coalesce(wellness_slots.duration_min, excluded.duration_min),
+    notas         = coalesce(wellness_slots.notas, excluded.notas);
+
+  -- ── Lo que sobra de cargas anteriores ─────────────────────────────────────
+  if v_pausar_sobrantes then
+    with fuera as (
+      update wellness_slots s set estatus = 'pausa', active = false
+       from wellness_classes c
+      where c.id = s.class_id and c.bu_id = v_bu
+        and coalesce(s.estatus, 'activa') = 'activa'
+        and not ((s.weekday, s.start_time) in (
+          (1, time '08:00'), (1, time '18:00'), (1, time '19:30'),
+          (2, time '07:00'), (2, time '08:00'), (2, time '18:00'), (2, time '19:30'),
+          (3, time '08:00'), (3, time '18:00'), (3, time '19:30'),
+          (4, time '07:00'), (4, time '08:00'), (4, time '18:00'), (4, time '19:30'),
+          (6, time '11:00')))
+      returning c.name, s.weekday, s.start_time)
+    select string_agg(format('%s %s %s',
+             case weekday when 0 then 'dom' when 1 then 'lun' when 2 then 'mar' when 3 then 'mié'
+                          when 4 then 'jue' when 5 then 'vie' else 'sáb' end,
+             to_char(start_time, 'HH24:MI'), name), ' · ')
+      into v_sobrantes from fuera;
+    if v_sobrantes is not null then
+      raise notice 'Quedaron EN PAUSA (no en la parrilla oficial): %. Si alguno sí va, reactívalo en Wellness → Parrilla.', v_sobrantes;
+    end if;
+  end if;
 
   -- ── Qué imparte cada quien (el directorio de Maestros lo muestra) ─────────
   insert into wellness_instructor_classes (instructor_id, class_id)
