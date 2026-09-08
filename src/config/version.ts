@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.110.0"
+export const APP_VERSION = "2.110.1"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.110.1",
+    date: "2026-09-08",
+    type: "PATCH",
+    changes: [
+      "El logotipo de POD Wellness ahora sí coincide con el original. El ícono tenía la geometría mal: eran cuatro círculos sueltos, y la marca real es un contorno circular con cuatro muescas delgadas en los ejes y la estrella de cuatro picos al centro",
+      "Corregido también el tracking del logotipo: el manual pide 7.5 PÍXELES sobre 36px de texto (0.208em), no 7.5% — las letras iban muy juntas",
+    ]
+  },
   {
     version: "2.110.0",
     date: "2026-09-08",
