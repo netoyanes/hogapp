@@ -62,4 +62,19 @@ export const TIPO = {
  */
 // El tracking del logotipo es 7.5 PÍXELES sobre 36px de texto — 0.2083em —,
 // no 7.5%: es lo que dice la nota del manual y lo que trae el archivo.
-export const LOGO = { iconMin: 40, textMin: 32, tracking: '0.2083em', padding: 16 } as const
+//
+// `fluido` es el tamaño de texto por defecto en pantalla. El mínimo de 32px del
+// manual está pensado para impreso: con el tracking del lockup, "POD WELLNESS"
+// mide ~12.3 veces el tamaño del texto, así que a 32px pide 394px de ancho y en
+// un teléfono de 360 se corta la última S. El clamp respeta los 32 (y sube a 34)
+// cuando hay ancho, y baja en pantallas angostas en lugar de recortar la marca.
+//   6.8vw → 320px: 22px · 360px: 24px · 430px: 29px · 500px+: tope de 34px
+//
+// El 6.8 lleva holgura a propósito. El ancho exacto depende de las métricas de
+// Poppins, y si Google Fonts no carga —red del cliente, bloqueo corporativo— el
+// navegador cae a la sans del sistema, que es MÁS ancha. Ajustar esto al límite
+// justo hace que el logo se corte precisamente cuando la fuente no cargó.
+export const LOGO = {
+  iconMin: 40, textMin: 32, tracking: '0.2083em', padding: 16,
+  gap: 0.55, fluido: 'clamp(19px, 6.8vw, 34px)',
+} as const

@@ -258,25 +258,32 @@ export function WellnessPortal({ code }: { code: string }) {
     // Página independiente y SIEMPRE clara: es la cara al cliente, y habla en
     // la marca de POD, no en la de HOG APP.
     <div style={{ minHeight: '100vh', background: CREAM[500], color: OBSIDIAN[500], fontFamily: POPPINS }}>
-      {/* Banda de marca: el degradado del espacio con el logo en cream, que es
-          como el manual pide usar el ícono sobre color. */}
-      <div style={{ background: WELLNESS_GRADIENT, padding: '30px 18px 26px' }}>
+      {/* Banda de marca. El logo va VERDE SOBRE CREAM, que es como viene el
+          archivo y la única forma de que contraste: antes iba en cream sobre el
+          degradado del espacio, y ahí el verde de la marca no existe.
+          También es lo que pide la proporción 70/20/10 del manual — el verde es
+          acento, no fondo. El degradado se queda, pero como filo de 3px. */}
+      <div style={{ background: CREAM[300], padding: '34px 18px 26px', borderBottom: `1px solid ${CREAM[600]}` }}>
         <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center' }}>
-          <PodWellnessLogo size={26} color={CREAM[500]} />
-          <p style={{ fontFamily: PLEX, fontWeight: 200, fontSize: 14, letterSpacing: '0.06em', color: 'rgba(239,239,224,0.72)', margin: '14px 0 0' }}>
+          {/* Sin size: el default fluido de la marca. Llega a 34/40 —los dos
+              mínimos del manual— cuando hay ancho, y baja en pantalla angosta
+              en vez de cortarse. */}
+          <PodWellnessLogo />
+          <p style={{ fontFamily: PLEX, fontWeight: 300, fontSize: 13, letterSpacing: '0.16em', color: OBSIDIAN[100], margin: '18px 0 0' }}>
             {info?.venue ? info.venue.toUpperCase() : 'YOGA · PILATES · BIENESTAR'}
           </p>
           {hayDescuento && (
-            <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, marginTop: 16, padding: '7px 16px', borderRadius: 999, background: 'rgba(239,239,224,0.13)', border: '1px solid rgba(239,239,224,0.28)' }}>
-              <span style={{ fontFamily: PLEX, fontSize: 11.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(239,239,224,0.75)' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, marginTop: 18, padding: '7px 16px', borderRadius: 999, background: 'rgba(29,158,117,0.09)', border: '1px solid rgba(29,158,117,0.28)' }}>
+              <span style={{ fontFamily: PLEX, fontSize: 11.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: ESPACIO.wellness }}>
                 {token ? 'Tu precio' : 'Con cuenta'}
               </span>
-              <span style={{ fontFamily: PLEX, fontSize: 13, fontWeight: 300, color: 'rgba(239,239,224,0.6)', textDecoration: 'line-through' }}>{mxn(regular!)}</span>
-              <span style={{ fontFamily: POPPINS, fontSize: 19, fontWeight: 600, color: CREAM[500] }}>{mxn(conDescuento!)}</span>
+              <span style={{ fontFamily: PLEX, fontSize: 13, fontWeight: 300, color: OBSIDIAN[100], textDecoration: 'line-through' }}>{mxn(regular!)}</span>
+              <span style={{ fontFamily: POPPINS, fontSize: 19, fontWeight: 600, color: ESPACIO.wellness }}>{mxn(conDescuento!)}</span>
             </div>
           )}
         </div>
       </div>
+      <div style={{ height: 3, background: WELLNESS_GRADIENT }} />
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '26px 18px 60px' }}>
         <header style={{ textAlign: 'center', marginBottom: 24 }}>
