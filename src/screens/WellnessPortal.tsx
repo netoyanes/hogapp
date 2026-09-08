@@ -55,6 +55,19 @@ interface Info {
   precio_vigente?: number | null; promocion?: boolean
   promo_hasta?: string | null; promo_solo_primera?: boolean
 }
+interface Producto {
+  code: string; nombre: string; descripcion: string | null; tipo: string
+  precio: number; creditos: number | null; vigencia_dias: number
+  por_clase: number | null; vigente_hasta: string | null
+  cupo_total: number | null; disponibles: number | null
+}
+interface Compra {
+  purchase_id: string; code: string | null; producto: string; tipo: string
+  precio: number; paid: boolean; status: string
+  creditos_totales: number | null; creditos_usados: number
+  restantes: number | null; ilimitado: boolean
+  inicia: string | null; vence: string | null; vigente: boolean
+}
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const TOKEN_KEY = 'hog_wellness_token'
@@ -69,6 +82,8 @@ export function WellnessPortal({ code }: { code: string }) {
   const [perfil, setPerfil] = useState<{ phone?: string; email?: string | null; since?: string; tomadas?: number; primera_disponible?: boolean } | null>(null)
   const [mine, setMine] = useState<MyBooking[]>([])
   const [info, setInfo] = useState<Info | null>(null)
+  const [productos, setProductos] = useState<Producto[]>([])
+  const [compras, setCompras] = useState<Compra[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null)
@@ -83,6 +98,10 @@ export function WellnessPortal({ code }: { code: string }) {
   const [ticket, setTicket] = useState<MyBooking | null>(null)
   const [cuentaOpen, setCuentaOpen] = useState(false)
   const [historialOpen, setHistorialOpen] = useState(false)
+  const [compraOpen, setCompraOpen] = useState<Producto | null>(null)
+  const [ticketCompra, setTicketCompra] = useState<{ code: string; nombre: string; precio: number; creditos: number | null; vence: string | null; inicia_en_primera_clase: boolean } | null>(null)
+  // Lo que la reserva devolvió sobre la compra que la cubrió, para el ticket
+  const [ticketExtra, setTicketExtra] = useState<{ producto?: string | null; restantes?: number | null } | null>(null)
 
   // Un solo formulario para las dos rutas de reserva: cambia el botón que se
   // aprieta, no los campos.
@@ -100,19 +119,24 @@ export function WellnessPortal({ code }: { code: string }) {
     setSlots((sch ?? []) as SlotDef[])
     setOcc((oc ?? []) as Occ[])
     supabase.rpc('fn_wellness_info', { p_code: code }).then(({ data }) => setInfo(data ?? null))
+    // Sin wellness_productos.sql el RPC no existe y la sección simplemente no
+    // aparece: el portal sigue vendiendo clase suelta como antes.
+    supabase.rpc('fn_wellness_products', { p_code: code })
+      .then(({ data }) => setProductos((data ?? []) as Producto[]))
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code])
   useEffect(() => { load() }, [load])
 
   const loadMine = useCallback(async () => {
-    if (!token) { setMine([]); setMyName(''); setPerfil(null); return }
+    if (!token) { setMine([]); setMyName(''); setPerfil(null); setCompras([]); return }
     const { data } = await supabase.rpc('fn_wellness_me', { p_token: token })
     if (!data) { localStorage.removeItem(TOKEN_KEY); setToken(null); return }
     setMyName(data.name ?? '')
     setPerfil({ phone: data.phone, email: data.email, since: data.since, tomadas: data.tomadas, primera_disponible: data.primera_disponible })
     setCorreoEdit(data.email ?? '')
     setMine((data.bookings ?? []) as MyBooking[])
+    setCompras((data.compras ?? []) as Compra[])
   }, [token])
   useEffect(() => { loadMine() }, [loadMine])
 
@@ -170,6 +194,18 @@ export function WellnessPortal({ code }: { code: string }) {
       && proximas.some(p => p.slot.slot_id === slotId && p.date === date && p.slot.class === b.class && p.slot.start_time === b.start_time))
 
   const vigentes = mine.filter(b => b.status !== 'cancelada' && b.class_date >= iso(hoy))
+  // Lo comprado que todavía sirve. Una compra agotada o vencida no se muestra:
+  // ver "Paquete 5 · 0 restantes" no le dice nada útil a nadie.
+  const vigentes_compras = compras.filter(c => c.vigente && (c.ilimitado || (c.restantes ?? 0) > 0))
+
+  /**
+   * ¿Alguna compra viva cubre una clase de ESTA fecha? La cobertura no es un
+   * sí o un no global: un paquete que vence el 22 no cubre una clase del 25, y
+   * la semana de prueba solo cubre sus siete días. Mostrar "incluida" en una
+   * clase que sí se va a cobrar es prometer de más.
+   */
+  const cubreFecha = (fecha: string) => vigentes_compras.some(c =>
+    (c.inicia == null || fecha >= c.inicia) && (c.vence == null || fecha <= c.vence))
   const pasadas = mine.filter(b => b.status !== 'cancelada' && b.class_date < iso(hoy))
 
   // ── Acciones ──────────────────────────────────────────────────────────────
@@ -186,6 +222,7 @@ export function WellnessPortal({ code }: { code: string }) {
     setBusy(false)
     if (data?.error) { setMsg({ text: data.error, error: true }); return }
     setReservaOpen(null)
+    setTicketExtra({ producto: data.producto, restantes: data.restantes })
     setTicket({
       booking_id: data.booking_id, code: data.code, class: slot.class, class_date: date,
       start_time: slot.start_time, instructor: slot.instructor,
@@ -219,12 +256,50 @@ export function WellnessPortal({ code }: { code: string }) {
     if (data?.error) { setMsg({ text: data.error, error: true }); return }
     const { slot, date } = reservaOpen
     setReservaOpen(null)
+    setTicketExtra(null)
     setTicket({
       booking_id: data.booking_id, code: data.code, class: slot.class, class_date: date,
       start_time: slot.start_time, instructor: slot.instructor,
       status: 'reservada', paid: false, paid_via: null, amount: data.amount,
     })
     load()
+  }
+
+  // ── Comprar ───────────────────────────────────────────────────────────────
+  // Comprar EXIGE cuenta: un paquete de 10 clases sin dónde consultarlo es una
+  // promesa que nadie puede cobrar. Si no hay sesión, se pide el registro en la
+  // misma ventana, igual que al apartar.
+  function abrirCompra(prod: Producto) {
+    if (token) { comprar(prod); return }
+    setF({ name: '', phone: '', email: '' })
+    setCompraOpen(prod)
+  }
+
+  async function comprar(prod: Producto, tok = token) {
+    setBusy(true)
+    const { data } = await supabase.rpc('fn_wellness_buy', { p_token: tok, p_venue: code, p_product: prod.code })
+    setBusy(false)
+    if (data?.error) { setMsg({ text: data.error, error: true }); return }
+    setCompraOpen(null)
+    setTicketCompra({
+      code: data.code, nombre: data.nombre, precio: Number(data.precio),
+      creditos: data.creditos ?? null, vence: data.vence ?? null,
+      inicia_en_primera_clase: !!data.inicia_en_primera_clase,
+    })
+    load(); loadMine()
+  }
+
+  async function registrarYComprar() {
+    if (!compraOpen) return
+    setBusy(true)
+    const { data } = await supabase.rpc('fn_wellness_register', {
+      p_name: f.name, p_phone: f.phone, p_email: f.email,
+    })
+    if (data?.error) { setBusy(false); setMsg({ text: data.error, error: true }); return }
+    localStorage.setItem(TOKEN_KEY, data.token)
+    setToken(data.token)
+    setBusy(false)
+    await comprar(compraOpen, data.token)
   }
 
   async function entrar() {
@@ -416,6 +491,37 @@ export function WellnessPortal({ code }: { code: string }) {
           </section>
         )}
 
+        {/* ── LO QUE TIENES ── Antes de la cartelera: si ya compraste, lo
+            primero que quieres saber es cuántas clases te quedan. */}
+        {token && vigentes_compras.length > 0 && (
+          <section style={{ marginBottom: 22 }}>
+            <h2 style={rotulo}>Lo que tienes</h2>
+            {vigentes_compras.map(c => (
+              <div key={c.purchase_id} style={{ ...tarjeta, padding: '12px 15px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: PLEX, fontSize: 15, fontWeight: 600 }}>{c.producto}</div>
+                  <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12.5, color: OBSIDIAN[100] }}>
+                    {c.ilimitado
+                      ? <>Ilimitado{c.vence ? ` · hasta el ${fmtCorto(c.vence)}` : ' · arranca en tu primera clase'}</>
+                      : <>{c.restantes} de {c.creditos_totales} clases{c.vence ? ` · hasta el ${fmtCorto(c.vence)}` : ''}</>}
+                    {!c.paid && ' · por pagar en caja'}
+                  </div>
+                </div>
+                {!c.ilimitado && (
+                  <div style={{ fontFamily: PLEX, fontSize: 22, fontWeight: 700, color: ESPACIO.wellness, flexShrink: 0 }}>
+                    {c.restantes}
+                  </div>
+                )}
+                {c.code && (
+                  <span style={{ fontFamily: PLEX, fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', color: ESPACIO.wellness, background: 'rgba(29,158,117,0.10)', border: '1px solid rgba(29,158,117,0.3)', borderRadius: 999, padding: '6px 11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {c.code}
+                  </span>
+                )}
+              </div>
+            ))}
+          </section>
+        )}
+
         {/* ── MIS PRÓXIMAS CLASES ── Lo que buscas al volver: tu código. */}
         {token && vigentes.length > 0 && (
           <section style={{ marginBottom: 24 }}>
@@ -477,7 +583,15 @@ export function WellnessPortal({ code }: { code: string }) {
                     </div>
                     <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12, color: lleno ? '#8C2F1F' : OBSIDIAN[100], whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {slot.instructor ? `${slot.instructor} · ` : ''}
-                      {lleno ? 'Llena' : libres <= 3 ? `quedan ${libres}` : mxn(precioLista(slot.price))}
+                      {lleno
+                        ? 'Llena'
+                        : libres <= 3
+                          ? `quedan ${libres}`
+                          : cubreFecha(date)
+                            // Con paquete o membresía vigente esta clase no se
+                            // cobra: enseñar $300 haría dudar de lo ya pagado.
+                            ? <span style={{ color: ESPACIO.wellness, fontWeight: 600 }}>Incluida</span>
+                            : mxn(precioLista(slot.price))}
                     </div>
                   </div>
                   <button disabled={lleno || reservada || busy} onClick={() => abrirReserva(slot, date)}
@@ -495,6 +609,62 @@ export function WellnessPortal({ code }: { code: string }) {
             style={{ width: '100%', minHeight: 46, borderRadius: 999, border: `1px solid ${CREAM[600]}`, background: 'none', color: OBSIDIAN[200], fontFamily: PLEX, fontSize: 13.5, cursor: 'pointer', marginTop: 4 }}>
             Ver dos semanas
           </button>
+        )}
+
+        {/* ── PAQUETES Y MEMBRESÍAS ── Va DESPUÉS de la cartelera: primero se
+            ve que hay clases a las que se quiere ir, y solo entonces tiene
+            sentido comprar diez. */}
+        {productos.length > 0 && (
+          <section style={{ marginTop: 30 }}>
+            <h2 style={rotulo}>Ven más seguido y paga menos</h2>
+            <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13.5, color: OBSIDIAN[100], lineHeight: 1.55, margin: '0 0 12px' }}>
+              La clase suelta cuesta {regular != null ? mxn(regular) : '—'}. Estas opciones bajan el precio por clase.
+            </p>
+            {productos.map(prod => {
+              const yaLoTiene = compras.some(c => c.producto === prod.nombre && c.vigente)
+              const quedan = prod.disponibles
+              return (
+                <div key={prod.code} style={{ ...tarjeta, padding: '14px 15px', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: PLEX, fontSize: 15.5, fontWeight: 600 }}>{prod.nombre}</div>
+                      {prod.descripcion && (
+                        <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12.5, color: OBSIDIAN[100], marginTop: 2, lineHeight: 1.5 }}>
+                          {prod.descripcion}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontFamily: POPPINS, fontSize: 18, fontWeight: 700 }}>{mxn(prod.precio)}</div>
+                      {prod.tipo === 'membresia' && (
+                        <div style={{ fontFamily: PLEX, fontSize: 11, color: OBSIDIAN[100] }}>al mes</div>
+                      )}
+                      {prod.por_clase != null && (
+                        <div style={{ fontFamily: PLEX, fontSize: 11, color: ESPACIO.wellness }}>{mxn(prod.por_clase)} por clase</div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 11 }}>
+                    {/* El contador de fundadores sale de la base: "quedan 6" es
+                        argumento de venta y tiene que ser verdad. */}
+                    {quedan != null && (
+                      <span style={{ fontFamily: PLEX, fontSize: 12, fontWeight: 600, color: quedan <= 5 ? '#8A6206' : OBSIDIAN[100] }}>
+                        {quedan === 1 ? 'Queda 1 lugar' : `Quedan ${quedan} lugares`}
+                      </span>
+                    )}
+                    <span style={{ flex: 1 }} />
+                    <button onClick={() => abrirCompra(prod)} disabled={busy || yaLoTiene}
+                      style={{ minHeight: 42, padding: '0 18px', borderRadius: 999, border: 'none', fontFamily: PLEX, fontSize: 13.5, fontWeight: 600, cursor: yaLoTiene ? 'default' : 'pointer', background: yaLoTiene ? CREAM[600] : OBSIDIAN[500], color: yaLoTiene ? OBSIDIAN[100] : CREAM[500], flexShrink: 0 }}>
+                      {yaLoTiene ? 'Ya lo tienes' : 'Comprar'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+            <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12, color: OBSIDIAN[100], lineHeight: 1.6, marginTop: 10 }}>
+              Compras aquí y pagas con tu código en la caja de {LUGAR.pisoCaja}. Puedes cancelar una clase hasta 4 horas antes sin perderla.
+            </p>
+          </section>
         )}
 
         {/* ── CÓMO LLEGAR ── Compacto, pero con los dos pisos: es lo que más
@@ -601,6 +771,84 @@ export function WellnessPortal({ code }: { code: string }) {
         </div>
       )}
 
+      {/* ── COMPRAR SIN SESIÓN ── Mismo formulario que al apartar. */}
+      {compraOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 55, overflowY: 'auto' }}>
+          <div style={{ background: CREAM[500], borderRadius: 20, padding: 22, width: '100%', maxWidth: 400, margin: 'auto' }}>
+            <div style={{ fontFamily: PLEX, fontSize: 19, fontWeight: 700 }}>{compraOpen.nombre}</div>
+            <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 14, color: OBSIDIAN[100], marginTop: 3, lineHeight: 1.5 }}>
+              {mxn(compraOpen.precio)}
+              {compraOpen.por_clase != null ? ` · ${mxn(compraOpen.por_clase)} por clase` : ''}
+              {compraOpen.tipo === 'membresia' ? ' al mes' : ''}
+            </div>
+            <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13.5, color: OBSIDIAN[100], margin: '14px 0 0', lineHeight: 1.55 }}>
+              Para comprarlo necesitas cuenta — es donde vas a ver cuántas clases te quedan y tu código.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
+              <input value={f.name} onChange={e => setF(v => ({ ...v, name: e.target.value }))}
+                placeholder="Tu nombre" autoComplete="name" style={inp} autoFocus />
+              <input value={f.phone} onChange={e => setF(v => ({ ...v, phone: e.target.value }))}
+                placeholder="Tu teléfono (10 dígitos)" type="tel" inputMode="numeric" autoComplete="tel" style={inp} />
+              <input value={f.email} onChange={e => setF(v => ({ ...v, email: e.target.value }))}
+                placeholder="Tu correo (opcional)" type="email" inputMode="email" autoComplete="email" style={inp} />
+              <button onClick={registrarYComprar} disabled={busy || !camposReserva}
+                style={{ ...btn, marginTop: 4, opacity: busy || !camposReserva ? 0.45 : 1 }}>
+                {busy ? 'Un momento…' : `Crear cuenta y comprar · ${mxn(compraOpen.precio)}`}
+              </button>
+              <button onClick={() => setCompraOpen(null)}
+                style={{ minHeight: 40, background: 'none', border: 'none', color: OBSIDIAN[100], fontFamily: PLEX, fontSize: 13, cursor: 'pointer' }}>
+                Ahora no
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TICKET DE COMPRA ── */}
+      {ticketCompra && (
+        <div onClick={() => setTicketCompra(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 60, overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: CREAM[300], borderRadius: 20, width: '100%', maxWidth: 370, overflow: 'hidden', margin: 'auto' }}>
+            <div style={{ background: WELLNESS_GRADIENT, padding: '18px 22px 16px', textAlign: 'center' }}>
+              <PodWellnessLogo size={15} color={CREAM[500]} />
+              <p style={{ fontFamily: PLEX, fontSize: 11, letterSpacing: '0.14em', color: 'rgba(239,239,224,0.8)', margin: '11px 0 0' }}>
+                COMPRA REGISTRADA
+              </p>
+            </div>
+            <div style={{ padding: '18px 22px 22px' }}>
+              <div style={{ fontFamily: PLEX, fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>{ticketCompra.nombre}</div>
+              <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 14, color: OBSIDIAN[200], marginTop: 3 }}>
+                {ticketCompra.creditos != null
+                  ? `${ticketCompra.creditos} clases`
+                  : 'Clases ilimitadas'}
+                {ticketCompra.vence
+                  ? ` · vence el ${fmtCorto(ticketCompra.vence)}`
+                  : ticketCompra.inicia_en_primera_clase ? ' · arranca en tu primera clase' : ''}
+              </div>
+
+              <div style={{ margin: '16px 0', padding: '15px 14px', borderRadius: 14, background: CREAM[500], border: `1px dashed ${ESPACIO.wellness}`, textAlign: 'center' }}>
+                <div style={{ fontFamily: PLEX, fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: OBSIDIAN[100] }}>Código de tu compra</div>
+                <div style={{ fontFamily: PLEX, fontSize: 29, fontWeight: 700, letterSpacing: '0.08em', color: ESPACIO.wellness, marginTop: 4 }}>
+                  {ticketCompra.code}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontFamily: POPPINS, fontSize: 14, fontWeight: 300 }}>
+                <span style={{ color: OBSIDIAN[100] }}>Total a pagar</span>
+                <strong style={{ fontSize: 21, fontWeight: 700 }}>{mxn(ticketCompra.precio)}</strong>
+              </div>
+
+              <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[200], margin: '14px 0 0', lineHeight: 1.55, padding: '12px 14px', borderRadius: 12, background: 'rgba(29,158,117,0.08)', border: '1px solid rgba(29,158,117,0.25)' }}>
+                Paga en la caja de <strong style={{ fontWeight: 600 }}>{LUGAR.pisoCaja}</strong> con este código. Ya puedes apartar tus clases desde ahora — no se te cobra otra vez.
+              </p>
+
+              <button onClick={() => setTicketCompra(null)} style={{ ...btn, marginTop: 14 }}>Listo</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── TICKET ── El comprobante que se enseña en caja. */}
       {ticket && (
         <div onClick={() => setTicket(null)}
@@ -627,15 +875,28 @@ export function WellnessPortal({ code }: { code: string }) {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontFamily: POPPINS, fontSize: 14, fontWeight: 300 }}>
-                <span style={{ color: OBSIDIAN[100] }}>Total a pagar</span>
-                <strong style={{ fontSize: 21, fontWeight: 700 }}>{Number(ticket.amount) > 0 ? mxn(Number(ticket.amount)) : 'Sin costo'}</strong>
-              </div>
+              {/* Cubierta por un paquete o membresía: no se cobra nada, y lo
+                  que la persona quiere saber es cuántas le quedan. */}
+              {Number(ticket.amount) === 0 && ticketExtra?.producto ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, fontFamily: POPPINS, fontSize: 14, fontWeight: 300 }}>
+                  <span style={{ color: OBSIDIAN[100] }}>Con tu {ticketExtra.producto}</span>
+                  <strong style={{ fontSize: 15, fontWeight: 700, color: ESPACIO.wellness, textAlign: 'right' }}>
+                    {ticketExtra.restantes == null ? 'Sin costo' : `Te quedan ${ticketExtra.restantes}`}
+                  </strong>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontFamily: POPPINS, fontSize: 14, fontWeight: 300 }}>
+                  <span style={{ color: OBSIDIAN[100] }}>Total a pagar</span>
+                  <strong style={{ fontSize: 21, fontWeight: 700 }}>{Number(ticket.amount) > 0 ? mxn(Number(ticket.amount)) : 'Sin costo'}</strong>
+                </div>
+              )}
 
               <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[200], margin: '14px 0 0', lineHeight: 1.55, padding: '12px 14px', borderRadius: 12, background: 'rgba(29,158,117,0.08)', border: '1px solid rgba(29,158,117,0.25)' }}>
                 {ticket.paid
                   ? <>Ya está pagada. Preséntate en el estudio, {LUGAR.pisoEstudio}.</>
-                  : <>Enseña este código en la caja de <strong style={{ fontWeight: 600 }}>{LUGAR.pisoCaja}</strong>. La clase es en el {LUGAR.pisoEstudio}.</>}
+                  : Number(ticket.amount) === 0 && ticketExtra?.producto
+                    ? <>Esta clase ya va incluida. Preséntate en el estudio, {LUGAR.pisoEstudio}, con tu código.</>
+                    : <>Enseña este código en la caja de <strong style={{ fontWeight: 600 }}>{LUGAR.pisoCaja}</strong>. La clase es en el {LUGAR.pisoEstudio}.</>}
               </p>
 
               {/* Sin cuenta no hay dónde volver a consultarlo: hay que decirlo
