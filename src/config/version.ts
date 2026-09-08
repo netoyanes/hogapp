@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.108.1"
+export const APP_VERSION = "2.109.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,20 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.109.0",
+    date: "2026-09-08",
+    type: "MINOR",
+    changes: [
+      "WELLNESS ADMINISTRA LA OPERACIÓN — el panel de Excel de POD Wellness ahora vive en la app, con cuatro pestañas nuevas",
+      "PARRILLA: la fuente única del calendario. Cada horario gana turno (AM/PM/Sábado), responsable de piso, instructor, cupo, duración, estatus y notas. Marca en rojo los horarios activos sin instructor, y trae la vista semanal que antes se llenaba sola en el Excel",
+      "CIERRE DE TURNO: el registro diario. Al terminar cada turno se llena su renglón — registrados por link (se precarga de las reservas reales), asistieron, walk-ins, total cobrados, precio, si el instructor llegó a tiempo, si el espacio quedó limpio e incidencias. Los ingresos se calculan solos: cobrados × precio, nadie los escribe. Lo que quedó sin cerrar en un día pasado se ve en rojo",
+      "TABLERO: se calcula solo desde los cierres. Ingresos y avance vs meta, clases impartidas, alumnos cobrados, ingreso por clase, no-shows, turnos sin cerrar y qué revisar; desglose por turno, clase, responsable de piso e instructor",
+      "MAESTROS: directorio con estatus (confirmado, en proceso, prospecto, baja), qué clases imparte cada quien y cómo se le paga — honorario fijo por clase o porcentaje del ingreso",
+      "Configuración por venue: precio regular, descuento de apertura, precio vigente (se calcula solo) y meta de ingresos del mes. El precio vigente es el que se propone al cerrar cada turno, y avisa si cobras distinto",
+      "Requiere wellness_operacion.sql",
+    ]
+  },
   {
     version: "2.108.1",
     date: "2026-09-03",

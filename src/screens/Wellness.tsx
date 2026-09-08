@@ -3,6 +3,7 @@ import { Flower2, Plus, Trash2, ChevronLeft, ChevronRight, Link2 } from 'lucide-
 import { supabase } from '../lib/supabase'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { SegmentedControl, StatusBadgeV2, Sheet, showToast } from '../components/v2'
+import { ParrillaTab, CierreTab, TableroTab, MaestrosTab, ConfigSheet, type OpConfig, type OpSlot, type OpInstructor, type Persona } from './WellnessOperacion'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WELLNESS (admin) — el otro lado del portal público (?wellness=CODIGO)
@@ -16,12 +17,19 @@ import { SegmentedControl, StatusBadgeV2, Sheet, showToast } from '../components
 //    (semana / quincena / mes) con proyección sobre reservas ya hechas.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface Instructor { id: string; bu_id: string; full_name: string; profile_id: string | null; revenue_pct: number; active: boolean }
+interface Instructor {
+  id: string; bu_id: string; full_name: string; profile_id: string | null; revenue_pct: number; active: boolean
+  phone?: string | null; email?: string | null; estatus?: string | null; honorario?: number | null; notas?: string | null
+}
 interface WClass {
   id: string; bu_id: string; name: string; description: string | null
   instructor_id: string | null; price: number; capacity: number; duration_min: number; color: string; active: boolean
 }
-interface WSlot { id: string; class_id: string; weekday: number; start_time: string; active: boolean }
+interface WSlot {
+  id: string; class_id: string; weekday: number; start_time: string; active: boolean
+  turno?: string | null; responsable_id?: string | null; instructor_id?: string | null
+  capacity?: number | null; duration_min?: number | null; estatus?: string | null; notas?: string | null
+}
 interface Student { id: string; full_name: string; phone: string; email: string | null; created_at: string }
 interface Booking {
   id: string; slot_id: string; class_date: string; student_id: string
@@ -46,6 +54,11 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
   const [missing, setMissing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [classSheet, setClassSheet] = useState<WClass | 'new' | null>(null)
+  // Operación (panel de POD Wellness): configuración de precios/meta y el
+  // directorio de gente para el responsable de piso.
+  const [config, setConfig] = useState<OpConfig | null>(null)
+  const [gente, setGente] = useState<Persona[]>([])
+  const [configOpen, setConfigOpen] = useState(false)
   // Semana visible del reporte (lunes)
   const [weekStart, setWeekStart] = useState(() => {
     const d = new Date(); const dow = (d.getDay() + 6) % 7
@@ -64,12 +77,29 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
     ])
     if (insErr) { setMissing(true); setLoading(false); return }
     setMissing(false)
+    // Estas dos son opcionales: si wellness_operacion.sql no se ha corrido, la
+    // app sigue funcionando y cada pestaña avisa qué falta.
+    supabase.from('profiles').select('id, full_name').not('full_name', 'is', null).order('full_name')
+      .then(({ data }) => setGente((data ?? []) as Persona[]))
+    supabase.from('wellness_config').select('*').limit(1).maybeSingle()
+      .then(({ data }) => setConfig((data ?? null) as OpConfig | null))
     setBuList(bus ?? []); setInstructors((ins ?? []) as Instructor[])
     setClasses((cls ?? []) as WClass[]); setSlots((sl ?? []) as WSlot[])
     setStudents((st ?? []) as Student[]); setBookings((bk ?? []) as Booking[])
     setLoading(false)
   }, [])
   useEffect(() => { load() }, [load])
+
+  // Cuántos se registraron por link en cada ocurrencia — precarga el cierre
+  const bookingsPorSlot = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const b of bookings) {
+      if (b.status === 'cancelada') continue
+      const k = `${b.slot_id}|${b.class_date}`
+      m[k] = (m[k] ?? 0) + 1
+    }
+    return m
+  }, [bookings])
 
   // El instructor solo ve SUS clases; el gerente ve todas
   const misClases = useMemo(() => {
@@ -84,6 +114,10 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
   const tabs = [
     { id: 'horarios', label: 'Alumnos por horario' },
     ...(isManager ? [
+      { id: 'cierre',   label: 'Cierre de turno' },
+      { id: 'parrilla', label: 'Parrilla' },
+      { id: 'tablero',  label: 'Tablero' },
+      { id: 'maestros', label: `Maestros · ${instructors.length}` },
       { id: 'clases',  label: 'Clases y precios' },
       { id: 'alumnos', label: `Alumnos · ${students.length}` },
       { id: 'ingresos', label: 'Ingresos' },
@@ -114,6 +148,22 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
             instructors={instructors} weekStart={weekStart} setWeekStart={setWeekStart}
             isManager={isManager} onChange={load} />
         )}
+        {tab === 'cierre' && isManager && (
+          <CierreTab classes={classes} slots={slots as OpSlot[]} instructors={instructors as OpInstructor[]}
+            gente={gente} config={config} userId={userId} canWrite={isManager} bookingsPorSlot={bookingsPorSlot} />
+        )}
+        {tab === 'parrilla' && isManager && (
+          <ParrillaTab classes={classes} slots={slots as OpSlot[]} instructors={instructors as OpInstructor[]}
+            gente={gente} canWrite={isManager} onChange={load} />
+        )}
+        {tab === 'tablero' && isManager && (
+          <TableroTab config={config} gente={gente} instructors={instructors as OpInstructor[]}
+            canWrite={isManager} onConfig={() => setConfigOpen(true)} />
+        )}
+        {tab === 'maestros' && isManager && (
+          <MaestrosTab instructors={instructors as OpInstructor[]} classes={classes} buList={buList}
+            canWrite={isManager} onChange={load} />
+        )}
         {tab === 'clases' && isManager && (
           <ClasesTab classes={classes} slots={slots} instructors={instructors} buList={buList}
             onNew={() => setClassSheet('new')} onEdit={c => setClassSheet(c)} onChange={load} />
@@ -122,6 +172,11 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
         {tab === 'ingresos' && isManager && <IngresosTab bookings={bookings} classes={classes} slots={slots} instructors={instructors} />}
       </div>
 
+      {configOpen && (
+        <ConfigSheet config={config} buList={buList} userId={userId}
+          onClose={() => setConfigOpen(false)}
+          onSaved={() => { setConfigOpen(false); supabase.from('wellness_config').select('*').limit(1).maybeSingle().then(({ data }) => setConfig((data ?? null) as OpConfig | null)) }} />
+      )}
       {classSheet && (
         <ClassSheet cls={classSheet === 'new' ? null : classSheet} buList={buList} instructors={instructors}
           slots={slots} isMobile={isMobile} onClose={() => setClassSheet(null)}
