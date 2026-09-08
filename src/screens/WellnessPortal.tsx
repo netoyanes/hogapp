@@ -105,7 +105,11 @@ export function WellnessPortal({ code }: { code: string }) {
 
   // Un solo formulario para las dos rutas de reserva: cambia el botón que se
   // aprieta, no los campos.
-  const [f, setF] = useState({ name: '', phone: '', email: '' })
+  const [f, setF] = useState({ name: '', phone: '', email: '', password: '' })
+  // Cuentas de antes de las contraseñas: entran una vez con su nombre y aquí
+  // se les pide crear una.
+  const [pedirPassword, setPedirPassword] = useState(false)
+  const [nuevaPassword, setNuevaPassword] = useState('')
   const [correoEdit, setCorreoEdit] = useState('')
 
   const hoy = new Date()
@@ -204,6 +208,11 @@ export function WellnessPortal({ code }: { code: string }) {
    * la semana de prueba solo cubre sus siete días. Mostrar "incluida" en una
    * clase que sí se va a cobrar es prometer de más.
    */
+  // La semana de prueba, si sigue en el catálogo, y si esta persona ya la usó.
+  // Es "una vez por persona", así que basta con haberla comprado alguna vez.
+  const prueba = productos.find(p => p.tipo === 'prueba') ?? null
+  const tienePrueba = compras.some(c => c.tipo === 'prueba')
+
   const cubreFecha = (fecha: string) => vigentes_compras.some(c =>
     (c.inicia == null || fecha >= c.inicia) && (c.vence == null || fecha <= c.vence))
   const pasadas = mine.filter(b => b.status !== 'cancelada' && b.class_date < iso(hoy))
@@ -212,7 +221,7 @@ export function WellnessPortal({ code }: { code: string }) {
   function abrirReserva(slot: SlotDef, date: string) {
     // Con sesión no hay nada que preguntar: se aparta y se muestra el ticket.
     if (token) { reservarConCuenta(slot, date); return }
-    setF({ name: '', phone: '', email: '' })
+    setF({ name: '', phone: '', email: '', password: '' })
     setReservaOpen({ slot, date })
   }
 
@@ -236,7 +245,7 @@ export function WellnessPortal({ code }: { code: string }) {
     if (!reservaOpen) return
     setBusy(true)
     const { data } = await supabase.rpc('fn_wellness_register', {
-      p_name: f.name, p_phone: f.phone, p_email: f.email,
+      p_name: f.name, p_phone: f.phone, p_email: f.email, p_password: f.password,
     })
     if (data?.error) { setBusy(false); setMsg({ text: data.error, error: true }); return }
     localStorage.setItem(TOKEN_KEY, data.token)
@@ -271,7 +280,7 @@ export function WellnessPortal({ code }: { code: string }) {
   // misma ventana, igual que al apartar.
   function abrirCompra(prod: Producto) {
     if (token) { comprar(prod); return }
-    setF({ name: '', phone: '', email: '' })
+    setF({ name: '', phone: '', email: '', password: '' })
     setCompraOpen(prod)
   }
 
@@ -293,7 +302,7 @@ export function WellnessPortal({ code }: { code: string }) {
     if (!compraOpen) return
     setBusy(true)
     const { data } = await supabase.rpc('fn_wellness_register', {
-      p_name: f.name, p_phone: f.phone, p_email: f.email,
+      p_name: f.name, p_phone: f.phone, p_email: f.email, p_password: f.password,
     })
     if (data?.error) { setBusy(false); setMsg({ text: data.error, error: true }); return }
     localStorage.setItem(TOKEN_KEY, data.token)
@@ -304,17 +313,30 @@ export function WellnessPortal({ code }: { code: string }) {
 
   async function entrar() {
     setBusy(true)
-    const { data } = await supabase.rpc('fn_wellness_login', { p_phone: f.phone, p_name: f.name })
+    const { data } = await supabase.rpc('fn_wellness_login', { p_phone: f.phone, p_password: f.password })
     setBusy(false)
     if (data?.error) { setMsg({ text: data.error, error: true }); return }
     if (data?.nuevo) {
-      setMsg({ text: 'Ese teléfono todavía no tiene cuenta. Se crea sola la primera vez que apartas una clase.', error: true })
+      setMsg({ text: 'Ese teléfono todavía no tiene cuenta. Se crea la primera vez que apartas una clase.', error: true })
       return
     }
     localStorage.setItem(TOKEN_KEY, data.token)
     setToken(data.token)
     setLoginOpen(false)
+    // Cuenta de antes de las contraseñas: entró con su nombre y ahora se le
+    // pide una. Mientras no la cree, su cuenta sigue abriéndose con un dato
+    // que cualquiera que la conozca puede adivinar.
+    if (data.sin_password) { setPedirPassword(true); setNuevaPassword('') }
     setMsg({ text: `Qué gusto verte, ${String(data.name).split(' ')[0]}.` })
+  }
+
+  async function guardarPassword() {
+    setBusy(true)
+    const { data } = await supabase.rpc('fn_wellness_set_password', { p_token: token, p_password: nuevaPassword })
+    setBusy(false)
+    if (data?.error) { setMsg({ text: data.error, error: true }); return }
+    setPedirPassword(false); setNuevaPassword('')
+    setMsg({ text: 'Listo — tu contraseña quedó guardada.' })
   }
 
   async function guardarCorreo() {
@@ -386,9 +408,37 @@ export function WellnessPortal({ code }: { code: string }) {
     fontFamily: PLEX, fontSize: 15.5, fontWeight: 600, cursor: 'pointer', width: '100%',
   }
   const camposReserva = f.name.trim().length >= 3 && f.phone.trim().length >= 10
+  // Crear cuenta pide además contraseña; entrar solo teléfono + contraseña.
+  const camposCuenta = camposReserva && f.password.length >= 6
+  const camposLogin = f.phone.trim().length >= 10 && f.password.length >= 1
 
   return (
     <div style={{ minHeight: '100vh', background: CREAM[500], color: OBSIDIAN[500], fontFamily: POPPINS }}>
+
+      {/* ── BARRA DE LA SEMANA DE PRUEBA ── Pegada arriba en todo el scroll.
+          Es la pieza que hace funcionar el resto del embudo, así que no puede
+          vivir enterrada al final de la página. Desaparece para quien ya la
+          compró: seguir ofreciéndosela sería ruido, y comprarla dos veces no
+          se puede. */}
+      {prueba && !tienePrueba && (
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 40, background: OBSIDIAN[500],
+          padding: '9px 14px', display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: PLEX, fontSize: 13.5, fontWeight: 600, color: CREAM[500], whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              Semana de prueba · {mxn(prueba.precio)}
+            </div>
+            <div style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 11.5, color: 'rgba(239,239,224,0.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              7 días de clases ilimitadas
+            </div>
+          </div>
+          <button onClick={() => abrirCompra(prueba)} disabled={busy}
+            style={{ flexShrink: 0, minHeight: 38, padding: '0 16px', borderRadius: 999, border: 'none', background: CREAM[500], color: OBSIDIAN[500], fontFamily: PLEX, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
+            La quiero
+          </button>
+        </div>
+      )}
 
       {/* ── PORTADA ── Mínima: quién, dónde, cuánto. Y la puerta de entrada a
           la cuenta, que antes no existía en ningún lado. */}
@@ -396,7 +446,7 @@ export function WellnessPortal({ code }: { code: string }) {
         <div style={{ maxWidth: 620, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <PodWellnessLogo size="clamp(15px, 4.4vw, 21px)" color={CREAM[500]} />
-            <button onClick={() => (token ? setCuentaOpen(v => !v) : (setF({ name: '', phone: '', email: '' }), setLoginOpen(true)))}
+            <button onClick={() => (token ? setCuentaOpen(v => !v) : (setF({ name: '', phone: '', email: '', password: '' }), setLoginOpen(true)))}
               style={{ flexShrink: 0, minHeight: 38, padding: '0 15px', borderRadius: 999, background: 'rgba(239,239,224,0.16)', border: '1px solid rgba(239,239,224,0.35)', color: CREAM[500], fontFamily: PLEX, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
               {token ? `Hola, ${myName.split(' ')[0]}` : 'Entrar'}
             </button>
@@ -484,6 +534,10 @@ export function WellnessPortal({ code }: { code: string }) {
                 )}
               </div>
             )}
+            <button onClick={() => { setNuevaPassword(''); setPedirPassword(true) }}
+              style={{ marginTop: 14, display: 'block', background: 'none', border: 'none', padding: 0, color: ESPACIO.wellness, fontFamily: PLEX, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              Cambiar mi contraseña
+            </button>
             <button onClick={() => { localStorage.removeItem(TOKEN_KEY); setToken(null); setCuentaOpen(false) }}
               style={{ marginTop: 14, background: 'none', border: 'none', padding: 0, color: OBSIDIAN[100], fontFamily: PLEX, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
               Salir en este dispositivo
@@ -708,12 +762,14 @@ export function WellnessPortal({ code }: { code: string }) {
                   placeholder="Tu teléfono (10 dígitos)" type="tel" inputMode="numeric" autoComplete="tel" style={inp} />
                 <input value={f.email} onChange={e => setF(v => ({ ...v, email: e.target.value }))}
                   placeholder="Tu correo (opcional)" type="email" inputMode="email" autoComplete="email" style={inp} />
+                <input value={f.password} onChange={e => setF(v => ({ ...v, password: e.target.value }))}
+                  placeholder="Crea una contraseña (6+ caracteres)" type="password" autoComplete="new-password" style={inp} />
               </div>
 
               {/* Con cuenta primero: es la opción que queremos que tomen, y con
                   descuento vigente es además la más barata. */}
-              <button onClick={registrarYApartar} disabled={busy || !camposReserva}
-                style={{ ...btn, marginTop: 16, opacity: busy || !camposReserva ? 0.45 : 1 }}>
+              <button onClick={registrarYApartar} disabled={busy || !camposCuenta}
+                style={{ ...btn, marginTop: 16, opacity: busy || !camposCuenta ? 0.45 : 1 }}>
                 {busy ? 'Un momento…' : `Crear cuenta y apartar · ${mxn(precioCuenta)}`}
               </button>
               <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12.5, color: OBSIDIAN[100], lineHeight: 1.55, margin: '8px 0 0', textAlign: 'center' }}>
@@ -749,19 +805,22 @@ export function WellnessPortal({ code }: { code: string }) {
             <PodIcon size={32} color={ESPACIO.wellness} />
             <h3 style={{ fontFamily: POPPINS, fontSize: 21, fontWeight: 800, margin: '13px 0 5px', letterSpacing: '-0.01em' }}>Entra a tus clases</h3>
             <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13.5, color: OBSIDIAN[100], margin: '0 0 16px', lineHeight: 1.55 }}>
-              Tu teléfono es tu acceso — no hay contraseña. Aquí ves tus reservas, tus códigos y a qué clases has ido.
+              Con tu teléfono y tu contraseña. Aquí ves tus reservas, tus códigos, tus paquetes y a qué clases has ido.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <input value={f.name} onChange={e => setF(v => ({ ...v, name: e.target.value }))}
-                placeholder="Tu nombre" autoComplete="name" style={inp} autoFocus
-                onKeyDown={e => { if (e.key === 'Enter') entrar() }} />
               <input value={f.phone} onChange={e => setF(v => ({ ...v, phone: e.target.value }))}
-                placeholder="Tu teléfono (10 dígitos)" type="tel" inputMode="numeric" autoComplete="tel" style={inp}
+                placeholder="Tu teléfono (10 dígitos)" type="tel" inputMode="numeric" autoComplete="tel" style={inp} autoFocus
                 onKeyDown={e => { if (e.key === 'Enter') entrar() }} />
-              <button onClick={entrar} disabled={busy || !camposReserva}
-                style={{ ...btn, opacity: busy || !camposReserva ? 0.45 : 1 }}>
+              <input value={f.password} onChange={e => setF(v => ({ ...v, password: e.target.value }))}
+                placeholder="Tu contraseña" type="password" autoComplete="current-password" style={inp}
+                onKeyDown={e => { if (e.key === 'Enter') entrar() }} />
+              <button onClick={entrar} disabled={busy || !camposLogin}
+                style={{ ...btn, opacity: busy || !camposLogin ? 0.45 : 1 }}>
                 {busy ? 'Un momento…' : 'Entrar'}
               </button>
+              <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 12, color: OBSIDIAN[100], lineHeight: 1.55, margin: 0, textAlign: 'center' }}>
+                ¿Se te olvidó? Pídenos que te la repongamos en el estudio.
+              </p>
               <button onClick={() => setLoginOpen(false)}
                 style={{ minHeight: 40, background: 'none', border: 'none', color: OBSIDIAN[100], fontFamily: PLEX, fontSize: 13, cursor: 'pointer' }}>
                 Cerrar
@@ -791,13 +850,41 @@ export function WellnessPortal({ code }: { code: string }) {
                 placeholder="Tu teléfono (10 dígitos)" type="tel" inputMode="numeric" autoComplete="tel" style={inp} />
               <input value={f.email} onChange={e => setF(v => ({ ...v, email: e.target.value }))}
                 placeholder="Tu correo (opcional)" type="email" inputMode="email" autoComplete="email" style={inp} />
-              <button onClick={registrarYComprar} disabled={busy || !camposReserva}
-                style={{ ...btn, marginTop: 4, opacity: busy || !camposReserva ? 0.45 : 1 }}>
+              <input value={f.password} onChange={e => setF(v => ({ ...v, password: e.target.value }))}
+                placeholder="Crea una contraseña (6+ caracteres)" type="password" autoComplete="new-password" style={inp} />
+              <button onClick={registrarYComprar} disabled={busy || !camposCuenta}
+                style={{ ...btn, marginTop: 4, opacity: busy || !camposCuenta ? 0.45 : 1 }}>
                 {busy ? 'Un momento…' : `Crear cuenta y comprar · ${mxn(compraOpen.precio)}`}
               </button>
               <button onClick={() => setCompraOpen(null)}
                 style={{ minHeight: 40, background: 'none', border: 'none', color: OBSIDIAN[100], fontFamily: PLEX, fontSize: 13, cursor: 'pointer' }}>
                 Ahora no
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CREAR CONTRASEÑA ── Para las cuentas de antes de que existieran. */}
+      {pedirPassword && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 58, overflowY: 'auto' }}>
+          <div style={{ background: CREAM[500], borderRadius: 20, padding: 22, width: '100%', maxWidth: 380, margin: 'auto' }}>
+            <PodIcon size={32} color={ESPACIO.wellness} />
+            <h3 style={{ fontFamily: POPPINS, fontSize: 21, fontWeight: 800, margin: '13px 0 5px', letterSpacing: '-0.01em' }}>Crea tu contraseña</h3>
+            <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13.5, color: OBSIDIAN[100], margin: '0 0 16px', lineHeight: 1.55 }}>
+              Tu cuenta es de antes de que existieran las contraseñas y ahora guarda tus paquetes. Ponle una para que solo tú entres.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input value={nuevaPassword} onChange={e => setNuevaPassword(e.target.value)}
+                placeholder="Contraseña (6+ caracteres)" type="password" autoComplete="new-password" style={inp} autoFocus
+                onKeyDown={e => { if (e.key === 'Enter' && nuevaPassword.length >= 6) guardarPassword() }} />
+              <button onClick={guardarPassword} disabled={busy || nuevaPassword.length < 6}
+                style={{ ...btn, opacity: busy || nuevaPassword.length < 6 ? 0.45 : 1 }}>
+                {busy ? 'Un momento…' : 'Guardar'}
+              </button>
+              <button onClick={() => setPedirPassword(false)}
+                style={{ minHeight: 40, background: 'none', border: 'none', color: OBSIDIAN[100], fontFamily: PLEX, fontSize: 13, cursor: 'pointer' }}>
+                Luego
               </button>
             </div>
           </div>
