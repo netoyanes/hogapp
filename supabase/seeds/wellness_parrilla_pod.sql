@@ -9,6 +9,10 @@
 -- detiene y te lista los que sí hay, en vez de crear las clases colgando de
 -- la casa equivocada.
 --
+-- OJO con el código: es el de business_units, no la dirección. POD Wellness
+-- vive en POD Condesa, cuyo código es "PC" — Nuevo León 108 es la calle. El
+-- portal público se abre con ese mismo código: /?wellness=PC
+--
 -- Es idempotente: correrlo dos veces no duplica nada. Si ya editaste un
 -- horario a mano, la segunda corrida respeta lo que hay (usa on conflict).
 --
@@ -17,8 +21,8 @@
 
 do $$
 declare
-  -- La casa de POD Wellness en HOG APP
-  v_code   text := 'NUEVOLEON108';
+  -- La casa de POD Wellness en HOG APP: POD Condesa
+  v_code   text := 'PC';
   -- wellness.sql sembró un Dharma Yoga de ejemplo en martes y jueves 07:30.
   -- Con esto en true, cualquier horario de estas clases que NO esté en la
   -- parrilla oficial queda EN PAUSA (no se borra: se reactiva desde
@@ -38,9 +42,18 @@ begin
       v_code, (select string_agg(code, ', ' order by code) from business_units);
   end if;
 
-  -- El precio de la clase sigue al precio vigente del venue si ya está
-  -- configurado (300 con -40 = 260); si no, arranca en 300.
-  select coalesce(precio_vigente, 300) into v_precio from wellness_config where bu_id = v_bu;
+  -- Precio de apertura: 300 de lista con -40 para quien se registra (= 260).
+  -- do nothing, no do update: si ya hay configuración, manda la que esté en
+  -- Wellness → Configuración. Si no, este seed volvería a encender el
+  -- descuento de septiembre cada vez que alguien lo corre.
+  insert into wellness_config (bu_id, precio_regular, descuento)
+  values (v_bu, 300, 40)
+  on conflict (bu_id) do nothing;
+
+  -- La clase se cobra al precio DE LISTA; el descuento por registro lo aplica
+  -- fn_wellness_book leyendo precio_vigente. Si la clase guardara ya el precio
+  -- con descuento, el walk-in de mostrador pagaría de menos.
+  select coalesce(precio_regular, 300) into v_precio from wellness_config where bu_id = v_bu;
   v_precio := coalesce(v_precio, 300);
 
   -- ── Maestros ──────────────────────────────────────────────────────────────
@@ -83,6 +96,12 @@ begin
     ) as x(nombre, maestro)
    where c.bu_id = v_bu and lower(c.name) = lower(x.nombre)
      and c.instructor_id is distinct from x.maestro;
+
+  -- Todas las clases de la casa al mismo precio de lista: la carga demo dejó
+  -- un Dharma Yoga en 250 y dos clases de la misma casa a distinto precio se
+  -- ven como un error en el portal.
+  update wellness_classes set price = v_precio
+   where bu_id = v_bu and price is distinct from v_precio;
 
   select id into v_dharma  from wellness_classes where bu_id = v_bu and name = 'Dharma Yoga';
   select id into v_runners from wellness_classes where bu_id = v_bu and name = 'Yoga para Runners 🌈';

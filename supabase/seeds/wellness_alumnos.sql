@@ -142,44 +142,48 @@ end $$;
 -- Registrados al precio con descuento, walk-ins al regular. Con un solo precio
 -- el ingreso del turno quedaba mal desde el día que entró la regla.
 --
--- OJO: recrear una columna generada pide un ACCESS EXCLUSIVE sobre la tabla.
--- Si otra sesión la tiene tomada (por ejemplo, una corrida anterior que se
--- cortó y dejó una transacción abierta), esto se quedaría esperando hasta que
--- la conexión muera — que es justo el "connection timeout" que no dice nada.
--- Con lock_timeout falla en 5 segundos y con un mensaje que sí sirve.
+-- Dos cuidados aprendidos en producción:
+--
+--   · NADA de information_schema. Esas vistas unen media docena de catálogos
+--     sin índices y en una base con muchos objetos tardan segundos — no se
+--     bloquean, solo se arrastran, y desde afuera parece un cuelgue. Aquí se
+--     consulta pg_catalog directo, que sí va por índice.
+--   · lock_timeout, porque recrear una columna generada pide ACCESS EXCLUSIVE.
+--     Si otra sesión tiene la tabla, esto falla en 5 segundos con un mensaje
+--     que sirve, en vez de esperar a que muera la conexión.
 set lock_timeout = '5s';
 
-do $$
-begin
-  alter table wellness_sessions add column if not exists precio_walkin numeric
-    check (precio_walkin is null or precio_walkin >= 0);
+-- Columna nueva, nula y sin default: solo metadatos, no reescribe la tabla.
+alter table wellness_sessions add column if not exists precio_walkin numeric;
 
-  -- Solo se recrea si todavía tiene la fórmula vieja: en la segunda corrida
-  -- no toca nada y ni siquiera pide el lock.
-  if exists (
-    select 1 from pg_attrdef d
-      join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
-     where d.adrelid = 'wellness_sessions'::regclass and a.attname = 'ingresos'
-       and pg_get_expr(d.adbin, d.adrelid) not like '%walk_ins%'
-  ) or not exists (
-    select 1 from information_schema.columns
-     where table_name = 'wellness_sessions' and column_name = 'ingresos'
-  ) then
-    if exists (select 1 from information_schema.columns
-                where table_name = 'wellness_sessions' and column_name = 'ingresos') then
-      alter table wellness_sessions drop column ingresos;
-    end if;
-    -- Los registrados son los cobrados que no fueron walk-in. Sin precio de
-    -- walk-in se usa el mismo, así una operación de un solo precio sigue
-    -- dando exactamente el mismo número que antes.
-    alter table wellness_sessions add column ingresos numeric
-      generated always as (
-        greatest(total_cobrados - walk_ins, 0) * precio_aplicado
-        + walk_ins * coalesce(precio_walkin, precio_aplicado)
-      ) stored;
+do $$
+declare v_formula text;
+begin
+  -- La fórmula actual de la columna generada, leída de pg_catalog
+  select pg_get_expr(d.adbin, d.adrelid) into v_formula
+    from pg_attribute a
+    left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+   where a.attrelid = 'wellness_sessions'::regclass
+     and a.attname = 'ingresos' and a.attnum > 0 and not a.attisdropped;
+
+  -- Ya tiene la fórmula de dos precios: no hay nada que hacer y ni siquiera
+  -- se pide el lock. Esto hace que un reintento tras un corte sea gratis.
+  if v_formula is not null and v_formula like '%walk_ins%' then
+    return;
   end if;
+
+  alter table wellness_sessions drop column if exists ingresos;
+
+  -- Los registrados son los cobrados que no fueron walk-in. Sin precio de
+  -- walk-in se usa el mismo, así una operación de un solo precio sigue dando
+  -- exactamente el mismo número que antes.
+  alter table wellness_sessions add column ingresos numeric
+    generated always as (
+      greatest(total_cobrados - walk_ins, 0) * precio_aplicado
+      + walk_ins * coalesce(precio_walkin, precio_aplicado)
+    ) stored;
 exception when lock_not_available then
-  raise exception 'No se pudo tomar el lock de wellness_sessions: otra sesión la tiene ocupada. Corre el diagnóstico de bloqueos, termina esa sesión y vuelve a intentar.';
+  raise exception 'No se pudo tomar el lock de wellness_sessions: otra sesión la tiene ocupada. Termina las consultas viejas y reintenta.';
 end $$;
 
 reset lock_timeout;
