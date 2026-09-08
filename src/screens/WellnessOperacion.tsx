@@ -36,7 +36,7 @@ export interface OpSession {
   id: string; bu_id: string; slot_id: string | null; class_date: string; start_time: string
   class_name: string; turno: string; responsable_id: string | null; instructor_id: string | null
   registrados_link: number; asistieron: number; walk_ins: number; total_cobrados: number
-  precio_aplicado: number; ingresos: number
+  precio_aplicado: number; precio_walkin: number | null; ingresos: number
   instructor_a_tiempo: boolean | null; espacio_ok: boolean | null; incidencias: string | null
   cerrado_por: string | null; cerrado_at: string | null
 }
@@ -498,6 +498,10 @@ function CierreSheet({ slot, sesion, fecha, classes, instructors, gente, config,
   const [cobrados, setCobrados] = useState(sesion ? String(sesion.total_cobrados) : '')
   const [cobradosManual, setCobradosManual] = useState(!!sesion)
   const [precio, setPrecio] = useState(String(sesion?.precio_aplicado ?? config?.precio_vigente ?? clase?.price ?? 0))
+  // Dos precios: el registrado paga el vigente, el walk-in el regular. Es la
+  // regla que hace que registrarse valga la pena, y el ingreso del turno solo
+  // sale bien si se capturan por separado.
+  const [precioWalk, setPrecioWalk] = useState(String(sesion?.precio_walkin ?? config?.precio_regular ?? ''))
   const [aTiempo, setATiempo] = useState<boolean | null>(sesion?.instructor_a_tiempo ?? null)
   const [limpio, setLimpio] = useState<boolean | null>(sesion?.espacio_ok ?? null)
   const [inc, setInc] = useState(sesion?.incidencias ?? '')
@@ -506,7 +510,9 @@ function CierreSheet({ slot, sesion, fecha, classes, instructors, gente, config,
   // Cobrados = quienes asistieron + walk-ins, mientras nadie lo corrija a mano
   const nAsis = Number(asis || 0), nWalk = Number(walk || 0)
   useEffect(() => { if (!cobradosManual) setCobrados(String(nAsis + nWalk)) }, [nAsis, nWalk, cobradosManual])
-  const ingresos = Number(cobrados || 0) * Number(precio || 0)
+  const nWalkPrecio = precioWalk === '' ? Number(precio || 0) : Number(precioWalk)
+  const registrados = Math.max(0, Number(cobrados || 0) - nWalk)
+  const ingresos = registrados * Number(precio || 0) + nWalk * nWalkPrecio
   const noShows = Math.max(0, Number(reg || 0) - nAsis)
 
   async function guardar(cerrar: boolean) {
@@ -525,6 +531,7 @@ function CierreSheet({ slot, sesion, fecha, classes, instructors, gente, config,
       asistieron: Math.max(0, nAsis), walk_ins: Math.max(0, nWalk),
       total_cobrados: Math.max(0, Number(cobrados || 0)),
       precio_aplicado: Math.max(0, Number(precio || 0)),
+      precio_walkin: precioWalk === '' ? null : Math.max(0, Number(precioWalk)),
       instructor_a_tiempo: aTiempo, espacio_ok: limpio,
       incidencias: inc.trim() || null,
       ...(cerrar ? { cerrado_por: userId ?? null, cerrado_at: new Date().toISOString() } : {}),
@@ -628,22 +635,28 @@ function CierreSheet({ slot, sesion, fecha, classes, instructors, gente, config,
                     className="num" style={{ ...inp, fontWeight: 700, borderColor: cobradosManual ? 'var(--accent)' : 'var(--border-subtle)' }} />
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8, alignItems: 'end' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: 8, marginTop: 8, alignItems: 'end' }}>
                 <div>
-                  <label style={lbl}>Precio aplicado</label>
-                  <input type="number" inputMode="decimal" min={0} value={precio} onChange={e => setPrecio(e.target.value)} className="num" style={inp} />
+                  <label style={lbl}>Precio registrado</label>
+                  <input type="number" inputMode="decimal" min={0} value={precio} onChange={e => setPrecio(e.target.value)} className="num" style={inp}
+                    title="Lo que paga quien reservó con su cuenta" />
+                </div>
+                <div>
+                  <label style={lbl}>Precio walk-in</label>
+                  <input type="number" inputMode="decimal" min={0} value={precioWalk} onChange={e => setPrecioWalk(e.target.value)} className="num" style={inp}
+                    placeholder="igual" title="Lo que paga quien llega sin cuenta — el regular, sin descuento" />
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ ...lbl, marginBottom: 2 }}>Ingresos</span>
                   <div className="num" style={{ ...mono, fontSize: 22, fontWeight: 800, color: ingresos > 0 ? 'var(--status-healthy)' : 'var(--text-tertiary)', lineHeight: 1.1 }}>{mxn(ingresos)}</div>
                 </div>
               </div>
-              <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: '8px 0 0' }}>
-                {noShows > 0
-                  ? <>Se registraron {reg} y asistieron {nAsis}: <b style={{ color: 'var(--status-attention)' }}>{noShows} no llegaron</b>. Los ingresos se calculan solos: cobrados × precio.</>
-                  : <>Los ingresos se calculan solos: cobrados × precio. Nadie los escribe a mano.</>}
+              <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: '8px 0 0', lineHeight: 1.5 }}>
+                {noShows > 0 && <>Se registraron {reg} y asistieron {nAsis}: <b style={{ color: 'var(--status-attention)' }}>{noShows} no llegaron</b>. </>}
+                Los ingresos se calculan solos: {registrados} {registrados === 1 ? 'registrado' : 'registrados'} × {mxn(Number(precio || 0))}
+                {nWalk > 0 && <> + {nWalk} walk-in × {mxn(nWalkPrecio)}</>}. Nadie los escribe a mano.
                 {config && Number(precio) !== Number(config.precio_vigente) && (
-                  <> · <span style={{ color: 'var(--status-attention)' }}>Ojo: el precio vigente es {mxn(config.precio_vigente)}</span></>
+                  <> · <span style={{ color: 'var(--status-attention)' }}>Ojo: el precio con cuenta es {mxn(config.precio_vigente)}</span></>
                 )}
               </p>
             </div>

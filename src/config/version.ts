@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.110.1"
+export const APP_VERSION = "2.111.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,19 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.111.0",
+    date: "2026-09-08",
+    type: "MINOR",
+    changes: [
+      "CUENTA DE ALUMNO EN EL PORTAL — el acceso deja de estar escondido tras una reserva y vive arriba de la cartelera. El alumno entra con su teléfono y su nombre; si el teléfono no existe, el mismo formulario se convierte en registro y pide correo",
+      "EL DESCUENTO AHORA ES POR REGISTRARSE: quien tiene cuenta paga el precio con descuento, quien llega sin cuenta paga el regular. Cada clase muestra los dos precios, para que se vea lo que se ahorra al registrarse",
+      "Mi cuenta: nombre, teléfono, desde cuándo es alumno, clases tomadas y el correo editable — el dato que hará falta para las membresías",
+      "El cierre de turno ahora captura DOS precios, registrado y walk-in, y los ingresos se calculan con ambos. Con un solo precio el ingreso del turno quedaba mal desde el día que entró la regla",
+      "Reservar por el portal cobra el precio vigente del venue: antes usaba el precio de la clase e ignoraba la configuración",
+      "Requiere wellness_alumnos.sql. Para cargar maestros, clases y horarios reales de POD: wellness_parrilla_pod.sql (hay que poner el código del venue adentro)",
+    ]
+  },
   {
     version: "2.110.1",
     date: "2026-09-08",

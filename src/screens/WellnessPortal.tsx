@@ -37,6 +37,12 @@ export function WellnessPortal({ code }: { code: string }) {
   const [occ, setOcc] = useState<Occ[]>([])
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
   const [myName, setMyName] = useState('')
+  // La cuenta del alumno: entrar con teléfono, y si no existe, crearla ahí mismo
+  const [perfil, setPerfil] = useState<{ phone?: string; email?: string | null; since?: string; tomadas?: number } | null>(null)
+  const [acc, setAcc] = useState({ phone: '', name: '', email: '' })
+  const [accNuevo, setAccNuevo] = useState(false)
+  const [cuentaOpen, setCuentaOpen] = useState(false)
+  const [correoEdit, setCorreoEdit] = useState('')
   const [mine, setMine] = useState<MyBooking[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -72,6 +78,8 @@ export function WellnessPortal({ code }: { code: string }) {
     const { data } = await supabase.rpc('fn_wellness_me', { p_token: token })
     if (!data) { localStorage.removeItem(TOKEN_KEY); setToken(null); return }
     setMyName(data.name ?? '')
+    setPerfil({ phone: data.phone, email: data.email, since: data.since, tomadas: data.tomadas })
+    setCorreoEdit(data.email ?? '')
     setMine((data.bookings ?? []) as MyBooking[])
   }, [token])
   useEffect(() => { loadMine() }, [loadMine])
@@ -107,6 +115,46 @@ export function WellnessPortal({ code }: { code: string }) {
     if (data?.error) { setMsg({ text: data.error, error: true }); return }
     setMsg({ text: `Listo — tu lugar en ${slot.class} quedó apartado. ${Number(data?.amount) > 0 ? 'Puedes pagarla abajo en "Mis clases".' : ''}` })
     load(); loadMine()
+  }
+
+  // Entrar: el teléfono identifica y el nombre confirma. Si el teléfono no
+  // está dado de alta, el mismo formulario se convierte en registro.
+  async function entrar() {
+    setBusy(true)
+    const { data } = await supabase.rpc('fn_wellness_login', { p_phone: acc.phone, p_name: acc.name })
+    setBusy(false)
+    if (data?.error) { setMsg({ text: data.error, error: true }); return }
+    if (data?.nuevo) {
+      setAccNuevo(true)
+      setMsg({ text: 'Ese teléfono todavía no está registrado. Completa tus datos y creamos tu cuenta — así pagas el precio con descuento.' })
+      return
+    }
+    localStorage.setItem(TOKEN_KEY, data.token)
+    setToken(data.token)
+    setAccNuevo(false)
+    setMsg({ text: `Bienvenido de vuelta, ${String(data.name).split(' ')[0]}.` })
+  }
+
+  async function crearCuenta() {
+    setBusy(true)
+    const { data } = await supabase.rpc('fn_wellness_register', {
+      p_name: acc.name, p_phone: acc.phone, p_email: acc.email,
+    })
+    setBusy(false)
+    if (data?.error) { setMsg({ text: data.error, error: true }); return }
+    localStorage.setItem(TOKEN_KEY, data.token)
+    setToken(data.token)
+    setAccNuevo(false)
+    setMsg({ text: '¡Listo! Tu cuenta quedó creada — ya tienes el precio con descuento en todas tus clases.' })
+  }
+
+  async function guardarCorreo() {
+    setBusy(true)
+    const { data } = await supabase.rpc('fn_wellness_update_me', { p_token: token, p_email: correoEdit })
+    setBusy(false)
+    if (data?.error) { setMsg({ text: data.error, error: true }); return }
+    setPerfil(p => p ? { ...p, email: data.email } : p)
+    setMsg({ text: 'Correo actualizado.' })
   }
 
   async function registrar() {
@@ -182,8 +230,15 @@ export function WellnessPortal({ code }: { code: string }) {
 
   // El precio que ve el alumno: el vigente de la casa manda sobre el de la
   // clase, para que una promoción se anuncie en un solo lugar.
-  const precioDe = (p: number) => info?.precio_vigente != null && info.precio_vigente > 0 ? Number(info.precio_vigente) : p
-  const hayPromo = !!info?.promocion && Number(info?.descuento) > 0
+  // El descuento es la razón para registrarse: quien tiene cuenta paga el
+  // precio vigente; quien llega sin registrarse paga el regular.
+  const regular = Number(info?.precio_regular) > 0 ? Number(info!.precio_regular) : null
+  const conDescuento = Number(info?.precio_vigente) > 0 ? Number(info!.precio_vigente) : null
+  const hayDescuento = !!info?.promocion && Number(info?.descuento) > 0 && regular != null && conDescuento != null
+  const precioDe = (p: number) => {
+    if (!hayDescuento) return conDescuento ?? p
+    return token ? conDescuento! : regular!
+  }
 
   // ── Identidad POD (manual de marca): 70% cream · 20% obsidian · 10% verde ──
   const inpPod: React.CSSProperties = {
@@ -211,11 +266,13 @@ export function WellnessPortal({ code }: { code: string }) {
           <p style={{ fontFamily: PLEX, fontWeight: 200, fontSize: 14, letterSpacing: '0.06em', color: 'rgba(239,239,224,0.72)', margin: '14px 0 0' }}>
             {info?.venue ? info.venue.toUpperCase() : 'YOGA · PILATES · BIENESTAR'}
           </p>
-          {hayPromo && (
+          {hayDescuento && (
             <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, marginTop: 16, padding: '7px 16px', borderRadius: 999, background: 'rgba(239,239,224,0.13)', border: '1px solid rgba(239,239,224,0.28)' }}>
-              <span style={{ fontFamily: PLEX, fontSize: 11.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(239,239,224,0.75)' }}>Apertura</span>
-              <span style={{ fontFamily: PLEX, fontSize: 13, fontWeight: 300, color: 'rgba(239,239,224,0.6)', textDecoration: 'line-through' }}>{mxn(Number(info!.precio_regular))}</span>
-              <span style={{ fontFamily: POPPINS, fontSize: 19, fontWeight: 600, color: CREAM[500] }}>{mxn(Number(info!.precio_vigente))}</span>
+              <span style={{ fontFamily: PLEX, fontSize: 11.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(239,239,224,0.75)' }}>
+                {token ? 'Tu precio' : 'Con cuenta'}
+              </span>
+              <span style={{ fontFamily: PLEX, fontSize: 13, fontWeight: 300, color: 'rgba(239,239,224,0.6)', textDecoration: 'line-through' }}>{mxn(regular!)}</span>
+              <span style={{ fontFamily: POPPINS, fontSize: 19, fontWeight: 600, color: CREAM[500] }}>{mxn(conDescuento!)}</span>
             </div>
           )}
         </div>
@@ -227,14 +284,90 @@ export function WellnessPortal({ code }: { code: string }) {
             Aparta tu lugar
           </h1>
           <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 16, color: OBSIDIAN[100], margin: '6px 0 0' }}>
-            Sin cuentas ni contraseñas.{hayPromo ? ` Todo septiembre a ${mxn(Number(info!.precio_vigente))}.` : ''}
+            {token
+              ? `Bienvenido de vuelta, ${myName.split(' ')[0]}.`
+              : hayDescuento
+                ? `Crea tu cuenta y paga ${mxn(conDescuento!)} en lugar de ${mxn(regular!)}.`
+                : 'Sin contraseñas: tu teléfono es tu acceso.'}
           </p>
-          {myName && (
-            <p style={{ fontFamily: PLEX, fontSize: 13.5, margin: '12px 0 0', color: ESPACIO.wellness, fontWeight: 600 }}>
-              Hola, {myName.split(' ')[0]}
-            </p>
-          )}
         </header>
+
+        {/* ── ACCESO ── Sin cuenta no hay descuento: por eso el bloque va
+            arriba, antes de la cartelera, y no escondido tras una reserva. */}
+        {!token && (
+          <section style={{ ...tarjeta, padding: 18, marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4 }}>
+              <PodIcon size={22} color={ESPACIO.wellness} />
+              <h2 style={{ fontFamily: PLEX, fontSize: 18, fontWeight: 700, margin: 0 }}>
+                {accNuevo ? 'Crea tu cuenta' : 'Entra o crea tu cuenta'}
+              </h2>
+            </div>
+            <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13.5, color: OBSIDIAN[100], margin: '0 0 14px', lineHeight: 1.55 }}>
+              {accNuevo
+                ? 'Solo esto y listo. Tu teléfono será tu acceso — no hay contraseñas que recordar.'
+                : hayDescuento
+                  ? <>Con cuenta pagas <strong style={{ color: ESPACIO.wellness, fontWeight: 600 }}>{mxn(conDescuento!)}</strong> por clase en vez de {mxn(regular!)}. Si ya tienes, entra con tu teléfono.</>
+                  : 'Tu teléfono es tu acceso. Si es la primera vez, te creamos la cuenta al momento.'}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
+                <input value={acc.phone} onChange={e => { setAcc(a => ({ ...a, phone: e.target.value })); setAccNuevo(false) }}
+                  placeholder="Teléfono (10 dígitos)" type="tel" inputMode="tel" style={inpPod}
+                  onKeyDown={e => { if (e.key === 'Enter' && !accNuevo) entrar() }} />
+                <input value={acc.name} onChange={e => setAcc(a => ({ ...a, name: e.target.value }))}
+                  placeholder="Tu nombre" style={inpPod}
+                  onKeyDown={e => { if (e.key === 'Enter' && !accNuevo) entrar() }} />
+              </div>
+              {accNuevo && (
+                <input value={acc.email} onChange={e => setAcc(a => ({ ...a, email: e.target.value }))}
+                  placeholder="Tu correo (para tus recibos y avisos)" type="email" inputMode="email" style={inpPod} />
+              )}
+              <button onClick={() => accNuevo ? crearCuenta() : entrar()} disabled={busy || acc.phone.trim().length < 10 || acc.name.trim().length < 3}
+                style={{ minHeight: 50, borderRadius: 999, border: 'none', background: OBSIDIAN[500], color: CREAM[500], fontFamily: PLEX, fontSize: 15, fontWeight: 600, cursor: 'pointer', opacity: busy || acc.phone.trim().length < 10 || acc.name.trim().length < 3 ? 0.45 : 1 }}>
+                {busy ? 'Un momento…' : accNuevo ? 'Crear mi cuenta' : 'Entrar'}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* ── MI CUENTA ── */}
+        {token && (
+          <section style={{ ...tarjeta, marginBottom: 20, overflow: 'hidden' }}>
+            <button onClick={() => setCuentaOpen(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '14px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+              <PodIcon size={26} color={ESPACIO.wellness} />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontFamily: PLEX, fontSize: 15.5, fontWeight: 600 }}>{myName}</span>
+                <span style={{ display: 'block', fontFamily: POPPINS, fontWeight: 300, fontSize: 12.5, color: OBSIDIAN[100] }}>
+                  {perfil?.tomadas ? `${perfil.tomadas} ${perfil.tomadas === 1 ? 'clase tomada' : 'clases tomadas'}` : 'Mi cuenta'}
+                  {hayDescuento ? ` · pagas ${mxn(conDescuento!)}` : ''}
+                </span>
+              </span>
+              <span style={{ fontFamily: PLEX, fontSize: 12, color: OBSIDIAN[100] }}>{cuentaOpen ? 'Ocultar' : 'Ver'}</span>
+            </button>
+            {cuentaOpen && (
+              <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontFamily: POPPINS, fontWeight: 300, fontSize: 13 }}>
+                  <span><span style={{ color: OBSIDIAN[100] }}>Teléfono</span><br /><strong style={{ fontWeight: 600 }}>{perfil?.phone ?? '—'}</strong></span>
+                  <span><span style={{ color: OBSIDIAN[100] }}>Desde</span><br /><strong style={{ fontWeight: 600 }}>{perfil?.since ? new Date(perfil.since).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' }) : '—'}</strong></span>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontFamily: PLEX, fontSize: 11.5, color: OBSIDIAN[100], marginBottom: 5 }}>
+                    Correo {perfil?.email ? '' : '— completa este dato para tus recibos'}
+                  </label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input value={correoEdit} onChange={e => setCorreoEdit(e.target.value)} placeholder="tucorreo@ejemplo.com"
+                      type="email" inputMode="email" style={inpPod} onKeyDown={e => { if (e.key === 'Enter') guardarCorreo() }} />
+                    <button onClick={guardarCorreo} disabled={busy || correoEdit === (perfil?.email ?? '')}
+                      style={{ minHeight: 50, padding: '0 16px', borderRadius: 999, border: 'none', background: correoEdit !== (perfil?.email ?? '') ? ESPACIO.wellness : CREAM[600], color: correoEdit !== (perfil?.email ?? '') ? CREAM[500] : OBSIDIAN[100], fontFamily: PLEX, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
         {msg && (
           <div onClick={() => setMsg(null)} style={{ padding: '13px 15px', borderRadius: 12, marginBottom: 16, cursor: 'pointer', fontFamily: POPPINS, fontWeight: 300, background: msg.error ? '#F7E9E4' : 'rgba(29,158,117,0.10)', border: `1px solid ${msg.error ? '#DFB6A8' : 'rgba(29,158,117,0.35)'}`, color: msg.error ? '#7A2E1B' : '#0F5B43', fontSize: 14, lineHeight: 1.5 }}>
@@ -271,8 +404,12 @@ export function WellnessPortal({ code }: { code: string }) {
                       {slot.instructor ? `con ${slot.instructor}` : ''}
                       {slot.instructor && precio > 0 ? ' · ' : ''}
                       {precio > 0 ? (
-                        hayPromo
-                          ? <><span style={{ textDecoration: 'line-through', opacity: 0.65 }}>{mxn(Number(info!.precio_regular))}</span> <strong style={{ color: ESPACIO.wellness, fontWeight: 600 }}>{mxn(precio)}</strong></>
+                        hayDescuento
+                          ? (token
+                              // Con cuenta: el precio con descuento, y de dónde viene
+                              ? <><span style={{ textDecoration: 'line-through', opacity: 0.6 }}>{mxn(regular!)}</span> <strong style={{ color: ESPACIO.wellness, fontWeight: 600 }}>{mxn(conDescuento!)}</strong></>
+                              // Sin cuenta: paga el regular, y se ve lo que deja en la mesa
+                              : <><strong style={{ fontWeight: 600 }}>{mxn(regular!)}</strong> <span style={{ color: ESPACIO.wellness, whiteSpace: 'nowrap' }}>· {mxn(conDescuento!)} con cuenta</span></>)
                           : mxn(precio)
                       ) : 'sin costo'}
                     </div>
@@ -325,10 +462,10 @@ export function WellnessPortal({ code }: { code: string }) {
           <PodIcon size={40} color={CREAM[700]} />
           {!token ? (
             <p style={{ fontFamily: POPPINS, fontWeight: 300, fontSize: 13, color: OBSIDIAN[100], margin: 0, maxWidth: 380, lineHeight: 1.6 }}>
-              ¿Ya te habías registrado? Reserva cualquier clase y pon tu mismo teléfono — recuperas tu cuenta sola.
+              Tu teléfono es tu acceso. Si cambias de celular, entra con el mismo número y tu cuenta te sigue.
             </p>
           ) : (
-            <button onClick={() => { localStorage.removeItem(TOKEN_KEY); setToken(null); setMine([]) }}
+            <button onClick={() => { localStorage.removeItem(TOKEN_KEY); setToken(null); setMine([]); setPerfil(null); setCuentaOpen(false) }}
               style={{ fontFamily: PLEX, fontSize: 12, color: OBSIDIAN[100], background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
               Salir de esta cuenta en este dispositivo
             </button>
