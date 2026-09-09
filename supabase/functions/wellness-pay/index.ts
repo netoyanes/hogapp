@@ -68,6 +68,28 @@ Deno.serve(async (req: Request) => {
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
   try {
+    // ── REGRESO del checkout ─────────────────────────────────────────────────
+    // Blumon no devuelve al alumno con un GET: hace POST a la URL de retorno.
+    // Vercel sirve estáticos y contesta 405 a un POST, así que el alumno veía
+    // una pantalla en blanco justo después de pagar — el peor momento posible.
+    //
+    // Este salto recibe ese POST y rebota al portal con 303, que es el código
+    // que le dice al navegador "ahora hazme un GET". Sin el 303, el navegador
+    // repetiría el POST contra Vercel y volveríamos al 405.
+    //
+    // NO se lee nada del cuerpo: quien confirma un pago es el webhook, con su
+    // secreto. Esto es solo la puerta de regreso del navegador.
+    if (action === 'return') {
+      // El código de casa se limita a lo que es: letras y números. Sin esto,
+      // un `v` manipulado podría convertir esto en un redirector abierto.
+      const venue = (url.searchParams.get('v') ?? '').replace(/[^A-Za-z0-9]/g, '').slice(0, 24)
+      const base = (Deno.env.get('PORTAL_BASE_URL') ?? '').replace(/\/+$/, '')
+      return new Response(null, {
+        status: 303,
+        headers: { ...CORS, Location: `${base}/?wellness=${encodeURIComponent(venue)}` },
+      })
+    }
+
     // ── WEBHOOK de Blumon: confirma/rechaza por reference ────────────────────
     if (action === 'webhook') {
       // AUTENTICACIÓN DEL WEBHOOK. Sin esto, cualquiera que haga POST aquí con
@@ -170,7 +192,10 @@ Deno.serve(async (req: Request) => {
         amount, unique: true, reference,
         paymentConcept: `${className} · ${booking.class_date}`,
         response: true,
-        urlCallback: `${Deno.env.get('PORTAL_BASE_URL') ?? ''}/?wellness=${encodeURIComponent(buCode)}`,
+        // El regreso NO apunta a Vercel: Blumon devuelve al alumno con POST y
+        // el hosting estático contesta 405. Pasa por action=return, que acepta
+        // el POST y rebota al portal con un 303.
+        urlCallback: `${Deno.env.get('SUPABASE_URL')}/functions/v1/wellness-pay?action=return&v=${encodeURIComponent(buCode)}`,
       }),
     })
     const data = await res.json()
