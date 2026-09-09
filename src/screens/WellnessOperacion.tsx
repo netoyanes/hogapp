@@ -695,6 +695,13 @@ function CierreSheet({ slot, sesion, fecha, classes, instructors, gente, config,
 // ═══════════════════════════════════════════════════════════════════════════
 // TABLERO — se calcula solo desde los cierres
 // ═══════════════════════════════════════════════════════════════════════════
+/** Una entrada de dinero, venga de la caja o de la pasarela. */
+interface Transaccion {
+  id: string; fecha: string; via: string; estado: string; monto: number | null
+  alumno: string; telefono: string | null; concepto: string
+  codigo: string | null; referencia: string | null; venue: string | null
+}
+
 export function TableroTab({ config, gente, instructors, canWrite, onConfig }: {
   config: OpConfig | null; gente: Persona[]; instructors: OpInstructor[]
   canWrite: boolean; onConfig: () => void
@@ -705,10 +712,18 @@ export function TableroTab({ config, gente, instructors, canWrite, onConfig }: {
   const [hasta, setHasta] = useState(finMes)
   const [ses, setSes] = useState<OpSession[]>([])
   const [falta, setFalta] = useState(false)
+  const [movs, setMovs] = useState<Transaccion[]>([])
 
   useEffect(() => {
     supabase.from('wellness_sessions').select('*').gte('class_date', desde).lte('class_date', hasta).order('class_date')
       .then(({ data, error }) => { if (error) { setFalta(true); return } setFalta(false); setSes((data ?? []) as OpSession[]) })
+    // El dinero NO sale de los cierres: un cobro en línea o un paquete comprado
+    // desde el portal nunca pasan por uno. Por eso va aparte.
+    // Se filtra por el día completo: `hasta` es una fecha y la vista trae hora.
+    supabase.from('v_wellness_transacciones').select('*')
+      .gte('fecha', desde).lte('fecha', `${hasta}T23:59:59.999Z`)
+      .order('fecha', { ascending: false })
+      .then(({ data }) => setMovs((data ?? []) as Transaccion[]))
   }, [desde, hasta])
 
   const k = useMemo(() => {
@@ -821,6 +836,73 @@ export function TableroTab({ config, gente, instructors, canWrite, onConfig }: {
       <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: 0 }}>
         Todo esto sale de los cierres de turno. No hay un solo número que alguien tenga que actualizar a mano.
       </p>
+
+      {/* ── TRANSACCIONES ── La otra mitad del tablero. Los cuadros de arriba
+          salen de los cierres de turno, que alguien captura clase por clase;
+          esto sale del dinero. Un cobro con tarjeta o un paquete comprado en el
+          portal nunca pasan por un cierre, así que sin esta lista eran
+          invisibles — y son justo los que hay que poder cotejar. */}
+      <section style={{ marginTop: 26 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Transacciones
+          </h3>
+          <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+            {movs.length === 0 ? 'sin movimientos en el periodo' : `${movs.length} en el periodo`}
+          </span>
+          <span style={{ flex: 1 }} />
+          {movs.length > 0 && (
+            <>
+              <span className="num" style={{ fontSize: 12.5, fontFamily: 'var(--font-mono)', color: 'var(--status-healthy)', fontWeight: 700 }}>
+                cobrado {mxn(movs.filter(m => m.estado === 'pagado').reduce((t, m) => t + Number(m.monto ?? 0), 0))}
+              </span>
+              {movs.some(m => m.estado === 'pendiente') && (
+                <span className="num" style={{ fontSize: 12.5, fontFamily: 'var(--font-mono)', color: 'var(--status-warning)' }}>
+                  pendiente {mxn(movs.filter(m => m.estado === 'pendiente').reduce((t, m) => t + Number(m.monto ?? 0), 0))}
+                </span>
+              )}
+            </>
+          )}
+        </div>
+
+        <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, overflowX: 'auto' }}>
+          {movs.length === 0 ? (
+            <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>
+              Sin movimientos en el periodo. Aquí aparecen los pagos en línea, los paquetes y las clases cobradas en caja.
+            </p>
+          ) : movs.map(m => (
+            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
+              <span className="num" style={{ fontSize: 11.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', minWidth: 88 }}>
+                {new Date(m.fecha).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </span>
+              <span style={{ flex: 1, minWidth: 130, fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{m.alumno}</span>
+              <span style={{ flex: 1.4, minWidth: 150, fontSize: 12.5, color: 'var(--text-secondary)' }}>{m.concepto}</span>
+              {/* El código es lo que la persona enseña; la referencia es lo que
+                  se busca en el panel de Blumon. Los dos se seleccionan. */}
+              <span className="num" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', minWidth: 96, userSelect: 'all' }}>
+                {m.codigo ?? '—'}
+              </span>
+              <span className="num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', minWidth: 150, userSelect: 'all' }}>
+                {m.referencia ?? ''}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', minWidth: 42 }}>{m.via}</span>
+              <span style={{
+                fontSize: 11, fontWeight: 600, minWidth: 66,
+                color: m.estado === 'pagado' ? 'var(--status-healthy)'
+                  : m.estado === 'rechazado' ? 'var(--status-danger)' : 'var(--status-warning)',
+              }}>
+                {m.estado}
+              </span>
+              <span className="num" style={{ fontSize: 12.5, fontWeight: 700, fontFamily: 'var(--font-mono)', width: 82, textAlign: 'right', color: m.estado === 'pagado' ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
+                {mxn(Number(m.monto ?? 0))}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 8, lineHeight: 1.6 }}>
+          Un intento en <strong>pendiente</strong> es un checkout que se abrió y no se completó — es normal que haya varios por una misma reserva. Solo cuenta como ingreso lo que dice <strong>pagado</strong>.
+        </p>
+      </section>
     </div>
   )
 }
