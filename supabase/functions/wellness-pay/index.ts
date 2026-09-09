@@ -182,12 +182,26 @@ Deno.serve(async (req: Request) => {
     if (payErr || !pay) return json({ error: `No se pudo iniciar el pago: ${payErr?.message}` }, 500)
 
     const access = await blumonToken()
-    const nombre = String(student.full_name ?? '').trim().split(/\s+/)
+
+    // Blumon exige que nombre y apellido contengan SOLO letras. Dos cosas
+    // rompían ese contrato:
+    //   · el apellido caía en '-' cuando la persona se registró con un solo
+    //     nombre, y un guion no es una letra;
+    //   · los acentos y la ñ viajaban tal cual, y su validador los rechaza.
+    // Se limpian los dos y se quedan los espacios, porque un apellido compuesto
+    // es la norma aquí y un validador que los rechazara sería inservible.
+    const soloLetras = (s: string) => s
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // acentos y ñ fuera
+      .replace(/[^A-Za-z ]/g, ' ')
+      .replace(/\s+/g, ' ').trim()
+    const partes = (soloLetras(String(student.full_name ?? '')) || 'Alumno').split(' ')
     const res = await fetch(`${BASE().ecom}/checkout/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${access}` },
       body: JSON.stringify({
-        name: nombre[0] ?? '', lastName: nombre.slice(1).join(' ') || '-',
+        // Sin apellido se repite el nombre: es lo único que cumple "solo
+        // letras" sin inventarle un apellido a nadie.
+        name: partes[0], lastName: partes.slice(1).join(' ') || partes[0],
         email: student.email ?? undefined, phone: student.phone ?? undefined,
         amount, unique: true, reference,
         paymentConcept: `${className} · ${booking.class_date}`,
