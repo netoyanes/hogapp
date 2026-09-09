@@ -364,19 +364,29 @@ export function WellnessPortal({ code }: { code: string }) {
 
   async function pagar(b: MyBooking) {
     setBusy(true)
-    try {
-      const { data, error } = await supabase.functions.invoke('wellness-pay', { body: { token, booking_id: b.booking_id } })
-      let payload = data as { pay_url?: string; error?: string } | null
-      if (error && !payload) {
-        try { payload = await (error as { context?: Response }).context?.json() ?? null } catch { payload = null }
-      }
-      if (!payload?.pay_url) {
-        setMsg({ text: payload?.error ?? `El pago en línea no está disponible ahorita — puedes pagar en ${LUGAR.pisoCaja}.`, error: true })
-        return
-      }
-      window.open(payload.pay_url, '_blank', 'noopener')
-      setMsg({ text: 'Se abrió la página de pago seguro.' })
-    } finally { setBusy(false) }
+    // Sin `finally`: en el camino bueno la pestaña se va a Blumon, y liberar el
+    // botón justo antes de irse deja una rendija para un segundo clic — que
+    // sería un segundo cobro iniciado. Solo se libera cuando algo falló y la
+    // persona sigue aquí.
+    const { data, error } = await supabase.functions.invoke('wellness-pay', { body: { token, booking_id: b.booking_id } })
+    let payload = data as { pay_url?: string; error?: string } | null
+    if (error && !payload) {
+      try { payload = await (error as { context?: Response }).context?.json() ?? null } catch { payload = null }
+    }
+    if (!payload?.pay_url) {
+      setBusy(false)
+      setMsg({ text: payload?.error ?? `El pago en línea no está disponible ahorita — puedes pagar en ${LUGAR.pisoCaja}.`, error: true })
+      return
+    }
+    // MISMA PESTAÑA, no window.open. El navegador solo permite abrir una
+    // ventana si es reacción inmediata a un clic, y aquí ya esperamos la
+    // respuesta de Blumon: para cuando llega, el gesto del usuario venció y el
+    // bloqueador de pop-ups la mata. La persona se queda mirando un botón que
+    // no hizo nada, con el cobro ya iniciado del otro lado.
+    //
+    // Navegar en la misma pestaña no se puede bloquear, y el regreso ya está
+    // resuelto: Blumon devuelve al portal por action=return.
+    window.location.assign(payload.pay_url)
   }
 
   async function cancelar(b: MyBooking) {
