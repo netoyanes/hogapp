@@ -16,11 +16,16 @@
 //   BLUMON_USER       usuario e-commerce (correo del registro)
 //   BLUMON_PASS       password YA en SHA-256 hex (como lo pide su API)
 //   PORTAL_BASE_URL   https://tu-dominio.com  (para el urlCallback de regreso)
+//   WELLNESS_WEBHOOK_SECRET  cadena larga al azar; autentica el webhook
 //
-// Verify JWT: DESACTIVADO — el alumno no es usuario de Supabase (su auth es el
-// access_token, validado aquí contra la base) y el webhook viene de Blumon.
+// Verify JWT: tiene que estar DESACTIVADO para que el webhook funcione — el
+// alumno no es usuario de Supabase (su auth es el access_token, validado aquí
+// contra la base) y Blumon no manda Authorization. Por eso el webhook trae su
+// propio secreto: apagar verify_jwt sin él deja la puerta abierta a que
+// cualquiera marque clases como pagadas.
+//
 // Registrar el webhook con soporte@blumonpay.com apuntando a:
-//   https://<project>.supabase.co/functions/v1/wellness-pay?action=webhook
+//   https://<project>.supabase.co/functions/v1/wellness-pay?action=webhook&key=<WELLNESS_WEBHOOK_SECRET>
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const CORS = {
@@ -65,6 +70,32 @@ Deno.serve(async (req: Request) => {
   try {
     // ── WEBHOOK de Blumon: confirma/rechaza por reference ────────────────────
     if (action === 'webhook') {
+      // AUTENTICACIÓN DEL WEBHOOK. Sin esto, cualquiera que haga POST aquí con
+      // una reference válida marca una clase como pagada sin pagarla. Hoy el
+      // agujero está tapado por accidente —la función corre con verify_jwt y
+      // Blumon no manda Authorization, así que el webhook rebota con 401— pero
+      // eso significa que el día que se apague verify_jwt para que funcione, el
+      // hueco queda abierto. El secreto va en la URL de callback porque Blumon
+      // deja registrar la URL completa, y es lo único que soportan mientras no
+      // confirmen si firman sus notificaciones.
+      const esperado = Deno.env.get('WELLNESS_WEBHOOK_SECRET') ?? ''
+      const recibido = url.searchParams.get('key') ?? ''
+      if (!esperado) {
+        console.error('[wellness-pay] WELLNESS_WEBHOOK_SECRET sin configurar: webhook rechazado')
+        return json({ error: 'Webhook no configurado.' }, 503)
+      }
+      // Comparación en tiempo constante: con === el tiempo de respuesta cambia
+      // según cuántos caracteres coinciden, y eso permite adivinar el secreto
+      // uno a uno. El acumulador XOR recorre siempre todo.
+      const a = new TextEncoder().encode(esperado)
+      const b = new TextEncoder().encode(recibido)
+      let diff = a.length ^ b.length
+      for (let i = 0; i < a.length; i++) diff |= a[i] ^ (b[i] ?? 0)
+      if (diff !== 0) {
+        console.error('[wellness-pay] webhook con key inválida')
+        return json({ error: 'No autorizado.' }, 401)
+      }
+
       const hook = await req.json()
       const ref = String(hook.reference ?? '')
       const approved = String(hook.codeResponse ?? '') === '00'
