@@ -24,12 +24,22 @@ import { CREAM, OBSIDIAN, ESPACIO, WELLNESS_GRADIENT, POPPINS, PLEX } from '../l
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * El cobro en línea todavía NO está listo: falta el alta de producción de
- * Blumon y autenticar el webhook de wellness-pay, que hoy marca una reserva
- * como pagada sin verificar quién llama. Mientras tanto se cobra en caja.
- * Para encenderlo: cerrar esos dos pendientes y poner esto en true.
+ * EL COBRO EN LÍNEA, DE MOMENTO, SOLO PARA PROBARLO.
+ *
+ * La pasarela ya funciona de punta a punta —checkout, regreso y webhook—, pero
+ * las credenciales cargadas son las de SANDBOX. Encenderlo para todos mandaría
+ * a los alumnos a un checkout donde su tarjeta no se cobra, y llegarían al
+ * estudio creyendo que ya pagaron.
+ *
+ * Así que se enciende por URL: /?wellness=PC&pago=1
+ *
+ * Quien llega del link de redes no lo ve y paga en caja, como hasta ahora.
+ * Quien quiere probar el flujo completo agrega el parámetro.
+ *
+ * PARA PRODUCCIÓN: cuando BLUMON_ENV sea 'prod' con credenciales productivas y
+ * la URL del webhook esté registrada, esto se cambia por `true` a secas.
  */
-const PAGO_EN_LINEA = false
+const pagoEnLinea = () => new URLSearchParams(location.search).get('pago') === '1'
 
 const LUGAR = {
   nombre: 'POD Condesa',
@@ -210,6 +220,10 @@ export function WellnessPortal({ code }: { code: string }) {
    */
   // La semana de prueba, si sigue en el catálogo, y si esta persona ya la usó.
   // Es "una vez por persona", así que basta con haberla comprado alguna vez.
+  // Se resuelve en el render y no en el módulo, para que funcione igual si el
+  // portal algún día navega sin recargar.
+  const puedePagar = pagoEnLinea()
+
   const prueba = productos.find(p => p.tipo === 'prueba') ?? null
   const tienePrueba = compras.some(c => c.tipo === 'prueba')
 
@@ -990,7 +1004,7 @@ export function WellnessPortal({ code }: { code: string }) {
                 </p>
               )}
 
-              {PAGO_EN_LINEA && !ticket.paid && Number(ticket.amount) > 0 && (
+              {puedePagar && !ticket.paid && Number(ticket.amount) > 0 && (
                 <button onClick={() => pagar(ticket)} disabled={busy}
                   style={{ ...btn, background: ESPACIO.wellness, marginTop: 12 }}>
                   Pagar ahora {mxn(Number(ticket.amount))}
