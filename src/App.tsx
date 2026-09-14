@@ -11,6 +11,7 @@ import { Nomina } from './screens/Nomina'
 import { Wellness } from './screens/Wellness'
 import { WellnessPortal } from './screens/WellnessPortal'
 import { Finanzas } from './screens/Finanzas'
+import { Aperturas } from './screens/Aperturas'
 import { RevenueUpload } from './screens/RevenueUpload'
 import { BUOnboardingForm } from './screens/BUOnboardingForm'
 import { AppLayout } from './components/layout/AppLayout'
@@ -355,6 +356,12 @@ export default function App() {
         return <Casa userId={profile?.id} userRole={role} initialReport />
       case 'events':
         return <Events userRole={role} userId={profile?.id} caps={caps} onOpenTask={openTaskOverlay} />
+      case 'aperturas':
+        // Aperturas es exclusivo del Master: un presupuesto de apertura trae
+        // rentas, traspasos y márgenes de proveedor.
+        return role === 'MASTER'
+          ? <Aperturas />
+          : <EmptyState icon="🔒" title="Solo Master" description="Aperturas es exclusivo de dirección." />
       case 'objectives':
         // Objetivos es exclusivo del Master (dirección)
         return role === 'MASTER'

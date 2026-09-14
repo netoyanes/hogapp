@@ -17,7 +17,7 @@ export const TENANT: TenantConfig = {
   appSubtitle: 'Command Center',
   logo: { type: 'symbol' },
   enabledViews: [
-    'resumen', 'dashboard', 'pulso', 'finanzas', 'nomina', 'wellness', 'pr', 'prcom', 'tasks', 'crm', 'concierge', 'casa', 'events', 'objectives',
+    'resumen', 'dashboard', 'pulso', 'finanzas', 'nomina', 'aperturas', 'wellness', 'pr', 'prcom', 'tasks', 'crm', 'concierge', 'casa', 'events', 'objectives',
     'revenue', 'reports', 'activity', 'upload', 'templates',
     'invite', 'profile',
   ],
@@ -28,6 +28,7 @@ export const TENANT: TenantConfig = {
     pr:        'Red PR',
     prcom:     'Comisiones PR',
     finanzas:  'Finanzas',
+    aperturas: 'Aperturas',
     tasks:     'Tareas',
     crm:       'Comercial',
     contacts:  'Comercial',
