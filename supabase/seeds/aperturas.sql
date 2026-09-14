@@ -87,6 +87,10 @@ create table if not exists aperturas_partidas (
   -- Sin esta bandera, la terraza que se termina en octubre haría que el
   -- cronograma gritara "no llegas" todos los días.
   post_apertura boolean not null default false,
+  -- Piso de arranque por un tercero, no por la obra: el electricista que hasta
+  -- el viernes se desocupa. Sin esto el cronograma promete arranques que nadie
+  -- va a cumplir.
+  no_antes_de  date,
   notas        text,
 
   -- Compra

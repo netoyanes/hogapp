@@ -101,8 +101,13 @@ export function programar(proyecto: Proyecto, partidas: Partida[]): Cronograma {
   const es = new Map<string, number>()
   const ef = new Map<string, number>()
   for (const id of orden) {
-    const dur = duracionDe(porId.get(id)!)
-    const inicio = previas.get(id)!.reduce((max, dep) => Math.max(max, ef.get(dep) ?? 0), 0)
+    const p = porId.get(id)!
+    const dur = duracionDe(p)
+    const porDeps = previas.get(id)!.reduce((max, dep) => Math.max(max, ef.get(dep) ?? 0), 0)
+    // El piso por fecha fija manda sobre las dependencias: que la obra esté
+    // lista no adelanta al proveedor que hasta el viernes se desocupa.
+    const piso = p.no_antes_de ? diasEntre(proyecto.inicio, p.no_antes_de) : 0
+    const inicio = Math.max(porDeps, piso, 0)
     es.set(id, inicio)
     ef.set(id, inicio + dur)
   }
@@ -145,7 +150,10 @@ export function programar(proyecto: Proyecto, partidas: Partida[]): Cronograma {
     const b = ef.get(p.id) ?? dur
     const c = ls.get(p.id) ?? a
     const d = lf.get(p.id) ?? b
-    const holgura = enOrden.has(p.id) ? c - a : 0
+    // Una fecha fija puede empujar el arranque más allá de su límite y dar
+    // holgura negativa. Eso ya lo grita `colchon`; aquí se aplana para no
+    // pintar una franja de ancho negativo en el Gantt.
+    const holgura = enOrden.has(p.id) ? Math.max(0, c - a) : 0
     barras.set(p.id, {
       id: p.id,
       inicio_temprano: a, fin_temprano: b,
@@ -501,12 +509,34 @@ export function alertasDe(
     })
   }
 
-  // 5. Atrasos: la partida debió terminar y no está al 100.
-  for (const p of partidas) {
-    const b = crono.barras.get(p.id)
-    if (!b || p.avance >= 100) continue
-    if (b.fecha_fin < hoy) {
-      const dias = diasEntre(b.fecha_fin, hoy)
+  // 5. Atrasos.
+  //
+  // Solo cuentan las partidas que YA tienen días puestos. Una partida sin
+  // duración es un renglón que alguien anotó para no olvidarlo, no un
+  // compromiso con fecha: reportarla como "atrasada" llena el panel de ruido
+  // el primer día y entrena a la gente a ignorar las alertas.
+  const atrasos = partidas
+    .filter(p => {
+      const b = crono.barras.get(p.id)
+      return b && b.duracion > 0 && p.avance < 100 && b.fecha_fin < hoy
+    })
+    .map(p => ({ p, b: crono.barras.get(p.id)!, dias: diasEntre(crono.barras.get(p.id)!.fecha_fin, hoy) }))
+    .sort((a, b) => b.dias - a.dias)
+
+  // Con más de tres, una sola línea: veinte alertas iguales no son veinte
+  // avisos, son una pared que nadie lee.
+  if (atrasos.length > 3) {
+    const criticos = atrasos.filter(a => a.b.critica).length
+    alertas.push({
+      id: 'atrasos',
+      gravedad: criticos > 0 ? 'roja' : 'ambar',
+      titulo: `${atrasos.length} cosas van tarde`,
+      detalle: `La peor es ${atrasos[0].p.nombre}, ${atrasos[0].dias} días.` +
+        (criticos > 0 ? ` ${criticos} de ellas no se pueden atrasar.` : '') +
+        ' Ábrelas en la Lista y actualiza su avance o sus fechas.',
+    })
+  } else {
+    for (const { p, b, dias } of atrasos) {
       alertas.push({
         id: `atraso:${p.id}`,
         gravedad: b.critica ? 'roja' : 'ambar',

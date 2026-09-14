@@ -93,6 +93,13 @@ export interface Partida {
    * en flujo de caja —el dinero sale igual—, pero fuera de la fecha meta.
    */
   post_apertura: boolean
+  /**
+   * Fecha antes de la cual esto no puede arrancar, aunque todo lo que espera
+   * ya esté listo. Es para lo que no depende de la obra sino de terceros: el
+   * electricista que hasta el viernes se desocupa, el permiso que sale el día
+   * que sale. Sin esto, el cronograma promete arranques que nadie va a cumplir.
+   */
+  no_antes_de?: string | null
   notas?: string | null
 
   // ── Compra ──

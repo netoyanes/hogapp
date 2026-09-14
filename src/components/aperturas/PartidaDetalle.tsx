@@ -252,6 +252,12 @@ La fecha de verdad depende de tu código postal y de si hay existencia — cámb
         </div>
       </div>
 
+      <Campo label="No puede empezar antes de"
+        ayuda="Opcional. Para cuando no depende de la obra sino de un tercero: el electricista que hasta el viernes se desocupa, el permiso que sale el día que sale.">
+        <input type="date" value={p.no_antes_de ?? ''}
+          onChange={e => onChange({ no_antes_de: e.target.value || null })} style={inp} />
+      </Campo>
+
       <Casilla checked={p.post_apertura} onChange={v => onChange({ post_apertura: v })}
         label="Esto se hace DESPUÉS de abrir (cuenta en el dinero, pero no retrasa la apertura)" />
 

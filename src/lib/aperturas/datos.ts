@@ -40,6 +40,7 @@ export const aPartida = (r: Record<string, unknown>): Partida => ({
   saldo_pagado: !!r.saldo_pagado,
   estimado: !!r.estimado,
   post_apertura: !!r.post_apertura,
+  no_antes_de: (r.no_antes_de as string) ?? null,
   notas: (r.notas as string) ?? null,
   url: (r.url as string) ?? null,
   foto: (r.foto as string) ?? null,
