@@ -13,7 +13,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { HardHat, Plus, Sparkles, Flag, RotateCcw, AlertTriangle, CalendarClock } from 'lucide-react'
+import {
+  HardHat, Plus, Sparkles, Flag, RotateCcw, AlertTriangle, CalendarClock,
+  Settings2, Trash2, ShoppingCart, Hammer, ClipboardList,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { Sheet, showToast } from '../components/v2'
@@ -34,14 +37,19 @@ import { Barra, Guardado } from '../components/aperturas/ui'
 type Pestana = 'panel' | 'cronograma' | 'partidas' | 'proveedores' | 'flujo' | 'ajustes'
 type EstadoGuardado = 'listo' | 'guardando' | 'guardado' | 'error'
 
+// Los nombres son los que usaría alguien parado en la obra, no los de un
+// software de project management. "Cronograma" y "flujo de caja" no le dicen
+// nada a quien está abriendo su primer local; "Calendario" y "Pagos", sí.
+// Ajustes sale de las pestañas: se toca una vez y estorba el resto del tiempo.
 const PESTANAS: { id: Pestana; label: string }[] = [
-  { id: 'panel', label: 'Panel' },
-  { id: 'cronograma', label: 'Cronograma' },
-  { id: 'partidas', label: 'Partidas' },
+  { id: 'panel', label: 'Resumen' },
+  { id: 'partidas', label: 'Lista' },
+  { id: 'cronograma', label: 'Calendario' },
+  { id: 'flujo', label: 'Pagos' },
   { id: 'proveedores', label: 'Proveedores' },
-  { id: 'flujo', label: 'Flujo de caja' },
-  { id: 'ajustes', label: 'Ajustes' },
 ]
+
+const nombreDe = (n: string) => n.trim() || 'Apertura sin nombre'
 
 export function Aperturas() {
   const isMobile = useIsMobile()
@@ -159,7 +167,7 @@ export function Aperturas() {
     const { partidas: frescas } = await cargarProyecto(proyectoId)
     setPartidas(frescas)
     setSelId(data.id as string)
-    if (pestana === 'panel') setPestana('partidas')
+    setPestana('partidas')
   }
 
   async function borrarPartida(id: string) {
@@ -205,6 +213,20 @@ export function Aperturas() {
     await cargarLista()
     setProyectoId(data.id as string)
     setPestana('ajustes')
+  }
+
+  async function borrarApertura() {
+    if (!proyecto) return
+    // Confirmación con el nombre adentro: borrar la apertura equivocada es
+    // perder todo el plan, y el selector siempre tiene varias.
+    if (!window.confirm(`¿Borrar "${nombreDe(proyecto.nombre)}" y todo lo que tiene dentro? No se puede deshacer.`)) return
+    const { error } = await supabase.from('aperturas_proyectos').delete().eq('id', proyecto.id)
+    if (error) { showToast(`No se pudo borrar: ${error.message}`, 'error'); return }
+    const quedan = proyectos.filter(p => p.id !== proyecto.id)
+    setProyectos(quedan)
+    setProyectoId(quedan[0]?.id ?? '')
+    setPestana('panel')
+    showToast('Apertura borrada.', 'success')
   }
 
   async function cargarEjemplo() {
@@ -256,18 +278,23 @@ export function Aperturas() {
       <div style={{ padding: 24, maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
         <HardHat size={28} style={{ color: 'var(--text-tertiary)' }} />
         <h1 style={{ color: 'var(--text-primary)', fontSize: 18, fontWeight: 800, margin: '12px 0 6px' }}>Aperturas</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6, margin: '0 0 18px' }}>
-          Cronograma con ruta crítica, presupuesto, flujo de caja y proveedores de un local nuevo.
-          Captura partidas; las fechas, el dinero y las alertas se calculan solos.
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13.5, lineHeight: 1.65, margin: '0 0 18px' }}>
+          Para abrir un local nuevo. Anotas lo que vas a comprar y lo que vas a
+          contratar; la app te dice cuándo abres, cuánto llevas gastado y qué
+          pagos vienen.
         </p>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button onClick={nuevaApertura} style={{ ...btn, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Plus size={14} /> Nueva apertura
+          <button onClick={cargarEjemplo} disabled={sembrando} style={{ ...btn, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Sparkles size={14} /> {sembrando ? 'Cargando…' : 'Ver un ejemplo lleno'}
           </button>
-          <button onClick={cargarEjemplo} disabled={sembrando} style={{ ...btnGhost, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Sparkles size={14} /> {sembrando ? 'Cargando…' : 'Cargar ejemplo'}
+          <button onClick={nuevaApertura} style={{ ...btnGhost, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Plus size={14} /> Empezar una en blanco
           </button>
         </div>
+        <p style={{ color: 'var(--text-tertiary)', fontSize: 11.5, lineHeight: 1.6, margin: '14px 0 0' }}>
+          El ejemplo es una tienda-café de dos semanas. Míralo, y cuando le
+          entiendas, bórralo y carga la tuya.
+        </p>
       </div>
     )
   }
@@ -301,30 +328,47 @@ export function Aperturas() {
             <h1 style={{ color: 'var(--text-primary)', fontSize: 18, fontWeight: 800, margin: 0 }}>Aperturas</h1>
             <Guardado estado={estado} />
             <div style={{ flex: 1 }} />
+            {/* Un nombre vacío dejaba el selector en blanco y parecía que no
+                había nada cargado. */}
             <select value={proyectoId} onChange={e => setProyectoId(e.target.value)}
               style={{ ...inp, width: 'auto', maxWidth: 230, cursor: 'pointer' }}>
-              {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              {proyectos.map(p => <option key={p.id} value={p.id}>{nombreDe(p.nombre)}</option>)}
             </select>
-            <button onClick={nuevaApertura} title="Nueva apertura"
+            <button onClick={nuevaApertura} title="Empezar otra apertura"
               style={{ ...btn, minHeight: 38, width: 38, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Plus size={15} />
             </button>
           </div>
 
-          {/* Pestañas */}
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
-            {PESTANAS.map(t => (
-              <button key={t.id} onClick={() => setPestana(t.id)} style={{
-                minHeight: 34, padding: '0 13px', borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap',
-                fontSize: 12.5, fontWeight: pestana === t.id ? 700 : 500,
-                background: pestana === t.id ? 'var(--accent-bg)' : 'transparent',
-                border: `1px solid ${pestana === t.id ? 'var(--accent)' : 'var(--border-default)'}`,
-                color: pestana === t.id ? 'var(--accent)' : 'var(--text-secondary)',
-              }}>{t.label}</button>
-            ))}
+          {/* Pestañas + ajustes */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, flex: 1 }}>
+              {PESTANAS.map(t => (
+                <button key={t.id} onClick={() => setPestana(t.id)} style={{
+                  minHeight: 34, padding: '0 13px', borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap',
+                  fontSize: 12.5, fontWeight: pestana === t.id ? 700 : 500,
+                  background: pestana === t.id ? 'var(--accent-bg)' : 'transparent',
+                  border: `1px solid ${pestana === t.id ? 'var(--accent)' : 'var(--border-default)'}`,
+                  color: pestana === t.id ? 'var(--accent)' : 'var(--text-secondary)',
+                }}>{t.label}</button>
+              ))}
+            </div>
+            <button onClick={() => setPestana('ajustes')} title="Ajustes de esta apertura"
+              style={{
+                minHeight: 34, width: 34, borderRadius: 999, flexShrink: 0, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent',
+                border: `1px solid ${pestana === 'ajustes' ? 'var(--accent)' : 'var(--border-default)'}`,
+                color: pestana === 'ajustes' ? 'var(--accent)' : 'var(--text-tertiary)',
+              }}>
+              <Settings2 size={14} />
+            </button>
           </div>
 
-          {tablero && (
+          {/* Sin partidas no hay nada que resumir, agendar ni pagar: en vez de
+              cuatro tableros en cero, una sola instrucción. */}
+          {partidas.length === 0 && pestana !== 'proveedores' && pestana !== 'ajustes' ? (
+            <Empezar onAdd={agregarPartida} onEjemplo={cargarEjemplo} sembrando={sembrando} isMobile={isMobile} />
+          ) : tablero && (
             <>
               {pestana === 'panel' && (
                 <Panel proyecto={proyecto} partidas={partidas} tablero={tablero} hoy={hoy}
@@ -349,27 +393,36 @@ export function Aperturas() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <AjustesProyecto proyecto={proyecto} onChange={cambiarProyecto} />
                   <div style={{ ...card, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div style={{ flex: 1, minWidth: 200 }}>
-                      <p style={{ ...secTitle, margin: '0 0 4px' }}>Línea base</p>
-                      <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5 }}>
+                    <div style={{ flex: 1, minWidth: 220 }}>
+                      <p style={{ ...secTitle, margin: '0 0 4px' }}>Guardar el plan de hoy</p>
+                      <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.55 }}>
                         {proyecto.linea_base_at
-                          ? `Plan fijado el ${new Date(proyecto.linea_base_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}. Volver restaura duraciones y dependencias.`
-                          : 'Fija el plan cuando lo des por bueno. Es la única forma de contestar después "¿esto ya se movió?".'}
+                          ? `Guardado el ${new Date(proyecto.linea_base_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}. Si algo se movió y quieres volver a como estaba, usa el botón de al lado.`
+                          : 'Guarda una foto del plan cuando lo des por bueno. Así, cuando alguien pregunte "¿esto ya se movió?", tienes contra qué comparar.'}
                       </p>
                     </div>
                     <button onClick={fijarLineaBase} style={{ ...btnGhost, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Flag size={13} /> Fijar plan
+                      <Flag size={13} /> Guardar el plan
                     </button>
                     {proyecto.linea_base && (
                       <button onClick={volverAlPlan} style={{ ...btnGhost, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <RotateCcw size={13} /> Volver al plan original
+                        <RotateCcw size={13} /> Volver al plan guardado
                       </button>
                     )}
                   </div>
-                  <button onClick={cargarEjemplo} disabled={sembrando}
-                    style={{ ...btnGhost, alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Sparkles size={13} /> {sembrando ? 'Cargando…' : 'Cargar otra apertura de ejemplo'}
-                  </button>
+
+                  <div style={{ ...card, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ flex: 1, minWidth: 220 }}>
+                      <p style={{ ...secTitle, margin: '0 0 4px' }}>Borrar esta apertura</p>
+                      <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.55 }}>
+                        Se va con todo lo que tenga dentro. No se puede deshacer.
+                      </p>
+                    </div>
+                    <button onClick={borrarApertura}
+                      style={{ ...btnGhost, color: 'var(--status-risk)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Trash2 size={13} /> Borrar
+                    </button>
+                  </div>
                 </div>
               )}
             </>
@@ -394,6 +447,95 @@ export function Aperturas() {
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 var(--space-4) var(--space-6)' }}>{detalle}</div>
         </Sheet>
       )}
+    </div>
+  )
+}
+
+// ── Empezar ──────────────────────────────────────────────────────────────────
+// Lo que se ve cuando la apertura está vacía.
+//
+// Antes aquí había cuatro tableros en cero y tres listas que decían "no hay
+// nada". Ocho números que no significaban nada y ni una instrucción. Una
+// pantalla vacía tiene UN trabajo: decir qué sigue.
+
+function Empezar({ onAdd, onEjemplo, sembrando, isMobile }: {
+  onAdd: (tipo: Partida['tipo']) => void
+  onEjemplo: () => void
+  sembrando: boolean
+  isMobile: boolean
+}) {
+  // Los tres tipos, explicados por lo que SON, no por cómo se llaman adentro.
+  const opciones = [
+    {
+      tipo: 'compra' as const, icono: ShoppingCart, color: '#3D89C4',
+      titulo: 'Algo que voy a comprar',
+      ejemplo: 'Cafetera, sillas, lámparas',
+      pide: 'Cuánto cuesta y en cuántos días llega',
+    },
+    {
+      tipo: 'trabajo' as const, icono: Hammer, color: 'var(--status-healthy)',
+      titulo: 'Alguien que voy a contratar',
+      ejemplo: 'Pintor, carpintero, electricista',
+      pide: 'Cuánto cobra y cuántos días se tarda',
+    },
+    {
+      tipo: 'tarea' as const, icono: ClipboardList, color: 'var(--text-secondary)',
+      titulo: 'Algo que hace mi equipo',
+      ejemplo: 'Permisos, montaje, prueba de servicio',
+      pide: 'Quién lo hace y cuántos días toma',
+    },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ ...card, padding: isMobile ? 16 : 22 }}>
+        <h2 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 800, margin: '0 0 6px' }}>
+          Esta apertura todavía está vacía
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6, margin: '0 0 16px', maxWidth: 560 }}>
+          Ve anotando todo lo que tienes que comprar, contratar o hacer. Con eso
+          la app calcula sola cuándo puedes abrir, cuánto llevas gastado y qué
+          pagos vienen esta semana. Empieza por lo primero que se te ocurra —
+          el orden no importa.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 10 }}>
+          {opciones.map(o => {
+            const Icono = o.icono
+            return (
+              <button key={o.tipo} onClick={() => onAdd(o.tipo)} style={{
+                textAlign: 'left', cursor: 'pointer', padding: 14, borderRadius: 'var(--radius-md)',
+                background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}>
+                <Icono size={18} style={{ color: o.color }} />
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>{o.titulo}</span>
+                <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.45 }}>{o.ejemplo}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.45, marginTop: 2 }}>
+                  Te va a pedir: {o.pide}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div style={{ ...card, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 3px' }}>
+            ¿Prefieres ver uno ya hecho?
+          </p>
+          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.55 }}>
+            Carga una tienda-café de ejemplo, con sus compras, sus contratistas
+            y sus pagos. Es la forma más rápida de entender para qué sirve cada
+            pestaña. Se borra cuando quieras.
+          </p>
+        </div>
+        <button onClick={onEjemplo} disabled={sembrando}
+          style={{ ...btn, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Sparkles size={14} /> {sembrando ? 'Cargando…' : 'Ver el ejemplo'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -451,44 +593,49 @@ function Panel({ proyecto, partidas, tablero, hoy, isMobile, onSelect, onIrA }: 
       {/* Cuatro indicadores */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 8 }}>
         <div onClick={() => onIrA('cronograma')} style={{ ...card, cursor: 'pointer' }}>
-          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>Apertura</div>
-          <div className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 800, color: colorColchon, lineHeight: 1 }}>
-            {crono.colchon > 0 ? `+${crono.colchon}` : crono.colchon} d
+          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>¿Llegas a la fecha?</div>
+          <div style={{ fontSize: 19, fontWeight: 800, color: colorColchon, lineHeight: 1.15 }}>
+            {crono.colchon < 0
+              ? `Te pasas ${Math.abs(crono.colchon)} ${Math.abs(crono.colchon) === 1 ? 'día' : 'días'}`
+              : crono.colchon === 0 ? 'Justo a tiempo'
+              : `Te sobran ${crono.colchon} ${crono.colchon === 1 ? 'día' : 'días'}`}
           </div>
-          <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 4 }}>
-            Lista el {dia(crono.fin)} · meta {dia(proyecto.meta_apertura)}
+          <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 5, lineHeight: 1.45 }}>
+            Todo queda listo el {dia(crono.fin)} y querías abrir el {dia(proyecto.meta_apertura)}
           </div>
         </div>
 
         <div onClick={() => onIrA('partidas')} style={{ ...card, cursor: 'pointer' }}>
-          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>Avance físico</div>
+          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>¿Qué tanto llevas?</div>
           <div className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>
             {pct(tablero.avance)}
           </div>
           <div style={{ marginTop: 6 }}><Barra valor={tablero.avance} planeado={tablero.planeado} /></div>
           <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 4 }}>
-            Planeado a hoy {pct(tablero.planeado)}{atrasadas.length ? ` · ${atrasadas.length} atrasadas` : ''}
+            Para hoy deberías ir en {pct(tablero.planeado)}
+            {atrasadas.length ? ` · ${atrasadas.length} ${atrasadas.length === 1 ? 'cosa va atrasada' : 'cosas van atrasadas'}` : ''}
           </div>
         </div>
 
         <div onClick={() => onIrA('flujo')} style={{ ...card, cursor: 'pointer' }}>
-          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>Comprometido</div>
+          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>¿Cuánto llevas gastado?</div>
           <div className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 800, lineHeight: 1, color: presupuesto.disponible < 0 ? C_CRITICA : 'var(--text-primary)' }}>
             {mxn(presupuesto.comprometido)}
           </div>
           <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 4 }}>
-            de {mxn(presupuesto.ejecutable)} ejecutables
-            {presupuesto.disponible < 0 && <span style={{ color: C_CRITICA }}> · sobregiro {mxn(-presupuesto.disponible)}</span>}
+            {presupuesto.disponible < 0
+              ? <>de {mxn(presupuesto.ejecutable)} que podías gastar · <span style={{ color: C_CRITICA }}>te pasaste {mxn(-presupuesto.disponible)}</span></>
+              : <>te quedan {mxn(presupuesto.disponible)} de {mxn(presupuesto.ejecutable)}</>}
           </div>
         </div>
 
         <div onClick={() => onIrA('flujo')} style={{ ...card, cursor: 'pointer' }}>
-          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>Pagado</div>
+          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>¿Cuánto ya pagaste?</div>
           <div className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 800, color: 'var(--status-healthy)', lineHeight: 1 }}>
             {mxn(presupuesto.pagado)}
           </div>
           <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 4 }}>
-            Por pagar {mxn(presupuesto.por_pagar)} · {pct(tablero.financiero)} del comprometido
+            Todavía debes {mxn(presupuesto.por_pagar)}
           </div>
         </div>
       </div>
@@ -496,8 +643,10 @@ function Panel({ proyecto, partidas, tablero, hoy, isMobile, onSelect, onIrA }: 
       {/* Tres listas cortas */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 12 }}>
         <div style={card}>
-          <p style={{ ...secTitle, color: C_CRITICA }}>Ruta crítica · {criticas.length}</p>
-          {criticas.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>Sin partidas con duración todavía.</p>}
+          <p style={{ ...secTitle, color: C_CRITICA }}>Esto no se puede atrasar · {criticas.length}</p>
+          {criticas.length === 0
+            ? <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5 }}>Nada todavía. En cuanto pongas cuántos días toma cada cosa, aquí sale la cadena que manda sobre tu fecha de apertura.</p>
+            : <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '-4px 0 2px', lineHeight: 1.45 }}>Si cualquiera de estas se atrasa un día, abres un día después.</p>}
           {criticas.map(p => {
             const b = crono.barras.get(p.id)!
             return (
@@ -512,8 +661,10 @@ function Panel({ proyecto, partidas, tablero, hoy, isMobile, onSelect, onIrA }: 
         </div>
 
         <div style={card}>
-          <p style={{ ...secTitle, color: C_ESTIMADO }}>Sin precio firme · {estimadas.length}</p>
-          {estimadas.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>Todo está cotizado en firme.</p>}
+          <p style={{ ...secTitle, color: C_ESTIMADO }}>Precios al tanteo · {estimadas.length}</p>
+          {estimadas.length === 0
+            ? <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5 }}>Todo tiene precio cotizado. Nada de esto te va a sorprender.</p>
+            : <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '-4px 0 2px', lineHeight: 1.45 }}>Estos números todavía pueden crecer. Son el riesgo de tu presupuesto.</p>}
           {estimadas.map(p => {
             const monto = montoDe(p)
             return (
@@ -526,8 +677,8 @@ function Panel({ proyecto, partidas, tablero, hoy, isMobile, onSelect, onIrA }: 
         </div>
 
         <div style={card}>
-          <p style={secTitle}><CalendarClock size={11} style={{ verticalAlign: '-2px' }} /> Pagos · próximos 7 días</p>
-          {proximos.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>Nada por pagar esta semana.</p>}
+          <p style={secTitle}><CalendarClock size={11} style={{ verticalAlign: '-2px' }} /> Te toca pagar esta semana · {proximos.length}</p>
+          {proximos.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5 }}>Nada por pagar en los próximos 7 días.</p>}
           {proximos.map(pago => (
             <div key={`${pago.partida_id}:${pago.clase}`} onClick={() => onSelect(pago.partida_id)} style={fila}>
               <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-tertiary)', width: 46, flexShrink: 0 }}>{dia(pago.fecha)}</span>
@@ -540,25 +691,25 @@ function Panel({ proyecto, partidas, tablero, hoy, isMobile, onSelect, onIrA }: 
 
       {/* Avance por fase */}
       <div style={card}>
-        <p style={secTitle}>Avance por fase</p>
+        <p style={secTitle}>Cómo va cada etapa</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {fases.map(f => (
             <div key={f.nombre}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 12.5, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nombre}</span>
-                <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-tertiary)' }}>{f.partidas} partidas</span>
+                <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-tertiary)' }}>{f.partidas} {f.partidas === 1 ? 'cosa' : 'cosas'}</span>
                 <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 700, color: 'var(--text-secondary)' }}>{mxn(f.monto)}</span>
                 <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 800, color: 'var(--text-primary)', width: 38, textAlign: 'right' }}>{pct(f.avance)}</span>
               </div>
               <Barra valor={f.avance} />
             </div>
           ))}
-          {fases.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>Todavía no hay partidas.</p>}
+          {fases.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>Todavía no has anotado nada.</p>}
         </div>
       </div>
 
       <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0, textAlign: 'center' }}>
-        {partidas.length} partidas · {diasEntre(proyecto.inicio, crono.fin_total) + 1} días de proyecto · todo lo de arriba se calcula, nada se captura
+        {partidas.length} {partidas.length === 1 ? 'cosa anotada' : 'cosas anotadas'} · {diasEntre(proyecto.inicio, crono.fin_total) + 1} días de obra · todo lo de arriba lo calcula la app sola
       </p>
     </div>
   )

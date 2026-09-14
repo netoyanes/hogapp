@@ -452,8 +452,8 @@ export function alertasDe(
     alertas.push({
       id: 'ciclo',
       gravedad: 'roja',
-      titulo: 'Dependencias circulares',
-      detalle: `${crono.ciclos.map(id => porId.get(id)?.nombre ?? id).join(', ')} se esperan entre sí. El cronograma no puede resolverlas; quita una dependencia.`,
+      titulo: 'Dos cosas se están esperando entre sí',
+      detalle: `${crono.ciclos.map(id => porId.get(id)?.nombre ?? id).join(', ')} no pueden empezar porque cada una espera a la otra. Ábrelas y quítale la dependencia a una.`,
     })
   }
 
@@ -462,15 +462,15 @@ export function alertasDe(
     alertas.push({
       id: 'fecha',
       gravedad: 'roja',
-      titulo: `La apertura se pasa ${Math.abs(crono.colchon)} día${Math.abs(crono.colchon) === 1 ? '' : 's'}`,
-      detalle: `Con las duraciones de hoy se termina el ${crono.fin} y la meta es el ${proyecto.meta_apertura}. Solo acortar la ruta crítica mueve esta fecha.`,
+      titulo: `No llegas: te pasas ${Math.abs(crono.colchon)} día${Math.abs(crono.colchon) === 1 ? '' : 's'}`,
+      detalle: `Con los días que pusiste, todo queda listo hasta el ${crono.fin} y querías abrir el ${proyecto.meta_apertura}. Lo único que adelanta la fecha es acortar algo de la lista de "esto no se puede atrasar".`,
     })
   } else if (crono.colchon <= 3 && crono.duracion_apertura > 0) {
     alertas.push({
       id: 'fecha',
       gravedad: 'ambar',
-      titulo: crono.colchon === 1 ? 'Queda 1 día de colchón' : `Quedan ${crono.colchon} días de colchón`,
-      detalle: 'Cualquier retraso en la ruta crítica se come la fecha de apertura.',
+      titulo: crono.colchon === 1 ? 'Vas muy justo: te sobra 1 día' : `Vas justo: te sobran ${crono.colchon} días`,
+      detalle: 'Si se atrasa cualquiera de las cosas que no se pueden atrasar, ya no abres el día que querías.',
     })
   }
 
@@ -479,15 +479,15 @@ export function alertasDe(
     alertas.push({
       id: 'presupuesto',
       gravedad: 'roja',
-      titulo: `Sobregiro de ${dinero(-pres.disponible)}`,
-      detalle: `Comprometido ${dinero(pres.comprometido)} contra ${dinero(pres.ejecutable)} ejecutables. La reserva de ${dinero(pres.reserva)} es para imprevistos, no para cubrir esto.`,
+      titulo: `Te pasaste ${dinero(-pres.disponible)} del presupuesto`,
+      detalle: `Llevas ${dinero(pres.comprometido)} comprometido y solo podías gastar ${dinero(pres.ejecutable)}. Los ${dinero(pres.reserva)} que apartaste son para imprevistos, no para tapar esto.`,
     })
   } else if (pres.consumo >= 0.9) {
     alertas.push({
       id: 'presupuesto',
       gravedad: 'ambar',
-      titulo: `${Math.round(pres.consumo * 100)}% del presupuesto ejecutable comprometido`,
-      detalle: `Quedan ${dinero(pres.disponible)} para todo lo que falte capturar.`,
+      titulo: `Ya comprometiste el ${Math.round(pres.consumo * 100)}% de tu dinero`,
+      detalle: `Solo te quedan ${dinero(pres.disponible)} para todo lo que te falte anotar.`,
     })
   }
 
@@ -496,8 +496,8 @@ export function alertasDe(
     alertas.push({
       id: 'estimados',
       gravedad: 'ambar',
-      titulo: `${Math.round(pres.estimado / pres.comprometido * 100)}% del presupuesto sigue estimado`,
-      detalle: `${dinero(pres.estimado)} sin cotización en firme. Es el dinero que todavía puede crecer.`,
+      titulo: `${Math.round(pres.estimado / pres.comprometido * 100)}% de tu presupuesto son precios al tanteo`,
+      detalle: `${dinero(pres.estimado)} sin cotizar. Es el dinero que todavía te puede crecer; cotízalo antes de comprometerte.`,
     })
   }
 
@@ -510,10 +510,10 @@ export function alertasDe(
       alertas.push({
         id: `atraso:${p.id}`,
         gravedad: b.critica ? 'roja' : 'ambar',
-        titulo: `${p.nombre} lleva ${dias} día${dias === 1 ? '' : 's'} de retraso`,
+        titulo: `${p.nombre} va ${dias} día${dias === 1 ? '' : 's'} tarde`,
         detalle: b.critica
-          ? 'Está en la ruta crítica: cada día de retraso es un día menos de apertura.'
-          : `Tiene ${b.holgura} día${b.holgura === 1 ? '' : 's'} de holgura antes de tocar la fecha.`,
+          ? 'Esto no se puede atrasar: cada día tarde es un día más para poder abrir.'
+          : `Todavía aguanta ${b.holgura} día${b.holgura === 1 ? '' : 's'} más antes de mover tu fecha de apertura.`,
         partida_id: p.id,
       })
     }
@@ -528,8 +528,8 @@ export function alertasDe(
       alertas.push({
         id: `sinprov:${p.id}`,
         gravedad: 'ambar',
-        titulo: `${p.nombre} no tiene proveedor`,
-        detalle: `Es crítica y arranca el ${b.fecha_inicio}. Sin proveedor asignado no hay quién la ejecute.`,
+        titulo: `${p.nombre}: no has puesto con quién`,
+        detalle: `Empieza el ${b.fecha_inicio} y no se puede atrasar. Si todavía no sabes a quién llamar, ya vas tarde.`,
         partida_id: p.id,
       })
     }

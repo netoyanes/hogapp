@@ -60,7 +60,7 @@ export function Cronograma({ proyecto, partidas, tablero, hoy, selId, onSelect, 
           {/* Encabezado de días */}
           <div style={{ display: 'flex', position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)' }}>
             <div style={{ width: colNombre, flexShrink: 0, position: 'sticky', left: 0, zIndex: 3, background: 'var(--bg-surface)', padding: '8px 10px' }}>
-              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Partida</span>
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Qué</span>
             </div>
             {dias.map(f => (
               <div key={f} style={{
@@ -112,7 +112,7 @@ export function Cronograma({ proyecto, partidas, tablero, hoy, selId, onSelect, 
                       ))}
                       {/* Holgura: hasta dónde podría correrse sin romper nada */}
                       {b.holgura > 0 && (
-                        <div title={`${b.holgura} días de holgura`} style={{
+                        <div title={`Se puede tardar hasta ${b.holgura} ${b.holgura === 1 ? 'día' : 'días'} más sin mover la apertura`} style={{
                           position: 'absolute', left: b.inicio_temprano * ANCHO + ancho, top: '50%',
                           transform: 'translateY(-50%)', width: b.holgura * ANCHO, height: 12,
                           background: 'repeating-linear-gradient(90deg, var(--border-default) 0 3px, transparent 3px 6px)',
@@ -137,16 +137,16 @@ export function Cronograma({ proyecto, partidas, tablero, hoy, selId, onSelect, 
         </div>
       </div>
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', padding: '10px 12px', borderTop: '1px solid var(--border-subtle)' }}>
-        {[['Ruta crítica', C_CRITICA], ['Compra (tiempo de entrega)', C_COMPRA], ['Trabajo o tarea', 'var(--status-healthy)']].map(([t, c]) => (
+        {[['No se puede atrasar', C_CRITICA], ['Compra: la barra es lo que tarda en llegar', C_COMPRA], ['Trabajo o tarea', 'var(--status-healthy)']].map(([t, c]) => (
           <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-tertiary)' }}>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: c }} /> {t}
           </span>
         ))}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-tertiary)' }}>
-          <span style={{ width: 14, height: 6, background: 'repeating-linear-gradient(90deg, var(--border-default) 0 3px, transparent 3px 6px)' }} /> Holgura
+          <span style={{ width: 14, height: 6, background: 'repeating-linear-gradient(90deg, var(--border-default) 0 3px, transparent 3px 6px)' }} /> Se puede tardar hasta aquí
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-tertiary)' }}>
-          <span style={{ width: 2, height: 11, background: C_CRITICA }} /> Meta de apertura
+          <span style={{ width: 2, height: 11, background: C_CRITICA }} /> El día que quieres abrir
         </span>
       </div>
     </div>
@@ -175,7 +175,7 @@ export function TablaPartidas({ partidas, proveedores, tablero, selId, onSelect,
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 6, flex: 1, flexWrap: 'wrap' }}>
-          {([['todas', 'Todas'], ['compra', 'Compras'], ['trabajo', 'Trabajos'], ['tarea', 'Tareas']] as const).map(([id, label]) => (
+          {([['todas', 'Todo'], ['compra', 'Lo que compro'], ['trabajo', 'Lo que contrato'], ['tarea', 'Lo que hace el equipo']] as const).map(([id, label]) => (
             <button key={id} onClick={() => setFiltro(id)} style={{
               minHeight: 32, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600,
               background: filtro === id ? 'var(--accent-bg)' : 'transparent',
@@ -185,7 +185,7 @@ export function TablaPartidas({ partidas, proveedores, tablero, selId, onSelect,
           ))}
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          {([['compra', 'Compra'], ['trabajo', 'Trabajo'], ['tarea', 'Tarea']] as const).map(([t, label]) => (
+          {([['compra', 'Comprar'], ['trabajo', 'Contratar'], ['tarea', 'Tarea']] as const).map(([t, label]) => (
             <button key={t} onClick={() => onAdd(t)} style={{ ...btnGhost, minHeight: 32, padding: '0 10px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
               <Plus size={12} /> {label}
             </button>
@@ -197,12 +197,12 @@ export function TablaPartidas({ partidas, proveedores, tablero, selId, onSelect,
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 620 : undefined }}>
           <thead>
             <tr>
-              <th style={th}>Partida</th>
-              <th style={th}>Proveedor</th>
-              <th style={{ ...th, textAlign: 'right' }}>Monto</th>
-              <th style={th}>Inicio</th>
-              <th style={th}>Fin</th>
-              <th style={{ ...th, width: 90 }}>Avance</th>
+              <th style={th}>Qué</th>
+              <th style={th}>Con quién</th>
+              <th style={{ ...th, textAlign: 'right' }}>Cuánto</th>
+              <th style={th}>Empieza</th>
+              <th style={th}>Termina</th>
+              <th style={{ ...th, width: 90 }}>Va en</th>
             </tr>
           </thead>
           <tbody>
@@ -218,7 +218,7 @@ export function TablaPartidas({ partidas, proveedores, tablero, selId, onSelect,
                         ? <img src={p.foto} alt="" style={{ width: 22, height: 22, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }} />
                         : <ShoppingCart size={13} style={{ color: C_COMPRA, flexShrink: 0 }} />)}
                       {p.nombre}
-                      {p.post_apertura && <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '1px 4px' }}>FASE 2</span>}
+                      {p.post_apertura && <span title="No detiene la apertura: se hace después de abrir" style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '1px 4px' }}>DESPUÉS</span>}
                     </span>
                   </td>
                   <td style={td}>{p.proveedor_id ? nombreProv[p.proveedor_id] ?? '—' : '—'}</td>
@@ -242,7 +242,7 @@ export function TablaPartidas({ partidas, proveedores, tablero, selId, onSelect,
         </table>
         {lista.length === 0 && (
           <p style={{ padding: 20, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12.5, margin: 0 }}>
-            No hay partidas de este tipo todavía.
+No has anotado nada de este tipo todavía.
           </p>
         )}
       </div>
@@ -287,7 +287,7 @@ export function TablaProveedores({ proveedores, partidas, tablero, onChange, onA
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <p style={{ ...secTitle, margin: 0, flex: 1 }}>Proveedores · el % de anticipo define cuándo sale el dinero</p>
+        <p style={{ ...secTitle, margin: 0, flex: 1 }}>Con quién trabajas · el % de anticipo decide cuándo sale el dinero</p>
         <button onClick={onAdd} style={{ ...btn, minHeight: 32, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
           <Plus size={13} /> Proveedor
         </button>
@@ -299,12 +299,12 @@ export function TablaProveedores({ proveedores, partidas, tablero, onChange, onA
               <th style={{ ...th, minWidth: 150 }}>Nombre</th>
               <th style={{ ...th, minWidth: 120 }}>Tipo</th>
               <th style={{ ...th, minWidth: 120 }}>Oficio</th>
-              <th style={{ ...th, width: 90 }}>Anticipo</th>
+              <th style={{ ...th, width: 90 }} title="Qué parte le pagas al arrancar. 50 = mitad y mitad.">Anticipo %</th>
               <th style={{ ...th, minWidth: 120 }}>Contacto</th>
-              <th style={{ ...th, textAlign: 'right' }}>Partidas</th>
-              <th style={{ ...th, textAlign: 'right' }}>Comprometido</th>
-              <th style={{ ...th, textAlign: 'right' }}>Pagado</th>
-              <th style={{ ...th, textAlign: 'right' }}>Por pagar</th>
+              <th style={{ ...th, textAlign: 'right' }}>Trabajos</th>
+              <th style={{ ...th, textAlign: 'right' }}>Le debes en total</th>
+              <th style={{ ...th, textAlign: 'right' }}>Ya pagado</th>
+              <th style={{ ...th, textAlign: 'right' }}>Falta pagarle</th>
               <th style={{ ...th, width: 30 }} />
             </tr>
           </thead>
@@ -336,7 +336,7 @@ export function TablaProveedores({ proveedores, partidas, tablero, onChange, onA
                   <td className="num" style={{ ...calc, color: 'var(--status-healthy)' }}>{mxn(n.pagado)}</td>
                   <td className="num" style={{ ...calc, color: n.comprometido - n.pagado > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{mxn(n.comprometido - n.pagado)}</td>
                   <td style={{ ...td, textAlign: 'center' }}>
-                    <span role="button" title={n.partidas ? 'Tiene partidas asignadas' : 'Eliminar'}
+                    <span role="button" title={n.partidas ? 'No se puede borrar: tiene trabajos asignados' : 'Borrar'}
                       onClick={() => n.partidas === 0 && onDelete(v.id)}
                       style={{ cursor: n.partidas ? 'not-allowed' : 'pointer', color: 'var(--text-tertiary)', opacity: n.partidas ? 0.3 : 1, display: 'inline-flex' }}>
                       <Trash2 size={12} />
@@ -349,7 +349,7 @@ export function TablaProveedores({ proveedores, partidas, tablero, onChange, onA
         </table>
         {proveedores.length === 0 && (
           <p style={{ padding: 20, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12.5, margin: 0 }}>
-            Sin proveedores. Agrega el primero para que las partidas tengan a quién cargarse.
+Todavía no has dado de alta a nadie. Agrégalos aquí y luego los eliges en cada cosa que anotes.
           </p>
         )}
       </div>
@@ -380,20 +380,20 @@ export function Flujo({ tablero, hoy, onTogglePago, onSelect, isMobile }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={card}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
-          <p style={{ ...secTitle, margin: 0, flex: 1 }}>Flujo semanal · programado vs pagado</p>
-          {[['Programado', 'var(--text-tertiary)'], ['Pagado', 'var(--status-healthy)'], ['Acumulado', C_COMPRA]].map(([t, c]) => (
+          <p style={{ ...secTitle, margin: 0, flex: 1 }}>Cuánto sale cada semana</p>
+          {[['Te toca pagar', 'var(--text-tertiary)'], ['Ya pagado', 'var(--status-healthy)'], ['Suma total', C_COMPRA]].map(([t, c]) => (
             <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-secondary)' }}>
               <span style={{ width: 10, height: 10, borderRadius: 3, background: c }} /> {t}
             </span>
           ))}
         </div>
         {semanas.length === 0 ? (
-          <p style={{ color: 'var(--text-tertiary)', fontSize: 12.5, margin: 0 }}>Sin pagos programados todavía.</p>
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 12.5, margin: 0 }}>Todavía no hay pagos: ninguna cosa anotada tiene precio.</p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <svg viewBox={`0 0 ${CW} ${CH + 24}`} style={{ width: '100%', minWidth: 520, display: 'block' }}>
               {/* Referencias de presupuesto: el techo real y el aprobado */}
-              {([[presupuesto.ejecutable, 'Ejecutable', C_ESTIMADO], [presupuesto.aprobado, 'Aprobado', 'var(--text-tertiary)']] as const).map(([v, label, c]) => (
+              {([[presupuesto.ejecutable, 'Lo que puedes gastar', C_ESTIMADO], [presupuesto.aprobado, 'Presupuesto total', 'var(--text-tertiary)']] as const).map(([v, label, c]) => (
                 <g key={label}>
                   <line x1={0} y1={y(v)} x2={CW} y2={y(v)} stroke={c} strokeWidth={1} strokeDasharray="5 4" />
                   <text x={CW - 4} y={y(v) - 4} textAnchor="end" fill={c} style={{ fontSize: 9, fontFamily: 'var(--font-mono)' }}>{label} {mxn(v)}</text>
@@ -406,7 +406,7 @@ export function Flujo({ tablero, hoy, onTogglePago, onSelect, isMobile }: {
                 return (
                   <g key={s.inicio}>
                     <rect x={i * colW + colW / 2 - bw - 1} y={CH - hProg} width={bw} height={Math.max(hProg, s.programado > 0 ? 2 : 0)} rx={3} fill="var(--text-tertiary)" opacity={0.45}>
-                      <title>Semana del {dia(s.inicio)} · programado {mxn(s.programado)}</title>
+                      <title>Semana del {dia(s.inicio)} · te toca pagar {mxn(s.programado)}</title>
                     </rect>
                     <rect x={i * colW + colW / 2 + 1} y={CH - hPag} width={bw} height={Math.max(hPag, s.pagado > 0 ? 2 : 0)} rx={3} fill="var(--status-healthy)">
                       <title>Semana del {dia(s.inicio)} · pagado {mxn(s.pagado)}</title>
@@ -425,7 +425,7 @@ export function Flujo({ tablero, hoy, onTogglePago, onSelect, isMobile }: {
       </div>
 
       <div style={{ ...card, padding: 0 }}>
-        <p style={{ ...secTitle, margin: 0, padding: '12px 14px 8px' }}>Calendario de pagos · {pagos.length} eventos</p>
+        <p style={{ ...secTitle, margin: 0, padding: '12px 14px 8px' }}>Todos los pagos, por fecha · palomea el que ya hiciste</p>
         <div style={{ maxHeight: isMobile ? undefined : 420, overflowY: 'auto' }}>
           {pagos.map(pago => {
             const vencido = !pago.pagado && pago.fecha < hoy
@@ -455,7 +455,7 @@ export function Flujo({ tablero, hoy, onTogglePago, onSelect, isMobile }: {
           })}
           {pagos.length === 0 && (
             <p style={{ padding: 20, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12.5, margin: 0 }}>
-              Ninguna partida tiene monto todavía.
+Ninguna de las cosas que anotaste tiene precio todavía.
             </p>
           )}
         </div>
@@ -475,20 +475,20 @@ export function AjustesProyecto({ proyecto, onChange }: {
       <Campo label="Nombre">
         <input value={proyecto.nombre} onChange={e => onChange({ nombre: e.target.value })} style={inp} />
       </Campo>
-      <Campo label="Ciudad" ayuda="Se usa para estimar entregas.">
+      <Campo label="Ciudad" ayuda="Para calcular cuánto tardan las entregas.">
         <input value={proyecto.ciudad} onChange={e => onChange({ ciudad: e.target.value })} style={inp} />
       </Campo>
-      <Campo label="Inicio">
+      <Campo label="¿Cuándo empiezas?">
         <input type="date" value={proyecto.inicio} onChange={e => onChange({ inicio: e.target.value })} style={inp} />
       </Campo>
-      <Campo label="Meta de apertura">
+      <Campo label="¿Qué día quieres abrir?">
         <input type="date" value={proyecto.meta_apertura} onChange={e => onChange({ meta_apertura: e.target.value })} style={inp} />
       </Campo>
-      <Campo label="Presupuesto aprobado">
+      <Campo label="¿Cuánto tienes para gastar?">
         <input type="number" inputMode="decimal" value={proyecto.presupuesto_aprobado}
           onChange={e => onChange({ presupuesto_aprobado: Number(e.target.value) })} style={inp} />
       </Campo>
-      <Campo label="Reserva de contingencia (%)" ayuda="No se puede comprometer.">
+      <Campo label="Guardar para imprevistos (%)" ayuda="Este dinero se aparta y no cuenta como disponible.">
         <input type="number" min={0} max={50} value={Math.round(proyecto.reserva_pct * 100)}
           onChange={e => onChange({ reserva_pct: Math.min(50, Math.max(0, Number(e.target.value))) / 100 })} style={inp} />
       </Campo>
