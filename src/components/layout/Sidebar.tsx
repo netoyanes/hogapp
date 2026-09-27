@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck, Home, Radio, Landmark, Users, Flower2, Megaphone, Banknote, HardHat } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck, Home, Radio, Landmark, Users, Flower2, Megaphone, Banknote, HardHat, Piano } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
 import { STR } from '../../lib/strings'
@@ -23,6 +23,7 @@ export const NAV_ITEMS = [
   { id: 'nomina',     label: STR.nav.nomina,     icon: Users,           masterOnly: true },
   { id: 'aperturas',  label: STR.nav.aperturas,  icon: HardHat,         masterOnly: true },
   { id: 'wellness',   label: STR.nav.wellness,   icon: Flower2 },
+  { id: 'pianobar',   label: STR.nav.pianobar,   icon: Piano },
   { id: 'pr',         label: STR.nav.pr,         icon: Megaphone },
   { id: 'prcom',      label: STR.nav.prcom,      icon: Banknote },
   { id: 'tasks',      label: STR.nav.tasks,      icon: CheckSquare,     shortcut: '2' },

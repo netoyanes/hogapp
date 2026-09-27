@@ -10,6 +10,8 @@ import { SocialPulse } from './screens/SocialPulse'
 import { Nomina } from './screens/Nomina'
 import { Wellness } from './screens/Wellness'
 import { WellnessPortal } from './screens/WellnessPortal'
+import { PianoLetras } from './screens/PianoLetras'
+import { PianoBar } from './screens/PianoBar'
 import { Finanzas } from './screens/Finanzas'
 import { Aperturas } from './screens/Aperturas'
 import { RevenueUpload } from './screens/RevenueUpload'
@@ -69,6 +71,9 @@ const _reservar = _params.get('reservar')
 const _mireserva = _params.get('mireserva')
 // ?wellness=CODIGO — portal público de clases (alumnos, sin cuenta HOG APP)
 const _wellness = _params.get('wellness')
+// ?letras=CODIGO (o /letras/CODIGO, lo que va impreso en el QR de la mesa) —
+// portal público de piano nights: la letra de lo que suena, sin cuenta
+const _letras = _params.get('letras') ?? window.location.pathname.match(/^\/letras\/([\w-]+)\/?$/i)?.[1] ?? null
 // ?casas=1 — selector de casas: donde aterriza el link de un PR sin venue
 const _casas = _params.get('casas')
 // ?task=<id>[&project=<id>] — deep-link a una tarea (desde la vista pública,
@@ -95,6 +100,8 @@ export default function App() {
   // Portal wellness público (también es el regreso del checkout de Blumon:
   // el alumno aterriza aquí y ve su clase ya pagada)
   if (_wellness) return <WellnessPortal code={_wellness} />
+  // Piano nights — letras en vivo para quien escanea el QR de la mesa
+  if (_letras) return <PianoLetras code={_letras} />
   // Selector de casas — aterrizaje del link de un PR que no apunta a un venue
   if (_casas) return <CasasPicker />
   // Shared task view — completely isolated, no app shell
@@ -330,6 +337,11 @@ export default function App() {
         return role === 'MASTER' || userApps?.has('wellness')
           ? <Wellness userId={profile?.id} isManager={role === 'MASTER' || caps.has('wellness_admin')} />
           : <EmptyState icon="🔒" title="Sin acceso" description="Wellness se asigna por usuario en Usuarios." />
+      case 'pianobar':
+        // Piano nights: el músico y el staff del venue, con la app 'pianobar'
+        return role === 'MASTER' || userApps?.has('pianobar')
+          ? <PianoBar />
+          : <EmptyState icon="🔒" title="Sin acceso" description="Piano Nights se asigna por usuario en Usuarios." />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':

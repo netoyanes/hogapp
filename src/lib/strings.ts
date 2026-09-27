@@ -35,6 +35,7 @@ export const STR = {
     pr: 'Red PR',
     prcom: 'Comisiones PR',
     wellness: 'Wellness',
+    pianobar: 'Piano Nights',
     tasks: 'Tareas',
     crm: 'Comercial',
     reservations: 'Reservas',
