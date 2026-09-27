@@ -192,7 +192,7 @@ create trigger piano_setlist_touch after insert or update or delete on piano_set
   for each row execute function fn_piano_touch_noche();
 
 create or replace function public.fn_piano_noche_updated()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin new.updated_at := now(); return new; end $$;
 
 drop trigger if exists piano_noches_updated on piano_noches;
@@ -212,5 +212,14 @@ end $$;
 drop trigger if exists piano_canciones_touch on piano_canciones;
 create trigger piano_canciones_touch after update on piano_canciones
   for each row execute function fn_piano_touch_cancion();
+
+-- Supabase da EXECUTE a anon en cada función nueva (default privileges), y el
+-- revoke de public de arriba no lo quita. El público solo debe ver
+-- fn_piano_live; lo demás, cerrado explícitamente.
+revoke execute on function public.fn_can_piano() from anon;
+revoke execute on function public.fn_piano_sonar(uuid, uuid) from anon;
+revoke execute on function public.fn_piano_touch_noche() from public, anon, authenticated;
+revoke execute on function public.fn_piano_touch_cancion() from public, anon, authenticated;
+revoke execute on function public.fn_piano_noche_updated() from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
