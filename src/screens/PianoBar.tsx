@@ -20,7 +20,7 @@ import { APRICOT, MANO, MONO, APRICOT_LOGO, APRICOT_FONTS_HREF } from '../lib/ap
 
 interface Bu { id: string; code: string; name: string }
 interface Cancion {
-  id: string; titulo: string; artista: string | null; letra: string
+  id: string; titulo: string; artista: string | null; autores: string | null; letra: string
   tono: string | null; notas: string | null; activo: boolean
 }
 interface Noche {
@@ -440,7 +440,7 @@ function CancionForm({ inicial, onClose, onGuardada }: {
     if (!f.titulo?.trim()) { showToast('La canción necesita título', 'error'); return }
     setGuardando(true)
     const row = {
-      titulo: f.titulo.trim(), artista: f.artista?.trim() || null, letra: f.letra ?? '',
+      titulo: f.titulo.trim(), artista: f.artista?.trim() || null, autores: f.autores?.trim() || null, letra: f.letra ?? '',
       tono: f.tono?.trim() || null, notas: f.notas?.trim() || null, activo: f.activo ?? true,
     }
     const { data: u } = await supabase.auth.getUser()
@@ -482,6 +482,10 @@ function CancionForm({ inicial, onClose, onGuardada }: {
             <label style={lbl}>Tono (solo músico)</label>
             <input value={f.tono ?? ''} onChange={e => set('tono', e.target.value)} placeholder="Am" style={{ ...inp, width: '100%' }} />
           </div>
+        </div>
+        <div>
+          <label style={lbl}>Letra y música (autores)</label>
+          <input value={f.autores ?? ''} onChange={e => set('autores', e.target.value)} placeholder="Consuelo Velázquez" style={{ ...inp, width: '100%' }} />
         </div>
         <div>
           <label style={lbl}>Letra — deja una línea en blanco entre estrofas</label>

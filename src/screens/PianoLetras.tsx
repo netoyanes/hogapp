@@ -16,7 +16,7 @@ import { PianoArt } from '../components/pianobar/PianoArt'
 // Habla en Apricot, no en HOG: crema, carbón, Mynerve — el flyer hecho página.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface Cancion { id: string; titulo: string; artista: string | null; letra: string }
+interface Cancion { id: string; titulo: string; artista: string | null; autores: string | null; letra: string }
 interface Live {
   venue: string; code: string; en_vivo: boolean
   proxima?: { fecha: string; titulo: string } | null
@@ -203,6 +203,9 @@ export function PianoLetras({ code }: { code: string }) {
               </h2>
               {enPantalla.artista && (
                 <p style={{ fontFamily: MONO, fontSize: 14, margin: '8px 0 0', textTransform: 'uppercase' }}>{enPantalla.artista}</p>
+              )}
+              {enPantalla.autores && (
+                <p style={{ fontFamily: MONO, fontSize: 11.5, margin: '6px 0 0', opacity: 0.75 }}>Letra y música: {enPantalla.autores}</p>
               )}
 
               <div style={{ height: 2, background: APRICOT.carbon, margin: '20px 0 24px' }} />

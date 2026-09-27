@@ -35,6 +35,9 @@ create table if not exists piano_canciones (
   titulo     text not null,
   artista    text,
   letra      text not null default '',
+  -- Quién la escribió (letra y música), distinto del intérprete. Se muestra
+  -- en el portal: el crédito va siempre con la letra.
+  autores    text,
   -- Tono y notas son para el músico; el público no los ve.
   tono       text,
   notas      text,
@@ -75,6 +78,8 @@ create table if not exists piano_setlist (
 );
 
 create index if not exists piano_setlist_noche on piano_setlist (noche_id, orden);
+
+alter table piano_canciones add column if not exists autores text;
 
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'piano_noches_actual_fk') then
@@ -158,11 +163,11 @@ begin
     'en_vivo', true,
     'noche',   jsonb_build_object('id', v_noche.id, 'fecha', v_noche.fecha, 'titulo', v_noche.titulo),
     'rev',     extract(epoch from v_noche.updated_at),
-    'actual',  (select jsonb_build_object('id', s.id, 'titulo', c.titulo, 'artista', c.artista, 'letra', c.letra)
+    'actual',  (select jsonb_build_object('id', s.id, 'titulo', c.titulo, 'artista', c.artista, 'autores', c.autores, 'letra', c.letra)
                   from piano_setlist s join piano_canciones c on c.id = s.cancion_id
                  where s.id = v_noche.actual_id),
     'tocadas', coalesce((select jsonb_agg(jsonb_build_object(
-                   'id', s.id, 'titulo', c.titulo, 'artista', c.artista, 'letra', c.letra
+                   'id', s.id, 'titulo', c.titulo, 'artista', c.artista, 'autores', c.autores, 'letra', c.letra
                  ) order by s.tocada_at desc)
                   from piano_setlist s join piano_canciones c on c.id = s.cancion_id
                  where s.noche_id = v_noche.id and s.tocada_at is not null
