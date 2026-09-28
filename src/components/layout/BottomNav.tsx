@@ -1,4 +1,4 @@
-import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, CalendarDays, ClipboardCheck, Camera, BarChart3, FileText } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, UserCircle, Shell, Handshake, CalendarDays, ClipboardCheck, Camera, BarChart3, FileText, Piano } from 'lucide-react'
 import { STR } from '../../lib/strings'
 
 interface Props {
@@ -47,6 +47,7 @@ const SLOT_CATALOG = [
   { id: 'events',    label: STR.nav.events,      icon: CalendarDays },
   { id: 'revenue',   label: STR.nav.revenue,     icon: BarChart3 },
   { id: 'reports',   label: STR.nav.reports,     icon: FileText },
+  { id: 'pianobar',  label: 'Piano',             icon: Piano },
 ]
 
 export function BottomNav({ activeView, onNavigate, userRole, userApps }: Props) {
