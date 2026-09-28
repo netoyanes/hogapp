@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { SegmentedControl, StatusBadgeV2, EmptyStateV2, Sheet, showToast } from '../components/v2'
 import { APRICOT, MANO, MONO, APRICOT_LOGO, APRICOT_FONTS_HREF } from '../lib/apricotBrand'
+import { Peticiones } from '../components/pianobar/Peticiones'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PIANO NIGHTS · control de la noche
@@ -308,6 +309,9 @@ function NocheTab({ bu, noches, noche, setNocheId, items, canciones, onChange, o
           )}
         </div>
       </div>
+
+      {/* Peticiones del público (QR de la mesa) */}
+      <Peticiones nocheId={noche.id} siguienteOrden={items.reduce((m, i) => Math.max(m, i.orden), 0) + 1} onChange={onChange} />
 
       {/* Setlist */}
       <div>
