@@ -5,6 +5,7 @@ import {
   APRICOT_FONTS_HREF, APRICOT_LOGO,
 } from '../lib/apricotBrand'
 import { PianoArt } from '../components/pianobar/PianoArt'
+import { PedirCancion } from '../components/pianobar/Pedir'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PIANO NIGHTS · portal público de letras (?letras=CODIGO, sin sesión)
@@ -16,7 +17,7 @@ import { PianoArt } from '../components/pianobar/PianoArt'
 // Habla en Apricot, no en HOG: crema, carbón, Mynerve — el flyer hecho página.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface Cancion { id: string; titulo: string; artista: string | null; autores: string | null; letra: string }
+interface Cancion { id: string; titulo: string; artista: string | null; autores: string | null; letra: string; pedida_por?: string | null }
 interface Live {
   venue: string; code: string; en_vivo: boolean
   proxima?: { fecha: string; titulo: string } | null
@@ -168,11 +169,13 @@ export function PianoLetras({ code }: { code: string }) {
                   ? `La próxima noche de piano es el ${fechaLarga(live.proxima.fecha).toLowerCase()}. Aquí te esperamos, con la copa servida.`
                   : 'Cuando haya piano en vivo, este mismo QR te va a mostrar las letras para cantar.'}
               />
+              <PedirCancion code={code} enVivo={false} />
             </>
           ) : !enPantalla ? (
             <>
               <PianoArt style={{ maxWidth: 440, margin: '4px auto 26px' }} />
               <Aviso titulo="el piano está por empezar" texto="Deja el teléfono a la mano: en cuanto suene la primera canción, aquí aparece la letra." />
+              <PedirCancion code={code} enVivo={false} />
             </>
           ) : (
             <>
@@ -206,6 +209,9 @@ export function PianoLetras({ code }: { code: string }) {
               )}
               {enPantalla.autores && (
                 <p style={{ fontFamily: MONO, fontSize: 11.5, margin: '6px 0 0', opacity: 0.75 }}>Letra y música: {enPantalla.autores}</p>
+              )}
+              {!viendoPasada && enPantalla.pedida_por && (
+                <p style={{ fontFamily: MANO, fontSize: 24, margin: '10px 0 0', color: '#000' }}>la pidió {enPantalla.pedida_por}</p>
               )}
 
               <div style={{ height: 2, background: APRICOT.carbon, margin: '20px 0 24px' }} />
@@ -247,6 +253,7 @@ export function PianoLetras({ code }: { code: string }) {
                   )}
                 </section>
               )}
+              <PedirCancion code={code} enVivo />
             </>
           )}
         </main>
