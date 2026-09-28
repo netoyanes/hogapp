@@ -14,6 +14,7 @@ import { PianoLetras } from './screens/PianoLetras'
 import { PianoBar } from './screens/PianoBar'
 import { Finanzas } from './screens/Finanzas'
 import { Aperturas } from './screens/Aperturas'
+import { RadarBTC } from './screens/RadarBTC'
 import { RevenueUpload } from './screens/RevenueUpload'
 import { BUOnboardingForm } from './screens/BUOnboardingForm'
 import { AppLayout } from './components/layout/AppLayout'
@@ -374,6 +375,13 @@ export default function App() {
         return role === 'MASTER'
           ? <Aperturas />
           : <EmptyState icon="🔒" title="Solo Master" description="Aperturas es exclusivo de dirección." />
+      case 'radar':
+        // Radar BTC · USD · MXN: herramienta personal del Master. Es una página
+        // estática en un iframe; no hay tablas ni RLS que la respalden, así que
+        // esta puerta es la única.
+        return role === 'MASTER'
+          ? <RadarBTC />
+          : <EmptyState icon="🔒" title="Solo Master" description="El Radar BTC es una herramienta personal de dirección." />
       case 'objectives':
         // Objetivos es exclusivo del Master (dirección)
         return role === 'MASTER'

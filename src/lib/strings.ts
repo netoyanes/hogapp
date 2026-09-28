@@ -32,6 +32,7 @@ export const STR = {
     finanzas: 'Finanzas',
     nomina: 'Nómina',
     aperturas: 'Aperturas',
+    radar: 'Radar BTC',
     pr: 'Red PR',
     prcom: 'Comisiones PR',
     wellness: 'Wellness',
