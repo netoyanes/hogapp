@@ -72,4 +72,4 @@ export default defineConfig([
 ])
 ```
 
-# Deploy trigger: v1.14.0 role-preview
+# Deploy trigger: v2.112.0 obras
