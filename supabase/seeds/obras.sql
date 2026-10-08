@@ -176,9 +176,13 @@ begin
     return new;
   end if;
   if tg_op = 'DELETE' then
-    insert into obra_log (obra_id, tarea_id, miembro_id, usuario_id, actor, accion, antes, tarea_titulo)
-    values (old.obra_id, null, a.miembro_id, a.usuario_id, a.actor, 'borrar',
-            jsonb_build_object('titulo', old.titulo), old.titulo);
+    -- Si la obra entera se está borrando (cascada), ya no hay a qué colgar el
+    -- renglón: la bitácora se va con la obra.
+    if exists (select 1 from obras where id = old.obra_id) then
+      insert into obra_log (obra_id, tarea_id, miembro_id, usuario_id, actor, accion, antes, tarea_titulo)
+      values (old.obra_id, null, a.miembro_id, a.usuario_id, a.actor, 'borrar',
+              jsonb_build_object('titulo', old.titulo), old.titulo);
+    end if;
     return old;
   end if;
   -- UPDATE

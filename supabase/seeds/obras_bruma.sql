@@ -82,5 +82,5 @@ begin
     (v_obra, g, 6, 'Fumigación preventiva', 'Una semana antes de reabrir.', true, 'Servicio Técnico de Plagas'),
     (v_obra, g, 7, 'Recorrido final con el chef y entrega con checklist firmado', null, false, null);
 
-  raise notice 'Obra BRUMA1 sembrada: 7 grupos, 29 tareas. Link: /?obra=BRUMA1';
+  raise notice 'Obra BRUMA1 sembrada: 7 grupos, 28 tareas. Link: /?obra=BRUMA1';
 end $$;
