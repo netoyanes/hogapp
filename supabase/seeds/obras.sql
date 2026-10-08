@@ -18,16 +18,15 @@
 -- el después de cada campo. Los RPCs del portal solo dicen quién es el actor
 -- (set_config) antes de escribir; si nadie lo dice, el actor es auth.uid().
 --
--- Acceso interno: Master, o la app 'obras' asignada en Usuarios.
+-- Acceso interno: EXCLUSIVO del Master. Nadie más en HOG APP ve las obras.
 -- Ejecutar en el SQL Editor de Supabase. Idempotente.
--- Requiere: hog_role(), touch_updated_at(), user_apps, business_units, profiles.
+-- Requiere: hog_role(), touch_updated_at(), business_units, profiles.
 -- ═════════════════════════════════════════════════════════════════════════════
 
 -- ── Acceso interno ───────────────────────────────────────────────────────────
 create or replace function public.fn_can_obras()
 returns boolean language sql stable security definer set search_path = public as $$
   select hog_role() = 'MASTER'
-      or exists (select 1 from user_apps where user_id = auth.uid() and app = 'obras')
 $$;
 revoke all on function public.fn_can_obras() from public;
 grant execute on function public.fn_can_obras() to authenticated;

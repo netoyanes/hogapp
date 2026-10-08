@@ -22,7 +22,7 @@ export const NAV_ITEMS = [
   { id: 'finanzas',   label: STR.nav.finanzas,   icon: Landmark },
   { id: 'nomina',     label: STR.nav.nomina,     icon: Users,           masterOnly: true },
   { id: 'aperturas',  label: STR.nav.aperturas,  icon: HardHat,         masterOnly: true },
-  { id: 'obras',      label: STR.nav.obras,      icon: Hammer },
+  { id: 'obras',      label: STR.nav.obras,      icon: Hammer,          masterOnly: true },
   { id: 'wellness',   label: STR.nav.wellness,   icon: Flower2 },
   { id: 'pianobar',   label: STR.nav.pianobar,   icon: Piano },
   { id: 'pr',         label: STR.nav.pr,         icon: Megaphone },

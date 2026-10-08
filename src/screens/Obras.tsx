@@ -14,7 +14,7 @@ import { SegmentedControl, StatusBadgeV2, EmptyStateV2, Sheet, showToast } from 
 // hicieron, firmado con su nombre — la misma bitácora que escribe el trigger
 // de obra_tareas, sin importar de qué lado vino el cambio.
 //
-// Acceso: Master, o la app 'obras' asignada en Usuarios.
+// Acceso: EXCLUSIVO del Master (la policy fn_can_obras lo vuelve a verificar).
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Bu { id: string; code: string; name: string }

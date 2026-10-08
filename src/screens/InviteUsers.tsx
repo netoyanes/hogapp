@@ -56,7 +56,6 @@ const APP_CATALOG: { id: string; label: string }[] = [
   { id: 'activity',   label: 'Actividad' },
   { id: 'templates',  label: 'Plantillas' },
   { id: 'pianobar',   label: 'Piano Nights' },
-  { id: 'obras',      label: 'Obras' },
 ]
 
 interface Invitation {

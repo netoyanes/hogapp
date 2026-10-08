@@ -350,11 +350,11 @@ export default function App() {
           ? <PianoBar />
           : <EmptyState icon="🔒" title="Sin acceso" description="Piano Nights se asigna por usuario en Usuarios." />
       case 'obras':
-        // Remodelaciones con gente externa: Master, o la app 'obras' asignada en
-        // Usuarios. Las policies (fn_can_obras) son quienes de verdad limitan.
-        return role === 'MASTER' || userApps?.has('obras')
+        // Remodelaciones con gente externa: EXCLUSIVO del Master. La policy
+        // (fn_can_obras) lo vuelve a verificar en la base.
+        return role === 'MASTER'
           ? <Obras />
-          : <EmptyState icon="🔒" title="Sin acceso" description="Obras se asigna por usuario en Usuarios." />
+          : <EmptyState icon="🔒" title="Solo Master" description="Obras es exclusivo de dirección." />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':

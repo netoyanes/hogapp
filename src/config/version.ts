@@ -17,7 +17,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Quien entra se identifica con su celular y un PIN de 4 a 6 números (la primera vez da su nombre). A partir de ahí todo queda firmado: quién palomeó, quién editó qué campo (antes → después), quién agregó una tarea, quién reportó. La bitácora la escribe un trigger en la base, no la app",
       "Cada tarea lleva cuándo se hace, quién la ejecuta, nota, si requiere dinero y costo estimado vs real. La obra suma lo estimado y lo gastado contra su presupuesto",
       "Dentro de HOG APP, la pantalla Obras: crear la obra, armar grupos y tareas, compartir link y QR (con mensaje listo para WhatsApp), ver el equipo (quién entró y cuándo, desactivar, reponer PIN) y la bitácora completa filtrable por persona",
-      "Acceso: Master, o la app 'obras' asignada en Usuarios. Requiere obras.sql. Para arrancar con el plan de Bruma: obras_bruma.sql (código BRUMA1)",
+      "Dentro de HOG APP, Obras es exclusivo del Master. Requiere obras.sql. Para arrancar con el plan de Bruma: obras_bruma.sql (código BRUMA1)",
     ]
   },
   {
