@@ -12,6 +12,8 @@ import { Wellness } from './screens/Wellness'
 import { WellnessPortal } from './screens/WellnessPortal'
 import { PianoLetras } from './screens/PianoLetras'
 import { PianoBar } from './screens/PianoBar'
+import { Obras } from './screens/Obras'
+import { ObraPortal } from './screens/ObraPortal'
 import { Finanzas } from './screens/Finanzas'
 import { Aperturas } from './screens/Aperturas'
 import { RevenueUpload } from './screens/RevenueUpload'
@@ -74,6 +76,9 @@ const _wellness = _params.get('wellness')
 // ?letras=CODIGO (o /letras/CODIGO, lo que va impreso en el QR de la mesa) —
 // portal público de piano nights: la letra de lo que suena, sin cuenta
 const _letras = _params.get('letras') ?? window.location.pathname.match(/^\/letras\/([\w-]+)\/?$/i)?.[1] ?? null
+// ?obra=CODIGO — portal de avance de obra para gente externa (albañiles,
+// electricistas, proveedores) que entra con celular + PIN, sin cuenta HOG APP
+const _obra = _params.get('obra')
 // ?casas=1 — selector de casas: donde aterriza el link de un PR sin venue
 const _casas = _params.get('casas')
 // ?task=<id>[&project=<id>] — deep-link a una tarea (desde la vista pública,
@@ -102,6 +107,8 @@ export default function App() {
   if (_wellness) return <WellnessPortal code={_wellness} />
   // Piano nights — letras en vivo para quien escanea el QR de la mesa
   if (_letras) return <PianoLetras code={_letras} />
+  // Avance de obra — hoja de trabajo para la gente externa de una remodelación
+  if (_obra) return <ObraPortal code={_obra} />
   // Selector de casas — aterrizaje del link de un PR que no apunta a un venue
   if (_casas) return <CasasPicker />
   // Shared task view — completely isolated, no app shell
@@ -342,6 +349,12 @@ export default function App() {
         return role === 'MASTER' || userApps?.has('pianobar')
           ? <PianoBar />
           : <EmptyState icon="🔒" title="Sin acceso" description="Piano Nights se asigna por usuario en Usuarios." />
+      case 'obras':
+        // Remodelaciones con gente externa: Master, o la app 'obras' asignada en
+        // Usuarios. Las policies (fn_can_obras) son quienes de verdad limitan.
+        return role === 'MASTER' || userApps?.has('obras')
+          ? <Obras />
+          : <EmptyState icon="🔒" title="Sin acceso" description="Obras se asigna por usuario en Usuarios." />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':

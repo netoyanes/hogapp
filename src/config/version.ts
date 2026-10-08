@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.111.0"
+export const APP_VERSION = "2.112.0"
 
 export type ChangelogEntry = {
   version: string
@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.112.0",
+    date: "2026-10-08",
+    type: "MINOR",
+    changes: [
+      "OBRAS — avance diario de remodelaciones con gente externa. Cada obra tiene un link público (/?obra=CODIGO) que se abre en el celular: una columna, letras grandes, un check por tarea y el reporte del día. Sin cuenta de HOG APP",
+      "Quien entra se identifica con su celular y un PIN de 4 a 6 números (la primera vez da su nombre). A partir de ahí todo queda firmado: quién palomeó, quién editó qué campo (antes → después), quién agregó una tarea, quién reportó. La bitácora la escribe un trigger en la base, no la app",
+      "Cada tarea lleva cuándo se hace, quién la ejecuta, nota, si requiere dinero y costo estimado vs real. La obra suma lo estimado y lo gastado contra su presupuesto",
+      "Dentro de HOG APP, la pantalla Obras: crear la obra, armar grupos y tareas, compartir link y QR (con mensaje listo para WhatsApp), ver el equipo (quién entró y cuándo, desactivar, reponer PIN) y la bitácora completa filtrable por persona",
+      "Acceso: Master, o la app 'obras' asignada en Usuarios. Requiere obras.sql. Para arrancar con el plan de Bruma: obras_bruma.sql (código BRUMA1)",
+    ]
+  },
   {
     version: "2.111.0",
     date: "2026-09-08",
