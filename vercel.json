@@ -13,6 +13,10 @@
       "destination": "https://ksxgxdewrwoslpnvvqnm.supabase.co/functions/v1/og-share?kind=p&code=:code"
     },
     {
+      "source": "/simon",
+      "destination": "/simon.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

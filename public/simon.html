@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#C2410C">
+<title>Huracán Simón · División Mazatlán · HOG</title>
+<meta name="description" content="Plan de emergencia de HOG Mazatlán: horario crítico, protocolo por sitio, riesgos, refugios y cómo preparar tu casa.">
+<meta property="og:title" content="Huracán Simón · Plan de emergencia HOG Mazatlán">
+<meta property="og:description" content="Todo asegurado el martes 13 a las 12:00. Horario crítico, protocolo por sitio, refugios y lista para tu casa.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: una columna de aviso de protección civil — banda de estado, línea de tiempo a escala por hora, equipo, protocolo por sitio, técnica contra el agua, riesgos, refugios y la lista para casa al final. */
+:root{
+  --bg:#F3F5F7; --paper:#FFFFFF; --ink:#14202B; --ink2:#46566A; --line:#D3DAE2;
+  --alert:#C2410C; --alert-soft:#FBE7DC;
+  --storm:#B7791F; --storm-soft:#FBF0D8;
+  --hurr:#B42318; --hurr-soft:#FCE4E2;
+  --prep:#1D5F8C; --prep-soft:#DDEBF5;
+  --calm:#4C6B57; --calm-soft:#E2EDE5;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E151C; --paper:#16202A; --ink:#E7EDF3; --ink2:#9DAEC0; --line:#2A3846;
+  --alert:#F08A4B; --alert-soft:#3A2418;
+  --storm:#E0B256; --storm-soft:#3A2F15;
+  --hurr:#F2766B; --hurr-soft:#3D1A17;
+  --prep:#6FB0DD; --prep-soft:#15303F;
+  --calm:#8DB89A; --calm-soft:#1C2D22;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E151C; --paper:#16202A; --ink:#E7EDF3; --ink2:#9DAEC0; --line:#2A3846;
+  --alert:#F08A4B; --alert-soft:#3A2418;
+  --storm:#E0B256; --storm-soft:#3A2F15;
+  --hurr:#F2766B; --hurr-soft:#3D1A17;
+  --prep:#6FB0DD; --prep-soft:#15303F;
+  --calm:#8DB89A; --calm-soft:#1C2D22;
+  color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55}
+.wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:0 64px}
+a{color:var(--prep)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--alert);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:.005em}
+h2{font-size:30px;line-height:1.05;font-weight:800;text-transform:uppercase}
+h3{font-size:21px;line-height:1.15;font-weight:700}
+p{margin:0}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2)}
+
+/* Banda de estado */
+.band{background:var(--alert);color:#fff;padding-block:10px;padding-inline:16px}
+.band .in{max-width:760px;margin:0 auto;display:flex;gap:8px 16px;flex-wrap:wrap;align-items:baseline;justify-content:space-between}
+.band b{font-family:var(--display);font-size:19px;letter-spacing:.06em;text-transform:uppercase}
+.band span{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;opacity:.92}
+
+/* Encabezado */
+.hero{display:grid;gap:14px;padding-block:28px 8px}
+.hero h1{font-size:clamp(48px,13vw,84px);line-height:.9;font-weight:800;text-transform:uppercase}
+.hero h1 em{font-style:normal;color:var(--alert)}
+.lede{font-size:18px;max-width:60ch}
+.lede strong{font-weight:700}
+
+/* Tres pasos */
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:6px}
+@media (max-width:620px){.steps{grid-template-columns:1fr}}
+.step{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:6px;align-content:start;min-width:0}
+.step .when{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.04em}
+.step.now{border-color:var(--alert);box-shadow:inset 0 0 0 1px var(--alert)}
+.step.now .when,.step.limit .when{color:var(--alert)}
+.step p{font-size:14.5px;color:var(--ink2)}
+.step h3{font-size:22px}
+
+section{padding-block:34px 0;display:grid;gap:14px}
+.sec-head{display:grid;gap:4px;border-top:3px solid var(--ink);padding-top:10px}
+.lead2{font-size:16px;max-width:62ch}
+
+/* Línea de tiempo a escala */
+.scale{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px 14px 12px;overflow-x:auto}
+.track{position:relative;min-width:580px;height:128px}
+.day{position:absolute;top:0;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink2);border-left:1px solid var(--line);padding-left:4px;height:108px}
+.bar{position:absolute;top:24px;height:34px;border-radius:4px;display:flex;align-items:center;padding:0 6px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap;overflow:hidden}
+.bar.prep{background:var(--prep-soft);color:var(--prep);border:1px solid var(--prep)}
+.bar.storm{background:var(--storm-soft);color:var(--storm);border:1px solid var(--storm)}
+.bar.home{background:var(--calm-soft);color:var(--calm);border:1px solid var(--calm)}
+.bar.peak{background:var(--hurr-soft);color:var(--hurr);border:1px solid var(--hurr);top:62px;height:22px;justify-content:center}
+.mark{position:absolute;top:18px;width:0;height:72px;border-left:2px dashed var(--alert)}
+.mark-l{position:absolute;font-family:var(--mono);font-size:10.5px;white-space:nowrap;transform:translateX(-50%)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--ink2);margin-top:8px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px;border:1px solid}
+
+.timeline{display:grid;background:var(--paper);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tl{display:grid;grid-template-columns:118px 1fr;gap:12px;padding:12px 14px 12px 18px;border-top:1px solid var(--line);position:relative}
+.tl:first-child{border-top:0}
+.tl::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--sev,var(--line))}
+.tl .t{font-family:var(--mono);font-size:12.5px;font-weight:700;line-height:1.35;font-variant-numeric:tabular-nums}
+.tl .t small{display:block;font-weight:500;color:var(--ink2)}
+.tl .d{min-width:0}
+.tl .d b{display:block;font-size:15.5px}
+.tl .d p{font-size:14px;color:var(--ink2)}
+.tl.prep{--sev:var(--prep)} .tl.storm{--sev:var(--storm)} .tl.peak{--sev:var(--hurr)} .tl.home{--sev:var(--calm)} .tl.limit{--sev:var(--alert)}
+.tl.peak .t,.tl.limit .t{color:var(--alert)}
+@media (max-width:460px){.tl{grid-template-columns:1fr;gap:4px}}
+
+/* Equipo */
+.team{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:620px){.team{grid-template-columns:1fr}}
+.who{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:8px;align-content:start;min-width:0}
+.who.lead{border-color:var(--ink)}
+.who .role{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+.who p{font-size:14.5px}
+.who ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14.5px}
+
+/* Protocolo por sitio */
+.site{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:10px}
+.site-head{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;justify-content:space-between}
+.site-head .who-in{font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.risk{font-size:14.5px;border-left:3px solid var(--alert);padding-left:10px}
+.risk b{display:block}
+.site h4{margin:4px 0 0;font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);font-weight:700}
+.site ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14.5px}
+
+/* Técnica */
+.how{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+@media (max-width:620px){.how{grid-template-columns:1fr}}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:8px;align-content:start;min-width:0}
+.card ol,.card ul{margin:0;padding-left:20px;display:grid;gap:5px;font-size:14.5px}
+.card p{font-size:14.5px;color:var(--ink2)}
+.figure{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px;overflow-x:auto}
+.figure svg{display:block;width:100%;min-width:420px;height:auto}
+.figure figcaption{font-size:13px;color:var(--ink2);margin-top:6px}
+figure{margin:0}
+
+/* Riesgos */
+.risks{display:grid;gap:10px}
+.r{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:start}
+.chip{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:4px;white-space:nowrap;border:1px solid}
+.chip.alta{color:var(--hurr);background:var(--hurr-soft);border-color:var(--hurr)}
+.chip.media{color:var(--storm);background:var(--storm-soft);border-color:var(--storm)}
+.r h3{font-size:20px;align-self:center}
+.r p,.r ul{grid-column:1/-1;font-size:14.5px;color:var(--ink2);margin:0}
+.r ul{padding-left:18px;display:grid;gap:3px}
+
+.tablebox{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;min-width:480px;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-top:1px solid var(--line);vertical-align:top}
+thead th{border-top:0;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);font-weight:500}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.sem{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;border:1px solid;white-space:nowrap}
+.sem.rojo{color:var(--hurr);background:var(--hurr-soft);border-color:var(--hurr)}
+.sem.naranja{color:var(--storm);background:var(--storm-soft);border-color:var(--storm)}
+.probs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.prob{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:4px}
+.prob b{font-family:var(--display);font-size:34px;line-height:1;font-weight:800}
+.prob span{font-size:13px;color:var(--ink2)}
+.note{font-size:13px;color:var(--ink2)}
+
+/* Refugios */
+.sos{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;background:var(--hurr);color:#fff;border-radius:10px;padding:14px 16px}
+.sos .num{font-family:var(--display);font-size:56px;font-weight:800;line-height:.9}
+.sos p{font-size:14.5px}
+.shelters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));background:var(--paper);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+@media (max-width:560px){.shelters{grid-template-columns:1fr}}
+.shelters div{padding:10px 14px;border-top:1px solid var(--line);font-size:14.5px;min-width:0}
+.shelters small{display:block;color:var(--ink2);font-size:12.5px}
+.go{background:var(--alert-soft);border:1px solid var(--alert);border-radius:10px;padding:14px;display:grid;gap:8px}
+.go ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14.5px}
+
+/* Lista para casa */
+.checks{display:grid;gap:14px}
+.group{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:8px}
+.group h3{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.group h3 .count{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--ink2)}
+.item{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:start;padding:6px 0;border-top:1px solid var(--line)}
+.item:first-of-type{border-top:0}
+.item input{width:20px;height:20px;margin:2px 0 0;accent-color:var(--alert);cursor:pointer}
+.item label{cursor:pointer;font-size:15px;min-width:0}
+.item label small{display:block;color:var(--ink2);font-size:13px}
+.item input:checked+label{color:var(--ink2);text-decoration:line-through}
+.calc{display:grid;grid-template-columns:auto auto 1fr;gap:8px 12px;align-items:center;background:var(--prep-soft);border:1px solid var(--prep);border-radius:10px;padding:12px 14px}
+.calc label{font-size:14px;font-weight:600}
+.calc input{width:64px;font:inherit;font-family:var(--mono);padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)}
+.calc output{font-size:14px}
+@media (max-width:460px){.calc{grid-template-columns:auto 1fr}.calc output{grid-column:1/-1}.probs{grid-template-columns:1fr}}
+
+footer{padding-block:36px 0;display:grid;gap:8px;font-size:13px;color:var(--ink2);border-top:1px solid var(--line);margin-top:36px}
+footer ul{margin:0;padding-left:18px;display:grid;gap:3px}
+@media (prefers-reduced-motion:no-preference){.step.now{animation:pulse 2.4s ease-in-out 2}}
+@keyframes pulse{50%{box-shadow:inset 0 0 0 3px var(--alert)}}
+</style>
+</head>
+<body>
+<div class="band"><div class="in"><b>Vigilancia de huracán · Mazatlán</b><span>Aviso 20 del NHC · lunes 12 de octubre</span></div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">HOG · División Mazatlán · Plan de emergencia</div>
+    <h1>Huracán <em>Simón</em></h1>
+    <p class="lede">Con el aviso 20 del NHC, Simón pasaría como <strong>huracán categoría 1 a unos 26 km al noroeste del Centro el miércoles 14, entre las 9 y las 11 de la noche</strong>. La hora es incierta porque podría quedarse casi detenido. <strong>Todo tiene que quedar asegurado el martes 13 a las 12:00.</strong></p>
+    <div class="steps">
+      <div class="step now"><div class="when">HOY LUN 12 · 10:00</div><h3>Compras y costales</h3><p>Material para los tres sitios, costales llenos y compras personales.</p></div>
+      <div class="step"><div class="when">MAR 13 · EN LA MAÑANA</div><h3>Ejecutar el protocolo</h3><p>Cada responsable asegura su sitio con la lista de abajo.</p></div>
+      <div class="step limit"><div class="when">MAR 13 · 12:00 LÍMITE</div><h3>Cierre con fotos</h3><p>Lista de cierre al grupo. Después, cada quien a resguardarse.</p></div>
+    </div>
+  </header>
+
+  <section id="cuando">
+    <div class="sec-head"><div class="eyebrow">Horario crítico</div><h2>Cuándo pasa qué</h2></div>
+    <div class="scale" aria-label="Línea de tiempo a escala del lunes 12 al jueves 15">
+      <div class="track" id="track"></div>
+      <div class="legend">
+        <span><i style="background:var(--prep-soft);border-color:var(--prep)"></i>Preparar y asegurar</span>
+        <span><i style="background:var(--calm-soft);border-color:var(--calm)"></i>Resguardo</span>
+        <span><i style="background:var(--storm-soft);border-color:var(--storm)"></i>Viento de 63 km/h o más en el Centro</span>
+        <span><i style="background:var(--hurr-soft);border-color:var(--hurr)"></i>Paso del centro del huracán</span>
+      </div>
+    </div>
+    <div class="timeline">
+      <div class="tl prep"><div class="t">Lun 12<small>10:00 a 20:00</small></div><div class="d"><b>Compras y preparación</b><p>Ferretería primero: el triplay y los costales se agotan antes que la comida. Llenar costales y hacer las compras personales.</p></div></div>
+      <div class="tl prep"><div class="t">Mar 13<small>desde temprano</small></div><div class="d"><b>Ejecutar el protocolo en los tres sitios</b><p>Barreras en puertas, coladeras tapadas, ventanas fijas, equipo arriba de 1 m y envuelto.</p></div></div>
+      <div class="tl limit"><div class="t">Mar 13<small>12:00</small></div><div class="d"><b>Límite: lista de cierre con fotos al grupo</b><p>La obra de Perla se detiene a esta hora.</p></div></div>
+      <div class="tl home"><div class="t">Mar 13<small>18:00</small></div><div class="d"><b>Bruma y Apricot cerrados · decisión de refugio</b><p>Quien vaya a irse a un refugio decide a más tardar a esta hora, con luz de día. Desde el martes en la noche puede haber lluvia fuerte, oleaje y condiciones de tormenta tropical.</p></div></div>
+      <div class="tl storm"><div class="t">Mié 14<small>16:00 a 18:00</small></div><div class="d"><b>Empiezan los vientos de 63 km/h o más en el Centro</b><p>16:00 en Bruma y Apricot, 18:00 en Perla. En torres frente al mar empiezan desde las 13:00.</p></div></div>
+      <div class="tl peak"><div class="t">Mié 14<small>21:00 a 23:00</small></div><div class="d"><b>Paso del centro, a unos 26 km</b><p>Lo peor de la noche. Si hay una calma repentina, no salir: el viento regresa del lado contrario.</p></div></div>
+      <div class="tl storm"><div class="t">Jue 15<small>03:00 a 04:00</small></div><div class="d"><b>Terminan los vientos fuertes en el Centro</b><p>Seguimos resguardados hasta que Protección Civil levante la alerta.</p></div></div>
+      <div class="tl home"><div class="t">Jue 15<small>desde 10:00</small></div><div class="d"><b>Inspección y regreso</b><p>Solo con la alerta levantada. Cada responsable revisa su sitio y reporta con fotos.</p></div></div>
+    </div>
+    <p class="note">Horas de Mazatlán del aviso 20 del NHC. El NHC califica este pronóstico como de baja confianza y la trayectoria ha cambiado entre 3 y 28 km de un aviso a otro: esta página se actualiza con cada aviso.</p>
+  </section>
+
+  <section id="equipo">
+    <div class="sec-head"><div class="eyebrow">Responsables</div><h2>Quién ve qué</h2></div>
+    <div class="team">
+      <div class="who lead">
+        <div class="role">Coordinación general</div>
+        <h3>Neto</h3>
+        <p>Decide cambios de nivel, cierres y comunicación externa después de cada aviso del NHC. Se resguarda en Perla Escondida.</p>
+      </div>
+      <div class="who lead">
+        <div class="role">Gerente de la división Mazatlán</div>
+        <h3>Carlos</h3>
+        <p>Supervisa que todo se cumpla y ayuda a ejecutar en los tres sitios. Los responsables le reportan a él.</p>
+      </div>
+      <div class="who"><div class="role">Bruma</div><h3>Carlos</h3><p>Barreras, equipo elevado, cierre y reporte.</p></div>
+      <div class="who"><div class="role">Apricot</div><h3>Luis</h3><p>Ventanas, ventanal, piano, vino, cierre y reporte.</p></div>
+      <div class="who"><div class="role">Hostal Perla Escondida</div><h3>Andrés</h3><p>Obra, agua por Constitución, cuarto refugio y reporte.</p></div>
+      <div class="who"><div class="role">Soporte y ejecución</div><h3>Dani Gzz y Leo</h3><p>Compras, costales y apoyo donde Carlos indique. Avisos a clientes y reservas.</p></div>
+    </div>
+    <p class="note">Un solo grupo de WhatsApp. Cada responsable reporta el estado de su sitio a las 9:00 y a las 20:00, y en cuanto pase algo.</p>
+  </section>
+
+  <section id="protocolo">
+    <div class="sec-head"><div class="eyebrow">Martes 13 antes de las 12:00</div><h2>Protocolo por sitio</h2></div>
+
+    <div class="site">
+      <div class="site-head"><h3>Bruma · planta baja, Niños Héroes 1511</h3><span class="who-in">Carlos</span></div>
+      <p class="risk"><b>Riesgo: que Mariano Escobedo se vuelva un río.</b>La calle baja directo de Olas Altas, donde el malecón ya tiene tramos rotos. Todo lo que esté a menos de 1 m del piso está en riesgo.</p>
+      <h4>Agua</h4>
+      <ul><li>Barrera de plástico y costales de 30 cm en cada puerta, primero las que dan a Mariano Escobedo.</li><li>Sellar con plástico y cinta rejillas, ventilas y huecos de tubería a nivel de piso.</li><li>Tapar coladeras de piso y salidas de baño. Limpiar la coladera de la calle.</li></ul>
+      <h4>Equipo y refrigeración</h4>
+      <ul><li>Booth al centro del local. Subwoofer a más de 1 m en base firme. Todo el equipo arriba, desconectado y envuelto en bolsas con sílica o un trapo seco.</li><li>Mixer, agujas, laptops y discos duros a la bodega o a Apricot.</li><li>Producto refrigerado a Apricot o a hieleras. Refrigeradores vacíos, abiertos, desconectados, con compresores y cables arriba de 1 m.</li></ul>
+      <h4>Lo que puede volar o romperse</h4>
+      <ul><li>Cristalería en cajas en la bodega. Cuadros descolgados. Sillas, bancos y decoración amarrados o guardados.</li><li>Puertas con todos los seguros y apuntaladas. Cinta en cruz en vidrios; triplay si hay.</li><li>Al cerrar: pastilla general abajo, gas cerrado y fotos de todo.</li></ul>
+    </div>
+
+    <div class="site">
+      <div class="site-head"><h3>Apricot · 2º piso, Niños Héroes 1511-2</h3><span class="who-in">Luis</span></div>
+      <p class="risk"><b>Riesgo: el viento en ventanas, shades y ventanal.</b>Si una ventana se abre o un vidrio se rompe, el viento entra y empuja todo lo demás.</p>
+      <h4>Ventanas y ventanal</h4>
+      <ul><li>Ventanas flojas: cuñas de madera y un barrote de 2×4" atornillado por dentro, de marco a marco.</li><li>Shades y puerta de sombra antigua cerradas y amarradas en dos puntos con alambre o cinchos. Si una bisagra está floja, desmontar la hoja.</li><li>Ventanal: triplay de 15 mm atornillado, por fuera si se puede. Si no, cinta en cruz, cortinas cerradas y 2 m libres frente al vidrio.</li></ul>
+      <h4>Piano, TV y mobiliario</h4>
+      <ul><li>Piano junto a un muro interior, tapas cerradas, cobijas y encima plástico. Quitar el plástico en 2 o 3 días.</li><li>Nada valioso recargado contra el vidrio. Sillas y mesas al centro o en el cuarto de la tele.</li><li>TV desconectada y envuelta en el cuarto de arriba.</li></ul>
+      <h4>Refrigeración, vino y acceso</h4>
+      <ul><li>Un solo refrigerador encendido, en el cuarto de arriba, con todo lo de Apricot y lo que suba de Bruma; huecos llenos de agua congelada. Los demás vacíos y entreabiertos.</li><li>Cristalería y botellas de repisas altas en cajas en el piso.</li><li>La entrada y la escalera son compartidas con Bruma: si se inunda la planta baja no hay acceso. Nadie se queda arriba.</li></ul>
+    </div>
+
+    <div class="site">
+      <div class="site-head"><h3>Hostal Perla Escondida · Constitución, Centro</h3><span class="who-in">Andrés</span></div>
+      <p class="risk"><b>Riesgo: agua por Constitución y la coladera, material de obra y aberturas sin terminar.</b>Aquí se resguarda Neto, así que el primer piso tiene que quedar como refugio seguro. La fachada sur es un muro muy fuerte.</p>
+      <h4>Agua</h4>
+      <ul><li>Barrera de 30 cm en la puerta a Constitución y en cualquier acceso a nivel de calle.</li><li>La coladera que saca agua: tapón expansivo, bolsa doble con agua o arena y dos costales; alrededor, un anillo de costales sobre plástico.</li><li>Tapar regaderas, WC y lavabos del primer piso. Plástico y toallas al pie de la escalera; limpiar bajadas pluviales de losas y azotea.</li></ul>
+      <h4>Obra</h4>
+      <ul><li>Meter, bajar o amarrar láminas, madera, varilla, block, cubetas, herramienta, lonas y mallas. Las láminas y las lonas son lo más peligroso.</li><li>Desarmar o amarrar andamios. Cemento y material que se moja, adentro y sobre tarimas.</li><li>Aberturas sin terminar cerradas con triplay o plástico grueso con barrotes. Instalación eléctrica de obra desconectada.</li><li>La cuadrilla se va el martes al mediodía. Solo se queda Neto.</li></ul>
+      <h4>Cuarto refugio en el primer piso</h4>
+      <ul><li>El cuarto más interior, sin ventanas, lejos de la escalera y de aberturas. Un baño interior también sirve.</li><li>Colchón, kit para 4 días y lo indispensable a más de 1 m del piso.</li></ul>
+    </div>
+  </section>
+
+  <section id="agua">
+    <div class="sec-head"><div class="eyebrow">Técnica</div><h2>Barrera contra agua y coladeras</h2></div>
+    <p class="lead2">Cada puerta a Mariano Escobedo o a Constitución lleva una barrera de 30 cm. El plástico es lo que impermeabiliza; los costales solo lo sostienen y frenan la corriente.</p>
+    <figure class="figure">
+      <svg viewBox="0 0 520 210" role="img" aria-label="Corte lateral de la barrera: plástico pegado a la puerta, tres hileras de costales encima y el plástico doblado hacia arriba del lado de la calle">
+        <line x1="20" y1="170" x2="500" y2="170" stroke="var(--ink2)" stroke-width="2"/>
+        <rect x="300" y="40" width="16" height="130" fill="var(--line)" stroke="var(--ink2)"/>
+        <text x="308" y="32" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--ink2)">PUERTA</text>
+        <text x="420" y="160" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--ink2)">ADENTRO</text>
+        <text x="70" y="160" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--ink2)">CALLE</text>
+        <path d="M60 140 C 90 135, 110 150, 140 142" fill="none" stroke="var(--prep)" stroke-width="2"/>
+        <path d="M40 150 C 70 145, 90 160, 120 152" fill="none" stroke="var(--prep)" stroke-width="2"/>
+        <g fill="var(--storm-soft)" stroke="var(--storm)" stroke-width="1.5">
+          <rect x="188" y="148" width="48" height="20" rx="8"/><rect x="238" y="148" width="48" height="20" rx="8"/>
+          <rect x="212" y="127" width="48" height="20" rx="8"/><rect x="262" y="127" width="36" height="20" rx="8"/>
+          <rect x="226" y="106" width="48" height="20" rx="8"/>
+        </g>
+        <path d="M300 115 L 298 168 L 182 168 L 176 140" fill="none" stroke="var(--ink)" stroke-width="2.5"/>
+        <rect x="320" y="156" width="40" height="12" rx="6" fill="var(--calm-soft)" stroke="var(--calm)"/>
+        <line x1="470" y1="106" x2="470" y2="168" stroke="var(--alert)" stroke-width="1.5"/>
+        <line x1="464" y1="106" x2="476" y2="106" stroke="var(--alert)" stroke-width="1.5"/>
+        <line x1="464" y1="168" x2="476" y2="168" stroke="var(--alert)" stroke-width="1.5"/>
+        <text x="482" y="141" font-family="var(--mono)" font-size="11" fill="var(--alert)">30 cm</text>
+        <text x="236" y="98" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--storm)">3 hileras cuatrapeadas</text>
+        <text x="176" y="196" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--ink)">plástico calibre 600</text>
+        <text x="340" y="196" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--calm)">toallas</text>
+      </svg>
+      <figcaption>El agua choca contra el plástico, no contra la puerta. Los costales lo mantienen pegado al piso.</figcaption>
+    </figure>
+    <div class="how">
+      <div class="card">
+        <h3>Cómo se arma, por puerta de 90 cm</h3>
+        <p>12 costales a la mitad (unos 15 kg), plástico calibre 600 de 1.5 × 1.5 m, cinta ducto y toallas viejas.</p>
+        <ol>
+          <li>Limpiar el piso frente a la puerta: sin piedras ni basura.</li>
+          <li>Pegar el plástico a la puerta y al marco a unos 50 cm de altura, con cinta en todo el ancho. Que caiga al piso y siga 60 cm hacia la calle.</li>
+          <li>Llenar los costales solo a la mitad, sin amarrar; la boca doblada debajo.</li>
+          <li>Primera hilera sobre el plástico, a lo largo, pegados entre sí, 30 cm más allá de cada lado del marco. Pisarlos.</li>
+          <li>Segunda y tercera hilera cuatrapeadas, como ladrillos. Pisar otra vez.</li>
+          <li>Doblar hacia arriba el plástico de la calle sobre los costales y fijarlo con un último costal.</li>
+          <li>Por dentro, toallas enrolladas pegadas a la puerta.</li>
+        </ol>
+        <p>No subir más de tres hileras sin ensanchar la base. Si la puerta abre hacia afuera, que haya otra salida libre.</p>
+      </div>
+      <div class="card">
+        <h3>Coladeras y baños de planta baja</h3>
+        <p>Cuando la calle se llena, el drenaje se satura y el agua sale por la coladera más baja. Hay que tapar todas las salidas a nivel de piso, porque el agua busca la siguiente.</p>
+        <ul>
+          <li><b>Coladera de piso:</b> tapón expansivo de hule de la medida del tubo. Si no hay, bolsa gruesa doble con agua o arena y dos costales encima. Quitar la rejilla si se puede.</li>
+          <li><b>Regadera:</b> bolsa con agua y un costal encima.</li>
+          <li><b>WC:</b> bolsa con agua dentro de la taza, tapa abajo con algo pesado y llave de paso cerrada.</li>
+          <li><b>Lavabo y fregadero:</b> tapón puesto y bolsa con agua encima.</li>
+          <li><b>Después:</b> quitar todos los tapones antes de usar los baños.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="riesgos">
+    <div class="sec-head"><div class="eyebrow">Para pensar en todo lo precautorio</div><h2>Los riesgos</h2></div>
+    <div class="probs">
+      <div class="prob"><b class="mono">43 %</b><span>probabilidad de viento de 63 km/h o más en Mazatlán</span></div>
+      <div class="prob"><b class="mono">16 %</b><span>de 93 km/h o más</span></div>
+      <div class="prob"><b class="mono">6 %</b><span>de 119 km/h o más, fuerza de huracán</span></div>
+    </div>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>Sitio</th><th>Racha máxima</th><th>Viento ≥63 km/h desde</th><th>Semáforo</th></tr></thead>
+        <tbody>
+          <tr><td>Apricot, 2º piso</td><td class="n">111 km/h</td><td class="n">mié 16:00</td><td><span class="sem rojo">Rojo · cortes de luz</span></td></tr>
+          <tr><td>Bruma, planta baja</td><td class="n">105 km/h</td><td class="n">mié 16:00</td><td><span class="sem rojo">Rojo · inundación</span></td></tr>
+          <tr><td>Hostal Perla Escondida</td><td class="n">98 km/h</td><td class="n">mié 18:00</td><td><span class="sem naranja">Naranja</span></td></tr>
+          <tr><td>Torres frente al mar, piso 11</td><td class="n">161 km/h</td><td class="n">mié 13:00</td><td><span class="sem rojo">Rojo</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Probabilidades a 5 días y rachas modeladas con el aviso 20 del NHC, ajustadas por altura y entorno. Si Simón se desvía unos 150 km mar adentro, las rachas bajan a 50–65 km/h.</p>
+    <div class="risks">
+      <div class="r"><span class="chip alta">Alto</span><h3>Inundación en el Centro</h3>
+        <p>El NHC pronostica 50–100 mm de lluvia en Sinaloa, con puntos de hasta 200 mm, hasta el jueves. El Centro y el estero de Urías son las zonas con más riesgo de inundación de la ciudad. Mariano Escobedo y Constitución bajan desde Olas Altas y llevan el agua hacia Playa Sur.</p>
+        <ul><li>No caminar ni manejar por Mariano Escobedo, Constitución, Olas Altas ni Playa Sur con agua en la calle: 15 cm de corriente pueden tumbar a una persona.</li></ul></div>
+      <div class="r"><span class="chip alta">Alto</span><h3>Oleaje</h3>
+        <p>Olas de 3 a 5 m en la costa sur. El oleaje ya cobró vidas en Mazatlán y el malecón de Olas Altas tiene un tramo de unos 100 m colapsado. Puertos cerrados.</p>
+        <ul><li>Nadie va a la playa ni al malecón, ni a ver el mar.</li></ul></div>
+      <div class="r"><span class="chip alta">Alto</span><h3>Viento y vidrios</h3>
+        <p>Con rachas de 100 km/h cualquier objeto suelto se vuelve proyectil. La cinta en cruz no evita que un vidrio se rompa, solo reduce las astillas; lo que protege es el triplay.</p>
+        <ul><li>Durante el viento, en un cuarto interior, lejos de ventanas. No abrir ventanas "para igualar la presión": es un mito.</li></ul></div>
+      <div class="r"><span class="chip alta">Alto</span><h3>Sin luz y sin agua</h3>
+        <p>Es muy probable que se vaya la luz y puede tardar días en regresar. El bombeo de agua de la ciudad depende de la luz: si se va o colapsa el sistema de agua, lo más probable es que se corte el servicio.</p>
+        <ul><li>Celulares y baterías externas al 100 % antes del martes en la noche. Linternas, no velas.</li><li>Cubetas, tambos y tinaco llenos. Sin luz no hay terminales ni cajeros: efectivo.</li><li>Lo refrigerado que pase más de 4 horas arriba de 4 °C se tira.</li></ul></div>
+      <div class="r"><span class="chip media">Medio</span><h3>Una trayectoria que se mueve</h3>
+        <p>El viento esperado en Mazatlán subió en tres avisos seguidos y luego bajó con el aviso 20. Simón podría quedarse casi detenido, y eso alarga la lluvia. Nos preparamos para el escenario oficial y ajustamos con cada aviso.</p></div>
+      <div class="r"><span class="chip media">Medio</span><h3>Calma falsa y después del paso</h3>
+        <ul><li>Si el centro pasa cerca puede haber minutos u horas de calma. No es el final: el viento regresa de golpe del lado contrario.</li><li>Cables caídos pueden estar energizados. Ante cables, olor a gas o grietas, no entrar y llamar al 911.</li><li>Nunca generador, anafre ni asador dentro de casa: el monóxido de carbono mata sin olor.</li><li>Costales mojados con guantes: el agua de la calle trae drenaje. Hervir el agua de la llave antes de tomarla.</li></ul></div>
+    </div>
+  </section>
+
+  <section id="refugios">
+    <div class="sec-head"><div class="eyebrow">Si tu casa no es segura</div><h2>Refugios y emergencias</h2></div>
+    <div class="sos"><div class="num mono">911</div><p>Protección Civil, bomberos y Cruz Roja. Si Protección Civil ordena evacuar, eso manda sobre cualquier paso de este plan.</p></div>
+    <div class="go">
+      <h3>Cuándo irse a un refugio en vez de quedarse</h3>
+      <ul><li>Si el NHC sube a Simón a categoría 2 o más al acercarse.</li><li>Si Protección Civil ordena evacuar tu zona.</li><li>Si vives en zona baja, cerca del mar o en casa de lámina.</li><li>Si el agua de la calle empieza a pasar la barrera antes del pico.</li></ul>
+      <p style="font-size:14.5px"><b>Decídelo el martes a más tardar a las 18:00, con luz de día.</b> Después ya no se sale.</p>
+    </div>
+    <div class="shelters">
+      <div>Instituto Cultural de Occidente<small>Centro · activo</small></div>
+      <div>COBAES 39<small>Villa Unión · activo</small></div>
+      <div>Secundaria Técnica 88<small>Isla de la Piedra · activo</small></div>
+      <div>Preparatoria UAS<small>El Quelite · activo</small></div>
+      <div>Centro de Convenciones<small>Listo si se necesita</small></div>
+      <div>Cuatro refugios más listos<small>Confirma con Protección Civil antes de ir</small></div>
+    </div>
+  </section>
+
+  <section id="casa">
+    <div class="sec-head"><div class="eyebrow">Para tu casa · hoy lunes</div><h2>Prepárate para 4 días</h2></div>
+    <p class="lead2">Cuenta con estar 4 días sin poder salir, sin luz y sin agua de la llave. Marca lo que ya tienes; tu avance se guarda en este teléfono.</p>
+    <div class="calc">
+      <label for="ppl">Personas en casa</label>
+      <input id="ppl" type="number" min="1" max="20" value="2" inputmode="numeric">
+      <output id="calcOut" for="ppl"></output>
+    </div>
+    <div class="checks" id="checks"></div>
+  </section>
+
+  <footer>
+    <p><b>Fuentes.</b> Los pronósticos cambian. Revisa el aviso más reciente antes de moverte.</p>
+    <ul>
+      <li>Centro Nacional de Huracanes, aviso 20 de Simón: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noreferrer">nhc.noaa.gov</a></li>
+      <li>Servicio Meteorológico Nacional: <a href="https://smn.conagua.gob.mx/" target="_blank" rel="noreferrer">smn.conagua.gob.mx</a></li>
+      <li>Protección Civil Sinaloa y Ayuntamiento de Mazatlán: alerta amarilla y refugios.</li>
+    </ul>
+    <p>HOG · División Mazatlán. El plan completo, con tareas por responsable, está en HOG APP: proyecto "Emergencia Huracán Simón · División Mazatlán".</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  // ── Línea de tiempo a escala: lun 12 00:00 → jue 15 12:00 (84 h) ──
+  var H = 84;
+  var pct = function(h){ return (h / H * 100).toFixed(3) + '%'; };
+  var at = function(day, hh){ return (day - 12) * 24 + hh; };
+  var track = document.getElementById('track');
+  [['LUN 12',12],['MAR 13',13],['MIÉ 14',14],['JUE 15',15]].forEach(function(d){
+    var el = document.createElement('div'); el.className = 'day';
+    el.style.left = pct(at(d[1], 0)); el.textContent = d[0]; track.appendChild(el);
+  });
+  [
+    ['prep', at(12,10), at(12,20), 'Compras y costales'],
+    ['prep', at(13,7), at(13,12), 'Asegurar'],
+    ['home', at(13,12), at(14,16), 'Resguardo'],
+    ['storm', at(14,16), at(15,4), 'Viento ≥63 km/h'],
+    ['home', at(15,4), at(15,12), 'Esperar aviso']
+  ].forEach(function(b){
+    var el = document.createElement('div'); el.className = 'bar ' + b[0];
+    el.style.left = pct(b[1]); el.style.width = 'calc(' + pct(b[2] - b[1]) + ' - 2px)';
+    el.textContent = b[3]; el.title = b[3]; track.appendChild(el);
+  });
+  var pk = document.createElement('div'); pk.className = 'bar peak';
+  pk.style.left = pct(at(14,21)); pk.style.width = 'calc(' + pct(2) + ' + 18px)'; pk.textContent = '21–23'; pk.title = 'Paso del centro'; track.appendChild(pk);
+  var mk = document.createElement('div'); mk.className = 'mark'; mk.style.left = pct(at(13,12)); track.appendChild(mk);
+  [[at(13,12), 'Límite mar 12:00', 'var(--alert)', 94], [at(14,22), 'Paso del centro', 'var(--hurr)', 108]].forEach(function(m){
+    var lb = document.createElement('div'); lb.className = 'mark-l'; lb.style.left = pct(m[0]);
+    lb.style.top = m[3] + 'px'; lb.style.color = m[2]; lb.textContent = m[1]; track.appendChild(lb);
+  });
+
+  // ── Lista para casa ──
+  var GROUPS = [
+    ['Comida para 4 días', [
+      ['Enlatados que no necesiten cocción', 'Atún, frijoles, verduras, sopas, sardinas.'],
+      ['Abrelatas manual', 'Sin luz, el eléctrico no sirve.'],
+      ['Pan, galletas, cereal, tortillas de harina y tostadas', 'Duran más que la tortilla de maíz.'],
+      ['Crema de cacahuate, nueces, fruta seca y barras', 'Energía sin cocinar.'],
+      ['Leche en caja o en polvo, café, azúcar', null],
+      ['Fruta que aguante: plátano verde, manzana, naranja', null],
+      ['Comida de bebé y de mascotas', 'Si aplica, para 4 días.'],
+      ['Platos, vasos y cubiertos desechables', 'Para no gastar agua lavando.']
+    ]],
+    ['Agua', [
+      ['Agua de beber embotellada', 'Al menos 4 litros por persona al día.'],
+      ['Cubetas, tambos, tina y tinaco llenos', 'Para el baño y el aseo: probablemente se corte el agua si colapsa el sistema.'],
+      ['Botellas o bolsas de agua en el congelador', 'Mantienen frío el refri sin luz y después se toman.'],
+      ['Cloro', 'Para desinfectar agua y superficies después.']
+    ]],
+    ['Luz y comunicación', [
+      ['Linternas o lámparas recargables, y pilas', 'Velas solo si no hay olor a gas.'],
+      ['Baterías externas cargadas', 'Y el celular al 100 % antes del martes en la noche.'],
+      ['Radio de pilas', 'Para seguir los avisos sin internet.'],
+      ['Un horario para reportarte con tu familia', 'Por ejemplo, cada 3 horas, y qué hacer si no contestas.']
+    ]],
+    ['Salud y documentos', [
+      ['Medicamentos para una semana', 'Los de diario y los de dolor, fiebre y diarrea.'],
+      ['Botiquín y suero oral', null],
+      ['Repelente de mosquitos y gel antibacterial', null],
+      ['INE, actas, escrituras y pólizas en bolsa hermética', 'Junto con tu efectivo y tus llaves.'],
+      ['Efectivo en billetes chicos', 'Sin luz no hay terminales ni cajeros.']
+    ]],
+    ['La casa', [
+      ['Tanque de gasolina lleno', 'Las gasolineras cierran o se saturan.'],
+      ['Ventanas cerradas con seguro y lo de afuera adentro', 'Macetas, sillas, tanques, todo lo que vuele.'],
+      ['Un cuarto interior sin ventanas para el miércoles en la noche', 'Con colchón: sirve para dormir y para cubrirse.'],
+      ['Coladeras y baños tapados si vives en planta baja', 'Igual que en los locales.'],
+      ['Refri en el frío máximo desde el lunes', 'Y ábrelo lo menos posible.'],
+      ['Aparatos desconectados y gas cerrado al empezar el viento', null],
+      ['Mascotas adentro, con agua y comida', 'Confirma si tu refugio acepta mascotas.']
+    ]]
+  ];
+  var KEY = 'simon_checks_v2', saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { saved = {}; }
+  var host = document.getElementById('checks');
+  var esc = function(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var html = '';
+  GROUPS.forEach(function(g, gi){
+    html += '<div class="group"><h3>' + esc(g[0]) + ' <span class="count" data-g="' + gi + '"></span></h3>';
+    g[1].forEach(function(it, ii){
+      var id = 'c' + gi + '_' + ii;
+      html += '<div class="item"><input type="checkbox" id="' + id + '"' + (saved[id] ? ' checked' : '') + '><label for="' + id + '">' + esc(it[0]) + (it[1] ? '<small>' + esc(it[1]) + '</small>' : '') + '</label></div>';
+    });
+    html += '</div>';
+  });
+  host.innerHTML = html;
+  function counts(){
+    GROUPS.forEach(function(g, gi){
+      var n = 0; g[1].forEach(function(_, ii){ if (document.getElementById('c' + gi + '_' + ii).checked) n++; });
+      host.querySelector('[data-g="' + gi + '"]').textContent = n + ' de ' + g[1].length;
+    });
+  }
+  host.addEventListener('change', function(e){
+    if (!e.target.id) return;
+    saved[e.target.id] = e.target.checked;
+    try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (err) {}
+    counts();
+  });
+  counts();
+
+  // ── Calculadora de agua ──
+  var ppl = document.getElementById('ppl'), out = document.getElementById('calcOut');
+  try { var p = parseInt(localStorage.getItem('simon_ppl'), 10); if (p > 0) ppl.value = p; } catch (e) {}
+  function calc(){
+    var n = Math.max(1, Math.min(20, parseInt(ppl.value, 10) || 1));
+    out.innerHTML = '<b class="mono">' + (n * 16) + ' L</b> de agua para beber en 4 días: ' + Math.ceil(n * 16 / 20) + ' garrafón' + (Math.ceil(n * 16 / 20) > 1 ? 'es' : '') + ' de 20 L, además de las cubetas para el baño.';
+    try { localStorage.setItem('simon_ppl', String(n)); } catch (e) {}
+  }
+  ppl.addEventListener('input', calc); calc();
+})();
+</script>
+</body>
+</html>
