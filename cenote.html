@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Entrada propia de /cenote (vercel.json la reescribe aquí). Es la misma
+         SPA, pero con las metas de Cenote: este link se comparte en WhatsApp,
+         Facebook e Instagram, y sus robots NO ejecutan JS — leen este HTML
+         crudo. Con index.html el preview diría "HOG APP".
+         La imagen va con URL absoluta porque Meta no resuelve rutas relativas;
+         si cambia el dominio de producción, cambia aquí. Se generó desde la
+         identidad de Cenote (src/lib/cenoteBrand.ts) a 1200x630. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#EEEBDD" />
+    <title>Cenote Wellness Club · Salón y spa en la Condesa</title>
+    <meta name="description" content="Renta el salón para tus clases desde $2,500 al mes, sin porcentaje por alumno. Spa de sauna, vapor y cold plunge: circuito $500, masajes y rituales. 2º piso del Hotel Flow, Condesa." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Cenote Wellness Club" />
+    <meta property="og:locale" content="es_MX" />
+    <meta property="og:title" content="Cenote Wellness Club · Salón y spa en la Condesa" />
+    <meta property="og:description" content="Renta el salón para tus clases desde $2,500 al mes, sin porcentaje por alumno. Spa de sauna, vapor y cold plunge desde $500." />
+    <meta property="og:url" content="https://hogapp-smoky.vercel.app/cenote" />
+    <meta property="og:image" content="https://hogapp-smoky.vercel.app/cenote-og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Cenote Wellness Club: renta el salón y spa de calor, vapor y frío" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Cenote Wellness Club · Salón y spa en la Condesa" />
+    <meta name="twitter:description" content="Renta el salón desde $2,500 al mes. Spa de sauna, vapor y cold plunge desde $500." />
+    <meta name="twitter:image" content="https://hogapp-smoky.vercel.app/cenote-og.jpg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  </head>
+  <body style="background:#EEEBDD">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

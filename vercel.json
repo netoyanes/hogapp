@@ -17,6 +17,10 @@
       "destination": "/simon.html"
     },
     {
+      "source": "/cenote",
+      "destination": "/cenote.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
