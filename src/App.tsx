@@ -10,6 +10,7 @@ import { SocialPulse } from './screens/SocialPulse'
 import { Nomina } from './screens/Nomina'
 import { Wellness } from './screens/Wellness'
 import { WellnessPortal } from './screens/WellnessPortal'
+import { CenotePortal } from './screens/CenotePortal'
 import { PianoLetras } from './screens/PianoLetras'
 import { PianoBar } from './screens/PianoBar'
 import { Obras } from './screens/Obras'
@@ -73,6 +74,10 @@ const _reservar = _params.get('reservar')
 const _mireserva = _params.get('mireserva')
 // ?wellness=CODIGO — portal público de clases (alumnos, sin cuenta HOG APP)
 const _wellness = _params.get('wellness')
+// /cenote (o ?cenote=1) — portal comercial de Cenote: membresías del salón para
+// facilitadores y venta del spa. ?acceso=CODIGO abre directo el acceso del
+// facilitador con el código que le mandamos por WhatsApp.
+const _cenote = _params.has('cenote') || /^\/cenote\/?$/i.test(window.location.pathname)
 // ?letras=CODIGO (o /letras/CODIGO, lo que va impreso en el QR de la mesa) —
 // portal público de piano nights: la letra de lo que suena, sin cuenta
 const _letras = _params.get('letras') ?? window.location.pathname.match(/^\/letras\/([\w-]+)\/?$/i)?.[1] ?? null
@@ -105,6 +110,8 @@ export default function App() {
   // Portal wellness público (también es el regreso del checkout de Blumon:
   // el alumno aterriza aquí y ve su clase ya pagada)
   if (_wellness) return <WellnessPortal code={_wellness} />
+  // Cenote — salón por membresía y spa, para facilitadores y público
+  if (_cenote) return <CenotePortal />
   // Piano nights — letras en vivo para quien escanea el QR de la mesa
   if (_letras) return <PianoLetras code={_letras} />
   // Avance de obra — hoja de trabajo para la gente externa de una remodelación
