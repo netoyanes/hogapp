@@ -74,9 +74,8 @@ const _reservar = _params.get('reservar')
 const _mireserva = _params.get('mireserva')
 // ?wellness=CODIGO — portal público de clases (alumnos, sin cuenta HOG APP)
 const _wellness = _params.get('wellness')
-// /cenote (o ?cenote=1) — portal comercial de Cenote: membresías del salón para
-// facilitadores y venta del spa. ?acceso=CODIGO abre directo el acceso del
-// facilitador con el código que le mandamos por WhatsApp.
+// /cenote (o ?cenote=1) — sitio comercial del spa de Cenote. ?flow=1 abre con
+// el precio de huésped de Hotel Flow ya aplicado (el QR de la habitación).
 const _cenote = _params.has('cenote') || /^\/cenote(\.html)?\/?$/i.test(window.location.pathname)
 // ?letras=CODIGO (o /letras/CODIGO, lo que va impreso en el QR de la mesa) —
 // portal público de piano nights: la letra de lo que suena, sin cuenta
@@ -110,7 +109,7 @@ export default function App() {
   // Portal wellness público (también es el regreso del checkout de Blumon:
   // el alumno aterriza aquí y ve su clase ya pagada)
   if (_wellness) return <WellnessPortal code={_wellness} />
-  // Cenote — salón por membresía y spa, para facilitadores y público
+  // Cenote — sitio comercial del spa
   if (_cenote) return <CenotePortal />
   // Piano nights — letras en vivo para quien escanea el QR de la mesa
   if (_letras) return <PianoLetras code={_letras} />

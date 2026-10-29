@@ -57,7 +57,7 @@ function mensajeAcceso(f: Facilitador, codigo: string) {
 }
 
 export function CenoteAdmin({ canWrite }: { canWrite: boolean }) {
-  const [vista, setVista] = useState('facilitadores')
+  const [vista, setVista] = useState('spa')
   const [facs, setFacs] = useState<Facilitador[]>([])
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [missing, setMissing] = useState(false)
@@ -115,8 +115,8 @@ export function CenoteAdmin({ canWrite }: { canWrite: boolean }) {
       </div>
 
       <SegmentedControl value={vista} onChange={setVista} options={[
-        { id: 'facilitadores', label: `Facilitadores${kpi.nuevas ? ` · ${kpi.nuevas} nuevas` : ''}` },
         { id: 'spa', label: `Spa${kpi.pendientes ? ` · ${kpi.pendientes} por cobrar` : ''}` },
+        { id: 'facilitadores', label: `Facilitadores${kpi.nuevas ? ` · ${kpi.nuevas} nuevas` : ''}` },
       ]} />
 
       {vista === 'facilitadores' && (
