@@ -77,7 +77,7 @@ const _wellness = _params.get('wellness')
 // /cenote (o ?cenote=1) — portal comercial de Cenote: membresías del salón para
 // facilitadores y venta del spa. ?acceso=CODIGO abre directo el acceso del
 // facilitador con el código que le mandamos por WhatsApp.
-const _cenote = _params.has('cenote') || /^\/cenote\/?$/i.test(window.location.pathname)
+const _cenote = _params.has('cenote') || /^\/cenote(\.html)?\/?$/i.test(window.location.pathname)
 // ?letras=CODIGO (o /letras/CODIGO, lo que va impreso en el QR de la mesa) —
 // portal público de piano nights: la letra de lo que suena, sin cuenta
 const _letras = _params.get('letras') ?? window.location.pathname.match(/^\/letras\/([\w-]+)\/?$/i)?.[1] ?? null
