@@ -3,6 +3,7 @@ import { Flower2, Plus, Trash2, ChevronLeft, ChevronRight, Link2 } from 'lucide-
 import { supabase } from '../lib/supabase'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { SegmentedControl, StatusBadgeV2, Sheet, showToast } from '../components/v2'
+import { CenoteAdmin } from './CenoteAdmin'
 import { ParrillaTab, CierreTab, TableroTab, MaestrosTab, ConfigSheet, type OpConfig, type OpSlot, type OpInstructor, type Persona } from './WellnessOperacion'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,7 +53,9 @@ const hhmm = (t: string) => t.slice(0, 5)
 
 export function Wellness({ userId, isManager }: { userId?: string; isManager: boolean }) {
   const isMobile = useIsMobile()
-  const [tab, setTab] = useState('horarios')
+  // El gerente aterriza en Cenote: desde noviembre el negocio es rentar el
+  // salón y vender el spa. El instructor sigue viendo solo sus alumnos.
+  const [tab, setTab] = useState(isManager ? 'cenote' : 'horarios')
   const [buList, setBuList] = useState<{ id: string; code: string; name: string }[]>([])
   const [instructors, setInstructors] = useState<Instructor[]>([])
   const [classes, setClasses] = useState<WClass[]>([])
@@ -127,6 +130,7 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
   if (loading) return <p style={{ padding: 24, fontSize: 13, color: 'var(--text-tertiary)' }}>Cargando…</p>
 
   const tabs = [
+    ...(isManager ? [{ id: 'cenote', label: 'Cenote · salón y spa' }] : []),
     { id: 'horarios', label: 'Alumnos por horario' },
     ...(isManager ? [
       { id: 'cierre',   label: 'Cierre de turno' },
@@ -158,6 +162,7 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 32px' }}>
+        {tab === 'cenote' && isManager && <CenoteAdmin canWrite={isManager} />}
         {tab === 'horarios' && (
           <ReporteHorarios clases={misClases} slots={slots} bookings={bookings} students={students}
             instructors={instructors} weekStart={weekStart} setWeekStart={setWeekStart}
