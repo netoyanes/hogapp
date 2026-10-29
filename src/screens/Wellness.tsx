@@ -130,7 +130,7 @@ export function Wellness({ userId, isManager }: { userId?: string; isManager: bo
   if (loading) return <p style={{ padding: 24, fontSize: 13, color: 'var(--text-tertiary)' }}>Cargando…</p>
 
   const tabs = [
-    ...(isManager ? [{ id: 'cenote', label: 'Cenote · salón y spa' }] : []),
+    ...(isManager ? [{ id: 'cenote', label: 'Cenote · spa' }] : []),
     { id: 'horarios', label: 'Alumnos por horario' },
     ...(isManager ? [
       { id: 'cierre',   label: 'Cierre de turno' },
