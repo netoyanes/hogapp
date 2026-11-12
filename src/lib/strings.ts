@@ -37,6 +37,7 @@ export const STR = {
     wellness: 'Wellness',
     pianobar: 'Piano Nights',
     obras: 'Obras',
+    ronqueo: 'Ronqueo',
     tasks: 'Tareas',
     crm: 'Comercial',
     reservations: 'Reservas',

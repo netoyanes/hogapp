@@ -17,6 +17,14 @@
       "destination": "/simon.html"
     },
     {
+      "source": "/ronqueo",
+      "destination": "/ronqueo.html"
+    },
+    {
+      "source": "/ronqueo/gracias",
+      "destination": "/ronqueo.html"
+    },
+    {
       "source": "/cenote",
       "destination": "/cenote.html"
     },

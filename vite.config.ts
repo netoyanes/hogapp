@@ -7,8 +7,8 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // cenote.html es la misma app con las metas de Cenote para el preview
-      // del link compartido (ver el comentario en ese archivo).
-      input: { main: 'index.html', cenote: 'cenote.html' },
+      // del link compartido (ver el comentario en ese archivo). Igual ronqueo.html.
+      input: { main: 'index.html', cenote: 'cenote.html', ronqueo: 'ronqueo.html' },
     },
   },
 })
