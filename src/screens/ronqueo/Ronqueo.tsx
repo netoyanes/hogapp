@@ -220,7 +220,9 @@ export function Ronqueo() {
               <h2 id="rq-boleto-t" className="rq-precio"><span className="rq-sr">boleto: </span>{BOLETO.precio}</h2>
               <p className="rq-porpersona">
                 <span>{BOLETO.porPersona}</span>
-                {cupo && <span className="rq-quedan" aria-live="polite">{agotado ? BOLETO.compra.agotado : `quedan ${cupo.restantes} de ${cupo.cupo} lugares`}</span>}
+                {cupo && (agotado || EVENTO.mostrarRestantes) && (
+                  <span className="rq-quedan" aria-live="polite">{agotado ? BOLETO.compra.agotado : `quedan ${cupo.restantes} de ${cupo.cupo} lugares`}</span>
+                )}
               </p>
               <p className="rq-pill rq-pill--lima">{BOLETO.destacado}</p>
               <ul className="rq-incluye">
@@ -266,7 +268,7 @@ export function Ronqueo() {
       <div className="rq-barra rq-dia" data-oculta={boletoVisible} aria-hidden={boletoVisible || undefined}>
         <div className="rq-barra__precio">
           <span className="rq-barra__monto">{BARRA_MOVIL.precio}</span>
-          <span className="rq-barra__lugares">{cupo ? (agotado ? 'agotado' : `${cupo.restantes} lugares`) : `${EVENTO.cupo} lugares`}</span>
+          <span className="rq-barra__lugares">{agotado ? 'agotado' : cupo && EVENTO.mostrarRestantes ? `${cupo.restantes} lugares` : `${EVENTO.cupo} lugares`}</span>
         </div>
         <a className="rq-btn rq-btn--lima" href="#boleto" tabIndex={boletoVisible ? -1 : undefined}>{BARRA_MOVIL.cta}</a>
       </div>
