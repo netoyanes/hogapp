@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}))
     switch (body.action) {
-      case 'cupo': return json(await estado(db))
+      case 'cupo': return json(cupoPublico(await estado(db)))
       case 'checkout': return await checkout(db, body)
       case 'liberar': return await liberar(db, body)
       case 'sesion': return await sesion(db, body)
@@ -90,7 +90,20 @@ Deno.serve(async (req) => {
 async function estado(db: SupabaseClient) {
   const { data, error } = await db.rpc('ronqueo_estado')
   if (error) throw error
-  return data as { cupo: number; vendidos: number; reservados: number; restantes: number; maxPorCompra: number; ventaAbierta: boolean }
+  return data as { cupo: number; vendidos: number; reservados: number; restantes: number; maxPorCompra: number; ventaAbierta: boolean; precioCentavos: number }
+}
+
+// Lo que ve el público. Por default NO revela cuántos se han vendido: solo si
+// hay lugares y hasta cuántos se pueden comprar ahora (tope: max por compra).
+// Con el secret RONQUEO_MOSTRAR_RESTANTES=true manda el conteo real.
+function cupoPublico(e: Awaited<ReturnType<typeof estado>> & { precioCentavos?: number }) {
+  if (Deno.env.get('RONQUEO_MOSTRAR_RESTANTES') === 'true') return e
+  return {
+    cupo: e.cupo,
+    restantes: Math.min(e.restantes, e.maxPorCompra),
+    maxPorCompra: e.maxPorCompra,
+    precioCentavos: e.precioCentavos,
+  }
 }
 
 // ── checkout ────────────────────────────────────────────────────────────────

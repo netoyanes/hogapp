@@ -19,6 +19,11 @@ export const EVENTO = {
   precio: 1500, // MXN por lugar
   moneda: 'mxn',
   cupo: 50,
+  // false: el sitio NO muestra cuántos lugares quedan (solo «50 lugares»).
+  // El cupo se sigue controlando igual en el servidor, y si se agota el sitio
+  // dice «ya no quedan lugares». Para mostrar el conteo: pon true aquí Y el
+  // secret RONQUEO_MOSTRAR_RESTANTES=true en Supabase (si no, el servidor no lo manda).
+  mostrarRestantes: false,
   maxPorCompra: 10,
   // Para el .ics de «agregar al calendario» (hora local de Mazatlán)
   calendario: {
