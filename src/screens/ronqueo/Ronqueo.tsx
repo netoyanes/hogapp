@@ -186,6 +186,7 @@ export function Ronqueo() {
                 <span>{BOLETO.porPersona}</span>
                 {cupo && <span className="rq-quedan" aria-live="polite">{agotado ? BOLETO.compra.agotado : `quedan ${cupo.restantes} de ${cupo.cupo} lugares`}</span>}
               </p>
+              <p className="rq-pill rq-pill--lima">{BOLETO.destacado}</p>
               <ul className="rq-incluye">
                 {BOLETO.incluye.map((t, i) => (
                   <li className="rq-incluye__fila rq-filete" key={i}>
@@ -255,7 +256,9 @@ function Compra({ cupo, agotado, cancelado, refTarjeta, onAgotado }: {
   const [aviso, setAviso] = useState<string | null>(cancelado ? BOLETO.compra.cancelado : null)
 
   const cant = Math.min(cantidad, max)
-  const total = cant * EVENTO.precio
+  // El precio que se cobra vive en el servidor (ronqueo_config); el de contenido.ts es respaldo
+  const precio = cupo?.precioCentavos ? cupo.precioCentavos / 100 : EVENTO.precio
+  const total = cant * precio
   const bloqueado = agotado || enviando
 
   function validar(): Errores {
@@ -323,7 +326,7 @@ function Compra({ cupo, agotado, cancelado, refTarjeta, onAgotado }: {
         <div className="rq-compra__fila rq-compra__fila--total">
           <div className="rq-total__l">
             <span className="rq-total__et">{BOLETO.compra.total}</span>
-            <span className="rq-total__mult">{cant} × {pesos(EVENTO.precio)} {EVENTO.moneda}</span>
+            <span className="rq-total__mult">{cant} × {pesos(precio)} {EVENTO.moneda}</span>
           </div>
           <p className="rq-total__monto" aria-live="polite">{pesos(total)}</p>
         </div>
