@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { supabase } from './lib/supabase'
 import { Auth } from './screens/Auth'
@@ -14,6 +14,7 @@ import { CenotePortal } from './screens/CenotePortal'
 import { PianoLetras } from './screens/PianoLetras'
 import { PianoBar } from './screens/PianoBar'
 import { Obras } from './screens/Obras'
+import { RonqueoAdmin } from './screens/RonqueoAdmin'
 import { ObraPortal } from './screens/ObraPortal'
 import { Finanzas } from './screens/Finanzas'
 import { Aperturas } from './screens/Aperturas'
@@ -51,6 +52,11 @@ import { navItemsForRole } from './components/layout/Sidebar'
 import { getViewAsRole, setViewAsRole } from './lib/viewAs'
 import { useEffect, useRef } from 'react'
 
+// Ronqueo (Bruma Records) — landing público de venta de boletos. Lazy: sus
+// fuentes, CSS y fotos no se cargan en el resto de HOG APP.
+const Ronqueo = lazy(() => import('./screens/ronqueo/Ronqueo').then(m => ({ default: m.Ronqueo })))
+const RonqueoGracias = lazy(() => import('./screens/ronqueo/RonqueoGracias').then(m => ({ default: m.RonqueoGracias })))
+
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL' || role === 'DEV'
 }
@@ -76,6 +82,9 @@ const _mireserva = _params.get('mireserva')
 const _wellness = _params.get('wellness')
 // /cenote (o ?cenote=1) — sitio comercial del spa de Cenote. ?flow=1 abre con
 // el precio de huésped de Hotel Flow ya aplicado (el QR de la habitación).
+// /ronqueo y /ronqueo/gracias — venta de boletos del ronqueo de Bruma Records
+const _ronqueo = /^\/ronqueo(\.html)?\/?$/i.test(window.location.pathname)
+const _ronqueoGracias = /^\/ronqueo\/gracias\/?$/i.test(window.location.pathname)
 const _cenote = _params.has('cenote') || /^\/cenote(\.html)?\/?$/i.test(window.location.pathname)
 // ?letras=CODIGO (o /letras/CODIGO, lo que va impreso en el QR de la mesa) —
 // portal público de piano nights: la letra de lo que suena, sin cuenta
@@ -109,6 +118,9 @@ export default function App() {
   // Portal wellness público (también es el regreso del checkout de Blumon:
   // el alumno aterriza aquí y ve su clase ya pagada)
   if (_wellness) return <WellnessPortal code={_wellness} />
+  // Ronqueo — landing de boletos y confirmación de pago (Stripe)
+  if (_ronqueo) return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#161714' }} />}><Ronqueo /></Suspense>
+  if (_ronqueoGracias) return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#f4f1e9' }} />}><RonqueoGracias /></Suspense>
   // Cenote — sitio comercial del spa
   if (_cenote) return <CenotePortal />
   // Piano nights — letras en vivo para quien escanea el QR de la mesa
@@ -361,6 +373,12 @@ export default function App() {
         return role === 'MASTER'
           ? <Obras />
           : <EmptyState icon="🔒" title="Solo Master" description="Obras es exclusivo de dirección." />
+      case 'ronqueo':
+        // Boletos del ronqueo de Bruma Records. Solo lectura; la policy
+        // (fn_ronqueo_staff) lo vuelve a verificar en la base.
+        return role === 'MASTER' || role === 'DEV' || userApps?.has('ronqueo')
+          ? <RonqueoAdmin />
+          : <EmptyState icon="🔒" title="Sin acceso" description="Ronqueo se asigna por usuario en Usuarios." />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':

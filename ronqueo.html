@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Entrada propia de /ronqueo y /ronqueo/gracias (vercel.json las reescribe
+         aquí). Es la misma SPA, pero con las metas del evento: el link se
+         comparte en WhatsApp e Instagram y sus robots NO ejecutan JS — leen este
+         HTML crudo. La imagen va con URL absoluta porque Meta no resuelve rutas
+         relativas; si cambia el dominio de producción, cámbialo aquí. La imagen
+         sale de la foto del atún de Figma (scripts/ronqueo-images.mjs). -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#161714" />
+    <title>all you can eat · edición ronqueo · bruma records</title>
+    <meta name="description" content="un atún completo se despieza en vivo frente a ti y se sirve en todos sus cortes, sin límite. viernes 20 nov, bruma records, mazatlán. 50 lugares, $1,200." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="bruma records" />
+    <meta property="og:locale" content="es_MX" />
+    <meta property="og:title" content="all you can eat · edición ronqueo" />
+    <meta property="og:description" content="un atún completo, despiezado en vivo y servido sin límite. vie 20 nov · bruma records · mzt. 50 lugares, $1,200." />
+    <meta property="og:url" content="https://hogapp-smoky.vercel.app/ronqueo" />
+    <meta property="og:image" content="https://hogapp-smoky.vercel.app/ronqueo-og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="un atún completo sobre la tabla, listo para el ronqueo" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="all you can eat · edición ronqueo" />
+    <meta name="twitter:description" content="vie 20 nov · bruma records · mzt. 50 lugares, $1,200." />
+    <meta name="twitter:image" content="https://hogapp-smoky.vercel.app/ronqueo-og.jpg" />
+    <link rel="preload" as="image" type="image/webp" href="/ronqueo/img/atun-alto-800.webp" media="(max-width: 899px)" />
+    <link rel="preload" as="image" type="image/webp" href="/ronqueo/img/atun-ancho-1440.webp" media="(min-width: 900px)" />
+  </head>
+  <body style="background:#161714">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
