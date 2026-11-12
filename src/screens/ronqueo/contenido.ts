@@ -16,7 +16,7 @@
 export type Resp = string | { d: string; m: string }
 
 export const EVENTO = {
-  precio: 1200, // MXN por lugar
+  precio: 1500, // MXN por lugar
   moneda: 'mxn',
   cupo: 50,
   maxPorCompra: 10,
@@ -48,7 +48,7 @@ export const HERO = {
     d: 'un atún completo se despieza en vivo frente a ti y se sirve en todos sus cortes, sin límite. una noche, 50 lugares.',
     m: 'un atún completo se despieza en vivo frente a ti y se sirve en todos sus cortes, sin límite. 50 lugares.',
   } as Resp,
-  ctaPrincipal: 'compra tu boleto · $1,200',
+  ctaPrincipal: 'compra tu boleto · $1,500',
   ctaSecundario: 'ver la noche',
   sello: ['all you can eat', 'edición ronqueo'],
   fotoAlt: 'un atún completo sobre la tabla, con el cuchillo listo para el ronqueo',
@@ -123,8 +123,10 @@ export const QUIEN = {
 
 export const BOLETO = {
   pill: 'preventa · solo 50 lugares',
-  precio: '$1,200',
+  precio: '$1,500',
   porPersona: 'por persona',
+  // Se destaca junto al precio: el boleto es all you can eat, sin límite
+  destacado: 'all you can eat · sin límite',
   incluye: [
     { d: 'acceso y welcome drink', m: 'acceso y welcome drink' },
     { d: 'el ronqueo en vivo y la explicación de cada corte', m: 'el ronqueo en vivo' },
@@ -164,7 +166,7 @@ export const PREGUNTAS = {
 
 export const CIERRE = {
   titulo: { d: '50 lugares.\nuno puede ser tuyo.', m: '50 lugares.\nuno puede\nser tuyo.' } as Resp,
-  cta: 'compra tu boleto · $1,200',
+  cta: 'compra tu boleto · $1,500',
 }
 
 export const FOOTER = {
@@ -176,7 +178,7 @@ export const FOOTER = {
 }
 
 export const BARRA_MOVIL = {
-  precio: '$1,200',
+  precio: '$1,500',
   cta: 'compra tu boleto',
 }
 

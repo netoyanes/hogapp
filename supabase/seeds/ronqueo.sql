@@ -27,12 +27,14 @@ create table if not exists public.ronqueo_config (
   id               boolean primary key default true check (id),
   cupo             int  not null default 50 check (cupo >= 0),
   max_por_compra   int  not null default 10 check (max_por_compra between 1 and 50),
-  precio_centavos  int  not null default 120000 check (precio_centavos > 0), -- $1,200 MXN
+  precio_centavos  int  not null default 150000 check (precio_centavos > 0), -- $1,500 MXN
   moneda           text not null default 'mxn',
   venta_abierta    boolean not null default true,
   updated_at       timestamptz not null default now()
 );
 insert into public.ronqueo_config (id) values (true) on conflict (id) do nothing;
+-- Precio vigente (subió de $1,200 a $1,500); se aplica también a una base ya creada
+update public.ronqueo_config set precio_centavos = 150000, updated_at = now() where id and precio_centavos <> 150000;
 
 create sequence if not exists public.ronqueo_codigo_seq start 1;
 

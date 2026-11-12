@@ -3,7 +3,7 @@
 // de Checkout y leemos la confirmación.
 import { supabase } from '../../lib/supabase'
 
-export type Cupo = { cupo: number; vendidos: number; reservados: number; restantes: number; maxPorCompra: number }
+export type Cupo = { cupo: number; vendidos: number; reservados: number; restantes: number; maxPorCompra: number; precioCentavos?: number }
 
 export type Confirmacion =
   | { estado: 'pagado'; nombre: string; codigo: string; cantidad: number; total: number; correo: string }
