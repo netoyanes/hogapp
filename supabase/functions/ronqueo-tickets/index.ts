@@ -126,6 +126,9 @@ async function checkout(db: SupabaseClient, b: Record<string, unknown>) {
     const s = await stripeCli().checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
+      // Siempre en pesos: sin Adaptive Pricing, Stripe ofrecería USD a quien
+      // abre el checkout desde fuera de México
+      adaptive_pricing: { enabled: false },
       locale: 'es-419',
       customer_email: correo,
       client_reference_id: res.orden,
