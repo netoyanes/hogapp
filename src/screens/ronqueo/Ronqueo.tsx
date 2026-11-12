@@ -5,12 +5,25 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { R, Logo, Surcos } from './componentes'
 import {
-  BARRA_MOVIL, BOLETO, CIERRE, DATOS, EVENTO, FOOTER, HERO, ITINERARIO, LA_NOCHE, NAV, PREGUNTAS, QUIEN,
+  BARRA_MOVIL, BOLETO, CIERRE, DATOS, DJ, EVENTO, FOOTER, FOTOS, HERO, ITINERARIO, LA_NOCHE, NAV, PREGUNTAS, QUIEN,
+  type FotoId,
 } from './contenido'
 import { abrirCheckout, liberarReserva, pedirCupo, pesos, type Cupo } from './api'
 
 const FOTO_ANCHO = '/ronqueo/img/atun-ancho-640.webp 640w, /ronqueo/img/atun-ancho-960.webp 960w, /ronqueo/img/atun-ancho-1440.webp 1440w, /ronqueo/img/atun-ancho-2000.webp 2000w'
 const FOTO_ALTO = '/ronqueo/img/atun-alto-400.webp 400w, /ronqueo/img/atun-alto-800.webp 800w, /ronqueo/img/atun-alto-1200.webp 1200w'
+
+/** Foto del evento en webp responsivo, recortada con object-fit: cover. */
+function Foto({ id, sizes, className, lazy = true }: { id: FotoId; sizes: string; className?: string; lazy?: boolean }) {
+  const f = FOTOS[id]
+  const srcSet = f.anchos.map(w => `/ronqueo/img/${f.base}-${w}.webp ${w}w`).join(', ')
+  return (
+    <img
+      className={className} srcSet={srcSet} sizes={sizes} src={`/ronqueo/img/${f.base}-${f.anchos[0]}.webp`}
+      alt={f.alt} loading={lazy ? 'lazy' : undefined} decoding="async" style={{ objectPosition: f.pos }}
+    />
+  )
+}
 
 function usePaginaNoche() {
   useEffect(() => {
@@ -129,13 +142,9 @@ export function Ronqueo() {
           <ol className="rq-momentos">
             {LA_NOCHE.momentos.map(m => (
               <li className="rq-momento" key={m.num} id={m.id}>
-                {m.foto ? (
-                  <div className="rq-momento__foto">
-                    <img srcSet={FOTO_ANCHO} sizes="(min-width: 900px) 30vw, 100vw" src="/ronqueo/img/atun-ancho-640.webp" alt="" loading="lazy" decoding="async" />
-                  </div>
-                ) : (
-                  <div className="rq-momento__foto rq-momento__foto--vacia" aria-hidden="true"><p>{m.placeholderFoto}</p></div>
-                )}
+                <div className="rq-momento__foto">
+                  <Foto id={m.foto} sizes="(min-width: 900px) 30vw, 100vw" />
+                </div>
                 <div className="rq-momento__t rq-filete">
                   <span className="rq-momento__num" aria-hidden="true">{m.num}</span>
                   <div className="rq-momento__c">
@@ -146,6 +155,33 @@ export function Ronqueo() {
               </li>
             ))}
           </ol>
+        </section>
+
+        <section className="rq-sec rq-dj" id="dj" aria-labelledby="rq-dj-t">
+          <div className="rq-dj__retrato">
+            <Foto id="djRetrato" sizes="(min-width: 900px) 42vw, 100vw" />
+          </div>
+          <div className="rq-dj__texto">
+            <p className="rq-pill rq-pill--lima">{DJ.pill}</p>
+            <p className="rq-dj__et">{DJ.etiqueta}</p>
+            <h2 id="rq-dj-t" className="rq-h2">{DJ.nombre}</h2>
+            <p className="rq-dj__bajada"><R t={DJ.texto} /></p>
+            <p className="rq-dj__horario">{DJ.horario}</p>
+            <ul className="rq-dj__datos" aria-label="en corto">
+              {DJ.datos.map(d => <li key={d}>{d}</li>)}
+            </ul>
+            <div className="rq-dj__bio">
+              {DJ.bio.map(p => <p key={p}>{p}</p>)}
+            </div>
+            <ul className="rq-dj__links">
+              {DJ.links.map(l => (
+                <li key={l.href}><a href={l.href} target="_blank" rel="noopener noreferrer" aria-label={`${l.etiqueta} (se abre en otra pestaña)`}>{l.texto} ↗</a></li>
+              ))}
+            </ul>
+            <div className="rq-dj__rojo">
+              <Foto id="djRojo" sizes="(min-width: 900px) 46vw, 100vw" />
+            </div>
+          </div>
         </section>
 
         <section className="rq-sec rq-itin" aria-labelledby="rq-itin-t">

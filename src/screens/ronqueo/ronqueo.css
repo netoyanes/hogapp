@@ -177,9 +177,12 @@
 }
 @media (min-width: 900px) {
   .rq-nav { border-bottom: 1px solid var(--borde-editorial); }
+}
+/* Los links completos necesitan ~1100px; antes de eso sigue el menú hamburguesa */
+@media (min-width: 1100px) {
   .rq-nav__links { display: flex; }
   .rq-nav__menu, .rq-nav__panel { display: none; }
-  .rq-nav__link { font-size: clamp(16px, calc(10px + 12 * var(--fl)), 22px); }
+  .rq-nav__link { font-size: clamp(16px, calc(6px + 16 * var(--fl)), 22px); white-space: nowrap; }
 }
 
 /* ── Hero ────────────────────────────────────────────────────────────────── */
@@ -255,8 +258,6 @@
 .rq-momento { display: flex; flex-direction: column; gap: 12px; min-width: 0; scroll-margin-top: 24px; }
 .rq-momento__foto { height: 220px; width: 100%; overflow: hidden; background: var(--placeholder-foto); }
 .rq-momento__foto img { width: 100%; height: 100%; object-fit: cover; }
-.rq-momento__foto--vacia { display: none; align-items: center; justify-content: center; padding: 24px; }
-.rq-momento__foto--vacia p { width: 280px; max-width: 100%; text-align: center; font-family: var(--mono); font-size: 18px; letter-spacing: 0.06em; line-height: 1.3; color: var(--texto-inverso); }
 .rq-momento__t { display: flex; gap: 12px; padding-top: 14px; }
 .rq-momento__num { font-family: var(--mono); color: var(--acento-principal); font-size: clamp(18px, calc(18px + 4 * var(--fl)), 22px); letter-spacing: 0.06em; line-height: 1.3; }
 .rq-momento__c { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
@@ -268,10 +269,39 @@
   .rq-momentos { flex-direction: row; gap: 32px; align-items: flex-start; }
   .rq-momento { flex: 1 1 0; gap: 20px; }
   .rq-momento__foto { height: clamp(220px, calc(140px + 160 * var(--fl)), 300px); }
-  .rq-momento__foto--vacia { display: flex; }
   .rq-momento__t { gap: 16px; padding-top: 20px; }
   .rq-momento__titulo { font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
   .rq-momento__c { gap: 8px; }
+}
+
+/* Red pig flower — sección para destacar a la DJ (fuera de Figma, mismos tokens) */
+.rq-dj { display: flex; flex-direction: column; gap: 32px; border-top: 1px solid var(--borde-editorial); }
+.rq-dj__retrato { order: 2; overflow: hidden; background: var(--placeholder-foto); }
+.rq-dj__retrato img { width: 100%; height: 440px; object-fit: cover; }
+.rq-dj__texto { order: 1; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.rq-dj__et { font-family: var(--mono); text-transform: uppercase; color: var(--acento-principal); font-size: clamp(13px, calc(13px + 9 * var(--fl)), 22px); letter-spacing: 0.08em; line-height: 1.3; margin-top: 8px; }
+.rq-dj__bajada { font-size: clamp(18px, calc(18px + 12 * var(--fl)), 30px); line-height: 1.25; letter-spacing: -0.02em; max-width: 620px; }
+.rq-dj__horario { font-family: var(--mono); color: var(--texto-secundario); font-size: clamp(13px, calc(13px + 9 * var(--fl)), 22px); letter-spacing: 0.08em; line-height: 1.3; }
+.rq-dj__datos { display: flex; flex-wrap: wrap; gap: 8px; }
+.rq-dj__datos li {
+  font-family: var(--mono); text-transform: uppercase; font-size: clamp(11px, calc(11px + 5 * var(--fl)), 16px); letter-spacing: 0.06em;
+  border: 1px solid var(--borde-editorial); border-radius: 4px; padding: 4px 10px; line-height: 1.3;
+}
+.rq-dj__bio { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--borde-editorial); padding-top: 16px; max-width: 620px; }
+.rq-dj__bio p { font-size: clamp(16px, calc(16px + 4 * var(--fl)), 20px); line-height: 1.4; letter-spacing: -0.01em; color: var(--texto-secundario); }
+.rq-dj__links { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.rq-dj__links a {
+  font-family: var(--mono); font-size: clamp(14px, calc(14px + 4 * var(--fl)), 18px); letter-spacing: 0.06em;
+  color: var(--acento-principal); border-bottom: 1px solid currentColor; padding: 6px 0;
+}
+.rq-dj__links a:hover { color: var(--texto-primario); }
+.rq-dj__rojo { margin-top: 8px; overflow: hidden; background: var(--bruma-vinyl); }
+.rq-dj__rojo img { width: 100%; aspect-ratio: 1600 / 1104; object-fit: cover; }
+@media (min-width: 900px) {
+  .rq-dj { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(40px, calc(-10px + 90 * var(--fl)), 80px); align-items: start; }
+  .rq-dj__retrato { order: 0; }
+  .rq-dj__retrato img { height: auto; aspect-ratio: 1154 / 1600; }
+  .rq-dj__texto { order: 0; gap: 20px; padding-top: 8px; }
 }
 
 /* Itinerario */
@@ -308,7 +338,7 @@
 .rq-fichas { display: flex; flex-direction: column; gap: 24px; }
 .rq-ficha { display: flex; flex-direction: column; gap: 4px; padding: 16px 0; }
 .rq-ficha__rol { font-family: var(--mono); text-transform: uppercase; color: var(--texto-secundario); font-size: clamp(12px, calc(12px + 6 * var(--fl)), 18px); letter-spacing: 0.06em; line-height: 1.3; }
-.rq-ficha__nombre { font-weight: 700; font-size: clamp(34px, calc(34px + 22 * var(--fl)), 56px); line-height: 1; letter-spacing: -0.03em; white-space: nowrap; }
+.rq-ficha__nombre { font-weight: 700; font-size: clamp(34px, calc(34px + 22 * var(--fl)), 56px); line-height: 1; letter-spacing: -0.03em; }
 .rq-ficha__texto { font-size: clamp(17px, calc(17px + 7 * var(--fl)), 24px); line-height: 1.3; letter-spacing: -0.01em; color: var(--texto-secundario); }
 @media (min-width: 900px) {
   .rq-quien { gap: 48px; }
