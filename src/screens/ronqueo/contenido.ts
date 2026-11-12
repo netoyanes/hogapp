@@ -35,6 +35,7 @@ export const NAV = {
   links: [
     { texto: 'la noche', href: '#la-noche' },
     { texto: 'el menú', href: '#cortes' },
+    { texto: 'la dj', href: '#dj' },
     { texto: 'quién', href: '#quien' },
     { texto: 'boleto', href: '#boleto' },
   ],
@@ -62,6 +63,17 @@ export const DATOS: { etiqueta: string; valor: Resp }[] = [
   { etiqueta: 'lugares', valor: '50' },
 ]
 
+// Fotos del evento (public/ronqueo/img, generadas con scripts/ronqueo-fotos.mjs).
+// `pos` es el object-position: qué parte de la foto queda a la vista al recortar.
+export const FOTOS = {
+  samu: { base: 'samu-ronqueo', anchos: [480, 972], alt: 'el chef samu despieza el atún frente a la mesa', pos: 'center 42%' },
+  atun: { base: 'atun-manos', anchos: [480, 972], alt: 'manos sobre un atún completo, abierto para el ronqueo', pos: 'center 45%' },
+  cuchillos: { base: 'cuchillos', anchos: [480, 954], alt: 'los cuchillos del ronqueo sobre la mesa de trabajo', pos: 'center 40%' },
+  djRetrato: { base: 'dj-retrato', anchos: [480, 800, 1154], alt: 'red pig flower, retrato en blanco y negro con corona', pos: 'center 30%' },
+  djRojo: { base: 'dj-rojo', anchos: [640, 1000, 1600], alt: 'red pig flower bailando bajo luz roja', pos: 'center 40%' },
+}
+export type FotoId = keyof typeof FOTOS
+
 export const LA_NOCHE = {
   titulo: ['la noche,', 'en tres cortes.'],
   indice: '01 · 02 · 03',
@@ -74,8 +86,7 @@ export const LA_NOCHE = {
         d: 'el chef samu presenta la pieza completa y la despieza frente a ti. qué es cada corte, de dónde sale y por qué sabe distinto.',
         m: 'el chef samu despieza la pieza completa frente a ti y explica cada corte.',
       } as Resp,
-      foto: 'atun' as const,
-      placeholderFoto: '',
+      foto: 'samu' as FotoId,
     },
     {
       id: 'cortes',
@@ -85,8 +96,7 @@ export const LA_NOCHE = {
         d: 'cada parte del atún preparada en un estilo distinto. [cortes y preparaciones por definir con cocina]',
         m: 'cada parte del atún en un estilo distinto. [cortes por definir con cocina]',
       } as Resp,
-      foto: null,
-      placeholderFoto: 'foto: tabla con los cortes ya preparados, cenital',
+      foto: 'atun' as FotoId,
     },
     {
       id: undefined,
@@ -96,8 +106,7 @@ export const LA_NOCHE = {
         d: 'degustación all you can eat de 8:00 a 9:00 pm. después la barra toma la noche y la música sigue.',
         m: 'all you can eat de 8:00 a 9:00 pm. después, barra y música.',
       } as Resp,
-      foto: null,
-      placeholderFoto: 'foto: mesa compartida, manos sirviéndose',
+      foto: 'cuchillos' as FotoId,
     },
   ],
 }
@@ -108,7 +117,27 @@ export const ITINERARIO = {
     { hora: '6:00 pm', que: 'puertas y welcome drink', detalle: 'welcome drink para quien llegue entre 6:00 y 7:00. música en vivo.' },
     { hora: '7:30 pm', que: 'empieza el ronqueo', detalle: 'el chef samu abre la pieza y explica cada corte.' },
     { hora: '8:00 – 9:00', que: 'all you can eat', detalle: 'todos los cortes, preparados al momento, sin límite.' },
-    { hora: '9:00 pm →', que: 'la barra y la cabina', detalle: 'anika en la barra con un coctel pensado para el atún. red pig en cabina.' },
+    { hora: '9:00 pm →', que: 'la barra y la cabina', detalle: 'anika en la barra con un coctel pensado para el atún. red pig flower en cabina.' },
+  ],
+}
+
+// Sección propia para destacar a la DJ (no está en Figma; usa los mismos estilos).
+// Bio resumida de la que mandó la artista (redpigflower.com).
+export const DJ = {
+  pill: 'dj set · toda la noche',
+  etiqueta: 'en cabina',
+  nombre: 'red pig flower.',
+  texto: 'toca durante el servicio y se queda en cabina cuando la cocina cierra.' as Resp,
+  horario: 'durante el servicio · 9:00 pm →',
+  bio: [
+    'artista nacida en seúl. su camino la llevó por tokio, londres y berlín, y hoy vive en bruselas.',
+    'trae su giro propio al techno contemporáneo: ha tocado en clubes de todo el mundo, publica sus producciones desde hace una década y cofundó el sello sound of vast.',
+    'también hace arte digital y lo ha expuesto en el ncca de moscú, goldsmiths en londres y el asia culture centre de gwangju.',
+  ],
+  datos: ['techno', 'seúl → bruselas', 'sound of vast'],
+  links: [
+    { texto: '@redpigflower', href: 'https://instagram.com/redpigflower', etiqueta: 'instagram de red pig flower' },
+    { texto: 'redpigflower.com', href: 'https://redpigflower.com', etiqueta: 'sitio de red pig flower' },
   ],
 }
 
@@ -116,7 +145,7 @@ export const QUIEN = {
   titulo: { d: 'quién está detrás.', m: 'quién está\ndetrás.' } as Resp,
   fichas: [
     { rol: 'en cocina', nombre: 'chef samu', texto: { d: 'oyster club. lleva el ronqueo de principio a fin.', m: 'oyster club' } as Resp },
-    { rol: 'en cabina', nombre: 'red pig', texto: { d: 'toca durante el servicio y se queda cuando la cocina cierra.', m: 'durante el servicio y después' } as Resp },
+    { rol: 'en cabina', nombre: 'red pig flower', texto: { d: 'dj de techno nacida en seúl, hoy en bruselas. toca durante el servicio y se queda cuando la cocina cierra.', m: 'techno · seúl → bruselas' } as Resp },
     { rol: 'en la barra', nombre: 'anika', texto: { d: 'head bartender de bruma records. presenta un coctel para el atún.', m: 'head bartender de bruma records' } as Resp },
   ],
 }
