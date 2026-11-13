@@ -8,7 +8,7 @@ import { type FotoId } from './contenido'
 import { CambioIdioma, ProveedorIdioma } from './idioma'
 import { useContenido, useIdioma } from './idiomaCtx'
 import { registrar } from './embudo'
-import { pixelInicioPago, pixelVioBoleto } from './pixel'
+import { pixelInicioPago, pixelVistaLanding } from './pixel'
 import { abrirCheckout, liberarReserva, pedirCupo, pesos, type Cupo } from './api'
 
 const FOTO_ANCHO = '/ronqueo/img/atun-ancho-640.webp 640w, /ronqueo/img/atun-ancho-960.webp 960w, /ronqueo/img/atun-ancho-1440.webp 1440w, /ronqueo/img/atun-ancho-2000.webp 2000w'
@@ -47,7 +47,10 @@ function RonqueoPagina() {
   usePaginaNoche(UI.tituloDoc)
   const { idioma } = useIdioma()
   // Embudo: una visita por carga de página; cada clic en «compra tu boleto» con su lugar
-  useEffect(() => { registrar('visita', { idioma, unaVez: true }) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    registrar('visita', { idioma, unaVez: true })
+    pixelVistaLanding(EVENTO.precio) // Meta Pixel: ViewContent al cargar /ronqueo
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const cta = (detalle: string) => () => registrar('cta', { idioma, detalle })
   const [cupo, setCupo] = useState<Cupo | null>(null)
   const [menuAbierto, setMenuAbierto] = useState(false)
@@ -83,12 +86,11 @@ function RonqueoPagina() {
       setBoletoVisible(e.isIntersecting)
       if (e.isIntersecting) {
         registrar('boleto_visto', { idioma: document.documentElement.lang === 'en' ? 'en' : 'es', unaVez: true })
-        pixelVioBoleto(EVENTO.precio)
       }
     }, { threshold: 0.15 })
     io.observe(el)
     return () => io.disconnect()
-  }, [EVENTO.precio])
+  }, [])
 
   // Escape cierra el menú mobile
   useEffect(() => {
