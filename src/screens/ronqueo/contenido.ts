@@ -31,7 +31,7 @@ export const EVENTO = {
     inicio: '20261120T180000', // vie 20 nov 2026, 6:00 pm (puertas)
     fin: '20261120T230000', // [hora de cierre por definir] — se asume 11:00 pm
     zona: 'America/Mazatlan',
-    lugar: 'bruma records · [dirección por definir] · mazatlán',
+    lugar: 'bruma records · niños héroes 1511, col. centro, mazatlán, sinaloa',
     descripcion: 'puertas 6:00 pm · ronqueo 7:30 pm · all you can eat 8:00 – 9:00 pm. llega temprano, de verdad.',
   },
 }
@@ -177,7 +177,7 @@ export const BOLETO = {
       whatsapp: 'whatsapp',
     },
     pagar: 'pagar',
-    legal: 'pago seguro con stripe · tarjeta de crédito o débito · recibes tu código RONQUEO por correo al instante.',
+    legal: 'pago seguro con stripe · tarjeta de crédito o débito · recibes tu código BOLETO por correo al instante.',
     agotado: 'ya no quedan lugares',
     cargando: 'abriendo stripe…',
     cancelado: 'el pago no se completó. tus lugares siguen disponibles un rato; puedes intentarlo otra vez.',
@@ -206,7 +206,7 @@ export const CIERRE = {
 export const FOOTER = {
   lineas: [
     'bruma records · café-bar & music',
-    '[dirección por definir] · mazatlán',
+    'niños héroes 1511, col. centro · mazatlán, sinaloa',
     '@bruma_rec · #ronqueobruma',
   ],
 }

@@ -35,6 +35,15 @@
   ],
   "headers": [
     {
+      "source": "/pr/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
       "source": "/r/:code",
       "headers": [
         {
