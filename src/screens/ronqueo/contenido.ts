@@ -122,7 +122,7 @@ export const ITINERARIO = {
     { hora: '6:00 pm', que: 'puertas y welcome drink', detalle: 'welcome drink para quien llegue entre 6:00 y 7:00. música en vivo.' },
     { hora: '7:30 pm', que: 'empieza el ronqueo', detalle: 'el chef samu abre la pieza y explica cada corte.' },
     { hora: '8:00 – 9:00', que: 'all you can eat', detalle: 'todos los cortes, preparados al momento, sin límite.' },
-    { hora: '9:00 pm →', que: 'la barra y la cabina', detalle: 'anika en la barra con un coctel pensado para el atún. red pig flower en cabina.' },
+    { hora: '9:00 pm →', que: 'la barra y la cabina', detalle: 'arinka en la barra con un coctel pensado para el atún. red pig flower en cabina.' },
   ],
 }
 
@@ -151,7 +151,7 @@ export const QUIEN = {
   fichas: [
     { rol: 'en cocina', nombre: 'chef samu', texto: { d: 'oyster club. lleva el ronqueo de principio a fin.', m: 'oyster club' } as Resp },
     { rol: 'en cabina', nombre: 'red pig flower', texto: { d: 'dj de techno nacida en seúl, hoy en bruselas. toca durante el servicio y se queda cuando la cocina cierra.', m: 'techno · seúl → bruselas' } as Resp },
-    { rol: 'en la barra', nombre: 'anika', texto: { d: 'head bartender de bruma records. presenta un coctel para el atún.', m: 'head bartender de bruma records' } as Resp },
+    { rol: 'en la barra', nombre: 'arinka', texto: { d: 'head bartender de bruma records. presenta un coctel para el atún.', m: 'head bartender de bruma records' } as Resp },
   ],
 }
 
