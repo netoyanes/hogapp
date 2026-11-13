@@ -1,0 +1,75 @@
+/* /pr/invitaciones — herramienta interna; usa los tokens de Bruma en modo Día
+   (definidos en ronqueo.css, que llega con componentes.tsx). */
+
+.pr { min-height: 100vh; padding-bottom: 64px; }
+.pr-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 20px var(--gutter); border-bottom: 1px solid var(--borde-editorial); }
+.pr-top .rq-logo img { width: 90px; }
+.pr-top__t { text-align: right; display: flex; flex-direction: column; gap: 4px; }
+.pr-et { font-family: var(--mono); text-transform: uppercase; font-size: 12px; letter-spacing: 0.08em; color: var(--acento-cálido); }
+.pr-yo { font-size: 15px; }
+.pr-main { padding: 32px var(--gutter) 0; max-width: 1440px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; min-width: 0; }
+.pr-main > *, .pr-registro > * { min-width: 0; max-width: 100%; }
+.pr-h1 { font-weight: 800; letter-spacing: -0.04em; line-height: 0.95; font-size: clamp(36px, calc(36px + 20 * var(--fl)), 56px); }
+.pr-h2 { font-weight: 800; letter-spacing: -0.04em; line-height: 0.95; font-size: clamp(32px, calc(32px + 12 * var(--fl)), 44px); }
+.pr-nota { font-size: 15px; line-height: 1.4; color: var(--texto-secundario); }
+.pr-ayuda { font-size: 13px; line-height: 1.4; color: var(--texto-secundario); }
+.pr-error { font-size: 15px; color: #a3321b; background: #fbe4dc; padding: 10px 12px; border-radius: 4px; }
+.pr-link { font-family: var(--mono); font-size: 13px; letter-spacing: 0.04em; text-decoration: underline; text-underline-offset: 3px; padding: 6px 4px; color: var(--texto-primario); }
+.pr-link--peligro { color: #a3321b; }
+.pr-mono { font-family: var(--mono); font-size: 13px; letter-spacing: 0.04em; }
+.pr-nowrap { white-space: nowrap; }
+
+/* Campos */
+.pr-campo { display: flex; flex-direction: column; gap: 6px; }
+.pr-campo label, .pr-label, .pr-set legend { font-family: var(--mono); text-transform: uppercase; font-size: 12px; letter-spacing: 0.08em; color: var(--texto-secundario); padding: 0; }
+.pr-campo input {
+  font: inherit; font-size: 18px; color: var(--texto-primario); background: #fffcef;
+  border: 1px solid var(--borde-editorial); border-radius: 4px; padding: 12px 14px; width: 100%;
+}
+.pr-set { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pr-seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.pr-op { position: relative; cursor: pointer; }
+.pr-op input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.pr-op span { display: inline-flex; padding: 10px 14px; border: 1px solid var(--borde-editorial); border-radius: 4px; font-size: 15px; line-height: 1.2; background: #fffcef; }
+.pr-op input:checked + span { background: var(--bruma-verde-profundo); color: var(--bruma-papel); }
+.pr-op input:focus-visible + span { outline: 3px solid var(--bruma-verde-profundo); outline-offset: 2px; box-shadow: 0 0 0 6px var(--bruma-lima); }
+.pr-stepper { display: inline-flex; align-self: flex-start; border: 1.5px solid var(--borde-editorial); border-radius: 4px; }
+.pr-stepper button, .pr-stepper output { min-width: 48px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 20px; }
+.pr-stepper button:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Acceso */
+.pr-acceso { max-width: 440px; display: flex; flex-direction: column; gap: 18px; }
+.pr-acceso .rq-btn { align-self: flex-start; }
+
+/* Formulario + vista previa */
+.pr-grid { display: flex; flex-direction: column; gap: 32px; }
+.pr-form { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.pr-generar { align-self: stretch; }
+.pr-hecha { border: 1px solid var(--borde-editorial); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 8px; background: #fffcef; }
+.pr-hecha__codigo { font-weight: 800; letter-spacing: -0.04em; font-size: 40px; line-height: 1; }
+.pr-acciones { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.pr-acciones .rq-btn { font-size: 16px; padding: 12px 16px; }
+.pr-previa { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pr-previa__imgs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.pr-previa__imgs--2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.pr-previa figure { display: flex; flex-direction: column; gap: 6px; }
+.pr-previa img { width: 100%; height: auto; border: 1px solid color-mix(in srgb, var(--borde-editorial) 25%, transparent); box-shadow: 0 10px 30px rgba(22, 23, 20, .12); }
+.pr-previa__cargando { width: 100%; background: var(--bruma-hueso); }
+.pr-previa figcaption { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; color: var(--texto-secundario); }
+@media (min-width: 1000px) {
+  .pr-grid { display: grid; grid-template-columns: minmax(360px, 5fr) minmax(0, 7fr); gap: 48px; align-items: start; }
+  .pr-previa { position: sticky; top: 16px; }
+  .pr-previa__imgs:not(.pr-previa__imgs--2) { max-width: 520px; }
+}
+
+/* Registro */
+.pr-registro { display: flex; flex-direction: column; gap: 16px; }
+.pr-registro__enc { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; border-top: 1px solid var(--borde-editorial); padding-top: 24px; }
+.pr-buscar { max-width: 420px; }
+.pr-tabla-w { position: relative; overflow-x: auto; border: 1px solid var(--borde-editorial); border-radius: 8px; background: #fffcef; }
+.pr-tabla { width: 100%; border-collapse: collapse; font-size: 15px; }
+.pr-tabla th { text-align: left; font-family: var(--mono); font-weight: 400; text-transform: uppercase; font-size: 11px; letter-spacing: 0.08em; color: var(--texto-secundario); padding: 10px 12px; border-bottom: 1px solid var(--borde-editorial); white-space: nowrap; }
+.pr-tabla td { white-space: nowrap; padding: 10px 12px; border-top: 1px solid color-mix(in srgb, var(--borde-editorial) 18%, transparent); vertical-align: middle; }
+.pr-anulada td { color: var(--texto-secundario); text-decoration: line-through; }
+.pr-anulada td:last-child { text-decoration: none; }
+.pr-badge { margin-left: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; background: #fbe4dc; color: #a3321b; padding: 2px 6px; border-radius: 3px; text-decoration: none; display: inline-block; }

@@ -1,7 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Ronqueo · venta de boletos de «All You Can Eat · Edición Ronqueo» (Bruma
 -- Records, vie 20 nov 2026). Cobro con Stripe Checkout desde la edge function
--- `ronqueo-tickets`; aquí viven las órdenes, el cupo y los códigos RONQUEO-XX.
+-- `ronqueo-tickets`; aquí viven las órdenes, el cupo y los códigos BOLETO-XX (RONQUEO-XX
+-- y CORTESÍA-XX son de las invitaciones de PR: ver ronqueo_invitaciones.sql).
 --
 -- Cómo se controla el cupo (50 lugares, contados por CANTIDAD):
 --   · ronqueo_reservar() toma un candado transaccional (pg_advisory_xact_lock)
@@ -152,7 +153,7 @@ begin
   get diagnostics n = row_count;
   if n > 0 then
     update ronqueo_orders
-       set codigo = 'RONQUEO-' || lpad(codigo_num::text, 2, '0')
+       set codigo = 'BOLETO-' || lpad(codigo_num::text, 2, '0')
      where stripe_session_id = p_session_id and codigo is null;
   end if;
   return query select * from ronqueo_orders where stripe_session_id = p_session_id;
