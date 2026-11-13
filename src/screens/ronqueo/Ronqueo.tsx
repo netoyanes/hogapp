@@ -8,6 +8,7 @@ import { type FotoId } from './contenido'
 import { CambioIdioma, ProveedorIdioma } from './idioma'
 import { useContenido, useIdioma } from './idiomaCtx'
 import { registrar } from './embudo'
+import { pixelInicioPago, pixelVioBoleto } from './pixel'
 import { abrirCheckout, liberarReserva, pedirCupo, pesos, type Cupo } from './api'
 
 const FOTO_ANCHO = '/ronqueo/img/atun-ancho-640.webp 640w, /ronqueo/img/atun-ancho-960.webp 960w, /ronqueo/img/atun-ancho-1440.webp 1440w, /ronqueo/img/atun-ancho-2000.webp 2000w'
@@ -80,11 +81,14 @@ function RonqueoPagina() {
     if (!el || !('IntersectionObserver' in window)) return
     const io = new IntersectionObserver(([e]) => {
       setBoletoVisible(e.isIntersecting)
-      if (e.isIntersecting) registrar('boleto_visto', { idioma: document.documentElement.lang === 'en' ? 'en' : 'es', unaVez: true })
+      if (e.isIntersecting) {
+        registrar('boleto_visto', { idioma: document.documentElement.lang === 'en' ? 'en' : 'es', unaVez: true })
+        pixelVioBoleto(EVENTO.precio)
+      }
     }, { threshold: 0.15 })
     io.observe(el)
     return () => io.disconnect()
-  }, [])
+  }, [EVENTO.precio])
 
   // Escape cierra el menú mobile
   useEffect(() => {
@@ -335,6 +339,7 @@ function Compra({ cupo, agotado, cancelado, refTarjeta, onAgotado }: {
       return
     }
     registrar('pagar', { idioma, detalle: String(cant) })
+    pixelInicioPago(cant, total)
     setEnviando(true)
     setAviso(null)
     try {
