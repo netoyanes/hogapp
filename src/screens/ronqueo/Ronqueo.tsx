@@ -4,10 +4,10 @@
 // ronqueo-tickets); aquí solo mandamos cantidad + datos y redirigimos.
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { R, Logo, Surcos } from './componentes'
-import {
-  BARRA_MOVIL, BOLETO, CIERRE, DATOS, DJ, EVENTO, FOOTER, FOTOS, HERO, ITINERARIO, LA_NOCHE, NAV, PREGUNTAS, QUIEN,
-  type FotoId,
-} from './contenido'
+import { type FotoId } from './contenido'
+import { CambioIdioma, ProveedorIdioma } from './idioma'
+import { useContenido, useIdioma } from './idiomaCtx'
+import { registrar } from './embudo'
 import { abrirCheckout, liberarReserva, pedirCupo, pesos, type Cupo } from './api'
 
 const FOTO_ANCHO = '/ronqueo/img/atun-ancho-640.webp 640w, /ronqueo/img/atun-ancho-960.webp 960w, /ronqueo/img/atun-ancho-1440.webp 1440w, /ronqueo/img/atun-ancho-2000.webp 2000w'
@@ -15,6 +15,7 @@ const FOTO_ALTO = '/ronqueo/img/atun-alto-400.webp 400w, /ronqueo/img/atun-alto-
 
 /** Foto del evento en webp responsivo, recortada con object-fit: cover. */
 function Foto({ id, sizes, className, lazy = true }: { id: FotoId; sizes: string; className?: string; lazy?: boolean }) {
+  const { FOTOS } = useContenido()
   const f = FOTOS[id]
   const srcSet = f.anchos.map(w => `/ronqueo/img/${f.base}-${w}.webp ${w}w`).join(', ')
   return (
@@ -25,18 +26,28 @@ function Foto({ id, sizes, className, lazy = true }: { id: FotoId; sizes: string
   )
 }
 
-function usePaginaNoche() {
+function usePaginaNoche(titulo: string) {
   useEffect(() => {
     const prev = document.body.style.background
     document.body.style.background = '#161714'
-    // main.tsx pone el título de HOG APP; aquí va el del evento
-    document.title = 'all you can eat · edición ronqueo · bruma records'
     return () => { document.body.style.background = prev }
   }, [])
+  // main.tsx pone el título de HOG APP; aquí va el del evento (en su idioma)
+  useEffect(() => { document.title = titulo }, [titulo])
 }
 
+/** Español por default; el botón «EN» de arriba cambia todo a inglés. */
 export function Ronqueo() {
-  usePaginaNoche()
+  return <ProveedorIdioma><RonqueoPagina /></ProveedorIdioma>
+}
+
+function RonqueoPagina() {
+  const { BARRA_MOVIL, BOLETO, CIERRE, DATOS, DJ, EVENTO, FOOTER, HERO, ITINERARIO, LA_NOCHE, NAV, PREGUNTAS, QUIEN, UI } = useContenido()
+  usePaginaNoche(UI.tituloDoc)
+  const { idioma } = useIdioma()
+  // Embudo: una visita por carga de página; cada clic en «compra tu boleto» con su lugar
+  useEffect(() => { registrar('visita', { idioma, unaVez: true }) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const cta = (detalle: string) => () => registrar('cta', { idioma, detalle })
   const [cupo, setCupo] = useState<Cupo | null>(null)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [boletoVisible, setBoletoVisible] = useState(false)
@@ -67,7 +78,10 @@ export function Ronqueo() {
   useEffect(() => {
     const el = compraRef.current
     if (!el || !('IntersectionObserver' in window)) return
-    const io = new IntersectionObserver(([e]) => setBoletoVisible(e.isIntersecting), { threshold: 0.15 })
+    const io = new IntersectionObserver(([e]) => {
+      setBoletoVisible(e.isIntersecting)
+      if (e.isIntersecting) registrar('boleto_visto', { idioma: document.documentElement.lang === 'en' ? 'en' : 'es', unaVez: true })
+    }, { threshold: 0.15 })
     io.observe(el)
     return () => io.disconnect()
   }, [])
@@ -84,27 +98,30 @@ export function Ronqueo() {
 
   return (
     <div className="rq">
-      <a className="rq-saltar" href="#boleto">ir a comprar boleto</a>
+      <a className="rq-saltar" href="#boleto" onClick={cta('saltar')}>{UI.saltar}</a>
 
       <header className="rq-nav">
-        <Logo tono="noche" />
-        <nav aria-label="secciones">
+        <Logo tono="noche" etiqueta={UI.inicio} />
+        <div className="rq-nav__der">
+        <CambioIdioma />
+        <nav aria-label={UI.secciones}>
           <ul className="rq-nav__links">
-            {NAV.links.map(l => <li key={l.href}><a className="rq-nav__link" href={l.href}>{l.texto}</a></li>)}
-            <li><a className="rq-btn rq-btn--lima" href="#boleto">{NAV.cta}</a></li>
+            {NAV.links.map(l => <li key={l.href}><a className="rq-nav__link" href={l.href} onClick={l.href === '#boleto' ? cta('nav-link') : undefined}>{l.texto}</a></li>)}
+            <li><a className="rq-btn rq-btn--lima" href="#boleto" onClick={cta('nav')}>{NAV.cta}</a></li>
           </ul>
           <button
             className="rq-nav__menu" type="button" aria-expanded={menuAbierto} aria-controls="rq-menu"
-            aria-label={menuAbierto ? 'cerrar menú' : 'abrir menú'} onClick={() => setMenuAbierto(v => !v)}
+            aria-label={menuAbierto ? UI.cerrarMenu : UI.abrirMenu} onClick={() => setMenuAbierto(v => !v)}
           >
             <span /><span /><span />
           </button>
           {menuAbierto && (
             <div className="rq-nav__panel" id="rq-menu">
-              {NAV.links.map(l => <a key={l.href} href={l.href} onClick={() => setMenuAbierto(false)}>{l.texto}</a>)}
+              {NAV.links.map(l => <a key={l.href} href={l.href} onClick={() => { setMenuAbierto(false); if (l.href === '#boleto') cta('menu')() }}>{l.texto}</a>)}
             </div>
           )}
         </nav>
+        </div>
       </header>
 
       <main>
@@ -122,13 +139,13 @@ export function Ronqueo() {
             </h1>
             <p className="rq-hero__bajada"><R t={HERO.bajada} /></p>
             <div className="rq-hero__ctas">
-              <a className="rq-btn rq-btn--lima" href="#boleto">{HERO.ctaPrincipal}</a>
+              <a className="rq-btn rq-btn--lima" href="#boleto" onClick={cta('hero')}>{HERO.ctaPrincipal}</a>
               <a className="rq-btn rq-btn--borde" href="#la-noche">{HERO.ctaSecundario}</a>
             </div>
           </div>
         </section>
 
-        <dl className="rq-datos" aria-label="datos del evento">
+        <dl className="rq-datos" aria-label={UI.datosEvento}>
           {DATOS.map(d => (
             <div key={d.etiqueta}><dt>{d.etiqueta}</dt><dd><R t={d.valor} /></dd></div>
           ))}
@@ -167,7 +184,7 @@ export function Ronqueo() {
             <h2 id="rq-dj-t" className="rq-h2">{DJ.nombre}</h2>
             <p className="rq-dj__bajada"><R t={DJ.texto} /></p>
             <p className="rq-dj__horario">{DJ.horario}</p>
-            <ul className="rq-dj__datos" aria-label="en corto">
+            <ul className="rq-dj__datos" aria-label={UI.enCorto}>
               {DJ.datos.map(d => <li key={d}>{d}</li>)}
             </ul>
             <div className="rq-dj__bio">
@@ -175,7 +192,7 @@ export function Ronqueo() {
             </div>
             <ul className="rq-dj__links">
               {DJ.links.map(l => (
-                <li key={l.href}><a href={l.href} target="_blank" rel="noopener noreferrer" aria-label={`${l.etiqueta} (se abre en otra pestaña)`}>{l.texto} ↗</a></li>
+                <li key={l.href}><a href={l.href} target="_blank" rel="noopener noreferrer" aria-label={`${l.etiqueta} ${UI.nuevaPestana}`}>{l.texto} ↗</a></li>
               ))}
             </ul>
             <div className="rq-dj__rojo">
@@ -217,18 +234,18 @@ export function Ronqueo() {
           <div className="rq-boleto__grid">
             <div className="rq-boleto__izq">
               <p className="rq-pill rq-pill--verde">{BOLETO.pill}</p>
-              <h2 id="rq-boleto-t" className="rq-precio"><span className="rq-sr">boleto: </span>{BOLETO.precio}</h2>
+              <h2 id="rq-boleto-t" className="rq-precio"><span className="rq-sr">{UI.boletoSr}</span>{BOLETO.precio}</h2>
               <p className="rq-porpersona">
                 <span>{BOLETO.porPersona}</span>
                 {cupo && (agotado || EVENTO.mostrarRestantes) && (
-                  <span className="rq-quedan" aria-live="polite">{agotado ? BOLETO.compra.agotado : `quedan ${cupo.restantes} de ${cupo.cupo} lugares`}</span>
+                  <span className="rq-quedan" aria-live="polite">{agotado ? BOLETO.compra.agotado : UI.quedan(cupo.restantes, cupo.cupo)}</span>
                 )}
               </p>
               <p className="rq-pill rq-pill--lima">{BOLETO.destacado}</p>
               <ul className="rq-incluye">
                 {BOLETO.incluye.map((t, i) => (
                   <li className="rq-incluye__fila rq-filete" key={i}>
-                    <span className="rq-incluye__et">incluye</span>
+                    <span className="rq-incluye__et">{UI.incluye}</span>
                     <span className="rq-incluye__tx"><R t={t} /></span>
                   </li>
                 ))}
@@ -252,9 +269,9 @@ export function Ronqueo() {
           </dl>
         </section>
 
-        <section className="rq-sec rq-cierre" aria-label="cierre">
+        <section className="rq-sec rq-cierre" aria-label={UI.cierre}>
           <p className="rq-cierre__titulo"><R t={CIERRE.titulo} /></p>
-          <a className="rq-btn rq-btn--oscuro" href="#boleto">{CIERRE.cta}</a>
+          <a className="rq-btn rq-btn--oscuro" href="#boleto" onClick={cta('cierre')}>{CIERRE.cta}</a>
         </section>
       </main>
 
@@ -268,9 +285,9 @@ export function Ronqueo() {
       <div className="rq-barra rq-dia" data-oculta={boletoVisible} aria-hidden={boletoVisible || undefined}>
         <div className="rq-barra__precio">
           <span className="rq-barra__monto">{BARRA_MOVIL.precio}</span>
-          <span className="rq-barra__lugares">{agotado ? 'agotado' : cupo && EVENTO.mostrarRestantes ? `${cupo.restantes} lugares` : `${EVENTO.cupo} lugares`}</span>
+          <span className="rq-barra__lugares">{agotado ? UI.agotado : cupo && EVENTO.mostrarRestantes ? UI.lugaresN(cupo.restantes) : UI.lugaresN(EVENTO.cupo)}</span>
         </div>
-        <a className="rq-btn rq-btn--lima" href="#boleto" tabIndex={boletoVisible ? -1 : undefined}>{BARRA_MOVIL.cta}</a>
+        <a className="rq-btn rq-btn--lima" href="#boleto" onClick={cta('barra')} tabIndex={boletoVisible ? -1 : undefined}>{BARRA_MOVIL.cta}</a>
       </div>
     </div>
   )
@@ -283,6 +300,8 @@ function Compra({ cupo, agotado, cancelado, refTarjeta, onAgotado }: {
   cupo: Cupo | null; agotado: boolean; cancelado: boolean
   refTarjeta: React.RefObject<HTMLElement | null>; onAgotado: (restantes: number) => void
 }) {
+  const { BOLETO, EVENTO, UI } = useContenido()
+  const { idioma } = useIdioma()
   const uid = useId()
   const max = Math.max(1, Math.min(cupo?.maxPorCompra ?? EVENTO.maxPorCompra, cupo?.restantes ?? EVENTO.maxPorCompra))
   const [cantidad, setCantidad] = useState(2)
@@ -301,9 +320,9 @@ function Compra({ cupo, agotado, cancelado, refTarjeta, onAgotado }: {
 
   function validar(): Errores {
     const e: Errores = {}
-    if (nombre.trim().length < 2) e.nombre = 'escribe el nombre que va en la lista'
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo.trim())) e.correo = 'revisa tu correo: ahí llega tu código'
-    if (whatsapp.replace(/\D/g, '').length < 10) e.whatsapp = 'tu whatsapp a 10 dígitos'
+    if (nombre.trim().length < 2) e.nombre = UI.errNombre
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo.trim())) e.correo = UI.errCorreo
+    if (whatsapp.replace(/\D/g, '').length < 10) e.whatsapp = UI.errWhatsapp
     return e
   }
 
@@ -315,18 +334,19 @@ function Compra({ cupo, agotado, cancelado, refTarjeta, onAgotado }: {
       document.getElementById(`${uid}-${Object.keys(e)[0]}`)?.focus()
       return
     }
+    registrar('pagar', { idioma, detalle: String(cant) })
     setEnviando(true)
     setAviso(null)
     try {
-      const { url } = await abrirCheckout({ cantidad: cant, nombre: nombre.trim(), correo: correo.trim(), whatsapp: whatsapp.trim() })
+      const { url } = await abrirCheckout({ cantidad: cant, nombre: nombre.trim(), correo: correo.trim(), whatsapp: whatsapp.trim(), idioma })
       location.href = url
     } catch (err) {
       const x = err as Error & { restantes?: number }
       if (typeof x.restantes === 'number') {
         onAgotado(x.restantes)
-        setAviso(x.restantes > 0 ? `solo quedan ${x.restantes} lugares. ajusta la cantidad.` : BOLETO.compra.agotado)
+        setAviso(x.restantes > 0 ? UI.soloQuedan(x.restantes) : BOLETO.compra.agotado)
       } else {
-        setAviso('no pudimos abrir el pago. intenta otra vez en un momento.')
+        setAviso(UI.errPago)
       }
       setEnviando(false)
     }
@@ -356,9 +376,9 @@ function Compra({ cupo, agotado, cancelado, refTarjeta, onAgotado }: {
               if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); setCantidad(Math.max(1, cant - 1)) }
             }}
           >
-            <button type="button" aria-label="quitar un lugar" disabled={bloqueado || cant <= 1} onClick={() => setCantidad(cant - 1)}>–</button>
-            <output aria-live="polite" aria-label={`${cant} ${cant === 1 ? 'lugar' : 'lugares'}`}>{cant}</output>
-            <button type="button" aria-label="agregar un lugar" disabled={bloqueado || cant >= max} onClick={() => setCantidad(cant + 1)}>+</button>
+            <button type="button" aria-label={UI.quitarLugar} disabled={bloqueado || cant <= 1} onClick={() => setCantidad(cant - 1)}>–</button>
+            <output aria-live="polite" aria-label={UI.lugarN(cant)}>{cant}</output>
+            <button type="button" aria-label={UI.agregarLugar} disabled={bloqueado || cant >= max} onClick={() => setCantidad(cant + 1)}>+</button>
           </div>
         </div>
         <div className="rq-compra__fila rq-compra__fila--total">
@@ -368,9 +388,9 @@ function Compra({ cupo, agotado, cancelado, refTarjeta, onAgotado }: {
           </div>
           <p className="rq-total__monto" aria-live="polite">{pesos(total)}</p>
         </div>
-        {campo('nombre', nombre, setNombre, { autoComplete: 'name', placeholder: 'como te anotamos' })}
-        {campo('correo', correo, setCorreo, { type: 'email', autoComplete: 'email', inputMode: 'email', placeholder: 'tu@correo.com' })}
-        {campo('whatsapp', whatsapp, setWhatsapp, { type: 'tel', autoComplete: 'tel', inputMode: 'tel', placeholder: '669 000 0000' })}
+        {campo('nombre', nombre, setNombre, { autoComplete: 'name', placeholder: UI.phNombre })}
+        {campo('correo', correo, setCorreo, { type: 'email', autoComplete: 'email', inputMode: 'email', placeholder: UI.phCorreo })}
+        {campo('whatsapp', whatsapp, setWhatsapp, { type: 'tel', autoComplete: 'tel', inputMode: 'tel', placeholder: UI.phWhatsapp })}
         {aviso && <p className="rq-compra__aviso" role="status">{aviso}</p>}
         <button className="rq-btn rq-btn--lima rq-compra__pagar" type="submit" disabled={bloqueado} aria-disabled={bloqueado}>
           {agotado ? BOLETO.compra.agotado : enviando ? BOLETO.compra.cargando : `${BOLETO.compra.pagar} ${pesos(total)}`}

@@ -23,7 +23,7 @@ async function llamar<T>(body: Record<string, unknown>): Promise<T> {
 
 export const pedirCupo = () => llamar<Cupo>({ action: 'cupo' })
 
-export const abrirCheckout = (datos: { cantidad: number; nombre: string; correo: string; whatsapp: string }) =>
+export const abrirCheckout = (datos: { cantidad: number; nombre: string; correo: string; whatsapp: string; idioma: 'es' | 'en' }) =>
   llamar<{ url: string }>({ action: 'checkout', ...datos })
 
 export const liberarReserva = (orden: string) => llamar<{ ok: boolean }>({ action: 'liberar', orden })

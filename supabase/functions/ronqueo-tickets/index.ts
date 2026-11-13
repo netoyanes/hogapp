@@ -13,6 +13,8 @@
 //                               Stripe ya marca el pago, confirma aquí mismo
 //                               (misma lógica idempotente que el webhook).
 //   · { action: 'reenviar' }    staff de HOG APP (con su sesión) reenvía el correo
+//   · { action: 'evento' }      embudo anónimo del landing (visita, cta, pagar…);
+//                               lo manda el navegador con sendBeacon
 //   · webhook de Stripe         lo reconoce por el header `stripe-signature`;
 //                               verifica la firma con STRIPE_WEBHOOK_SECRET.
 //                               checkout.session.completed → código + correo;
@@ -58,6 +60,7 @@ const DESCRIPCION = 'vie 20 nov 2026 · puertas 6:00 pm · bruma records · maza
 type Orden = {
   id: string; status: string; nombre: string; correo: string; whatsapp: string; cantidad: number
   monto_centavos: number; stripe_session_id: string | null; codigo: string | null; email_sent_at: string | null
+  idioma?: 'es' | 'en'
 }
 
 Deno.serve(async (req) => {
@@ -79,6 +82,7 @@ Deno.serve(async (req) => {
       case 'liberar': return await liberar(db, body)
       case 'sesion': return await sesion(db, body)
       case 'reenviar': return await reenviar(db, req, body)
+      case 'evento': return await evento(db, body)
       default: return json({ error: 'acción desconocida' }, 400)
     }
   } catch (e) {
@@ -112,6 +116,7 @@ async function checkout(db: SupabaseClient, b: Record<string, unknown>) {
   const nombre = String(b.nombre ?? '').trim().slice(0, 120)
   const correo = String(b.correo ?? '').trim().toLowerCase().slice(0, 200)
   const whatsapp = String(b.whatsapp ?? '').trim().slice(0, 30)
+  const idioma: 'es' | 'en' = b.idioma === 'en' ? 'en' : 'es'
   const cantidad = Number(b.cantidad)
 
   if (nombre.length < 2) return json({ error: 'nombre inválido' }, 400)
@@ -135,14 +140,14 @@ async function checkout(db: SupabaseClient, b: Record<string, unknown>) {
   // 2) Sesión de Stripe. Vence a los 30 min (el mínimo de Stripe); el apartado
   //    en la base vence a los 31, así nunca se cobra un lugar ya liberado.
   try {
-    const metadata = { orden: res.orden, nombre, correo, whatsapp, cantidad: String(cantidad), evento: 'ronqueo-2026-11-20' }
+    const metadata = { orden: res.orden, nombre, correo, whatsapp, cantidad: String(cantidad), evento: 'ronqueo-2026-11-20', idioma }
     const s = await stripeCli().checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
       // Siempre en pesos: sin Adaptive Pricing, Stripe ofrecería USD a quien
       // abre el checkout desde fuera de México
       adaptive_pricing: { enabled: false },
-      locale: 'es-419',
+      locale: idioma === 'en' ? 'en' : 'es-419',
       customer_email: correo,
       client_reference_id: res.orden,
       line_items: [{
@@ -156,11 +161,11 @@ async function checkout(db: SupabaseClient, b: Record<string, unknown>) {
       metadata,
       payment_intent_data: { metadata, description: `${PRODUCTO} · ${cantidad} × lugar` },
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
-      success_url: `${SITE}/ronqueo/gracias?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE}/ronqueo?cancelado=${res.orden}#boleto`,
+      success_url: `${SITE}/ronqueo/gracias?session_id={CHECKOUT_SESSION_ID}${idioma === 'en' ? '&lang=en' : ''}`,
+      cancel_url: `${SITE}/ronqueo?cancelado=${res.orden}${idioma === 'en' ? '&lang=en' : ''}#boleto`,
     }, { idempotencyKey: `ronqueo-${res.orden}` })
 
-    await db.from('ronqueo_orders').update({ stripe_session_id: s.id }).eq('id', res.orden)
+    await db.from('ronqueo_orders').update({ stripe_session_id: s.id, idioma }).eq('id', res.orden)
     return json({ url: s.url })
   } catch (e) {
     // Sin sesión no hay cobro posible: los lugares regresan al cupo
@@ -265,7 +270,7 @@ async function enviarCorreo(db: SupabaseClient, o: Orden) {
     body: JSON.stringify({
       from,
       to: [o.correo],
-      subject: `tu código para el ronqueo: ${o.codigo}`,
+      subject: T(o).asunto(o.codigo!),
       html: correoHtml(o),
       text: correoTexto(o),
       tags: [{ name: 'evento', value: 'ronqueo' }],
@@ -299,50 +304,100 @@ async function reenviar(db: SupabaseClient, req: Request, b: Record<string, unkn
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 const pesos = (centavos: number) => '$' + Math.round(centavos / 100).toLocaleString('en-US')
 
+// ── Copy del correo en los dos idiomas del landing ──────────────────────────
+const TEXTOS = {
+  es: {
+    asunto: (c: string) => `tu código para el ronqueo: ${c}`,
+    previa: (c: string) => `tu código: ${c} · vie 20 nov · bruma records`,
+    etiqueta: 'pago confirmado',
+    titulo: (n: string) => [`listo, ${n}.`, 'tu lugar tiene nombre.'],
+    tuCodigo: 'tu código',
+    lugares: (n: number) => `${n} ${n === 1 ? 'lugar' : 'lugares'}`,
+    fecha: 'viernes 20 nov · puertas 6:00 pm',
+    puerta: (n: string) => `enséñalo en la puerta, desde el teléfono o en captura. la lista va a nombre de ${n}.`,
+    boton: 'ver el evento',
+    cierre: 'llega temprano, de verdad.',
+  },
+  en: {
+    asunto: (c: string) => `your ronqueo code: ${c}`,
+    previa: (c: string) => `your code: ${c} · fri nov 20 · bruma records`,
+    etiqueta: 'payment confirmed',
+    titulo: (n: string) => [`done, ${n}.`, 'your seat has a name.'],
+    tuCodigo: 'your code',
+    lugares: (n: number) => `${n} ${n === 1 ? 'seat' : 'seats'}`,
+    fecha: 'friday nov 20 · doors 6:00 pm',
+    puerta: (n: string) => `show it at the door, on your phone or as a screenshot. the list is under ${n}.`,
+    boton: 'see the event',
+    cierre: 'come early, really.',
+  },
+}
+const T = (o: Orden) => TEXTOS[o.idioma === 'en' ? 'en' : 'es']
+const linkEvento = (o: Orden) => `${SITE}/ronqueo${o.idioma === 'en' ? '?lang=en' : ''}`
+
 function correoTexto(o: Orden) {
+  const t = T(o)
   return [
-    `listo, ${o.nombre}. tu lugar tiene nombre.`,
+    t.titulo(o.nombre).join(' '),
     '',
-    `tu código: ${o.codigo}`,
-    `${o.cantidad} ${o.cantidad === 1 ? 'lugar' : 'lugares'} · ${pesos(o.monto_centavos)} mxn`,
-    'viernes 20 nov · puertas 6:00 pm',
+    `${t.tuCodigo}: ${o.codigo}`,
+    `${t.lugares(o.cantidad)} · ${pesos(o.monto_centavos)} mxn`,
+    t.fecha,
     'bruma records · mazatlán',
     '',
-    'enséñalo en la puerta, desde el teléfono o en captura.',
-    'llega temprano, de verdad.',
+    t.puerta(o.nombre),
+    t.cierre,
     '',
-    `${SITE}/ronqueo`,
+    linkEvento(o),
   ].join('\n')
 }
 
 // Correo en los colores de Bruma (modo Día): papel, verde profundo y lima.
 // Tablas e inline styles: es lo único que respetan todos los clientes de correo.
 function correoHtml(o: Orden) {
+  const t = T(o)
   const n = esc(o.nombre)
+  const [l1, l2] = t.titulo(n)
   const font = "Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
   const mono = "'IBM Plex Mono', Menlo, Consolas, monospace"
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>tu código para el ronqueo</title></head>
+  return `<!doctype html><html lang="${o.idioma === 'en' ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>${t.asunto(o.codigo!)}</title></head>
 <body style="margin:0;padding:0;background:#f4f1e9;">
-<div style="display:none;max-height:0;overflow:hidden;">tu código: ${o.codigo} · vie 20 nov · bruma records</div>
+<div style="display:none;max-height:0;overflow:hidden;">${t.previa(o.codigo!)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1e9;">
 <tr><td align="center" style="padding:32px 16px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
   <tr><td style="font-family:${font};font-weight:800;font-size:22px;line-height:1;letter-spacing:-0.04em;color:#192623;padding-bottom:28px;">bruma<br>records</td></tr>
-  <tr><td style="font-family:${mono};font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#9d4b21;padding-bottom:12px;">pago confirmado</td></tr>
-  <tr><td style="font-family:${font};font-weight:800;font-size:40px;line-height:0.95;letter-spacing:-0.05em;color:#192623;padding-bottom:24px;">listo, ${n}.<br>tu lugar tiene nombre.</td></tr>
+  <tr><td style="font-family:${mono};font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#9d4b21;padding-bottom:12px;">${t.etiqueta}</td></tr>
+  <tr><td style="font-family:${font};font-weight:800;font-size:40px;line-height:0.95;letter-spacing:-0.05em;color:#192623;padding-bottom:24px;">${l1}<br>${l2}</td></tr>
   <tr><td style="background:#161714;border-radius:8px;padding:24px;">
-    <div style="font-family:${mono};font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#f4f1e9;">tu código</div>
+    <div style="font-family:${mono};font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#f4f1e9;">${t.tuCodigo}</div>
     <div style="font-family:${font};font-weight:800;font-size:40px;line-height:1;letter-spacing:-0.05em;color:#daff62;padding:6px 0 14px;">${o.codigo}</div>
     <div style="font-family:${font};font-size:16px;line-height:1.5;color:#f4f1e9;">
-      ${o.cantidad} ${o.cantidad === 1 ? 'lugar' : 'lugares'} · ${pesos(o.monto_centavos)} mxn<br>
-      viernes 20 nov · puertas 6:00 pm<br>
+      ${t.lugares(o.cantidad)} · ${pesos(o.monto_centavos)} mxn<br>
+      ${t.fecha}<br>
       bruma records · mazatlán
     </div>
   </td></tr>
-  <tr><td style="font-family:${font};font-size:17px;line-height:1.4;color:#5f5440;padding:24px 0;">enséñalo en la puerta, desde el teléfono o en captura. la lista va a nombre de ${n}.</td></tr>
-  <tr><td style="padding-bottom:28px;"><a href="${SITE}/ronqueo" style="display:inline-block;background:#daff62;color:#0f0f0f;font-family:${font};font-weight:700;font-size:17px;text-decoration:none;padding:16px 24px;border-radius:4px;">ver el evento</a></td></tr>
-  <tr><td style="border-top:1px solid #192623;padding-top:16px;font-family:${font};font-weight:500;font-size:15px;color:#192623;">llega temprano, de verdad.</td></tr>
+  <tr><td style="font-family:${font};font-size:17px;line-height:1.4;color:#5f5440;padding:24px 0;">${t.puerta(n)}</td></tr>
+  <tr><td style="padding-bottom:28px;"><a href="${linkEvento(o)}" style="display:inline-block;background:#daff62;color:#0f0f0f;font-family:${font};font-weight:700;font-size:17px;text-decoration:none;padding:16px 24px;border-radius:4px;">${t.boton}</a></td></tr>
+  <tr><td style="border-top:1px solid #192623;padding-top:16px;font-family:${font};font-weight:500;font-size:15px;color:#192623;">${t.cierre}</td></tr>
   <tr><td style="padding-top:20px;font-family:${mono};font-size:11px;letter-spacing:0.06em;color:#887a5b;">bruma records · café-bar &amp; music · @bruma_rec · #ronqueobruma</td></tr>
 </table></td></tr></table></body></html>`
+}
+
+// ── Embudo del landing (anónimo) ────────────────────────────────────────────
+const TIPOS_EVENTO = new Set(['visita', 'boleto_visto', 'cta', 'pagar'])
+async function evento(db: SupabaseClient, b: Record<string, unknown>) {
+  const tipo = String(b.tipo ?? '')
+  const visitante = String(b.visitante ?? '').replace(/[^a-z0-9-]/gi, '').slice(0, 64)
+  if (!TIPOS_EVENTO.has(tipo) || visitante.length < 8) return json({ ok: false }, 400)
+  const limpio = (v: unknown, n: number) => (v == null ? null : String(v).toLowerCase().replace(/[^a-z0-9 _.@-]/g, '').slice(0, n) || null)
+  await db.from('ronqueo_eventos').insert({
+    tipo, visitante,
+    idioma: b.idioma === 'en' ? 'en' : 'es',
+    detalle: limpio(b.detalle, 40),
+    dispositivo: b.dispositivo === 'movil' ? 'movil' : b.dispositivo === 'escritorio' ? 'escritorio' : null,
+    origen: limpio(b.origen, 60),
+  })
+  return json({ ok: true })
 }

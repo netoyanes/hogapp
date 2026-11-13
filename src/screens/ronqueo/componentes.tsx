@@ -26,9 +26,9 @@ export function R({ t }: { t: Resp }) {
   )
 }
 
-export function Logo({ tono, href = '/ronqueo' }: { tono: 'noche' | 'dia'; href?: string }) {
+export function Logo({ tono, href = '/ronqueo', etiqueta = 'bruma records · inicio' }: { tono: 'noche' | 'dia'; href?: string; etiqueta?: string }) {
   return (
-    <a className="rq-logo" href={href} aria-label="bruma records · inicio">
+    <a className="rq-logo" href={href} aria-label={etiqueta}>
       <img src={`/ronqueo/bruma-lockup-${tono}.svg`} width={150} height={99} alt="" />
     </a>
   )

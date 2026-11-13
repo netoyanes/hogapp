@@ -97,6 +97,7 @@ export function RonqueoAdmin() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 32px' }}>
+        <EmbudoLanding />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12, marginBottom: 16 }}>
           <KPITile label="Lugares vendidos" value={`${vendidos} / ${cupo}`} />
           <KPITile label="Apartados (pagando)" value={String(reservados)} hint="Vencen a los 31 min" />
@@ -156,6 +157,89 @@ export function RonqueoAdmin() {
         )}
       </div>
     </div>
+  )
+}
+
+// ── Estadísticas del landing: hasta dónde llega la gente ────────────────────
+type Embudo = {
+  visitas: number; visitantes: number; boleto_visto: number; cta_clics: number; cta_personas: number
+  pagar_clics: number; pagar_personas: number; checkouts: number; pagadas: number; lugares_pagados: number
+  cta_por_lugar: Record<string, number>; visitas_por_idioma: Record<string, number>
+  visitas_por_dispositivo: Record<string, number>; visitas_por_origen: Record<string, number>
+  por_dia: { dia: string; visitantes: number; cta: number; pagar: number }[]
+}
+const LUGAR_CTA: Record<string, string> = {
+  hero: 'Botón del inicio', nav: 'Botón de la barra (escritorio)', 'nav-link': 'Link «boleto» del menú',
+  menu: 'Menú móvil', barra: 'Barra fija (móvil)', cierre: 'Botón del cierre', saltar: 'Atajo de teclado',
+}
+
+function EmbudoLanding() {
+  const [e, setE] = useState<Embudo | null>(null)
+  const [error, setError] = useState(false)
+  useEffect(() => {
+    let vivo = true
+    const cargar = () => supabase.rpc('ronqueo_embudo').then(({ data, error }) => { if (!vivo) return; if (error) setError(true); else setE(data as Embudo) })
+    const t0 = setTimeout(cargar, 0)
+    const t = setInterval(cargar, 60_000)
+    return () => { vivo = false; clearTimeout(t0); clearInterval(t) }
+  }, [])
+  if (error) return <p style={{ color: 'var(--text-tertiary)', fontSize: 12, marginBottom: 16 }}>No se pudieron cargar las estadísticas del landing.</p>
+  if (!e) return null
+
+  const pasos = [
+    { label: 'Visitaron el landing', n: e.visitantes, nota: `${e.visitas} visitas en total` },
+    { label: 'Llegaron a la sección de boleto', n: e.boleto_visto },
+    { label: 'Picaron «compra tu boleto»', n: e.cta_personas, nota: `${e.cta_clics} clics` },
+    { label: 'Picaron «pagar»', n: e.pagar_personas, nota: `${e.pagar_clics} clics` },
+    { label: 'Abrieron el pago en Stripe', n: e.checkouts },
+    { label: 'Pagaron', n: e.pagadas, nota: `${e.lugares_pagados} lugares` },
+  ]
+  const base = Math.max(1, e.visitantes)
+  const pct = (n: number) => `${Math.round((n / base) * 100)}%`
+  const lista = (o: Record<string, number>, nombres?: Record<string, string>) =>
+    Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+      <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, padding: '3px 0' }}>
+        <span style={{ color: 'var(--text-secondary)' }}>{nombres?.[k] ?? k}</span><span className="num" style={{ fontWeight: 600 }}>{v}</span>
+      </div>
+    ))
+  const caja: React.CSSProperties = { background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '12px 14px' }
+  const titulo: React.CSSProperties = { fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--text-tertiary)', margin: '0 0 8px' }
+
+  return (
+    <section style={{ marginBottom: 20 }} aria-label="Estadísticas del landing">
+      <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Landing /ronqueo · hasta dónde llega la gente</h2>
+      <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 12px' }}>Personas distintas en cada paso (anónimo). El % es contra quienes visitaron.</p>
+      <div style={{ ...caja, display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+        {pasos.map(p => (
+          <div key={p.label} style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 220px) 1fr 90px', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.label}</span>
+            <div style={{ height: 22, background: 'var(--bg-elevated)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ width: `${Math.min(100, (p.n / base) * 100)}%`, minWidth: p.n ? 4 : 0, height: '100%', background: 'var(--accent)', borderRadius: 4 }} />
+            </div>
+            <span className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right' }} title={p.nota}>
+              {p.n} <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', fontSize: 11 }}>{pct(p.n)}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+        <div style={caja}><p style={titulo}>Clics por botón</p>{Object.keys(e.cta_por_lugar).length ? lista(e.cta_por_lugar, LUGAR_CTA) : <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>Sin clics todavía</p>}</div>
+        <div style={caja}><p style={titulo}>De dónde llegan</p>{lista(e.visitas_por_origen)}<p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '6px 0 0' }}>Agrega ?ref=instagram (o el nombre) al link que compartas.</p></div>
+        <div style={caja}><p style={titulo}>Idioma</p>{lista(e.visitas_por_idioma, { es: 'Español', en: 'English' })}</div>
+        <div style={caja}><p style={titulo}>Dispositivo</p>{lista(e.visitas_por_dispositivo, { movil: 'Celular', escritorio: 'Computadora' })}</div>
+      </div>
+      {e.por_dia.length > 0 && (
+        <div style={{ ...caja, marginTop: 12 }}>
+          <p style={titulo}>Por día (visitantes · clics compra · clics pagar)</p>
+          {[...e.por_dia].reverse().slice(0, 14).map(d => (
+            <div key={d.dia} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>{new Date(d.dia + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+              <span className="num">{d.visitantes} · {d.cta} · {d.pagar}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
