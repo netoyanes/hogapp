@@ -29,8 +29,26 @@
     <meta name="twitter:image" content="https://hogapp-smoky.vercel.app/ronqueo-og.jpg" />
     <link rel="preload" as="image" type="image/webp" href="/ronqueo/img/atun-alto-800.webp" media="(max-width: 899px)" />
     <link rel="preload" as="image" type="image/webp" href="/ronqueo/img/atun-ancho-1440.webp" media="(min-width: 900px)" />
+    <!-- Meta Pixel (campañas de Meta) — código base. Solo en el landing del
+         ronqueo y su confirmación, no en HOG APP. Los eventos de venta
+         (ViewContent, InitiateCheckout, Purchase) los manda
+         src/screens/ronqueo/pixel.ts. -->
+    <script>
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '4707864786136475');
+      fbq('track', 'PageView');
+    </script>
   </head>
   <body style="background:#161714">
+    <noscript><img height="1" width="1" style="display:none" alt=""
+      src="https://www.facebook.com/tr?id=4707864786136475&ev=PageView&noscript=1" /></noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

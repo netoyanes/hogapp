@@ -9,6 +9,7 @@ import { CambioIdioma, ProveedorIdioma } from './idioma'
 import { useContenido, useIdioma } from './idiomaCtx'
 import { leerConfirmacion, pesos, type Confirmacion } from './api'
 import { descargarIcs } from './ics'
+import { pixelCompra } from './pixel'
 
 export function RonqueoGracias() {
   return <ProveedorIdioma><GraciasPagina /></ProveedorIdioma>
@@ -34,6 +35,7 @@ function GraciasPagina() {
       .then(c => {
         if (!vivo) return
         setConf(c)
+        if (c.estado === 'pagado') pixelCompra(c.codigo, c.cantidad, c.total)
         if (c.estado === 'procesando' && ++intentos < 20) setTimeout(leer, 2500)
       })
       .catch(() => { if (vivo) setConf({ estado: 'no_encontrado' }) })
