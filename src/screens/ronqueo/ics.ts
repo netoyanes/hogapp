@@ -1,12 +1,12 @@
 // «agregar al calendario»: genera un .ics con la hora local de Mazatlán.
 // Sinaloa dejó el horario de verano en 2022: America/Mazatlan es UTC-7 todo
 // el año, así que el VTIMEZONE lleva una sola regla.
-import { EVENTO } from './contenido'
+import type { EVENTO as EventoTipo, UI as UiTipo } from './contenido'
 
 const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1')
 
-export function descargarIcs(codigo: string) {
-  const c = EVENTO.calendario
+export function descargarIcs(codigo: string, evento: typeof EventoTipo, ui: typeof UiTipo) {
+  const c = evento.calendario
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
   const ics = [
     'BEGIN:VCALENDAR',
@@ -30,11 +30,11 @@ export function descargarIcs(codigo: string) {
     `DTEND;TZID=${c.zona}:${c.fin}`,
     `SUMMARY:${esc(c.titulo)}`,
     `LOCATION:${esc(c.lugar)}`,
-    `DESCRIPTION:${esc(`tu código: ${codigo}. ${c.descripcion}`)}`,
+    `DESCRIPTION:${esc(`${ui.ics.tuCodigo(codigo)} ${c.descripcion}`)}`,
     'BEGIN:VALARM',
     'TRIGGER:-PT2H',
     'ACTION:DISPLAY',
-    `DESCRIPTION:${esc('hoy es el ronqueo. puertas 6:00 pm.')}`,
+    `DESCRIPTION:${esc(ui.ics.alarma)}`,
     'END:VALARM',
     'END:VEVENT',
     'END:VCALENDAR',

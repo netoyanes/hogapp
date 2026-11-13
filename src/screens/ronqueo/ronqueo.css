@@ -185,6 +185,17 @@
   .rq-nav__link { font-size: clamp(16px, calc(6px + 16 * var(--fl)), 22px); white-space: nowrap; }
 }
 
+/* Botón de idioma (EN / ES) — arriba, en la barra */
+.rq-nav__der { display: flex; align-items: center; gap: clamp(14px, calc(14px + 10 * var(--fl)), 24px); }
+.rq-idioma {
+  font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; line-height: 1;
+  min-width: 44px; min-height: 36px; padding: 0 10px; border-radius: 4px;
+  border: 1px solid var(--borde-editorial); color: var(--texto-primario);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.rq-idioma:hover { background: color-mix(in srgb, var(--texto-primario) 10%, transparent); }
+.rq-conf__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+
 /* ── Hero ────────────────────────────────────────────────────────────────── */
 .rq-hero {
   position: relative; isolation: isolate; overflow: hidden;
