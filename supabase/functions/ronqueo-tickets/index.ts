@@ -228,6 +228,18 @@ async function webhook(db: SupabaseClient, raw: string, firma: string) {
     return json({ error: 'firma inválida' }, 400)
   }
 
+  // Reembolso hecho desde el dashboard de Stripe: la orden deja de contar en el
+  // cupo y en las ventas. Solo si el cargo quedó reembolsado completo.
+  if (ev.type === 'charge.refunded') {
+    const ch = ev.data.object as Stripe.Charge
+    const pi = typeof ch.payment_intent === 'string' ? ch.payment_intent : ch.payment_intent?.id
+    if (ch.metadata?.evento === 'ronqueo-2026-11-20' && ch.refunded && pi) {
+      await db.from('ronqueo_orders').update({ status: 'refunded', refunded_at: new Date().toISOString() })
+        .eq('stripe_payment_intent', pi).eq('status', 'paid')
+    }
+    return json({ recibido: true })
+  }
+
   const s = ev.data.object as Stripe.Checkout.Session
   // Solo sesiones de este evento (la cuenta de Stripe puede tener otras ventas)
   if (!s.metadata?.orden || s.metadata.evento !== 'ronqueo-2026-11-20') return json({ ignorado: true })

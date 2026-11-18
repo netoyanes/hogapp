@@ -72,3 +72,11 @@ begin
 end $$;
 revoke all on function public.ronqueo_embudo() from public, anon;
 grant execute on function public.ronqueo_embudo() to authenticated;
+
+-- ── Reembolsos ──────────────────────────────────────────────────────────────
+-- Una orden reembolsada en Stripe pasa a 'refunded': deja de contar en el cupo
+-- (ronqueo_estado solo suma 'paid' y 'pending' vigentes) y en las ventas.
+alter table public.ronqueo_orders drop constraint if exists ronqueo_orders_status_check;
+alter table public.ronqueo_orders add constraint ronqueo_orders_status_check
+  check (status in ('pending', 'paid', 'expired', 'refunded'));
+alter table public.ronqueo_orders add column if not exists refunded_at timestamptz;

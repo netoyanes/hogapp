@@ -16,7 +16,7 @@ import { KPITile, SegmentedControl, StatusBadgeV2, EmptyStateV2, showToast } fro
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Orden {
-  id: string; created_at: string; status: 'pending' | 'paid' | 'expired'
+  id: string; created_at: string; status: 'pending' | 'paid' | 'expired' | 'refunded'
   nombre: string; correo: string; whatsapp: string; cantidad: number; monto_centavos: number
   expires_at: string; paid_at: string | null; codigo: string | null; codigo_num: number | null
   stripe_session_id: string | null; stripe_payment_intent: string | null
@@ -139,6 +139,7 @@ export function RonqueoAdmin() {
                       <td style={td}>
                         {o.status === 'paid'
                           ? <StatusBadgeV2 tone={o.email_sent_at ? 'healthy' : 'risk'} label={o.email_sent_at ? 'Pagado' : 'Pagado · sin correo'} />
+                          : o.status === 'refunded' ? <StatusBadgeV2 tone="risk" label="Reembolsada" />
                           : vencida ? <StatusBadgeV2 tone="neutral" label="Vencida" /> : <StatusBadgeV2 tone="attention" label="Pagando" />}
                         {o.status === 'paid' && o.email_error && <div style={{ color: 'var(--text-tertiary)', fontSize: 11, marginTop: 4, maxWidth: 220 }}>{o.email_error}</div>}
                       </td>
