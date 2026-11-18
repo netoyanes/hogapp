@@ -186,7 +186,7 @@
 }
 
 /* Botón de idioma (EN / ES) — arriba, en la barra */
-.rq-nav__der { display: flex; align-items: center; gap: clamp(14px, calc(14px + 10 * var(--fl)), 24px); }
+.rq-nav__der { margin-left: 24px; display: flex; align-items: center; gap: clamp(14px, calc(14px + 10 * var(--fl)), 24px); }
 .rq-idioma {
   font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; line-height: 1;
   min-width: 44px; min-height: 36px; padding: 0 10px; border-radius: 4px;
@@ -285,35 +285,12 @@
   .rq-momento__c { gap: 8px; }
 }
 
-/* Red pig flower — sección para destacar a la DJ (fuera de Figma, mismos tokens) */
-.rq-dj { display: flex; flex-direction: column; gap: 32px; border-top: 1px solid var(--borde-editorial); }
-.rq-dj__retrato { order: 2; overflow: hidden; background: var(--placeholder-foto); }
-.rq-dj__retrato img { width: 100%; height: 440px; object-fit: cover; }
-.rq-dj__texto { order: 1; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.rq-dj__et { font-family: var(--mono); text-transform: uppercase; color: var(--acento-principal); font-size: clamp(13px, calc(13px + 9 * var(--fl)), 22px); letter-spacing: 0.08em; line-height: 1.3; margin-top: 8px; }
-.rq-dj__bajada { font-size: clamp(18px, calc(18px + 12 * var(--fl)), 30px); line-height: 1.25; letter-spacing: -0.02em; max-width: 620px; }
-.rq-dj__horario { font-family: var(--mono); color: var(--texto-secundario); font-size: clamp(13px, calc(13px + 9 * var(--fl)), 22px); letter-spacing: 0.08em; line-height: 1.3; }
-.rq-dj__datos { display: flex; flex-wrap: wrap; gap: 8px; }
-.rq-dj__datos li {
-  font-family: var(--mono); text-transform: uppercase; font-size: clamp(11px, calc(11px + 5 * var(--fl)), 16px); letter-spacing: 0.06em;
-  border: 1px solid var(--borde-editorial); border-radius: 4px; padding: 4px 10px; line-height: 1.3;
-}
-.rq-dj__bio { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--borde-editorial); padding-top: 16px; max-width: 620px; }
-.rq-dj__bio p { font-size: clamp(16px, calc(16px + 4 * var(--fl)), 20px); line-height: 1.4; letter-spacing: -0.01em; color: var(--texto-secundario); }
-.rq-dj__links { display: flex; flex-wrap: wrap; gap: 8px 24px; }
-.rq-dj__links a {
-  font-family: var(--mono); font-size: clamp(14px, calc(14px + 4 * var(--fl)), 18px); letter-spacing: 0.06em;
-  color: var(--acento-principal); border-bottom: 1px solid currentColor; padding: 6px 0;
-}
-.rq-dj__links a:hover { color: var(--texto-primario); }
-.rq-dj__rojo { margin-top: 8px; overflow: hidden; background: var(--bruma-vinyl); }
-.rq-dj__rojo img { width: 100%; aspect-ratio: 1600 / 1104; object-fit: cover; }
-@media (min-width: 900px) {
-  .rq-dj { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(40px, calc(-10px + 90 * var(--fl)), 80px); align-items: start; }
-  .rq-dj__retrato { order: 0; }
-  .rq-dj__retrato img { height: auto; aspect-ratio: 1154 / 1600; }
-  .rq-dj__texto { order: 0; gap: 20px; padding-top: 8px; }
-}
+/* Música en vivo — reemplaza la sección de la DJ (mismos tokens, modo Noche) */
+.rq-musica { display: flex; flex-direction: column; gap: 20px; border-top: 1px solid var(--borde-editorial); }
+.rq-musica__texto { font-size: clamp(18px, calc(18px + 12 * var(--fl)), 30px); line-height: 1.25; letter-spacing: -0.02em; max-width: 760px; color: var(--texto-secundario); }
+.rq-musica__lista { display: flex; flex-direction: column; margin-top: 8px; max-width: 960px; }
+.rq-musica__lista li { display: flex; gap: 24px; align-items: baseline; padding: 16px 0; font-weight: 600; letter-spacing: -0.02em; font-size: clamp(20px, calc(20px + 14 * var(--fl)), 34px); line-height: 1.1; }
+.rq-musica__hora { flex: 0 0 10ch; font-family: var(--mono); font-weight: 400; letter-spacing: 0.06em; color: var(--acento-principal); font-size: clamp(14px, calc(14px + 8 * var(--fl)), 22px); }
 
 /* Itinerario */
 .rq-itin { background: var(--bg-superficie); display: flex; flex-direction: column; gap: 24px; }

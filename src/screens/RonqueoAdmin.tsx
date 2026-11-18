@@ -88,7 +88,7 @@ export function RonqueoAdmin() {
         <Fish size={17} style={{ color: 'var(--accent)' }} />
         <div style={{ flex: 1, minWidth: 200 }}>
           <h1 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 17, margin: 0 }}>Ronqueo · Bruma Records</h1>
-          <p style={{ color: 'var(--text-tertiary)', fontSize: 12, margin: '2px 0 0' }}>All you can eat · edición ronqueo — vie 20 nov. Venta con Stripe; cada compra queda aquí con su código.</p>
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 12, margin: '2px 0 0' }}>All you can eat · edición ronqueo — vie 27 nov. Venta con Stripe; cada compra queda aquí con su código.</p>
         </div>
         <button className="btn-ghost" onClick={() => { navigator.clipboard.writeText(link); showToast('Link copiado', 'success') }} style={btn}><Copy size={14} /> Copiar link</button>
         <a href="/ronqueo" target="_blank" rel="noreferrer" style={btn}><ExternalLink size={14} /> Abrir landing</a>

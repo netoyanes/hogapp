@@ -24,7 +24,7 @@ export const NAV = {
   links: [
     { texto: 'the night', href: '#la-noche' },
     { texto: 'the menu', href: '#cortes' },
-    { texto: 'the dj', href: '#dj' },
+    { texto: 'the music', href: '#musica' },
     { texto: 'who', href: '#quien' },
     { texto: 'ticket', href: '#boleto' },
   ],
@@ -32,11 +32,11 @@ export const NAV = {
 }
 
 export const HERO = {
-  pill: { d: 'fri nov 20 · bruma records · mzt', m: 'fri nov 20 · mzt' } as Resp,
+  pill: { d: 'fri nov 27 · bruma records · mzt', m: 'fri nov 27 · mzt' } as Resp,
   titulo: ['all you can eat.', 'ronqueo edition.'],
   bajada: {
-    d: 'a whole tuna broken down live in front of you and served in every cut, no limits. one night, 50 seats.',
-    m: 'a whole tuna broken down live in front of you and served in every cut, no limits. 50 seats.',
+    d: 'a whole tuna broken down live in front of you and served in every cut, no limits, with live music all night. one night, 50 seats.',
+    m: 'a whole tuna broken down live in front of you and served in every cut, no limits. live music, 50 seats.',
   } as Resp,
   ctaPrincipal: 'get your ticket · $1,500',
   ctaSecundario: 'see the night',
@@ -45,7 +45,7 @@ export const HERO = {
 }
 
 export const DATOS: { etiqueta: string; valor: Resp }[] = [
-  { etiqueta: 'when', valor: { d: 'friday nov 20', m: 'fri nov 20' } },
+  { etiqueta: 'when', valor: { d: 'friday nov 27', m: 'fri nov 27' } },
   { etiqueta: 'doors', valor: '6:00 pm' },
   { etiqueta: 'ronqueo', valor: '7:30 pm' },
   { etiqueta: 'where', valor: 'bruma records · mzt' },
@@ -56,8 +56,6 @@ export const FOTOS: typeof FOTOS_ES = {
   samu: { ...FOTOS_ES.samu, alt: 'chef samu breaking down the tuna at the table' },
   atun: { ...FOTOS_ES.atun, alt: 'hands on a whole tuna, opened for the ronqueo' },
   cuchillos: { ...FOTOS_ES.cuchillos, alt: 'the ronqueo knives on the work table' },
-  djRetrato: { ...FOTOS_ES.djRetrato, alt: 'red pig flower, black and white portrait with a crown' },
-  djRojo: { ...FOTOS_ES.djRojo, alt: 'red pig flower dancing under red light' },
 }
 
 export const LA_NOCHE = {
@@ -103,25 +101,18 @@ export const ITINERARIO = {
     { hora: '6:00 pm', que: 'doors and welcome drink', detalle: 'welcome drink for anyone arriving between 6:00 and 7:00. live music.' },
     { hora: '7:30 pm', que: 'the ronqueo begins', detalle: 'chef samu opens the fish and explains each cut.' },
     { hora: '8:00 – 9:00', que: 'all you can eat', detalle: 'every cut, prepared on the spot, no limits.' },
-    { hora: '9:00 pm →', que: 'the bar and the booth', detalle: 'arinka at the bar with a cocktail made for the tuna. red pig flower in the booth.' },
+    { hora: '9:00 pm →', que: 'the bar and the music', detalle: 'arinka at the bar with a cocktail made for the tuna. the live music keeps going.' },
   ],
 }
 
-export const DJ = {
-  pill: 'dj set · all night',
-  etiqueta: 'in the booth',
-  nombre: 'red pig flower.',
-  texto: 'plays through dinner service and stays in the booth after the kitchen closes.' as Resp,
-  horario: 'during service · 9:00 pm →',
-  bio: [
-    'seoul-born artist whose path has taken her through tokyo, london and berlin; today she lives in brussels.',
-    'she brings her own twist to contemporary techno: she has played clubs around the world, has been releasing her productions for a decade and co-founded the sound of vast label.',
-    'she also makes digital art, shown at the ncca in moscow, goldsmiths in london and the asia culture centre in gwangju.',
-  ],
-  datos: ['techno', 'seoul → brussels', 'sound of vast'],
-  links: [
-    { texto: '@redpigflower', href: 'https://instagram.com/redpigflower', etiqueta: 'red pig flower on instagram' },
-    { texto: 'redpigflower.com', href: 'https://redpigflower.com', etiqueta: 'red pig flower website' },
+export const MUSICA = {
+  pill: 'live music · all night',
+  titulo: { d: 'the night plays live.', m: 'the night\nplays live.' } as Resp,
+  texto: 'live music from the moment the doors open: it goes with the welcome drink, the ronqueo and the all you can eat, and it stays after the kitchen closes.' as Resp,
+  momentos: [
+    { hora: '6:00 pm', que: 'arrive to a welcome drink and music' },
+    { hora: '7:30 pm', que: 'the ronqueo, with the night already playing' },
+    { hora: '9:00 pm →', que: 'the bar and the music keep going' },
   ],
 }
 
@@ -129,13 +120,12 @@ export const QUIEN = {
   titulo: { d: "who's behind it.", m: "who's behind\nit." } as Resp,
   fichas: [
     { rol: 'in the kitchen', nombre: 'chef samu', texto: { d: 'oyster club. runs the ronqueo from start to finish.', m: 'oyster club' } as Resp },
-    { rol: 'in the booth', nombre: 'red pig flower', texto: { d: 'seoul-born techno dj, now in brussels. plays through service and stays when the kitchen closes.', m: 'techno · seoul → brussels' } as Resp },
     { rol: 'at the bar', nombre: 'arinka', texto: { d: 'head bartender at bruma records. serves a cocktail made for the tuna.', m: 'head bartender at bruma records' } as Resp },
   ],
 }
 
 export const BOLETO = {
-  pill: 'presale · only 50 seats',
+  pill: 'general sale · only 50 seats',
   precio: '$1,500',
   porPersona: 'per person',
   destacado: 'all you can eat · no limits',
@@ -199,12 +189,12 @@ export const CONFIRMACION = {
   titulo: (nombre: string) => [`done, ${nombre}.`, 'your seat has a name.'],
   tuCodigo: 'your code',
   detalle: (lugares: number, total: string) => `${lugares} ${lugares === 1 ? 'seat' : 'seats'} · ${total} mxn`,
-  fecha: 'friday nov 20 · doors 6:00 pm',
+  fecha: 'friday nov 27 · doors 6:00 pm',
   lugar: 'bruma records · mazatlán',
   correo: (correo: string) => `we sent your code and receipt to ${correo}. show it at the door, on your phone or as a screenshot.`,
   calendario: 'add to calendar',
   compartir: "share with who's coming",
-  compartirTexto: (codigo: string) => `i'm going to all you can eat · ronqueo edition at bruma records, fri nov 20, 6:00 pm. my code: ${codigo}. get yours:`,
+  compartirTexto: (codigo: string) => `i'm going to all you can eat · ronqueo edition at bruma records, fri nov 27, 6:00 pm. my code: ${codigo}. get yours:`,
   cierre: 'come early, really.',
   procesando: "we're confirming your payment with stripe. this takes a few seconds…",
   noEncontrado: "we couldn't find this payment. if you were charged, message us and we'll sort it out.",

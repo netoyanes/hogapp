@@ -55,7 +55,7 @@ const cryptoProvider = Stripe.createSubtleCryptoProvider()
 
 const SITE = (Deno.env.get('PUBLIC_SITE_URL') ?? '').replace(/\/+$/, '')
 const PRODUCTO = 'all you can eat · edición ronqueo'
-const DESCRIPCION = 'vie 20 nov 2026 · puertas 6:00 pm · bruma records · mazatlán'
+const DESCRIPCION = 'vie 27 nov 2026 · puertas 6:00 pm · bruma records · mazatlán · música en vivo'
 
 type Orden = {
   id: string; status: string; nombre: string; correo: string; whatsapp: string; cantidad: number
@@ -140,6 +140,8 @@ async function checkout(db: SupabaseClient, b: Record<string, unknown>) {
   // 2) Sesión de Stripe. Vence a los 30 min (el mínimo de Stripe); el apartado
   //    en la base vence a los 31, así nunca se cobra un lugar ya liberado.
   try {
+    // `evento` es una clave interna (la reconoce el webhook): se queda en 2026-11-20
+    // aunque el ronqueo se movió al vie 27, para no romper pagos en curso.
     const metadata = { orden: res.orden, nombre, correo, whatsapp, cantidad: String(cantidad), evento: 'ronqueo-2026-11-20', idioma }
     const s = await stripeCli().checkout.sessions.create({
       mode: 'payment',
@@ -308,24 +310,24 @@ const pesos = (centavos: number) => '$' + Math.round(centavos / 100).toLocaleStr
 const TEXTOS = {
   es: {
     asunto: (c: string) => `tu código para el ronqueo: ${c}`,
-    previa: (c: string) => `tu código: ${c} · vie 20 nov · bruma records`,
+    previa: (c: string) => `tu código: ${c} · vie 27 nov · bruma records`,
     etiqueta: 'pago confirmado',
     titulo: (n: string) => [`listo, ${n}.`, 'tu lugar tiene nombre.'],
     tuCodigo: 'tu código',
     lugares: (n: number) => `${n} ${n === 1 ? 'lugar' : 'lugares'}`,
-    fecha: 'viernes 20 nov · puertas 6:00 pm',
+    fecha: 'viernes 27 nov · puertas 6:00 pm',
     puerta: (n: string) => `enséñalo en la puerta, desde el teléfono o en captura. la lista va a nombre de ${n}.`,
     boton: 'ver el evento',
     cierre: 'llega temprano, de verdad.',
   },
   en: {
     asunto: (c: string) => `your ronqueo code: ${c}`,
-    previa: (c: string) => `your code: ${c} · fri nov 20 · bruma records`,
+    previa: (c: string) => `your code: ${c} · fri nov 27 · bruma records`,
     etiqueta: 'payment confirmed',
     titulo: (n: string) => [`done, ${n}.`, 'your seat has a name.'],
     tuCodigo: 'your code',
     lugares: (n: number) => `${n} ${n === 1 ? 'seat' : 'seats'}`,
-    fecha: 'friday nov 20 · doors 6:00 pm',
+    fecha: 'friday nov 27 · doors 6:00 pm',
     puerta: (n: string) => `show it at the door, on your phone or as a screenshot. the list is under ${n}.`,
     boton: 'see the event',
     cierre: 'come early, really.',
