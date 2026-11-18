@@ -43,7 +43,7 @@ export function Ronqueo() {
 }
 
 function RonqueoPagina() {
-  const { BARRA_MOVIL, BOLETO, CIERRE, DATOS, DJ, EVENTO, FOOTER, HERO, ITINERARIO, LA_NOCHE, NAV, PREGUNTAS, QUIEN, UI } = useContenido()
+  const { BARRA_MOVIL, BOLETO, CIERRE, DATOS, EVENTO, FOOTER, HERO, ITINERARIO, LA_NOCHE, MUSICA, NAV, PREGUNTAS, QUIEN, UI } = useContenido()
   usePaginaNoche(UI.tituloDoc)
   const { idioma } = useIdioma()
   // Embudo: una visita por carga de página; cada clic en «compra tu boleto» con su lugar
@@ -180,31 +180,15 @@ function RonqueoPagina() {
           </ol>
         </section>
 
-        <section className="rq-sec rq-dj" id="dj" aria-labelledby="rq-dj-t">
-          <div className="rq-dj__retrato">
-            <Foto id="djRetrato" sizes="(min-width: 900px) 42vw, 100vw" />
-          </div>
-          <div className="rq-dj__texto">
-            <p className="rq-pill rq-pill--lima">{DJ.pill}</p>
-            <p className="rq-dj__et">{DJ.etiqueta}</p>
-            <h2 id="rq-dj-t" className="rq-h2">{DJ.nombre}</h2>
-            <p className="rq-dj__bajada"><R t={DJ.texto} /></p>
-            <p className="rq-dj__horario">{DJ.horario}</p>
-            <ul className="rq-dj__datos" aria-label={UI.enCorto}>
-              {DJ.datos.map(d => <li key={d}>{d}</li>)}
-            </ul>
-            <div className="rq-dj__bio">
-              {DJ.bio.map(p => <p key={p}>{p}</p>)}
-            </div>
-            <ul className="rq-dj__links">
-              {DJ.links.map(l => (
-                <li key={l.href}><a href={l.href} target="_blank" rel="noopener noreferrer" aria-label={`${l.etiqueta} ${UI.nuevaPestana}`}>{l.texto} ↗</a></li>
-              ))}
-            </ul>
-            <div className="rq-dj__rojo">
-              <Foto id="djRojo" sizes="(min-width: 900px) 46vw, 100vw" />
-            </div>
-          </div>
+        <section className="rq-sec rq-musica" id="musica" aria-labelledby="rq-musica-t">
+          <p className="rq-pill rq-pill--lima">{MUSICA.pill}</p>
+          <h2 id="rq-musica-t" className="rq-h2"><R t={MUSICA.titulo} /></h2>
+          <p className="rq-musica__texto"><R t={MUSICA.texto} /></p>
+          <ol className="rq-musica__lista">
+            {MUSICA.momentos.map(m => (
+              <li key={m.hora} className="rq-filete"><span className="rq-musica__hora">{m.hora}</span><span>{m.que}</span></li>
+            ))}
+          </ol>
         </section>
 
         <section className="rq-sec rq-itin" aria-labelledby="rq-itin-t">
