@@ -119,13 +119,29 @@
     .martinis h3 { font-size: clamp(22px, 6.4vw, 28px); font-weight: 800; letter-spacing: -.045em; line-height: 1.1; }
     .martinis p { margin-top: 10px; line-height: 1.7; }
 
-    .oleada {
-      margin-top: 30px; border: 1.5px solid var(--tinta); border-radius: 10px; padding: 18px 20px;
-      display: flex; align-items: center; gap: 18px;
+    /* Oleada Festival — a dónde lleva esta noche */
+    .oleada { margin-top: 34px; background: #161616; color: var(--papel); border-radius: 14px; padding: 26px 20px 24px; }
+    .oleada .mono { color: #c5e0da; }
+    .oleada-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+    .oleada-top img { width: 150px; height: auto; filter: invert(1); }
+    .dia { text-align: right; font-weight: 800; letter-spacing: -.04em; line-height: .9; flex: none; }
+    .dia span { display: block; font-size: 18px; color: #c5e0da; }
+    .dia b { display: block; font-size: 56px; color: #f08a2c; }
+    .oleada h3 { margin-top: 20px; font-size: clamp(30px, 9.4vw, 52px); font-weight: 800; letter-spacing: -.05em; line-height: .95; color: #f0465a; text-wrap: balance; }
+    .oleada .lugar { margin-top: 14px; line-height: 1.7; }
+    .incluye { list-style: none; padding: 0; margin-top: 18px; border-top: 1px solid #34342f; }
+    .incluye li { display: grid; grid-template-columns: 26px 1fr; column-gap: 8px; align-items: baseline; padding: 13px 0 14px; border-bottom: 1px solid #34342f; }
+    .incluye .n { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; color: #f0465a; }
+    .incluye b { font-size: 19px; font-weight: 800; letter-spacing: -.04em; }
+    .incluye p { grid-column: 2; margin-top: 3px; font-size: 14px; line-height: 1.4; color: #b9b6ad; }
+    .precios { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+    .precios > span { border: 1.5px solid var(--papel); border-radius: 999px; padding: 9px 16px; font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+    .precios > span:first-child { background: #c5e0da; border-color: #c5e0da; color: var(--tinta); }
+    .boletos {
+      display: block; margin-top: 18px; background: var(--papel); color: #d92f47; text-decoration: none; text-align: center;
+      border-radius: 999px; padding: 16px 18px; font-size: 17px; font-weight: 800; letter-spacing: -.03em;
     }
-    .oleada img { width: 128px; height: auto; flex: none; }
-    .oleada p { font-size: 14px; line-height: 1.4; color: var(--gris); }
-    .oleada strong { display: block; color: var(--tinta); font-size: 16px; letter-spacing: -.02em; margin-bottom: 2px; }
+    .boletos:focus-visible { outline: 3px solid #c5e0da; outline-offset: 3px; }
 
     footer { margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--linea); }
     .logos { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; margin-top: 10px; }
@@ -204,10 +220,27 @@
       <p class="mono" data-en="ask at the bar · martini tuesday, every tuesday at bruma records">pregunta en barra · martini tuesday, cada martes en bruma records</p>
     </section>
 
-    <aside class="oleada">
-      <img src="/menu/bruma/oleada.webp" width="460" height="170" alt="Oleada Festival · conchas + vino + música" />
-      <p><strong data-en="on the way to nov 28">rumbo al 28 nov</strong><span data-en="this night is the warm-up for oleada festival: shells, wine and music.">esta noche es el warm-up de oleada festival: conchas, vino y música.</span></p>
-    </aside>
+    <section class="oleada">
+      <div class="oleada-top">
+        <img src="/menu/bruma/oleada.webp" width="460" height="170" alt="Oleada Festival · conchas + vino + música" />
+        <p class="dia"><span data-en="sat">sáb</span><b>28</b><span>nov</span></p>
+      </div>
+      <p class="mono lugar" data-en="first the bar, then the beach · the festival">primero la barra, luego la playa · el festival</p>
+      <h3 data-en="shells, wine and music by the sea.">conchas, vino y música frente al mar.</h3>
+      <p class="mono lugar">shekinah beach club &amp; events · mazatlán</p>
+      <ol class="incluye">
+        <li><span class="n">01</span><b data-en="chefs from across the region">chefs de toda la región</b><p data-en="seafood cooking, from shell to plate.">cocina de mar, de la concha al plato.</p></li>
+        <li><span class="n">02</span><b data-en="open bar">barra libre</b><p data-en="wine, spirits and mixology.">vino, destilados y mixología.</p></li>
+        <li><span class="n">03</span><b data-en="tasting">degustación</b><p data-en="all stations included.">todas las estaciones incluidas.</p></li>
+        <li><span class="n">04</span><b data-en="live music">música en vivo</b><p data-en="tenampa brass band · sr. raya.">tenampa brass band · sr. raya.</p></li>
+        <li><span class="n">05</span><b data-en="sunset on the beach">atardecer en la playa</b><p data-en="one of the best in mazatlán.">de los mejores de mazatlán.</p></li>
+      </ol>
+      <div class="precios">
+        <span><span data-en="presale">preventa</span> $1,200</span>
+        <span><span data-en="at the door">taquilla</span> $1,500</span>
+      </div>
+      <a class="boletos" href="https://www.instagram.com/oleada.festival/" target="_blank" rel="noopener"><span data-en="tickets &amp; info:">boletos e info:</span> @oleada.festival</a>
+    </section>
 
     <footer>
       <p class="mono" data-en="a collaboration with">en colaboración con</p>
