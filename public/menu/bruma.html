@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Carta pública de «ostiones & martinis» de Bruma Records (warm-up de
+       Oleada Festival, con chef Gera). Página estática, sin login: vercel.json
+       reescribe /ostiones aquí y el QR de la barra apunta a esa ruta.
+       Español por default; el botón EN/ES (o ?lang=en) cambia a inglés.
+       Los textos en inglés viven en los atributos data-en de cada elemento. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f3f0e9" />
+  <title>ostiones &amp; martinis · bruma records</title>
+  <meta name="description" content="noche de ostiones con chef gera en bruma records: cuatro preparaciones, dos frías y dos calientes, con martinis y vino. warm-up de oleada festival." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="bruma records" />
+  <meta property="og:locale" content="es_MX" />
+  <meta property="og:locale:alternate" content="en_US" />
+  <meta property="og:title" content="ostiones &amp; martinis · bruma records" />
+  <meta property="og:description" content="cuatro maneras de recorrer el ostión con chef gera, dos frías y dos calientes. martinis, muchos martinis, y vino." />
+  <meta property="og:url" content="https://hogapp-smoky.vercel.app/ostiones" />
+  <meta property="og:image" content="https://hogapp-smoky.vercel.app/menu/bruma/og.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/svg+xml" href="/ronqueo/bruma-simbolo-dia.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;700;800&display=swap" />
+  <style>
+    :root {
+      --papel: #f3f0e9;
+      --tinta: #0f0f0f;
+      --barro: #274672;
+      --gris: #5c5a55;
+      --linea: #d9d5cb;
+      --lima: #dfff67;
+      --fuente: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      background: var(--papel);
+      color: var(--tinta);
+      font-family: var(--fuente);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    .hoja {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: calc(20px + env(safe-area-inset-top)) 22px calc(36px + env(safe-area-inset-bottom));
+    }
+    .mono {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--barro);
+    }
+
+    /* Barra superior: logo + idioma */
+    .barra { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .barra img { height: 52px; width: auto; display: block; }
+    .idioma {
+      display: inline-flex; border: 1.5px solid var(--tinta); border-radius: 999px;
+      padding: 3px; background: transparent; cursor: pointer; font: inherit;
+    }
+    .idioma span {
+      font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: .08em;
+      min-width: 40px; padding: 8px 10px; border-radius: 999px; color: var(--tinta); text-align: center;
+    }
+    .idioma span[aria-current="true"] { background: var(--tinta); color: var(--papel); }
+    .idioma:focus-visible { outline: 3px solid var(--barro); outline-offset: 3px; }
+
+    .fecha { margin-top: 22px; }
+
+    /* Encabezado */
+    .cabeza { display: grid; grid-template-columns: 1fr 104px; gap: 16px; align-items: end; margin-top: 14px; }
+    h1 {
+      font-size: clamp(44px, 14.2vw, 92px);
+      font-weight: 800; line-height: .9; letter-spacing: -.055em;
+      text-wrap: balance;
+    }
+    h1 em { font-style: normal; color: var(--barro); display: block; }
+    .chef { text-align: left; }
+    .chef img { width: 100%; height: auto; aspect-ratio: 636 / 777; object-fit: cover; border-radius: 10px; display: block; background: var(--barro); }
+    .chef figcaption { margin-top: 8px; font-size: 10px; }
+    .intro { margin-top: 22px; font-size: 16px; line-height: 1.5; color: var(--gris); max-width: 46ch; }
+    .nota { margin-top: 22px; line-height: 1.7; }
+
+    /* Lista */
+    .lista { list-style: none; padding: 0; margin-top: 16px; border-top: 1px solid var(--linea); }
+    .lista li {
+      display: grid; grid-template-columns: 26px 1fr auto; column-gap: 8px; align-items: baseline;
+      padding: 18px 0 20px; border-bottom: 1px solid var(--linea);
+    }
+    .lista .n { font-family: var(--mono); font-size: 11px; color: var(--barro); letter-spacing: .08em; }
+    .lista h2 { font-size: clamp(22px, 6.6vw, 30px); font-weight: 800; letter-spacing: -.045em; line-height: 1.05; }
+    .lista .precio { font-size: clamp(22px, 6.6vw, 30px); font-weight: 800; letter-spacing: -.04em; color: var(--barro); padding-left: 12px; }
+    .lista p { grid-column: 2 / -1; margin-top: 7px; font-size: 15px; line-height: 1.4; color: var(--gris); }
+    .temp {
+      display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+      border: 1px solid currentColor; border-radius: 999px; padding: 2px 8px; margin-right: 8px; vertical-align: 1px;
+      color: var(--barro);
+    }
+    .temp.caliente { color: #9d4b21; }
+
+    .vuelo {
+      margin-top: 18px; background: var(--lima); border-radius: 10px;
+      display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+      padding: 20px 20px 22px;
+    }
+    .vuelo b { font-size: clamp(22px, 6.6vw, 30px); font-weight: 800; letter-spacing: -.045em; }
+    .vuelo small { display: block; margin-top: 5px; font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #3d4a12; }
+    .moneda { margin-top: 10px; font-size: 10px; color: var(--gris); }
+
+    .martinis { margin-top: 34px; }
+    .martinis h3 { font-size: clamp(22px, 6.4vw, 28px); font-weight: 800; letter-spacing: -.045em; line-height: 1.1; }
+    .martinis p { margin-top: 10px; line-height: 1.7; }
+
+    .oleada {
+      margin-top: 30px; border: 1.5px solid var(--tinta); border-radius: 10px; padding: 18px 20px;
+      display: flex; align-items: center; gap: 18px;
+    }
+    .oleada img { width: 128px; height: auto; flex: none; }
+    .oleada p { font-size: 14px; line-height: 1.4; color: var(--gris); }
+    .oleada strong { display: block; color: var(--tinta); font-size: 16px; letter-spacing: -.02em; margin-bottom: 2px; }
+
+    footer { margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--linea); }
+    .logos { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; margin-top: 10px; }
+    .logos img { height: 40px; width: auto; }
+    .pie { margin-top: 18px; font-size: 10px; color: var(--gris); }
+
+    @media (min-width: 560px) {
+      .hoja { padding-left: 40px; padding-right: 40px; padding-top: 40px; }
+      .cabeza { grid-template-columns: 1fr 190px; gap: 28px; }
+      .barra img { height: 60px; }
+      .chef figcaption { font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="hoja">
+    <div class="barra">
+      <img src="/ronqueo/bruma-lockup-dia.svg" alt="bruma records" width="150" height="99" />
+      <button class="idioma" type="button" id="idioma" aria-label="Switch to English">
+        <span data-l="es" aria-current="true">ES</span><span data-l="en">EN</span>
+      </button>
+    </div>
+
+    <p class="mono fecha" data-en="oysters night · with chef gera · 7 pm">noche de ostiones · con chef gera · 7 pm</p>
+
+    <header class="cabeza">
+      <h1><span data-en="oysters">ostiones</span> <em>&amp; martinis.</em></h1>
+      <figure class="chef">
+        <img src="/menu/bruma/chef-gera.webp" width="636" height="777" alt="Chef Gera con un plato de ostiones" data-en-alt="Chef Gera holding a plate of oysters" />
+        <figcaption class="mono">chef gera</figcaption>
+      </figure>
+    </header>
+
+    <p class="intro" data-en="the oyster is the sea in its most honest form: cold, briny and full of character. four ways to explore it, two cold and two hot, with martinis, lots of martinis, and wine to go with it.">el ostión es el mar en su forma más honesta: frío, salino y lleno de carácter. cuatro maneras de recorrerlo, dos frías y dos calientes, con martinis, muchos martinis, y vino para acompañar.</p>
+
+    <p class="mono nota" data-en="prices per piece · chef gera · oleada festival warm-up">precios por pieza · chef gera · warm-up oleada festival</p>
+
+    <ol class="lista">
+      <li>
+        <span class="n">01</span>
+        <h2 data-en="passion fruit &amp; habanero">maracuyá &amp; habanero</h2>
+        <span class="precio">$65</span>
+        <p><span class="temp" data-en="cold">frío</span><span data-en="passion fruit and fermented habanero.">maracuyá y habanero fermentado.</span></p>
+      </li>
+      <li>
+        <span class="n">02</span>
+        <h2>ponzu &amp; shiitake</h2>
+        <span class="precio">$70</span>
+        <p><span class="temp" data-en="cold">frío</span><span data-en="shiitake mushroom ponzu and seaweed caviar.">ponzu de hongo shiitake y caviar de alga.</span></p>
+      </li>
+      <li>
+        <span class="n">03</span>
+        <h2 data-en="ajillo &amp; chives">ajillo &amp; cebollín</h2>
+        <span class="precio">$60</span>
+        <p><span class="temp caliente" data-en="hot">caliente</span><span data-en="ajillo (garlic sauce) and chives.">ajillo y cebollín.</span></p>
+      </li>
+      <li>
+        <span class="n">04</span>
+        <h2>tempura</h2>
+        <span class="precio">$70</span>
+        <p><span class="temp caliente" data-en="hot">caliente</span><span data-en="tempura with costeño chile mayo.">tempura con mayonesa de chile costeño.</span></p>
+      </li>
+    </ol>
+
+    <div class="vuelo">
+      <div>
+        <b data-en="flight of four">vuelo de los cuatro</b>
+        <small data-en="one of each">uno de cada uno</small>
+      </div>
+      <b>$230</b>
+    </div>
+    <p class="mono moneda" data-en="prices in mexican pesos (mxn) · limited oysters">precios en pesos mexicanos (mxn) · ostiones limitados</p>
+
+    <section class="martinis">
+      <h3 data-en="martinis, lots of martinis. and wine.">martinis, muchos martinis. y vino.</h3>
+      <p class="mono" data-en="ask at the bar · martini tuesday, every tuesday at bruma records">pregunta en barra · martini tuesday, cada martes en bruma records</p>
+    </section>
+
+    <aside class="oleada">
+      <img src="/menu/bruma/oleada.webp" width="460" height="170" alt="Oleada Festival · conchas + vino + música" />
+      <p><strong data-en="on the way to nov 28">rumbo al 28 nov</strong><span data-en="this night is the warm-up for oleada festival: shells, wine and music.">esta noche es el warm-up de oleada festival: conchas, vino y música.</span></p>
+    </aside>
+
+    <footer>
+      <p class="mono" data-en="a collaboration with">en colaboración con</p>
+      <div class="logos">
+        <img src="/menu/bruma/shekinah.webp" width="350" height="123" alt="Shekinah Beach Club &amp; Events" />
+        <img src="/menu/bruma/mazalife.webp" width="353" height="123" alt="Mazalife Tourism &amp; Entertainment" />
+      </div>
+      <p class="mono pie">bruma records · mazatlán</p>
+    </footer>
+  </main>
+
+  <script>
+    (function () {
+      var CLAVE = 'bruma_menu_idioma';
+      var nodos = [].slice.call(document.querySelectorAll('[data-en]'));
+      nodos.forEach(function (n) { n.setAttribute('data-es', n.innerHTML); });
+      var alts = [].slice.call(document.querySelectorAll('[data-en-alt]'));
+      alts.forEach(function (n) { n.setAttribute('data-es-alt', n.alt); });
+      var boton = document.getElementById('idioma');
+
+      function inicial() {
+        var q = new URLSearchParams(location.search).get('lang');
+        if (q === 'en' || q === 'es') return q;
+        try { var g = localStorage.getItem(CLAVE); if (g === 'en' || g === 'es') return g; } catch (e) {}
+        // Sin elección previa: el idioma del teléfono (todo lo que no sea español ve inglés)
+        return /^es/i.test(navigator.language || 'es') ? 'es' : 'en';
+      }
+
+      function poner(l) {
+        document.documentElement.lang = l;
+        nodos.forEach(function (n) { n.innerHTML = n.getAttribute('data-' + l); });
+        alts.forEach(function (n) { n.alt = n.getAttribute('data-' + l + '-alt'); });
+        [].forEach.call(boton.children, function (s) {
+          if (s.getAttribute('data-l') === l) s.setAttribute('aria-current', 'true'); else s.removeAttribute('aria-current');
+        });
+        boton.setAttribute('aria-label', l === 'es' ? 'Switch to English' : 'Cambiar a español');
+        document.title = (l === 'es' ? 'ostiones' : 'oysters') + ' & martinis · bruma records';
+      }
+
+      var actual = inicial();
+      poner(actual);
+      boton.addEventListener('click', function () {
+        actual = actual === 'es' ? 'en' : 'es';
+        poner(actual);
+        try { localStorage.setItem(CLAVE, actual); } catch (e) {}
+        var u = new URL(location.href);
+        if (actual === 'en') u.searchParams.set('lang', 'en'); else u.searchParams.delete('lang');
+        history.replaceState(null, '', u.pathname + u.search);
+      });
+    })();
+  </script>
+</body>
+</html>
