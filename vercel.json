@@ -17,6 +17,10 @@
       "destination": "/simon.html"
     },
     {
+      "source": "/ostiones",
+      "destination": "/menu/bruma.html"
+    },
+    {
       "source": "/ronqueo",
       "destination": "/ronqueo.html"
     },
