@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <!-- «MUNBA Journeys»: mockup del landing de una noche en el Museo Nacional
+       de la Ballena (MUNBA), de MUNBA × Swells × Bruma Records. Es una
+       PROPUESTA para presentar la idea al museo, no una página de venta: la
+       fecha es tentativa y el boleto es de ejemplo. Página estática, sin login:
+       vercel.json reescribe /journeys y /travesia aquí. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0C1B33" />
+  <meta name="robots" content="noindex" />
+  <title>MUNBA Journeys · una noche en el Museo Nacional de la Ballena</title>
+  <meta name="description" content="Un recorrido nocturno por el Museo Nacional de la Ballena en cuatro estaciones: el viaje de una ballena jorobada, de Alaska a Mazatlán. Propuesta de MUNBA, Swells y Bruma Records." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="MUNBA Journeys" />
+  <meta property="og:locale" content="es_MX" />
+  <meta property="og:title" content="MUNBA Journeys · Travesía de las que vuelven" />
+  <meta property="og:description" content="Un recorrido nocturno por el Museo Nacional de la Ballena en cuatro estaciones. MUNBA × Swells × Bruma Records, Mazatlán." />
+  <meta property="og:url" content="https://hogapp-smoky.vercel.app/journeys" />
+  <meta property="og:image" content="https://hogapp-smoky.vercel.app/travesia/og.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Cola de ballena jorobada saliendo del mar" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/svg+xml" href="/ronqueo/bruma-simbolo-dia.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;700&display=swap" />
+  <style>
+    :root {
+      --mar: #0C1B33;
+      --barro: #274065;
+      --papel: #F3F0E9;
+      --blanco: #FBFAF6;
+      --lima: #DAFF62;
+      --niebla: #D6D9DF;
+      --tinta: #111111;
+      --gris: #3A3F48;
+      --linea: #D9D5CB;
+      --serif: 'Instrument Serif', Georgia, serif;
+      --sans: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    body { background: var(--papel); color: var(--tinta); font-family: var(--sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    img { display: block; max-width: 100%; height: auto; }
+    .ancho { max-width: 1120px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
+    .mono { font-family: var(--mono); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--barro); line-height: 1.6; }
+    h1, h2, h3 { font-family: var(--serif); font-weight: 400; line-height: 1; }
+    h2 { font-size: clamp(2.25rem, 6.4vw, 3.25rem); text-wrap: balance; }
+    p { line-height: 1.5; color: var(--gris); }
+    a:focus-visible { outline: 3px solid var(--barro); outline-offset: 3px; }
+
+    /* Barra de marcas */
+    .franja { background: var(--mar); }
+    .barra { padding-top: calc(16px + env(safe-area-inset-top)); padding-bottom: 16px; display: flex; flex-wrap: wrap; gap: 12px 18px; justify-content: space-between; align-items: center; }
+    .marcas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+    .marcas .x { font-family: var(--mono); font-size: 13px; color: var(--niebla); }
+    .marcas .munba { height: 24px; width: auto; }
+    .marcas .swells, .marcas .bruma { height: 36px; width: auto; }
+    .barra .mono { color: var(--niebla); font-size: 12px; }
+
+    /* Portada */
+    .hero { padding-top: 44px; padding-bottom: 56px; display: flex; flex-wrap: wrap; gap: 36px 48px; align-items: center; }
+    .hero-texto { flex: 999 1 460px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+    h1 { font-size: clamp(3.2rem, 13.5vw, 6.25rem); line-height: .95; letter-spacing: -.01em; }
+    .edicion { font-family: var(--serif); font-style: italic; font-size: clamp(1.6rem, 5vw, 2.25rem); line-height: 1.1; color: var(--barro); }
+    .bajada { font-size: clamp(1.0625rem, 2.4vw, 1.1875rem); max-width: 34rem; }
+    .fecha { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .fecha span { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--barro); color: var(--barro); border-radius: 999px; padding: 8px 14px; }
+    .fecha span:first-child { background: var(--barro); color: var(--papel); }
+    .hero-foto { flex: 1 1 320px; min-width: 0; width: 100%; max-width: 451px; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 20px; background: var(--barro); }
+
+    /* Recorrido */
+    .bloque { padding-top: 56px; padding-bottom: 56px; display: flex; flex-direction: column; gap: 32px; }
+    .intro { display: flex; flex-direction: column; gap: 12px; }
+    .intro p { font-size: 1.0625rem; max-width: 40rem; }
+    .linea { border-top: 1px solid var(--linea); }
+    .estaciones { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+    .estaciones li { background: var(--blanco); border: 1px solid var(--linea); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 8px; }
+    .num { width: 40px; height: 40px; border-radius: 50%; background: var(--barro); color: var(--papel); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 13px; margin-bottom: 6px; }
+    .estaciones h3 { font-size: 2.25rem; }
+    .estaciones li p { font-size: 1rem; }
+    .trio { list-style: none; padding: 0; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .trio li { all: unset; font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--barro); background: #E6EAF0; border-radius: 999px; padding: 4px 10px; }
+    .erizo { font-size: 1rem; }
+    .erizo strong { color: var(--tinta); }
+
+    /* Quién hace qué */
+    .oscura { background: var(--mar); color: var(--papel); }
+    .oscura .mono { color: var(--lima); }
+    .oscura p { color: var(--niebla); }
+    .quienes { padding-top: 56px; padding-bottom: 56px; display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 40px 48px; }
+    .quienes div { display: flex; flex-direction: column; gap: 12px; }
+    .quienes h2 { font-size: 2.75rem; }
+    .quienes p { font-size: 1.0625rem; }
+
+    /* Boleto */
+    .boleto { padding-top: 56px; padding-bottom: 56px; display: flex; flex-wrap: wrap; gap: 36px 48px; align-items: center; }
+    .boleto-texto { flex: 999 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+    .boleto-texto p { font-size: 1.0625rem; max-width: 34rem; }
+    .incluye { padding-left: 20px; font-size: 1.0625rem; line-height: 1.7; color: var(--gris); }
+    .tarjeta { flex: 1 1 300px; min-width: 0; max-width: 380px; margin: 0; }
+    .tarjeta-caja { background: var(--mar); color: var(--papel); border-radius: 24px; overflow: hidden; }
+    .tarjeta img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+    .tarjeta-datos { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .tarjeta-datos .mono { color: var(--lima); }
+    .tarjeta .nombre { color: var(--papel); font-family: var(--serif); font-size: 2.1rem; line-height: 1; }
+    .tarjeta .viaja { font-size: 1rem; color: var(--niebla); }
+    .tarjeta .viaja strong { color: var(--papel); }
+    .tarjeta .ruta { border-top: 1px dashed #5B6B85; padding-top: 14px; display: flex; justify-content: space-between; gap: 10px; font-size: .9375rem; color: var(--papel); }
+    .tarjeta figcaption { margin-top: 10px; text-align: center; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--gris); }
+
+    footer .barra { padding-bottom: calc(28px + env(safe-area-inset-bottom)); padding-top: 24px; }
+
+    @media (max-width: 520px) {
+      .ancho { padding-left: 20px; padding-right: 20px; }
+      .marcas .swells, .marcas .bruma { height: 30px; }
+      .marcas .munba { height: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="franja">
+    <header class="ancho barra">
+      <div class="marcas">
+        <img class="munba" src="/travesia/munba.svg" width="738" height="161" alt="MUNBA · Museo Nacional de la Ballena" />
+        <span class="x" aria-hidden="true">×</span>
+        <img class="swells" src="/travesia/swells.svg" width="1590" height="650" alt="Swells" />
+        <span class="x" aria-hidden="true">×</span>
+        <img class="bruma" src="/ronqueo/bruma-lockup-noche.svg" width="150" height="99" alt="Bruma Records" />
+      </div>
+      <p class="mono">Propuesta · mockup</p>
+    </header>
+  </div>
+
+  <main>
+    <section class="ancho hero">
+      <div class="hero-texto">
+        <p class="mono">Una noche en el Museo Nacional de la Ballena · Mazatlán</p>
+        <h1>MUNBA Journeys</h1>
+        <p class="edicion">Edición 01 · Travesía de las que vuelven.</p>
+        <p class="bajada">Un recorrido nocturno por el museo en cuatro estaciones. Sigues el viaje de una ballena jorobada, de Alaska a Mazatlán: en cada sala una historia, un bocado, una bebida y música.</p>
+        <div class="fecha">
+          <span>Sáb 19 dic 2026 · fecha propuesta</span>
+          <span>Inicio de la temporada de ballenas</span>
+        </div>
+      </div>
+      <img class="hero-foto" src="/travesia/ballena.webp" width="451" height="443" alt="Cola de ballena jorobada saliendo del mar" />
+    </section>
+
+    <div class="linea"></div>
+
+    <section class="ancho bloque">
+      <div class="intro">
+        <p class="mono">El recorrido</p>
+        <h2>Cuatro estaciones, un viaje.</h2>
+        <p>Cada sala del museo es una etapa de la migración. En cada una te recibe un guía del museo, pruebas algo, bebes algo y cambia la música. Avanzas con tu grupo, como ellas.</p>
+      </div>
+      <ol class="estaciones">
+        <li>
+          <span class="num" aria-hidden="true">01</span>
+          <p class="mono">Vestíbulo</p>
+          <h3>El norte</h3>
+          <p>La abundancia antes del viaje. Las aguas frías de Alaska, donde las jorobadas se alimentan.</p>
+          <ul class="trio"><li>Ostiones</li><li>Trago helado</li><li>Bienvenida</li></ul>
+        </li>
+        <li>
+          <span class="num" aria-hidden="true">02</span>
+          <p class="mono">Sala Thalassa</p>
+          <h3>La ruta</h3>
+          <p>El ayuno. Miles de kilómetros sin comer: luz baja y el canto de las jorobadas.</p>
+          <ul class="trio"><li>Un bocado mínimo</li><li>5 min con un biólogo</li></ul>
+        </li>
+        <li>
+          <span class="num" aria-hidden="true">03</span>
+          <p class="mono">El Astillero</p>
+          <h3>La costa</h3>
+          <p>El susurro. La llegada a las aguas tibias de Mazatlán, donde nacen las crías.</p>
+          <ul class="trio"><li>Producto local</li><li>Voz y cuerdas</li></ul>
+        </li>
+        <li>
+          <span class="num" aria-hidden="true">04</span>
+          <p class="mono">Óvalo exterior</p>
+          <h3>El regreso</h3>
+          <p>La comunidad. Las que vuelven cada año, y nosotros con ellas, bajo el cielo.</p>
+          <ul class="trio"><li>Mesa larga</li><li>Música en vivo</li></ul>
+        </li>
+      </ol>
+      <p class="erizo">Para cerrar: <strong>El Erizo</strong>, sesión de vinilos y cuerdas para 25 personas por turno.</p>
+    </section>
+
+    <section class="oscura">
+      <div class="ancho quienes">
+        <div>
+          <p class="mono">La sede y la ciencia</p>
+          <h2>MUNBA</h2>
+          <p>El Museo Nacional de la Ballena pone sus salas, sus guías, sus biólogos y su catálogo de ballenas jorobadas. El museo es el protagonista de la noche.</p>
+        </div>
+        <div>
+          <p class="mono">La curaduría</p>
+          <h2>Swells</h2>
+          <p>Swells diseña la travesía junto con MUNBA: la temática, el guion de cada estación y lo que el visitante se lleva de cada sala.</p>
+        </div>
+        <div>
+          <p class="mono">Música, cocina y bebidas</p>
+          <h2>Bruma Records</h2>
+          <p>Bruma se encarga de la experiencia: la música de cada estación, la cocina de chef Gera y las bebidas. Cero plástico de un solo uso.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="ancho boleto" id="boleto">
+      <div class="boleto-texto">
+        <p class="mono">El boleto</p>
+        <h2>Cada boleto es una ballena.</h2>
+        <p>A cada visitante le toca la cola de una jorobada real del catálogo del museo. En el boleto lleva su nombre, su horario por estación y su turno en El Erizo. Esa noche se entera si su ballena ya volvió esta temporada.</p>
+        <ul class="incluye">
+          <li>Recorrido guiado por las cuatro estaciones</li>
+          <li>Un bocado y una bebida en cada una</li>
+          <li>Música en vivo y turno en El Erizo</li>
+        </ul>
+      </div>
+      <figure class="tarjeta">
+        <div class="tarjeta-caja">
+          <img src="/travesia/ballena.webp" width="451" height="443" alt="Cola de la ballena asignada en el boleto de ejemplo" loading="lazy" />
+          <div class="tarjeta-datos">
+            <p class="mono">MUNBA Journeys · 19 dic</p>
+            <p class="nombre">Mariana López</p>
+            <p class="viaja">viaja con <strong>Lunar</strong> · ballena MZT-0412</p>
+            <p class="ruta"><span>Salida 7:30 pm</span><span>Grupo B</span><span>Erizo 10:15</span></p>
+          </div>
+        </div>
+        <figcaption>Boleto de ejemplo</figcaption>
+      </figure>
+    </section>
+  </main>
+
+  <footer class="franja">
+    <div class="ancho barra">
+      <div class="marcas">
+        <img class="munba" src="/travesia/munba.svg" width="738" height="161" alt="MUNBA" loading="lazy" />
+        <span class="x" aria-hidden="true">×</span>
+        <img class="swells" src="/travesia/swells.svg" width="1590" height="650" alt="Swells" loading="lazy" />
+        <span class="x" aria-hidden="true">×</span>
+        <img class="bruma" src="/ronqueo/bruma-lockup-noche.svg" width="150" height="99" alt="Bruma Records" loading="lazy" />
+      </div>
+      <p class="mono">Propuesta · datos de ejemplo</p>
+    </div>
+  </footer>
+</body>
+</html>
