@@ -88,6 +88,17 @@
     .erizo { font-size: 1rem; }
     .erizo strong { color: var(--tinta); }
 
+    /* La serie */
+    .serie { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+    .serie li { border: 1px dashed #B9B4A6; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 6px; }
+    .serie li.actual { background: var(--barro); border: 1px solid var(--barro); }
+    .serie li.actual .mono { color: var(--lima); }
+    .serie li.actual h3 { color: var(--papel); }
+    .serie li.actual p:not(.mono) { color: var(--niebla); }
+    .serie .mono { font-size: 11px; }
+    .serie h3 { font-size: 1.9rem; }
+    .serie p { font-size: .9375rem; }
+
     /* Quién hace qué */
     .oscura { background: var(--mar); color: var(--papel); }
     .oscura .mono { color: var(--lima); }
@@ -192,6 +203,23 @@
       <p class="erizo">Para cerrar: <strong>El Erizo</strong>, sesión de vinilos y cuerdas para 25 personas por turno.</p>
     </section>
 
+    <div class="linea"></div>
+
+    <section class="ancho bloque">
+      <div class="intro">
+        <p class="mono">La serie</p>
+        <h2>Cada journey, otra especie.</h2>
+        <p>MUNBA Journeys es una serie: cada edición recorre el museo siguiendo a un habitante distinto del mar. Mismo formato de estaciones, otra historia que contar.</p>
+      </div>
+      <ol class="serie">
+        <li class="actual"><p class="mono">Edición 01 · esta propuesta</p><h3>Las jorobadas</h3><p>La migración de Alaska a Mazatlán.</p></li>
+        <li><p class="mono">Idea</p><h3>El krill</h3><p>Lo que comen las ballenas: lo más pequeño sostiene a lo más grande.</p></li>
+        <li><p class="mono">Idea</p><h3>Las sardinas</h3><p>El cardumen: miles moviéndose como una sola.</p></li>
+        <li><p class="mono">Idea</p><h3>Los tiburones</h3><p>El depredador que mantiene el mar en equilibrio.</p></li>
+        <li><p class="mono">Idea</p><h3>Los delfines</h3><p>La manada y su manera de hablarse.</p></li>
+      </ol>
+    </section>
+
     <section class="oscura">
       <div class="ancho quienes">
         <div>
@@ -202,7 +230,7 @@
         <div>
           <p class="mono">La curaduría</p>
           <h2>Swells</h2>
-          <p>Swells diseña la travesía junto con MUNBA: la temática, el guion de cada estación y lo que el visitante se lleva de cada sala.</p>
+          <p>Swells propone cada journey junto con MUNBA y traduce la ciencia, sin tecnicismos, a una experiencia: el tema, el guion de cada estación y lo que el visitante se lleva de cada sala.</p>
         </div>
         <div>
           <p class="mono">Música, cocina y bebidas</p>
