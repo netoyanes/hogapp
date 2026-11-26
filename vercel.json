@@ -21,6 +21,10 @@
       "destination": "/menu/bruma.html"
     },
     {
+      "source": "/journeys",
+      "destination": "/travesia.html"
+    },
+    {
       "source": "/travesia",
       "destination": "/travesia.html"
     },
