@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Landing público de «Travesía»: cena-concierto en cuatro estaciones en el
+       Museo Nacional de la Ballena (MUNBA), de Swells × MUNBA × Bruma Records.
+       Página estática, sin login: vercel.json reescribe /travesia aquí.
+       Sale del mockup de diseño «Travesía · landing y boleto».
+
+       PENDIENTE antes de vender: fecha, aforo, precio, monto del donativo a
+       Swells y la liga de reserva. Mientras no existan, la página dice «fecha
+       por anunciar» y el botón es «reservas muy pronto» (busca «PENDIENTE»). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0C1B33" />
+  <title>Travesía · una noche en el Museo Nacional de la Ballena</title>
+  <meta name="description" content="Cena-concierto en cuatro estaciones dentro del Museo Nacional de la Ballena, en Mazatlán. El viaje de una ballena jorobada, de Alaska a Mazatlán, con la cocina de chef Gera, la barra de Bruma Records y música en vivo." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Travesía" />
+  <meta property="og:locale" content="es_MX" />
+  <meta property="og:title" content="Travesía · de las que vuelven" />
+  <meta property="og:description" content="Cena-concierto en cuatro estaciones dentro del Museo Nacional de la Ballena. Swells × MUNBA × Bruma Records, Mazatlán." />
+  <meta property="og:url" content="https://hogapp-smoky.vercel.app/travesia" />
+  <meta property="og:image" content="https://hogapp-smoky.vercel.app/travesia/og.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Cola de ballena jorobada saliendo del mar" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/svg+xml" href="/ronqueo/bruma-simbolo-dia.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;700&display=swap" />
+  <style>
+    :root {
+      --mar: #0C1B33;
+      --barro: #274065;
+      --papel: #F3F0E9;
+      --lima: #DAFF62;
+      --niebla: #D6D9DF;
+      --tinta: #111111;
+      --gris: #3A3F48;
+      --serif: 'Instrument Serif', Georgia, serif;
+      --sans: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    body { background: var(--mar); color: var(--papel); font-family: var(--sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    img { display: block; max-width: 100%; height: auto; }
+    .ancho { max-width: 1120px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
+    .mono { font-family: var(--mono); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--lima); line-height: 1.6; }
+    h1, h2, h3 { font-family: var(--serif); font-weight: 400; line-height: 1; }
+    h2 { font-size: clamp(2.5rem, 7vw, 3.5rem); text-wrap: balance; }
+    p { line-height: 1.5; }
+
+    /* Barra */
+    .barra { padding-top: calc(22px + env(safe-area-inset-top)); padding-bottom: 22px; display: flex; flex-wrap: wrap; gap: 14px 18px; justify-content: space-between; align-items: center; }
+    .marcas { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; }
+    .marcas .x { font-family: var(--mono); font-size: 13px; color: var(--niebla); }
+    .marcas .swells { height: 40px; width: auto; }
+    .marcas .munba { height: 26px; width: auto; }
+    .marcas .bruma { height: 40px; width: auto; }
+    .pildora {
+      font-family: var(--mono); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; text-decoration: none;
+      color: var(--lima); padding: 12px 18px; border: 1px solid var(--lima); border-radius: 999px;
+    }
+    .pildora:hover { background: var(--lima); color: var(--mar); }
+    a:focus-visible { outline: 3px solid var(--lima); outline-offset: 3px; }
+
+    /* Hero */
+    .hero { padding-top: 28px; padding-bottom: 64px; display: flex; flex-wrap: wrap; gap: 40px 48px; align-items: center; }
+    .hero-texto { flex: 999 1 460px; min-width: 0; display: flex; flex-direction: column; gap: 22px; }
+    h1 { font-size: clamp(3.4rem, 15vw, 7rem); line-height: .93; }
+    h1 em { display: block; color: var(--lima); }
+    .bajada { font-size: clamp(1.0625rem, 2.4vw, 1.25rem); max-width: 34rem; color: var(--niebla); }
+    .accion { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+    .boton { display: inline-block; background: var(--lima); color: var(--mar); font-weight: 700; font-size: 1.0625rem; text-decoration: none; padding: 17px 30px; border-radius: 999px; }
+    .boton.barro { background: var(--barro); color: var(--papel); }
+    .accion small { font-size: .9375rem; color: var(--niebla); }
+    .hero-foto { flex: 1 1 320px; min-width: 0; width: 100%; max-width: 480px; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 24px; background: var(--barro); }
+
+    /* Secciones claras */
+    .clara { background: var(--papel); color: var(--tinta); }
+    .clara .mono { color: var(--barro); }
+    .clara p { color: var(--gris); }
+    .bloque { padding-top: 64px; padding-bottom: 64px; display: flex; flex-direction: column; gap: 36px; }
+    .intro { display: flex; flex-direction: column; gap: 12px; }
+    .intro p { font-size: 1.0625rem; max-width: 40rem; }
+
+    /* Estaciones */
+    .estaciones { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+    .estaciones li { background: var(--barro); color: var(--papel); border-radius: 20px; padding: 26px; display: flex; flex-direction: column; gap: 10px; }
+    .estaciones h3 { font-size: 2.5rem; }
+    .estaciones li p { font-size: 1rem; color: var(--niebla); }
+    .estaciones li .mono { font-size: 13px; color: var(--lima); }
+    .erizo { font-size: 1rem; }
+    .erizo strong { color: var(--tinta); }
+
+    /* Quiénes */
+    .quienes { padding-top: 64px; padding-bottom: 64px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 44px 48px; }
+    .quienes div { display: flex; flex-direction: column; gap: 12px; }
+    .quienes h2 { font-size: 3rem; }
+    .quienes p { font-size: 1.0625rem; color: var(--niebla); }
+
+    /* Boleto */
+    .boleto { padding-top: 64px; padding-bottom: 64px; display: flex; flex-wrap: wrap; gap: 40px 48px; align-items: center; }
+    .boleto-texto { flex: 999 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+    .boleto-texto p { font-size: 1.0625rem; max-width: 34rem; }
+    .incluye { padding-left: 20px; font-size: 1.0625rem; line-height: 1.7; color: var(--gris); }
+    .tarjeta { flex: 1 1 300px; min-width: 0; max-width: 400px; margin: 0; }
+    .tarjeta-caja { background: var(--mar); color: var(--papel); border-radius: 28px; overflow: hidden; }
+    .tarjeta img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+    .tarjeta-datos { padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+    .tarjeta-datos .mono { color: var(--lima); }
+    .tarjeta .nombre { color: var(--papel); font-family: var(--serif); font-size: 2.25rem; line-height: 1; }
+    .tarjeta .viaja { font-size: 1rem; color: var(--niebla); }
+    .tarjeta .viaja strong { color: var(--papel); }
+    .tarjeta .ruta { border-top: 1px dashed #5B6B85; padding-top: 14px; display: flex; justify-content: space-between; gap: 10px; font-size: .9375rem; color: var(--papel); }
+    .tarjeta figcaption { margin-top: 10px; text-align: center; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--gris); }
+
+    footer { padding-top: 36px; padding-bottom: calc(48px + env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: center; }
+    footer .mono { color: var(--niebla); font-size: 12px; }
+
+    @media (max-width: 520px) {
+      .ancho { padding-left: 20px; padding-right: 20px; }
+      .marcas .swells, .marcas .bruma { height: 32px; }
+      .marcas .munba { height: 21px; }
+      .barra .pildora { display: none; }
+      .boton { width: 100%; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <header class="ancho barra">
+    <div class="marcas">
+      <img class="swells" src="/travesia/swells.svg" width="1590" height="650" alt="Swells" />
+      <span class="x" aria-hidden="true">×</span>
+      <img class="munba" src="/travesia/munba.svg" width="738" height="161" alt="MUNBA · Museo Nacional de la Ballena" />
+      <span class="x" aria-hidden="true">×</span>
+      <img class="bruma" src="/ronqueo/bruma-lockup-noche.svg" width="150" height="99" alt="Bruma Records" />
+    </div>
+    <a class="pildora" href="#boleto">Aparta tu lugar</a>
+  </header>
+
+  <main>
+    <section class="ancho hero">
+      <div class="hero-texto">
+        <!-- PENDIENTE: fecha -->
+        <p class="mono">Fecha por anunciar · Museo Nacional de la Ballena · Mazatlán</p>
+        <h1>Travesía <em>de las que vuelven.</em></h1>
+        <p class="bajada">Una cena-concierto en cuatro estaciones dentro del museo. Recorres el viaje de una ballena jorobada, de Alaska a Mazatlán, con la cocina de chef Gera, la barra de Bruma y música en vivo.</p>
+        <div class="accion">
+          <a class="boton" href="#boleto">Conoce tu boleto</a>
+          <!-- PENDIENTE: aforo y precio -->
+          <small>Lugares limitados · reservas muy pronto</small>
+        </div>
+      </div>
+      <img class="hero-foto" src="/travesia/ballena.webp" width="451" height="443" alt="Cola de ballena jorobada saliendo del mar" />
+    </section>
+
+    <section class="clara">
+      <div class="ancho bloque">
+        <div class="intro">
+          <p class="mono">El mapa del recorrido</p>
+          <h2>Cuatro estaciones, un viaje.</h2>
+          <p>En cada estación te recibe un guía del museo, pruebas un tiempo del menú y cambia la música. Avanzas con tu grupo, como ellas.</p>
+        </div>
+        <ol class="estaciones">
+          <li>
+            <p class="mono">01 · Vestíbulo</p>
+            <h3>El norte</h3>
+            <p>La abundancia antes del viaje. Ostiones crudos y ahumados, trago helado de bienvenida.</p>
+          </li>
+          <li>
+            <p class="mono">02 · Sala Thalassa</p>
+            <h3>La ruta</h3>
+            <p>El ayuno. Un tiempo mínimo, luz baja y el canto de las jorobadas. Cinco minutos con un biólogo.</p>
+          </li>
+          <li>
+            <p class="mono">03 · El Astillero</p>
+            <h3>La costa</h3>
+            <p>El susurro. Producto de Mazatlán en manos de chef Gera, voz y cuerdas casi en secreto.</p>
+          </li>
+          <li>
+            <p class="mono">04 · Óvalo exterior</p>
+            <h3>El regreso</h3>
+            <p>La comunidad. Mesa larga, platos al centro y música en vivo bajo el cielo.</p>
+          </li>
+        </ol>
+        <p class="erizo">Después del recorrido: <strong>El Erizo</strong>, sesión de vinilos y cuerdas para 25 personas por turno. Tu turno viene en el boleto.</p>
+      </div>
+    </section>
+
+    <section class="ancho quienes">
+      <div>
+        <p class="mono">La cocina</p>
+        <h2>Chef Gera</h2>
+        <p>El chef de MUNBA Nights diseña los cuatro tiempos del viaje, del ostión frío del norte a la mesa compartida del regreso. Producto local y de temporada.</p>
+      </div>
+      <div>
+        <p class="mono">La causa</p>
+        <h2>Swells</h2>
+        <!-- PENDIENTE: monto del donativo por boleto -->
+        <p>Swells trabaja por la conservación de la costa de Sinaloa: da a conocer sus especies y organiza limpiezas de playa. Una parte de cada boleto va a su programa, y tu boleto incluye un lugar en la próxima limpieza.</p>
+      </div>
+      <div>
+        <p class="mono">La barra y la música</p>
+        <h2>Bruma Records</h2>
+        <p>Coctelería y vino por estación, música en vivo en el exterior y vinilos en El Erizo. Cero plástico de un solo uso.</p>
+      </div>
+    </section>
+
+    <section class="clara" id="boleto">
+      <div class="ancho boleto">
+        <div class="boleto-texto">
+          <p class="mono">Tu boleto</p>
+          <h2>Cada boleto es una ballena.</h2>
+          <p>Al reservar te toca la cola de una jorobada real del catálogo del museo. En el boleto llevas su nombre, tu horario por estación y tu turno en El Erizo. La noche del evento te decimos si ya volvió esta temporada.</p>
+          <ul class="incluye">
+            <li>Cena de cuatro tiempos con maridaje</li>
+            <li>Recorrido guiado por el museo</li>
+            <li>Turno en El Erizo</li>
+            <li>Donativo a Swells y lugar en la próxima limpieza de playa</li>
+          </ul>
+          <!-- PENDIENTE: liga de reserva. Cuando exista, cambia este párrafo por
+               <a class="boton barro" href="…">Reserva tu travesía</a> -->
+          <p class="mono">Reservas muy pronto · lugares limitados</p>
+        </div>
+        <figure class="tarjeta">
+          <div class="tarjeta-caja">
+            <img src="/travesia/ballena.webp" width="451" height="443" alt="Cola de la ballena asignada en el boleto de ejemplo" loading="lazy" />
+            <div class="tarjeta-datos">
+              <p class="mono">Travesía · Mazatlán</p>
+              <p class="nombre">Mariana López</p>
+              <p class="viaja">viaja con <strong>Lunar</strong> · ballena MZT-0412</p>
+              <p class="ruta"><span>Salida 7:30 pm</span><span>Grupo B</span><span>Erizo 10:15</span></p>
+            </div>
+          </div>
+          <figcaption>Boleto de ejemplo</figcaption>
+        </figure>
+      </div>
+    </section>
+  </main>
+
+  <footer class="ancho">
+    <div class="marcas">
+      <img class="swells" src="/travesia/swells.svg" width="1590" height="650" alt="Swells" loading="lazy" />
+      <span class="x" aria-hidden="true">×</span>
+      <img class="munba" src="/travesia/munba.svg" width="738" height="161" alt="MUNBA" loading="lazy" />
+      <span class="x" aria-hidden="true">×</span>
+      <img class="bruma" src="/ronqueo/bruma-lockup-noche.svg" width="150" height="99" alt="Bruma Records" loading="lazy" />
+    </div>
+    <p class="mono">Museo Nacional de la Ballena · Mazatlán</p>
+  </footer>
+</body>
+</html>
