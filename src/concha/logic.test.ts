@@ -1,0 +1,117 @@
+import { describe, expect, it } from 'vitest'
+import {
+  diaSemana, fechaLarga, folioTxt, horario, lunesDe, menuDelDia, pesos,
+  repartoColaboracion, siguienteFolio, totales, turnoDelDia, aplicado,
+} from './logic'
+import { catalogoDemo } from './seed'
+import type { Orden, Renglon } from './types'
+
+const JUEVES = '2026-11-26'
+const cat = catalogoDemo(JUEVES)
+const comida = cat.turnos[0]
+const d = (id: string) => cat.descuentos.find(x => x.id === id)!
+
+const renglon = (p: Partial<Renglon>): Renglon => ({
+  id: crypto.randomUUID(), tipo: 'comida', platilloId: 'chicharron', nombre: 'x', guarniciones: [], agua: null,
+  cantidad: 1, precioUnit: 13000, costoUnit: null, colaboracionId: null, ...p,
+})
+
+describe('fechas y textos', () => {
+  it('días y lunes', () => {
+    expect(diaSemana(JUEVES)).toBe(4)
+    expect(lunesDe(JUEVES)).toBe('2026-11-23')
+    expect(lunesDe('2026-11-29')).toBe('2026-11-23') // domingo
+  })
+  it('como en el diseño', () => {
+    expect(fechaLarga(JUEVES)).toBe('Jueves 26 de noviembre')
+    expect(horario('12:00', '16:30')).toBe('12:00 a 4:30 PM')
+    expect(horario('09:30', '15:00')).toBe('9:30 AM a 3:00 PM')
+    expect(pesos(175500)).toBe('$1,755')
+    expect(pesos(-2800)).toBe('−$28')
+    expect(pesos(2850)).toBe('$28.50')
+    expect(folioTxt(27)).toBe('#0027')
+  })
+})
+
+describe('menú del día', () => {
+  it('turno por día', () => {
+    expect(turnoDelDia(cat, JUEVES)?.id).toBe('comida')
+    expect(turnoDelDia(cat, '2026-11-28')?.id).toBe('brunch')
+    expect(turnoDelDia(cat, '2026-11-29')).toBeNull()
+  })
+  it('precio base, colaboración y agotado', () => {
+    const g = menuDelDia(cat, JUEVES, 'guiso')
+    expect(g.map(x => x.platillo.id)).toEqual(['chicharron', 'fajitas', 'albondigas', 'marlin', 'especial', 'colache'])
+    expect(g[0].precio).toBe(13000)
+    expect(g[0].etiqueta).toBe('SOLO HOY')
+    expect(g[2].etiqueta).toBe('TODA LA SEMANA')
+    expect(g[4].precio).toBe(15000)
+    expect(g[4].etiqueta).toBe('COLABORACIÓN · CHEF INVITADO')
+    expect(g[5].agotado).toBe(true)
+  })
+  it('las porciones bajan con lo vendido y con la orden en curso', () => {
+    const exs = { [`${JUEVES}|chicharron`]: { fecha: JUEVES, platilloId: 'chicharron', vendidas: 10, agotadoManual: false } }
+    const [ch] = menuDelDia(cat, JUEVES, 'guiso', exs, { chicharron: 2 })
+    expect(ch.quedan).toBe(0)
+    expect(ch.agotado).toBe(true)
+  })
+  it('tope diario de la colaboración', () => {
+    const c2 = { ...cat, colaboraciones: [{ ...cat.colaboraciones[0], topeDia: 5, topes: { [JUEVES]: 3 } }] }
+    const esp = menuDelDia(c2, JUEVES, 'guiso').find(x => x.platillo.id === 'especial')!
+    expect(esp.quedan).toBe(3)
+  })
+  it('un platillo de un solo día no aparece al siguiente', () => {
+    expect(menuDelDia(cat, '2026-11-27', 'guiso').some(x => x.platillo.id === 'chicharron')).toBe(false)
+  })
+})
+
+describe('totales', () => {
+  const orden = [renglon({}), renglon({ platilloId: 'especial', precioUnit: 15000, colaboracionId: 'colab-demo' })]
+  it('Petroil 10% como en el diseño: $280 − $28 = $252', () => {
+    const t = totales(orden, aplicado(d('petroil')), comida, d('petroil'))
+    expect(t).toMatchObject({ subtotal: 28000, descuento: 2800, total: 25200, sinCobro: false, sellos: 2 })
+  })
+  it('convenio sin el platillo de colaboración, si así se configura', () => {
+    const sinColab = { ...d('petroil'), aplicaAColaboracion: false }
+    expect(totales(orden, aplicado(sinColab), comida, sinColab).descuento).toBe(1300)
+  })
+  it('cliente frecuente: 100% de una comida, la de menor precio; no suma sello esa', () => {
+    const t = totales(orden, aplicado(d('frecuente')), comida)
+    expect(t.descuento).toBe(13000)
+    expect(t.total).toBe(15000)
+    expect(t.sellos).toBe(1)
+  })
+  it('sin cobro: total 0, costo a precio de lista, sin sellos', () => {
+    const t = totales(orden, aplicado(d('cortesia')), comida)
+    expect(t).toMatchObject({ total: 0, sinCobro: true, costoSinCobro: 28000, sellos: 0 })
+  })
+  it('brunch con sello pendiente no suma', () => {
+    expect(totales(orden, null, cat.turnos[1]).sellos).toBe(0)
+  })
+})
+
+describe('folio y reparto al chef', () => {
+  const o = (fecha: string, folio: number | null, renglones: Renglon[], sinCobro = false): Orden => ({
+    id: crypto.randomUUID(), dispositivo: 't', fecha, folio, creadaEn: '', cobradaEn: '', turnoId: 'comida',
+    servicio: 'aqui', canal: 'mostrador', nombreCliente: null, telefono: null, direccion: null, costoEnvio: 0,
+    estado: 'cobrada', renglones, descuento: null, codigoCapturado: null, subtotal: 0, descuentoMonto: 0, total: 0,
+    sinCobro, costoSinCobro: 0, sellos: 0, selloNumero: null, pagos: [], cajero: null, sincronizada: false,
+  })
+  it('folio consecutivo por día', () => {
+    const ords = [o(JUEVES, 1, []), o(JUEVES, 2, []), o('2026-11-25', 9, [])]
+    expect(siguienteFolio(ords, JUEVES)).toBe(3)
+    expect(siguienteFolio(ords, '2026-11-27')).toBe(1)
+  })
+  it('50-50 de (precio − costo) solo la primera semana', () => {
+    const c = cat.colaboraciones[0] // desde el lunes 23, $150, costo $60
+    const esp = (cantidad: number) => renglon({ platilloId: 'especial', precioUnit: 15000, costoUnit: 6000, colaboracionId: c.id, cantidad })
+    const ords = [
+      o('2026-11-23', 1, [esp(3)]),
+      o('2026-11-23', 2, [esp(1)], true), // sin cobro: no cuenta
+      o('2026-11-30', 1, [esp(2)]),       // segunda semana: sin reparto
+    ]
+    const r = repartoColaboracion(c, ords)
+    expect(r[0]).toMatchObject({ fecha: '2026-11-23', vendidos: 3, ganancia: 27000, alChef: 13500, conReparto: true })
+    expect(r[1]).toMatchObject({ fecha: '2026-11-30', vendidos: 2, alChef: 0, conReparto: false })
+  })
+})

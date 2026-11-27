@@ -1,0 +1,137 @@
+/* Doña Concha · POS — tokens y componentes del archivo de Figma
+   (variables bg/canvas, bg/card, text/primary, text/price, text/secondary, border/rule).
+   Las fuentes se instalan con la app (@fontsource): no dependen de internet. */
+@import '@fontsource/archivo-black/400.css';
+@import '@fontsource/public-sans/400.css';
+@import '@fontsource/public-sans/600.css';
+@import '@fontsource/public-sans/700.css';
+@import '@fontsource/public-sans/900.css';
+
+.dc {
+  --dc-canvas: #F9CA18;
+  --dc-card: #FFF6D1;
+  --dc-primary: #EF3334;
+  --dc-price: #2F4AA6;
+  --dc-secondary: #7C673D;
+  --dc-rule: #EF3334;
+  --dc-title: 'Archivo Black', system-ui, sans-serif;
+  --dc-text: 'Public Sans', system-ui, sans-serif;
+
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  background: var(--dc-canvas);
+  color: var(--dc-primary);
+  font-family: var(--dc-text);
+  line-height: normal;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  overflow: hidden;
+}
+:where(.dc) *, :where(.dc) *::before, :where(.dc) *::after { box-sizing: border-box; }
+:where(.dc) button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; touch-action: manipulation; }
+:where(.dc) button:disabled { cursor: default; }
+:where(.dc) input { font: inherit; }
+
+/* ── Barra superior ─────────────────────────────── */
+.dc-top { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; flex-shrink: 0; }
+.dc-brand { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.dc-title { font-family: var(--dc-title); font-size: 22px; color: var(--dc-primary); margin: 0; }
+.dc-sub { font-weight: 600; font-size: 13px; color: var(--dc-secondary); margin: 2px 0 0; white-space: nowrap; }
+.dc-sub b { color: var(--dc-primary); font-weight: 700; }
+.dc-estado { display: flex; align-items: center; gap: 12px; }
+.dc-stat { background: var(--dc-card); border-radius: 14px; padding: 8px 16px; display: flex; flex-direction: column; white-space: nowrap; }
+.dc-stat-k { font-weight: 900; font-size: 10px; letter-spacing: 0.8px; color: var(--dc-secondary); }
+.dc-stat-v { font-family: var(--dc-title); font-size: 20px; color: var(--dc-price); }
+.dc-btn-corte { background: var(--dc-primary); color: var(--dc-card); font-weight: 700; font-size: 15px; border-radius: 999px; padding: 14px 20px; white-space: nowrap; }
+
+/* ── Logo (11:2) — no se modifica ───────────────── */
+.dc-logo { position: relative; width: 117.098px; height: 60px; flex-shrink: 0; }
+.dc-logo-concha { position: absolute; inset: 0.09% 25.51% 0 22.65%; }
+.dc-logo-lettering { position: absolute; inset: 9.07% -0.01% 8.4% 0; }
+.dc-logo img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; max-width: none; }
+
+/* ── Cuerpo ─────────────────────────────────────── */
+.dc-body { flex: 1; display: flex; min-height: 0; }
+.dc-menu { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding: 8px 24px 24px; overflow-y: auto; }
+.dc-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.dc-head { display: flex; align-items: flex-end; gap: 10px; white-space: nowrap; }
+.dc-head h2 { font-family: var(--dc-title); font-weight: 400; font-size: 15px; letter-spacing: 1.2px; color: var(--dc-primary); margin: 0; }
+.dc-head span { font-weight: 600; font-size: 12px; color: var(--dc-secondary); }
+
+/* ── Chip (191:157) y chip seleccionado (191:159) ─ */
+.dc-chip {
+  background: var(--dc-card); border: 1.5px solid var(--dc-rule); border-radius: 999px;
+  padding: 9px 14px; font-weight: 700; font-size: 13px; color: var(--dc-primary); white-space: nowrap;
+  min-height: 36px;
+}
+.dc-chip.is-on { background: var(--dc-price); border-color: var(--dc-price); color: var(--dc-card); }
+.dc-chip:disabled { opacity: .45; }
+
+/* ── Tarjeta de guiso (191:146) ─────────────────── */
+.dc-guisos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.dc-card {
+  background: var(--dc-card); border: 2px solid var(--dc-rule); border-radius: 18px; padding: 16px;
+  height: 176px; display: flex; flex-direction: column; justify-content: space-between; text-align: left;
+}
+.dc-card.is-agotado { opacity: .45; }
+.dc-card-top { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; overflow: hidden; }
+.dc-tag { background: var(--dc-canvas); border-radius: 999px; padding: 4px 10px; font-weight: 900; font-size: 11px; letter-spacing: 0.88px; color: var(--dc-primary); white-space: nowrap; }
+.dc-card-name { font-weight: 700; font-size: 20px; color: var(--dc-primary); margin: 0; }
+.dc-card-bottom { display: flex; align-items: center; justify-content: space-between; }
+.dc-price { font-family: var(--dc-title); font-size: 24px; color: var(--dc-price); }
+.dc-quedan { font-weight: 600; font-size: 12px; color: var(--dc-secondary); }
+.dc-add { background: var(--dc-price); color: var(--dc-card); border-radius: 999px; padding: 10px 18px; font-weight: 700; font-size: 14px; white-space: nowrap; min-height: 40px; }
+.dc-add:active:not(:disabled) { transform: scale(.97); }
+
+/* ── Orden ──────────────────────────────────────── */
+.dc-orden { width: 420px; flex-shrink: 0; background: var(--dc-card); border-top-left-radius: 28px; padding: 20px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.dc-orden-head { display: flex; align-items: center; justify-content: space-between; white-space: nowrap; }
+.dc-orden-head h2 { font-family: var(--dc-title); font-weight: 400; font-size: 22px; color: var(--dc-primary); margin: 0; }
+.dc-hora { font-weight: 600; font-size: 13px; color: var(--dc-secondary); }
+.dc-renglones { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; min-height: 0; flex-shrink: 1; }
+.dc-renglon { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; }
+.dc-cant { background: var(--dc-canvas); border-radius: 8px; padding: 4px 10px; font-family: var(--dc-title); font-size: 14px; color: var(--dc-primary); }
+.dc-det { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dc-det b { font-weight: 700; font-size: 15px; color: var(--dc-primary); }
+.dc-det small { font-weight: 400; font-size: 12px; color: var(--dc-secondary); }
+.dc-monto { font-family: var(--dc-title); font-size: 16px; color: var(--dc-price); white-space: nowrap; }
+.dc-ajuste { display: flex; gap: 8px; margin: -4px 0 0 38px; }
+.dc-ajuste button { border: 1.5px solid var(--dc-price); color: var(--dc-price); border-radius: 10px; min-width: 44px; height: 36px; padding: 0 12px; font-weight: 700; font-size: 14px; }
+.dc-ajuste .dc-quitar { border-color: var(--dc-primary); color: var(--dc-primary); }
+.dc-vacia { font-size: 14px; color: var(--dc-secondary); font-weight: 600; }
+.dc-rule { height: 1.5px; background: var(--dc-rule); opacity: .35; flex-shrink: 0; }
+.dc-label { font-weight: 900; font-size: 11px; letter-spacing: 0.88px; color: var(--dc-secondary); margin: 0; white-space: nowrap; }
+.dc-sellos { display: flex; gap: 6px; }
+.dc-sello { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--dc-primary); background: var(--dc-card); position: relative; }
+.dc-sello::after { content: ''; position: absolute; inset: -10px -3px; } /* área de toque más grande */
+.dc-sello.is-on { background: var(--dc-primary); }
+.dc-sello.is-gratis { border-color: var(--dc-price); }
+.dc-sello.is-gratis.is-on { background: var(--dc-price); }
+.dc-espacio { flex: 1; min-height: 0; }
+.dc-total { display: flex; align-items: center; justify-content: space-between; white-space: nowrap; }
+.dc-total span { font-weight: 600; font-size: 14px; color: var(--dc-secondary); }
+.dc-total strong { font-family: var(--dc-title); font-weight: 400; font-size: 16px; color: var(--dc-price); }
+.dc-total.is-grande span { font-family: var(--dc-title); font-weight: 400; font-size: 20px; color: var(--dc-primary); }
+.dc-total.is-grande strong { font-size: 30px; }
+.dc-pagos { display: flex; gap: 8px; }
+.dc-pago { flex: 1; border: 2px solid var(--dc-price); border-radius: 14px; padding: 14px 10px; font-weight: 700; font-size: 15px; color: var(--dc-price); background: var(--dc-card); }
+.dc-pago.is-on { background: var(--dc-price); color: var(--dc-card); }
+.dc-pago:disabled { opacity: .45; }
+.dc-cobrar { background: var(--dc-primary); color: var(--dc-card); border-radius: 18px; padding: 18px 20px; font-family: var(--dc-title); font-size: 22px; width: 100%; flex-shrink: 0; }
+.dc-cobrar:disabled { background: var(--dc-canvas); color: var(--dc-secondary); } /* sin rosa: la opacidad sobre crema se ve rosa */
+
+/* ── Avisos y hojas ─────────────────────────────── */
+.dc-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--dc-price); color: var(--dc-card); font-weight: 700; font-size: 15px; padding: 14px 22px; border-radius: 999px; z-index: 30; box-shadow: 0 6px 20px rgba(47, 74, 166, .25); max-width: 80vw; text-align: center; }
+.dc-toast.is-error { background: var(--dc-primary); }
+.dc-velo { position: fixed; inset: 0; background: rgba(124, 103, 61, .35); display: flex; align-items: center; justify-content: center; z-index: 20; }
+.dc-hoja { background: var(--dc-card); border: 2px solid var(--dc-rule); border-radius: 24px; padding: 24px; width: 440px; max-width: 92vw; display: flex; flex-direction: column; gap: 14px; }
+.dc-hoja h3 { font-family: var(--dc-title); font-weight: 400; font-size: 22px; margin: 0; color: var(--dc-primary); }
+.dc-hoja p { margin: 0; font-size: 14px; color: var(--dc-secondary); font-weight: 600; }
+.dc-input { width: 100%; border: 2px solid var(--dc-price); border-radius: 14px; padding: 14px 16px; font-size: 20px; font-weight: 700; color: var(--dc-price); background: #fff; outline: none; text-transform: uppercase; }
+.dc-hoja-btns { display: flex; gap: 8px; }
+.dc-hoja-btns .dc-pago { flex: 1; }
+
+/* ── Pantallas por construir ────────────────────── */
+.dc-pendiente { background: var(--dc-card); border: 2px solid var(--dc-rule); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; gap: 8px; }
+.dc-pendiente h3 { font-family: var(--dc-title); font-weight: 400; font-size: 20px; margin: 0; }
+.dc-pendiente p { margin: 0; color: var(--dc-secondary); font-weight: 600; font-size: 14px; }
