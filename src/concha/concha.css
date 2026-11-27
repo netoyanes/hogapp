@@ -53,6 +53,7 @@
 /* ── Cuerpo ─────────────────────────────────────── */
 .dc-body { flex: 1; display: flex; min-height: 0; }
 .dc-menu { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding: 8px 24px 24px; overflow-y: auto; }
+.dc-menu > * { flex-shrink: 0; }
 .dc-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .dc-head { display: flex; align-items: flex-end; gap: 10px; white-space: nowrap; }
 .dc-head h2 { font-family: var(--dc-title); font-weight: 400; font-size: 15px; letter-spacing: 1.2px; color: var(--dc-primary); margin: 0; }
@@ -183,3 +184,122 @@
   .dc-panel { break-inside: avoid; }
   .dc, .dc-panel { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ── Celular (vertical) ─────────────────────────────
+   En el teléfono la venta es ConchaMovil (flujo guiado, estilos .dm-*).
+   Aquí se adaptan las piezas compartidas: barra superior, cobro, corte y hojas. */
+
+@media (max-width: 760px) {
+  .dc { height: 100dvh; }
+  .dc-top { flex-wrap: wrap; gap: 10px; padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); }
+  .dc-brand { gap: 12px; }
+  .dc-title { font-size: 18px; }
+  .dc-sub { white-space: normal; font-size: 12px; }
+  .dc-estado { width: 100%; gap: 8px; flex-wrap: wrap; }
+  .dc-stat { flex: 1 1 0; min-width: 0; padding: 6px 12px; }
+  .dc-stat-k { font-size: 9px; letter-spacing: .6px; }
+  .dc-stat-v { font-size: 17px; }
+  .dc-btn-corte { flex: 1 1 100%; padding: 10px 16px; font-size: 14px; }
+
+
+
+  /* Cobro a pantalla completa */
+  .dc-cobro { flex-direction: column; width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; overflow-y: auto; }
+  .dc-cobro-resumen { width: auto; border-right: 0; padding: 16px 16px 0; padding-top: max(16px, env(safe-area-inset-top)); gap: 6px; }
+  .dc-cobro-resumen .dc-renglones, .dc-cobro-resumen .dc-espacio, .dc-cobro-resumen .dc-rule { display: none; }
+  .dc-cobro-pago { padding: 12px 16px; padding-bottom: max(16px, env(safe-area-inset-bottom)); gap: 10px; }
+  .dc-campos { flex-wrap: wrap; gap: 8px; }
+  .dc-campo { flex: 1 1 40%; padding: 8px 12px; }
+  .dc-campo-v { font-size: 22px; }
+  .dc-teclado { flex: none; gap: 8px; }
+  .dc-cobrar { font-size: 19px; padding: 16px; }
+  .dc-cobro .dc-hoja-btns .dc-pago { flex: 0 0 auto; padding: 14px 16px; }
+  .dc-teclado button { min-height: 52px; font-size: 24px; }
+  .dc-cobro-estado { min-height: 0; }
+  .dc-cobro-listo { width: 100vw; height: 100dvh; justify-content: center; }
+  .dc-cobro-grande { font-size: 60px; }
+  .dc-hoja { width: 92vw; padding: 20px; }
+
+  /* Corte en una columna */
+  .dc-corte { padding: 4px 16px 24px; }
+  .dc-corte-head { flex-direction: column; align-items: flex-start; }
+  .dc-corte-grid { grid-template-columns: 1fr; }
+  .dc-input-chico { width: 120px; }
+}
+
+/* ── Celular: flujo guiado (ConchaMovil) ────────────
+   Un paso por pantalla. Botón principal abajo, siempre a la mano del pulgar. */
+.dm { height: 100dvh; }
+.dm-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; padding-top: max(16px, env(safe-area-inset-top)); display: flex; flex-direction: column; gap: 10px; }
+.dm-scroll > * { flex-shrink: 0; }
+.dm-abajo { flex-shrink: 0; background: var(--dc-card); padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); border-top-left-radius: 22px; border-top-right-radius: 22px; box-shadow: 0 -6px 20px rgba(124, 103, 61, .18); }
+.dm-top { display: flex; align-items: center; justify-content: space-between; }
+.dm-corte { background: var(--dc-primary); color: var(--dc-card); font-weight: 700; font-size: 15px; border-radius: 999px; padding: 12px 18px; }
+.dm-estado { margin: 0; font-weight: 600; font-size: 13px; color: var(--dc-secondary); }
+.dm-estado b { color: var(--dc-primary); }
+.dm-h1 { font-family: var(--dc-title); font-weight: 400; font-size: 26px; color: var(--dc-primary); margin: 6px 0 0; line-height: 1.1; }
+.dm-ayuda { margin: 0; font-weight: 600; font-size: 14px; color: var(--dc-secondary); }
+.dm-paso { margin: 12px 0 0; font-weight: 900; font-size: 12px; letter-spacing: .9px; color: var(--dc-secondary); }
+.dm-paso span { font-weight: 600; letter-spacing: 0; }
+.dm-atras { align-self: flex-start; font-weight: 700; font-size: 16px; color: var(--dc-price); padding: 8px 0; }
+.dm-vacio { background: var(--dc-card); border-radius: 18px; padding: 24px; font-weight: 700; font-size: 16px; color: var(--dc-secondary); }
+
+.dm-guiso { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: 4px 12px; align-items: center; text-align: left; width: 100%;
+  background: var(--dc-card); border: 2px solid var(--dc-rule); border-radius: 18px; padding: 16px 18px; min-height: 84px; }
+.dm-guiso:active:not(:disabled) { background: #fff; }
+.dm-guiso.is-agotado { opacity: .45; }
+.dm-guiso-nombre { font-weight: 700; font-size: 20px; color: var(--dc-primary); }
+.dm-guiso-info { grid-row: 2; font-weight: 600; font-size: 13px; color: var(--dc-secondary); }
+.dm-guiso-precio { grid-row: 1 / 3; grid-column: 2; font-family: var(--dc-title); font-size: 24px; color: var(--dc-price); }
+
+.dm-opcion { background: var(--dc-card); border: 2px solid var(--dc-rule); border-radius: 16px; padding: 14px 16px; min-height: 56px; font-weight: 700; font-size: 17px; color: var(--dc-primary); text-align: left; }
+.dm-opcion.is-on { background: var(--dc-price); border-color: var(--dc-price); color: var(--dc-card); }
+.dm-opcion:disabled { opacity: .4; }
+.dm-ancha { width: 100%; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.dm-alta { min-height: 72px; font-size: 20px; justify-content: center; }
+.dm-check { width: 28px; height: 28px; border-radius: 50%; border: 2px solid currentColor; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.dm-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dm-dos .dm-opcion { text-align: center; }
+.dm-extras, .dm-billetes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dm-billetes .dm-opcion { text-align: center; font-family: var(--dc-title); font-weight: 400; font-size: 20px; }
+.dm-extras .dm-opcion { font-size: 15px; }
+
+.dm-principal { width: 100%; background: var(--dc-primary); color: var(--dc-card); border-radius: 18px; padding: 18px; font-family: var(--dc-title); font-size: 20px; min-height: 64px; }
+.dm-principal:disabled { background: var(--dc-canvas); color: var(--dc-secondary); font-family: var(--dc-text); font-weight: 700; font-size: 17px; }
+.dm-pista { margin: 0; text-align: center; font-weight: 700; font-size: 16px; color: var(--dc-secondary); padding: 18px 0; }
+
+.dm-renglon { background: var(--dc-card); border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+.dm-renglon-det { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dm-renglon-det b { font-weight: 700; font-size: 17px; color: var(--dc-primary); }
+.dm-renglon-det small { font-size: 13px; color: var(--dc-secondary); }
+.dm-renglon-det strong { font-family: var(--dc-title); font-weight: 400; font-size: 18px; color: var(--dc-price); }
+.dm-cantidad { display: flex; align-items: center; gap: 8px; }
+.dm-cantidad button { width: 44px; height: 44px; border-radius: 12px; border: 2px solid var(--dc-price); color: var(--dc-price); font-weight: 700; font-size: 22px; }
+.dm-cantidad span { font-family: var(--dc-title); font-size: 20px; color: var(--dc-primary); min-width: 20px; text-align: center; }
+.dm-fila { display: flex; justify-content: space-between; align-items: center; background: var(--dc-card); border-radius: 16px; padding: 16px; min-height: 56px; font-weight: 700; font-size: 16px; color: var(--dc-primary); text-align: left; }
+.dm-cambiar { color: var(--dc-price); text-decoration: underline; }
+.dm-totales { background: var(--dc-card); border-radius: 16px; padding: 14px 16px; margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.dm-totales div { display: flex; justify-content: space-between; font-weight: 600; font-size: 15px; color: var(--dc-secondary); }
+.dm-totales strong { font-family: var(--dc-title); font-weight: 400; color: var(--dc-price); }
+.dm-totales .is-total span { font-family: var(--dc-title); font-weight: 400; font-size: 20px; color: var(--dc-primary); }
+.dm-totales .is-total strong { font-size: 28px; }
+
+.dm-total-grande { margin: 0; font-family: var(--dc-title); font-size: 48px; color: var(--dc-price); line-height: 1.05; }
+.dm-monto { background: #fff; border: 2px solid var(--dc-price); border-radius: 16px; padding: 14px 16px; min-height: 60px; font-family: var(--dc-title); font-size: 24px; color: var(--dc-price); text-align: left; }
+.dm-terminal { background: var(--dc-card); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.dm-terminal .dm-paso { margin: 0; }
+.dm-link { align-self: flex-start; font-size: 16px; padding: 10px 0; }
+.dm-cambio { display: flex; justify-content: space-between; align-items: baseline; background: var(--dc-card); border-radius: 18px; padding: 16px; margin-top: 8px; }
+.dm-cambio span { font-family: var(--dc-title); font-size: 20px; color: var(--dc-primary); }
+.dm-cambio strong { font-family: var(--dc-title); font-weight: 400; font-size: 40px; color: var(--dc-price); }
+
+.dm-listo { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; }
+.dm-listo-k { margin: 0; font-weight: 700; font-size: 20px; color: var(--dc-secondary); }
+.dm-listo-v { margin: 0 0 20px; font-family: var(--dc-title); font-size: 72px; color: var(--dc-price); line-height: 1; }
+
+.dm-teclado { background: var(--dc-card); border-radius: 24px; padding: 20px; width: 92vw; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
+.dm-teclado .dm-paso { margin: 0; }
+.dm-teclado .dc-teclado { flex: none; }
+.dm-teclado .dc-teclado button { min-height: 60px; }
+.dm-toast { bottom: 110px; }
+.dm-corte .dc-corte { padding: 0; overflow: visible; }
