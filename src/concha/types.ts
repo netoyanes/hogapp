@@ -176,3 +176,56 @@ export interface Catalogo {
   colaboraciones: Colaboracion[]
   descuentos: Descuento[]
 }
+
+export interface Gasto {
+  id: string
+  fecha: string
+  concepto: string
+  monto: number
+  registradoPor: string | null
+  creadoEn: string
+  sincronizado: boolean
+}
+
+export interface FilaDesglose {
+  clave: string
+  nombre: string
+  cantidad: number      // platillos u órdenes, según el desglose
+  monto: number
+  extra?: number        // p. ej. lo que le toca al chef
+}
+
+export interface Desglose {
+  porGuiso: FilaDesglose[]
+  porDescuento: FilaDesglose[]
+  sinCobro: FilaDesglose[]
+  colaboraciones: FilaDesglose[]
+}
+
+export interface Corte {
+  id: string
+  fecha: string
+  fondo: number
+  ventaTotal: number
+  efectivo: number
+  tarjeta: number
+  /** Propinas: no son venta; se liquidan cada semana */
+  propinas: number
+  propinasEfectivo: number
+  propinasTarjeta: number
+  gastos: number
+  sinCobroCosto: number
+  /** fondo + ventas en efectivo + propinas en efectivo − gastos */
+  efectivoAEntregar: number
+  efectivoContado: number | null
+  diferencia: number | null
+  ordenes: number
+  comidas: number
+  ticketPromedio: number
+  meta: number
+  desglose: Desglose
+  notas: string | null
+  cerradoPor: string | null
+  cerradoEn: string
+  sincronizado: boolean
+}

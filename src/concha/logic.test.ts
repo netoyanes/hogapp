@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   diaSemana, fechaLarga, folioTxt, horario, lunesDe, menuDelDia, pesos,
-  repartoColaboracion, siguienteFolio, totales, turnoDelDia, aplicado, armarPagos, billetesSugeridos,
+  repartoColaboracion, siguienteFolio, totales, turnoDelDia, aplicado, armarPagos, billetesSugeridos, calcularCorte, corteCSV, propinasSemana,
 } from './logic'
 import { catalogoDemo } from './seed'
 import type { Orden, Renglon } from './types'
@@ -142,5 +142,48 @@ describe('cobro', () => {
   })
   it('billetes sugeridos', () => {
     expect(billetesSugeridos(25200)).toEqual([25200, 30000, 50000, 100000])
+  })
+})
+
+describe('corte de caja', () => {
+  const orden = (p: Partial<Orden>): Orden => ({
+    id: crypto.randomUUID(), dispositivo: 't', fecha: JUEVES, folio: 1, creadaEn: '', cobradaEn: '', turnoId: 'comida',
+    servicio: 'aqui', canal: 'mostrador', nombreCliente: null, telefono: null, direccion: null, costoEnvio: 0,
+    estado: 'cobrada', renglones: [renglon({ nombre: 'Chicharrón' })], descuento: null, codigoCapturado: null,
+    subtotal: 13000, descuentoMonto: 0, total: 13000, sinCobro: false, costoSinCobro: 0, sellos: 1, selloNumero: null,
+    pagos: [], cajero: null, sincronizada: false, ...p,
+  })
+  const pago = (forma: 'efectivo' | 'tarjeta', monto: number, propina = 0) =>
+    ({ id: crypto.randomUUID(), forma, monto, recibido: null, cambio: null, propina, referencia: null })
+  const ordenes = [
+    orden({ pagos: [pago('efectivo', 13000, 1000)] }),
+    orden({ total: 11700, descuentoMonto: 1300, descuento: aplicado(d('petroil')), pagos: [pago('tarjeta', 11700, 2000)] }),
+    orden({ total: 0, sinCobro: true, costoSinCobro: 13000, descuento: aplicado(d('personal')), pagos: [] }),
+    orden({ fecha: '2026-11-25', pagos: [pago('efectivo', 13000, 500)] }),   // otro día de la semana
+  ]
+  const gastos = [{ id: 'g', fecha: JUEVES, concepto: 'Hielo', monto: 4000, registradoPor: null, creadoEn: '', sincronizado: false }]
+  const c = calcularCorte({ fecha: JUEVES, ordenes, gastos, fondo: 50000, efectivoContado: 69000, colaboraciones: [], meta: 40 })
+
+  it('venta, formas de pago y propinas aparte', () => {
+    expect(c).toMatchObject({ ventaTotal: 24700, efectivo: 13000, tarjeta: 11700, propinasEfectivo: 1000, propinasTarjeta: 2000, ordenes: 2, comidas: 2, ticketPromedio: 12350 })
+  })
+  it('efectivo a entregar = fondo + efectivo + propinas en efectivo − gastos', () => {
+    expect(c.efectivoAEntregar).toBe(50000 + 13000 + 1000 - 4000)
+    expect(c.diferencia).toBe(69000 - 60000)
+  })
+  it('sin cobro y descuentos por separado', () => {
+    expect(c.sinCobroCosto).toBe(13000)
+    expect(c.desglose.sinCobro).toEqual([{ clave: 'personal', nombre: 'Comida de personal', cantidad: 1, monto: 13000 }])
+    expect(c.desglose.porDescuento[0]).toMatchObject({ nombre: 'Grupo Petroil', cantidad: 1, monto: 1300 })
+    expect(c.desglose.porGuiso[0]).toMatchObject({ nombre: 'Chicharrón', cantidad: 2 })
+  })
+  it('propinas por liquidar de la semana', () => {
+    expect(propinasSemana(ordenes, JUEVES)).toEqual({ efectivo: 1500, tarjeta: 2000 })
+  })
+  it('CSV', () => {
+    const csv = corteCSV(c)
+    expect(csv.startsWith('﻿')).toBe(true)
+    expect(csv).toContain('Efectivo a entregar,600.00')
+    expect(csv).toContain('Grupo Petroil,1,13.00')
   })
 })

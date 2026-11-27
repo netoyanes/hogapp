@@ -2,7 +2,7 @@
 // dinero, porciones o sellos vive aquí para poder probarlo solo.
 import type {
   Catalogo, Colaboracion, Descuento, DescuentoAplicado, Existencia, MenuItem,
-  FormaPago, Orden, Pago, Platillo, Renglon, Turno,
+  Corte, FilaDesglose, FormaPago, Gasto, Orden, Pago, Platillo, Renglon, Turno,
 } from './types'
 
 export const TZ = 'America/Mazatlan'
@@ -312,4 +312,110 @@ export function billetesSugeridos(total: number): number[] {
   const arriba = (n: number) => Math.ceil(total / n) * n
   const s = new Set([total, arriba(5000), arriba(10000), 20000, 50000, 100000].filter(x => x >= total))
   return [...s].sort((a, b) => a - b).slice(0, 4)
+}
+
+// ── Corte de caja ─────────────────────────────────────────────────────────
+
+function agrupar(filas: { clave: string; nombre: string; cantidad: number; monto: number; extra?: number }[]): FilaDesglose[] {
+  const m = new Map<string, FilaDesglose>()
+  for (const f of filas) {
+    const a = m.get(f.clave) ?? { clave: f.clave, nombre: f.nombre, cantidad: 0, monto: 0, ...(f.extra != null ? { extra: 0 } : {}) }
+    a.cantidad += f.cantidad; a.monto += f.monto
+    if (f.extra != null) a.extra = (a.extra ?? 0) + f.extra
+    m.set(f.clave, a)
+  }
+  return [...m.values()].sort((a, b) => b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre))
+}
+
+export interface DatosCorte {
+  fecha: string
+  ordenes: Orden[]          // todas; se filtran por fecha
+  gastos: Gasto[]
+  fondo: number
+  efectivoContado: number | null
+  colaboraciones: Colaboracion[]
+  meta: number
+}
+
+/**
+ * Corte del día. Las propinas no son venta ni se pagan de la caja ese día:
+ * las de efectivo se quedan en la caja (se entregan con el efectivo, por
+ * liquidar) y las de tarjeta llegan con el depósito de la terminal.
+ */
+export function calcularCorte(d: DatosCorte): Omit<Corte, 'id' | 'notas' | 'cerradoPor' | 'cerradoEn' | 'sincronizado'> {
+  const delDia = d.ordenes.filter(o => o.fecha === d.fecha && o.estado === 'cobrada')
+  const venta = delDia.filter(o => !o.sinCobro)
+  const sc = delDia.filter(o => o.sinCobro)
+  const pagos = venta.flatMap(o => o.pagos)
+  const efectivo = pagos.filter(p => p.forma === 'efectivo').reduce((s, p) => s + p.monto, 0)
+  const tarjeta = pagos.filter(p => p.forma === 'tarjeta').reduce((s, p) => s + p.monto, 0)
+  const propinasEfectivo = pagos.filter(p => p.forma === 'efectivo').reduce((s, p) => s + p.propina, 0)
+  const propinasTarjeta = pagos.filter(p => p.forma === 'tarjeta').reduce((s, p) => s + p.propina, 0)
+  const gastos = d.gastos.filter(g => g.fecha === d.fecha).reduce((s, g) => s + g.monto, 0)
+  const ventaTotal = venta.reduce((s, o) => s + o.total, 0)
+  const efectivoAEntregar = d.fondo + efectivo + propinasEfectivo - gastos
+  const comidas = venta.reduce((s, o) => s + comidasEnOrden(o.renglones), 0)
+
+  const porGuiso = agrupar(venta.flatMap(o => o.renglones.map(r => ({
+    clave: r.platilloId, nombre: r.nombre, cantidad: r.cantidad, monto: r.precioUnit * r.cantidad,
+  }))))
+  const porDescuento = agrupar(venta.filter(o => o.descuento).map(o => ({
+    clave: o.descuento!.id, nombre: o.descuento!.nombre, cantidad: 1, monto: o.descuentoMonto,
+  })))
+  const sinCobro = agrupar(sc.map(o => ({
+    clave: o.descuento?.id ?? 'sin-motivo', nombre: o.descuento?.nombre ?? 'Sin motivo', cantidad: comidasEnOrden(o.renglones), monto: o.costoSinCobro,
+  })))
+  const colaboraciones = d.colaboraciones.flatMap(c => {
+    const dia = repartoColaboracion(c, delDia).find(x => x.fecha === d.fecha)
+    return dia ? [{ clave: c.id, nombre: c.chef, cantidad: dia.vendidos, monto: dia.ganancia, extra: dia.alChef }] : []
+  })
+
+  return {
+    fecha: d.fecha, fondo: d.fondo, ventaTotal, efectivo, tarjeta,
+    propinas: propinasEfectivo + propinasTarjeta, propinasEfectivo, propinasTarjeta,
+    gastos, sinCobroCosto: sc.reduce((s, o) => s + o.costoSinCobro, 0),
+    efectivoAEntregar,
+    efectivoContado: d.efectivoContado,
+    diferencia: d.efectivoContado == null ? null : d.efectivoContado - efectivoAEntregar,
+    ordenes: venta.length, comidas,
+    ticketPromedio: venta.length ? Math.round(ventaTotal / venta.length) : 0,
+    meta: d.meta,
+    desglose: { porGuiso, porDescuento, sinCobro, colaboraciones },
+  }
+}
+
+/** Propinas por liquidar en la semana (lunes a domingo de `fecha`) */
+export function propinasSemana(ordenes: Orden[], fecha: string): { efectivo: number; tarjeta: number } {
+  const lun = lunesDe(fecha), dom = sumarDias(lun, 6)
+  let efectivo = 0, tarjeta = 0
+  for (const o of ordenes) {
+    if (o.estado !== 'cobrada' || o.fecha < lun || o.fecha > dom) continue
+    for (const p of o.pagos) { if (p.forma === 'efectivo') efectivo += p.propina; else tarjeta += p.propina }
+  }
+  return { efectivo, tarjeta }
+}
+
+/** CSV del corte (separado por comas, con BOM para que Excel/Sheets respeten acentos) */
+export function corteCSV(c: Pick<Corte, 'fecha' | 'fondo' | 'ventaTotal' | 'efectivo' | 'tarjeta' | 'propinasEfectivo' | 'propinasTarjeta' | 'gastos' | 'sinCobroCosto' | 'efectivoAEntregar' | 'efectivoContado' | 'diferencia' | 'ordenes' | 'comidas' | 'ticketPromedio' | 'meta' | 'desglose'>): string {
+  const m = (n: number | null) => (n == null ? '' : (n / 100).toFixed(2))
+  const q = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s)
+  const filas: (string | number)[][] = [
+    ['Corte de caja', c.fecha], [],
+    ['Concepto', 'Monto'],
+    ['Venta total', m(c.ventaTotal)], ['Efectivo', m(c.efectivo)], ['Tarjeta', m(c.tarjeta)],
+    ['Órdenes', c.ordenes], ['Comidas vendidas', c.comidas], ['Meta del día', c.meta], ['Ticket promedio', m(c.ticketPromedio)],
+    ['Propinas en efectivo (por liquidar)', m(c.propinasEfectivo)], ['Propinas con tarjeta (por liquidar)', m(c.propinasTarjeta)],
+    ['Fondo de caja', m(c.fondo)], ['Gastos de caja', m(c.gastos)], ['Efectivo a entregar', m(c.efectivoAEntregar)],
+    ['Efectivo contado', m(c.efectivoContado)], ['Diferencia', m(c.diferencia)],
+    ['Sin cobro (a precio de lista)', m(c.sinCobroCosto)],
+  ]
+  const seccion = (t: string, cols: string[], fs: FilaDesglose[], extra = false) => {
+    filas.push([], [t], cols)
+    for (const f of fs) filas.push(extra ? [f.nombre, f.cantidad, m(f.monto), m(f.extra ?? 0)] : [f.nombre, f.cantidad, m(f.monto)])
+  }
+  seccion('Vendidos por platillo', ['Platillo', 'Cantidad', 'Monto'], c.desglose.porGuiso)
+  seccion('Descuentos', ['Descuento', 'Órdenes', 'Descontado'], c.desglose.porDescuento)
+  seccion('Sin cobro por motivo', ['Motivo', 'Comidas', 'Costo'], c.desglose.sinCobro)
+  seccion('Colaboraciones', ['Chef', 'Vendidos', 'Ganancia', 'Al chef'], c.desglose.colaboraciones, true)
+  return '﻿' + filas.map(f => f.map(x => q(String(x))).join(',')).join('\n')
 }

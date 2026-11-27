@@ -12,6 +12,7 @@ import {
 } from './logic'
 import { cobrarOrden, ErrorCobro, setBorrador, usePOS } from './store'
 import { Cobro } from './Cobro'
+import { CorteCaja } from './CorteCaja'
 import { subirPendientes, useSesion, useSincronizacion } from './sync'
 import { supabase } from '../lib/supabase'
 import { isValidPin, isValidUsername, normalizeUsername, pinToPassword, usernameToEmail } from '../lib/hohAuth'
@@ -103,11 +104,10 @@ function useEnLinea() {
 type Vista = 'venta' | 'semana' | 'colaboraciones' | 'extras' | 'corte'
 type FormaUI = 'efectivo' | 'tarjeta' | 'dividir'
 
-const PENDIENTES: Record<Exclude<Vista, 'venta'>, { t: string; d: string }> = {
+const PENDIENTES: Record<Exclude<Vista, 'venta' | 'corte'>, { t: string; d: string }> = {
   semana: { t: 'Semana', d: 'Menú por día, mover o copiar platillos y existencias. Se construye después del cobro y el corte.' },
   colaboraciones: { t: 'Colaboraciones', d: 'Chef, platillo, fechas, precio, costo y reparto. Va después de Descuentos.' },
   extras: { t: 'Bebidas y extras', d: 'Aguas, guarniciones y extras del día con su precio. Los precios de medio litro, litro, arroz extra y agua extra siguen pendientes.' },
-  corte: { t: 'Corte de caja', d: 'Cierre del día, gastos de caja, fondo y efectivo a entregar. Es la siguiente pantalla después de Cobro.' },
 }
 
 // ── Pantalla ──────────────────────────────────────────────────────────────
@@ -170,7 +170,8 @@ export function ConchaPOS() {
   const vendidosHoy = deHoy.filter(o => !o.sinCobro).reduce((s, o) => s + comidasEnOrden(o.renglones), 0)
   const ventaHoy = deHoy.filter(o => !o.sinCobro).reduce((s, o) => s + o.total, 0)
   const sinCobroHoy = deHoy.filter(o => o.sinCobro).length
-  const porSubir = ordenes.filter(o => !o.sincronizada).length
+  const porSubir = ordenes.filter(o => !o.sincronizada).length + pos.gastos.filter(g => !g.sincronizado).length + pos.cortes.filter(c => !c.sincronizado).length
+  const cajaCerrada = pos.cortes.some(c => c.fecha === hoy)
 
   const aviso = (msg: string, error = false) => setToast({ msg, error })
 
@@ -305,7 +306,8 @@ export function ConchaPOS() {
             <p className="dc-sub">
               {fechaLarga(hoy)} · {turno ? `${turno.nombre} ${horario(turno.inicio, turno.fin)}` : 'Hoy no hay servicio'}
               {!enLinea && <> · <b>Sin internet</b></>}
-              {porSubir > 0 && <> · {porSubir} {porSubir === 1 ? 'orden' : 'órdenes'} por subir</>}
+              {cajaCerrada && <> · <b>Caja cerrada</b></>}
+              {porSubir > 0 && <> · {porSubir} por subir</>}
               {sesion === null && <> · <button type="button" className="dc-link" onClick={() => setHojaEntrar(true)}>Entrar para sincronizar</button></>}
               {sesion && errorSync && errorSync !== 'sin sesión' && <> · <b title={errorSync}>No se pudo subir</b></>}
             </p>
@@ -319,6 +321,7 @@ export function ConchaPOS() {
         </div>
       </header>
 
+      {vista === 'corte' ? <CorteCaja hoy={hoy} cajero={sesion?.user.id ?? null} onVolver={() => setVista('venta')} /> : (
       <div className="dc-body">
         {/* Menú */}
         <main className="dc-menu">
@@ -468,6 +471,8 @@ export function ConchaPOS() {
           <button type="button" className="dc-cobrar" onClick={cobrar} disabled={!orden.renglones.length}>{btnCobrar}</button>
         </aside>
       </div>
+
+      )}
 
       {hojaCobro && (
         <Cobro

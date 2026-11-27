@@ -5,7 +5,7 @@
 // Supabase; si no hay red, se quedan en la cola y se suben después. El folio
 // se asigna aquí, en la tablet: es consecutivo por día y no depende de la red.
 import { useSyncExternalStore } from 'react'
-import type { Catalogo, Existencia, Orden } from './types'
+import type { Catalogo, Corte, Existencia, Gasto, Orden } from './types'
 import { catalogoDemo } from './seed'
 import { fechaLocal, siguienteFolio } from './logic'
 
@@ -16,6 +16,8 @@ export interface EstadoPOS {
   catalogo: Catalogo
   existencias: Record<string, Existencia>
   ordenes: Orden[]
+  gastos: Gasto[]
+  cortes: Corte[]
   /** Orden en curso (sobrevive a recargar la página) */
   borrador: Orden | null
 }
@@ -26,6 +28,8 @@ function nuevo(): EstadoPOS {
     catalogo: catalogoDemo(fechaLocal()),
     existencias: {},
     ordenes: [],
+    gastos: [],
+    cortes: [],
     borrador: null,
   }
 }
@@ -33,7 +37,7 @@ function nuevo(): EstadoPOS {
 function cargar(): EstadoPOS {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return JSON.parse(raw) as EstadoPOS
+    if (raw) return { gastos: [], cortes: [], ...JSON.parse(raw) } as EstadoPOS
   } catch { /* almacenamiento bloqueado o dañado: arranca limpio */ }
   return nuevo()
 }
@@ -71,6 +75,7 @@ export class ErrorCobro extends Error {}
  * cola para subir. Falla si algún guiso ya no tiene porciones.
  */
 export function cobrarOrden(o: Orden): Orden {
+  if (estado.cortes.some(c => c.fecha === o.fecha)) throw new ErrorCobro('La caja de hoy ya se cerró')
   const exs = { ...estado.existencias }
   const fecha = o.fecha
   // Valida existencias contra lo que se vendió desde que se armó la orden
@@ -107,4 +112,33 @@ export function setCatalogo(c: Catalogo) {
 /** Solo para la demo: vuelve a los datos de ejemplo */
 export function reiniciarDemo() {
   guardar({ ...nuevo(), dispositivo: estado.dispositivo })
+}
+
+// ── Caja ───────────────────────────────────────────────────────────────────
+
+export function agregarGasto(g: Gasto) {
+  if (estado.cortes.some(c => c.fecha === g.fecha)) throw new ErrorCobro('La caja de ese día ya se cerró')
+  guardar({ ...estado, gastos: [...estado.gastos, g] })
+}
+
+export function quitarGasto(id: string) {
+  const g = estado.gastos.find(x => x.id === id)
+  if (!g || estado.cortes.some(c => c.fecha === g.fecha)) return
+  if (g.sincronizado) throw new ErrorCobro('Ese gasto ya se subió; corrígelo desde HOG APP')
+  guardar({ ...estado, gastos: estado.gastos.filter(x => x.id !== id) })
+}
+
+/** Cierra la caja del día: el corte queda fijo y ya no se puede vender ese día */
+export function cerrarCorte(c: Corte) {
+  if (estado.cortes.some(x => x.fecha === c.fecha)) throw new ErrorCobro('La caja de ese día ya se cerró')
+  guardar({ ...estado, cortes: [...estado.cortes, c] })
+}
+
+export function marcarCajaSincronizada(gastos: string[], cortes: string[]) {
+  const g = new Set(gastos), c = new Set(cortes)
+  guardar({
+    ...estado,
+    gastos: estado.gastos.map(x => (g.has(x.id) ? { ...x, sincronizado: true } : x)),
+    cortes: estado.cortes.map(x => (c.has(x.id) ? { ...x, sincronizado: true } : x)),
+  })
 }
