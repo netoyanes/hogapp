@@ -95,7 +95,7 @@ describe('folio y reparto al chef', () => {
     id: crypto.randomUUID(), dispositivo: 't', fecha, folio, creadaEn: '', cobradaEn: '', turnoId: 'comida',
     servicio: 'aqui', canal: 'mostrador', nombreCliente: null, telefono: null, direccion: null, costoEnvio: 0,
     estado: 'cobrada', renglones, descuento: null, codigoCapturado: null, subtotal: 0, descuentoMonto: 0, total: 0,
-    sinCobro, costoSinCobro: 0, sellos: 0, selloNumero: null, pagos: [], cajero: null, sincronizada: false,
+    sinCobro, costoSinCobro: 0, sellos: 0, selloNumero: null, pagos: [], cajero: null, cajeroUsuario: null, sincronizada: false,
   })
   it('folio consecutivo por día', () => {
     const ords = [o(JUEVES, 1, []), o(JUEVES, 2, []), o('2026-11-25', 9, [])]
@@ -151,7 +151,7 @@ describe('corte de caja', () => {
     servicio: 'aqui', canal: 'mostrador', nombreCliente: null, telefono: null, direccion: null, costoEnvio: 0,
     estado: 'cobrada', renglones: [renglon({ nombre: 'Chicharrón' })], descuento: null, codigoCapturado: null,
     subtotal: 13000, descuentoMonto: 0, total: 13000, sinCobro: false, costoSinCobro: 0, sellos: 1, selloNumero: null,
-    pagos: [], cajero: null, sincronizada: false, ...p,
+    pagos: [], cajero: null, cajeroUsuario: null, sincronizada: false, ...p,
   })
   const pago = (forma: 'efectivo' | 'tarjeta', monto: number, propina = 0) =>
     ({ id: crypto.randomUUID(), forma, monto, recibido: null, cambio: null, propina, referencia: null })

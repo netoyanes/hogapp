@@ -302,4 +302,14 @@
 .dm-teclado .dc-teclado { flex: none; }
 .dm-teclado .dc-teclado button { min-height: 60px; }
 .dm-toast { bottom: 110px; }
-.dm-corte .dc-corte { padding: 0; overflow: visible; }
+.dm-vista-corte .dc-corte { padding: 0; overflow: visible; }
+
+/* ── Entrada: ¿quién cobra? ─────────────────────── */
+.da { align-items: center; justify-content: center; overflow-y: auto; }
+.da-caja { width: min(420px, 92vw); display: flex; flex-direction: column; gap: 14px; padding: 24px 0; }
+.da-caja .dc-logo { align-self: center; }
+.da-caja .dm-h1 { text-align: center; }
+.da-caja .dm-ayuda { text-align: center; }
+.da-caja .dm-dos .dm-opcion { text-align: center; }
+.da-caja .dm-principal:disabled { background: var(--dc-card); }
+.da-caja .dc-input { text-transform: none; }

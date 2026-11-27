@@ -5,7 +5,7 @@
 // Supabase; si no hay red, se quedan en la cola y se suben después. El folio
 // se asigna aquí, en la tablet: es consecutivo por día y no depende de la red.
 import { useSyncExternalStore } from 'react'
-import type { Catalogo, Corte, Existencia, Gasto, Orden } from './types'
+import type { CajeroLocal, Catalogo, Corte, Existencia, Gasto, Orden, SesionCaja } from './types'
 import { catalogoDemo } from './seed'
 import { fechaLocal, siguienteFolio } from './logic'
 
@@ -20,6 +20,10 @@ export interface EstadoPOS {
   cortes: Corte[]
   /** Orden en curso (sobrevive a recargar la página) */
   borrador: Orden | null
+  /** Quién cobra ahora. Sin sesión de caja no se puede vender. */
+  sesionCaja: SesionCaja | null
+  /** Quienes ya entraron con internet aquí: pueden volver a entrar sin red */
+  cajeros: CajeroLocal[]
 }
 
 function nuevo(): EstadoPOS {
@@ -31,13 +35,15 @@ function nuevo(): EstadoPOS {
     gastos: [],
     cortes: [],
     borrador: null,
+    sesionCaja: null,
+    cajeros: [],
   }
 }
 
 function cargar(): EstadoPOS {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return { gastos: [], cortes: [], ...JSON.parse(raw) } as EstadoPOS
+    if (raw) return { gastos: [], cortes: [], sesionCaja: null, cajeros: [], ...JSON.parse(raw) } as EstadoPOS
   } catch { /* almacenamiento bloqueado o dañado: arranca limpio */ }
   return nuevo()
 }
@@ -111,7 +117,7 @@ export function setCatalogo(c: Catalogo) {
 
 /** Solo para la demo: vuelve a los datos de ejemplo */
 export function reiniciarDemo() {
-  guardar({ ...nuevo(), dispositivo: estado.dispositivo })
+  guardar({ ...nuevo(), dispositivo: estado.dispositivo, cajeros: estado.cajeros })
 }
 
 // ── Caja ───────────────────────────────────────────────────────────────────
@@ -141,4 +147,15 @@ export function marcarCajaSincronizada(gastos: string[], cortes: string[]) {
     gastos: estado.gastos.map(x => (g.has(x.id) ? { ...x, sincronizado: true } : x)),
     cortes: estado.cortes.map(x => (c.has(x.id) ? { ...x, sincronizado: true } : x)),
   })
+}
+
+// ── Quién cobra ────────────────────────────────────────────────────────────
+
+export function abrirCaja(sesion: SesionCaja, cajero: CajeroLocal | null) {
+  const cajeros = cajero ? [...estado.cajeros.filter(c => c.usuario !== cajero.usuario), cajero] : estado.cajeros
+  guardar({ ...estado, sesionCaja: sesion, cajeros })
+}
+
+export function salirCaja() {
+  guardar({ ...estado, sesionCaja: null })
 }

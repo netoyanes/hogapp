@@ -165,7 +165,30 @@ export interface Orden {
   selloNumero: number | null
   pagos: Pago[]
   cajero: string | null
+  /** Usuario de quien cobró, legible en reportes */
+  cajeroUsuario: string | null
   sincronizada: boolean
+}
+
+/**
+ * Alguien que ya entró a la caja con internet en este dispositivo. Se guarda
+ * una huella de su contraseña (PBKDF2 con sal) para reconocerlo sin red; la
+ * contraseña nunca se guarda.
+ */
+export interface CajeroLocal {
+  usuario: string
+  nombre: string
+  userId: string
+  sal: string
+  huella: string
+}
+
+/** Quién está cobrando ahora en este dispositivo */
+export interface SesionCaja {
+  usuario: string
+  nombre: string
+  userId: string
+  desde: string
 }
 
 export interface Catalogo {

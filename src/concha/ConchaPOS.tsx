@@ -8,11 +8,12 @@ import {
   aplicado, comidasEnOrden, fechaLarga, fechaLocal, folioTxt, horaCorta, horario,
   menuDelDia, pesos, siguienteFolio, totales, turnoDelDia, type ItemDelDia,
 } from './logic'
-import { cobrarOrden, ErrorCobro, setBorrador, usePOS } from './store'
+import { cobrarOrden, ErrorCobro, salirCaja, setBorrador, usePOS } from './store'
 import { Cobro } from './Cobro'
 import { CorteCaja } from './CorteCaja'
 import { subirPendientes, useSesion, useSincronizacion } from './sync'
-import { Chip, HojaCodigo, HojaEntrar, Logo } from './comun'
+import { Chip, HojaCodigo, Logo } from './comun'
+import { Acceso } from './Acceso'
 import { nuevaOrden, textoDescuento, useAhora, useEnLinea, usePrecache } from './util'
 import { ConchaMovil } from './ConchaMovil'
 import { useIsMobile } from '../hooks/useIsMobile'
@@ -54,7 +55,10 @@ const PENDIENTES: Record<Exclude<Vista, 'venta' | 'corte'>, { t: string; d: stri
 
 /** Tablet: la pantalla de Figma. Celular: flujo guiado paso a paso (ConchaMovil). */
 export function ConchaPOS() {
-  return useIsMobile(760) ? <ConchaMovil /> : <ConchaTablet />
+  const pos = usePOS()
+  const movil = useIsMobile(760)
+  if (!pos.sesionCaja) return <Acceso />       // primero: ¿quién cobra?
+  return movil ? <ConchaMovil /> : <ConchaTablet />
 }
 
 function ConchaTablet() {
@@ -80,7 +84,6 @@ function ConchaTablet() {
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null)
   const [hojaCodigo, setHojaCodigo] = useState(false)
   const [hojaCobro, setHojaCobro] = useState(false)
-  const [hojaEntrar, setHojaEntrar] = useState(false)
   const sesion = useSesion()
   const errorSync = useSincronizacion(sesion)
 
@@ -207,7 +210,7 @@ function ConchaTablet() {
       const c = cobrarOrden({
         ...orden, turnoId: turno?.id ?? null, subtotal: tot.subtotal, descuentoMonto: tot.descuento,
         total: tot.total, sinCobro: tot.sinCobro, costoSinCobro: tot.costoSinCobro, sellos: tot.sellos, pagos,
-        cajero: sesion?.user.id ?? null,
+        cajero: pos.sesionCaja?.userId ?? null, cajeroUsuario: pos.sesionCaja?.usuario ?? null,
       })
       setSel(null)
       subirPendientes().catch(() => {})
@@ -249,7 +252,8 @@ function ConchaTablet() {
               {!enLinea && <> · <b>Sin internet</b></>}
               {cajaCerrada && <> · <b>Caja cerrada</b></>}
               {porSubir > 0 && <> · {porSubir} por subir</>}
-              {sesion === null && <> · <button type="button" className="dc-link" onClick={() => setHojaEntrar(true)}>Entrar para sincronizar</button></>}
+{pos.sesionCaja && <> · Cobra <b>{pos.sesionCaja.nombre}</b> · <button type="button" className="dc-link" onClick={salirCaja}>Cambiar</button></>}
+              {sesion === null && <> · <b>Sin conexión a HOG APP: sal y vuelve a entrar con internet</b></>}
               {sesion && errorSync && errorSync !== 'sin sesión' && <> · <b title={errorSync}>No se pudo subir</b></>}
             </p>
           </div>
@@ -262,7 +266,7 @@ function ConchaTablet() {
         </div>
       </header>
 
-      {vista === 'corte' ? <CorteCaja hoy={hoy} cajero={sesion?.user.id ?? null} onVolver={() => setVista('venta')} /> : (
+      {vista === 'corte' ? <CorteCaja hoy={hoy} cajero={pos.sesionCaja?.userId ?? null} onVolver={() => setVista('venta')} /> : (
       <div className="dc-body">
         {/* Menú */}
         <main className="dc-menu">
@@ -422,7 +426,6 @@ function ConchaTablet() {
           onNueva={() => { setHojaCobro(false); setForma('efectivo') }}
         />
       )}
-      {hojaEntrar && <HojaEntrar onCerrar={() => setHojaEntrar(false)} />}
       {hojaCodigo && (
         <HojaCodigo
           descuentos={descuentosHoy.filter(d => d.tipo === 'codigo')}

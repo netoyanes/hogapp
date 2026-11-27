@@ -11,10 +11,10 @@ import {
   aplicado, armarPagos, billetesSugeridos, comidasEnOrden, fechaLarga, fechaLocal, folioTxt,
   menuDelDia, pesos, siguienteFolio, totales, turnoDelDia, type ItemDelDia, type ModoCobro,
 } from './logic'
-import { cobrarOrden, ErrorCobro, setBorrador, usePOS } from './store'
+import { cobrarOrden, ErrorCobro, salirCaja, setBorrador, usePOS } from './store'
 import { subirPendientes, useSesion, useSincronizacion } from './sync'
 import { CorteCaja } from './CorteCaja'
-import { HojaCodigo, HojaEntrar, Logo } from './comun'
+import { HojaCodigo, Logo } from './comun'
 import { nuevaOrden, textoDescuento, useAhora, useEnLinea, usePrecache } from './util'
 
 type Paso = 'menu' | 'armar' | 'orden' | 'descuento' | 'cobro' | 'listo' | 'corte'
@@ -37,7 +37,6 @@ export function ConchaMovil() {
   const [guiso, setGuiso] = useState<ItemDelDia | null>(null)
   const [cobrada, setCobrada] = useState<Orden | null>(null)
   const [aviso, setAviso] = useState<{ msg: string; error?: boolean } | null>(null)
-  const [hojaEntrar, setHojaEntrar] = useState(false)
   const [hojaCodigo, setHojaCodigo] = useState(false)
 
   useEffect(() => {
@@ -106,7 +105,7 @@ export function ConchaMovil() {
     try {
       const c = cobrarOrden({
         ...orden, turnoId: turno?.id ?? null, subtotal: tot.subtotal, descuentoMonto: tot.descuento, total: tot.total,
-        sinCobro: tot.sinCobro, costoSinCobro: tot.costoSinCobro, sellos: tot.sellos, pagos, cajero: sesion?.user.id ?? null,
+        sinCobro: tot.sinCobro, costoSinCobro: tot.costoSinCobro, sellos: tot.sellos, pagos, cajero: pos.sesionCaja?.userId ?? null, cajeroUsuario: pos.sesionCaja?.usuario ?? null,
       })
       setCobrada(c); setPaso('listo')
       subirPendientes().catch(() => {})
@@ -120,7 +119,7 @@ export function ConchaMovil() {
   // ── Pantallas ──────────────────────────────────────────────────────────
   let pantalla
   if (paso === 'corte') {
-    pantalla = <div className="dm-scroll dm-corte"><CorteCaja hoy={hoy} cajero={sesion?.user.id ?? null} onVolver={() => setPaso('menu')} /></div>
+    pantalla = <div className="dm-scroll dm-vista-corte"><CorteCaja hoy={hoy} cajero={pos.sesionCaja?.userId ?? null} onVolver={() => setPaso('menu')} /></div>
   } else if (paso === 'armar' && guiso) {
     pantalla = <ArmarComida item={guiso} guarniciones={guarniciones} aguas={aguas} onCancelar={() => setPaso('menu')} onAgregar={(g, a) => agregarComida(guiso, g, a)} />
   } else if (paso === 'orden') {
@@ -224,7 +223,8 @@ export function ConchaMovil() {
             {!enLinea && <> · <b>Sin internet</b></>}
             {cajaCerrada && <> · <b>Caja cerrada</b></>}
             {porSubir > 0 && <> · {porSubir} por subir</>}
-            {sesion === null && <> · <button type="button" className="dc-link" onClick={() => setHojaEntrar(true)}>Entrar para sincronizar</button></>}
+{pos.sesionCaja && <> · Cobra <b>{pos.sesionCaja.nombre}</b> · <button type="button" className="dc-link" onClick={salirCaja}>Cambiar</button></>}
+            {sesion === null && <> · <b>Sin conexión a HOG APP: sal y vuelve a entrar con internet</b></>}
             {sesion && errorSync && errorSync !== 'sin sesión' && <> · <b>No se pudo subir</b></>}
           </p>
 
@@ -272,7 +272,6 @@ export function ConchaMovil() {
   return (
     <div className="dc dm">
       {pantalla}
-      {hojaEntrar && <HojaEntrar onCerrar={() => setHojaEntrar(false)} />}
       {hojaCodigo && (
         <HojaCodigo descuentos={cat.descuentos.filter(d => d.activo && d.tipo === 'codigo')} onCerrar={() => setHojaCodigo(false)}
           onAplicar={(d, codigo) => { setHojaCodigo(false); elegirDescuento(d, codigo) }} />
