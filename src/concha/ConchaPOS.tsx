@@ -522,39 +522,69 @@ function HojaCodigo({ descuentos, onCerrar, onAplicar }: {
   )
 }
 
-/** Entrar con usuario y PIN de HOG APP (los de piso). La sesión queda guardada en la tablet. */
+/**
+ * Entrar con la cuenta de HOG APP: usuario y PIN (personal de piso), correo y
+ * contraseña, o Google — las mismas tres formas que el login de HOG APP. La
+ * sesión queda guardada en la tablet y sigue sirviendo sin internet.
+ */
 function HojaEntrar({ onCerrar }: { onCerrar: () => void }) {
+  const [modo, setModo] = useState<'pin' | 'correo'>('pin')
   const [usuario, setUsuario] = useState('')
-  const [pin, setPin] = useState('')
+  const [secreto, setSecreto] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
+
   async function entrar() {
-    const u = normalizeUsername(usuario)
-    if (!isValidUsername(u)) { setError('El usuario debe tener al menos 8 letras o números'); return }
-    if (!isValidPin(pin)) { setError('El PIN es de 4 a 6 dígitos'); return }
-    if (!navigator.onLine) { setError('Para entrar la primera vez se necesita internet'); return }
+    if (!navigator.onLine) { setError('Para entrar se necesita internet (solo la primera vez)'); return }
+    let email: string, password: string
+    if (modo === 'pin') {
+      const u = normalizeUsername(usuario)
+      if (!isValidUsername(u)) { setError('El usuario debe tener al menos 8 letras o números'); return }
+      if (!isValidPin(secreto)) { setError('El PIN es de 4 a 6 dígitos'); return }
+      email = usernameToEmail(u); password = pinToPassword(secreto)
+    } else {
+      if (!usuario.includes('@') || !secreto) { setError('Escribe tu correo y tu contraseña'); return }
+      email = usuario.trim(); password = secreto
+    }
     setCargando(true)
-    const { error: e } = await supabase.auth.signInWithPassword({ email: usernameToEmail(u), password: pinToPassword(pin) })
+    const { error: e } = await supabase.auth.signInWithPassword({ email, password })
     setCargando(false)
-    if (e) setError('Usuario o PIN incorrectos')
+    if (e) setError(modo === 'pin' ? 'Usuario o PIN incorrectos' : 'Correo o contraseña incorrectos')
     else onCerrar()
   }
+
+  async function google() {
+    if (!navigator.onLine) { setError('Para entrar se necesita internet (solo la primera vez)'); return }
+    const { error: e } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + '/concha' } })
+    if (e) setError(e.message)
+  }
+
+  function cambiar(m: 'pin' | 'correo') { setModo(m); setUsuario(''); setSecreto(''); setError(null) }
+
   return (
     <div className="dc-velo" onClick={onCerrar}>
       <div className="dc-hoja" onClick={e => e.stopPropagation()}>
         <h3>Entrar</h3>
-        <p>Con tu usuario y PIN de HOG APP. Se pide una sola vez; después la caja sigue funcionando aunque no haya internet.</p>
-        <input className="dc-input" style={{ textTransform: 'none' }} autoFocus value={usuario} placeholder="Usuario"
+        <p>Con tu cuenta de HOG APP. Se pide una sola vez; después la caja sigue funcionando aunque no haya internet.</p>
+        <div className="dc-row" style={{ gap: 8 }}>
+          <button type="button" className={'dc-chip' + (modo === 'pin' ? ' is-on' : '')} onClick={() => cambiar('pin')}>Usuario y PIN</button>
+          <button type="button" className={'dc-chip' + (modo === 'correo' ? ' is-on' : '')} onClick={() => cambiar('correo')}>Correo</button>
+        </div>
+        <input key={modo} className="dc-input" style={{ textTransform: 'none' }} autoFocus value={usuario}
+          placeholder={modo === 'pin' ? 'Usuario' : 'Correo'} type={modo === 'pin' ? 'text' : 'email'}
           autoCapitalize="none" autoCorrect="off" onChange={e => { setUsuario(e.target.value); setError(null) }} />
-        <input className="dc-input" value={pin} placeholder="PIN" inputMode="numeric" type="password"
-          onChange={e => { setPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(null) }}
+        <input className="dc-input" style={{ textTransform: 'none' }} value={secreto} type="password"
+          placeholder={modo === 'pin' ? 'PIN' : 'Contraseña'} inputMode={modo === 'pin' ? 'numeric' : 'text'}
+          onChange={e => { setSecreto(modo === 'pin' ? e.target.value.replace(/\D/g, '').slice(0, 6) : e.target.value); setError(null) }}
           onKeyDown={e => e.key === 'Enter' && entrar()} />
         {error && <p style={{ color: 'var(--dc-primary)' }}>{error}</p>}
         <div className="dc-hoja-btns">
           <button type="button" className="dc-pago" onClick={onCerrar}>Cancelar</button>
           <button type="button" className="dc-pago is-on" onClick={entrar} disabled={cargando}>{cargando ? 'Entrando…' : 'Entrar'}</button>
         </div>
+        <button type="button" className="dc-pago" onClick={google}>Entrar con Google</button>
       </div>
     </div>
   )
 }
+
