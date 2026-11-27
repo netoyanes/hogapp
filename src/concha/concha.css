@@ -123,7 +123,7 @@
 /* ── Avisos y hojas ─────────────────────────────── */
 .dc-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--dc-price); color: var(--dc-card); font-weight: 700; font-size: 15px; padding: 14px 22px; border-radius: 999px; z-index: 30; box-shadow: 0 6px 20px rgba(47, 74, 166, .25); max-width: 80vw; text-align: center; }
 .dc-toast.is-error { background: var(--dc-primary); }
-.dc-velo { position: fixed; inset: 0; background: rgba(124, 103, 61, .35); display: flex; align-items: center; justify-content: center; z-index: 20; }
+.dc-velo { position: fixed; inset: 0; background: rgba(249, 202, 24, .82); display: flex; align-items: center; justify-content: center; z-index: 20; }
 .dc-hoja { background: var(--dc-card); border: 2px solid var(--dc-rule); border-radius: 24px; padding: 24px; width: 440px; max-width: 92vw; display: flex; flex-direction: column; gap: 14px; }
 .dc-hoja h3 { font-family: var(--dc-title); font-weight: 400; font-size: 22px; margin: 0; color: var(--dc-primary); }
 .dc-hoja p { margin: 0; font-size: 14px; color: var(--dc-secondary); font-weight: 600; }
@@ -135,3 +135,25 @@
 .dc-pendiente { background: var(--dc-card); border: 2px solid var(--dc-rule); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; gap: 8px; }
 .dc-pendiente h3 { font-family: var(--dc-title); font-weight: 400; font-size: 20px; margin: 0; }
 .dc-pendiente p { margin: 0; color: var(--dc-secondary); font-weight: 600; font-size: 14px; }
+
+/* ── Cobro (propuesta) ──────────────────────────── */
+.dc-link { color: var(--dc-price); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.dc-cobro { background: var(--dc-card); border: 2px solid var(--dc-rule); border-radius: 28px; width: 1100px; max-width: 96vw; height: 860px; max-height: 94vh; display: flex; overflow: hidden; }
+.dc-cobro-resumen { width: 400px; flex-shrink: 0; padding: 24px; display: flex; flex-direction: column; gap: 14px; border-right: 1.5px solid rgba(239, 51, 52, .35); min-height: 0; }
+.dc-cobro-pago { flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.dc-campos { display: flex; gap: 10px; }
+.dc-campo { flex: 1; min-width: 0; text-align: left; border: 2px solid rgba(47, 74, 166, .35); border-radius: 16px; padding: 10px 14px; background: #fff; display: flex; flex-direction: column; gap: 2px; }
+.dc-campo.is-on { border-color: var(--dc-price); box-shadow: 0 0 0 3px rgba(47, 74, 166, .15); }
+.dc-campo-k { font-weight: 900; font-size: 11px; letter-spacing: .88px; color: var(--dc-secondary); }
+.dc-campo-v { font-family: var(--dc-title); font-size: 26px; color: var(--dc-price); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dc-campo-a { font-weight: 600; font-size: 12px; color: var(--dc-secondary); }
+.dc-teclado { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; flex: 1; min-height: 0; }
+.dc-teclado button { background: var(--dc-canvas); border-radius: 16px; font-family: var(--dc-title); font-size: 28px; color: var(--dc-primary); min-height: 56px; }
+.dc-teclado button:active { background: var(--dc-price); color: var(--dc-card); }
+.dc-cobro-estado { display: flex; flex-direction: column; gap: 6px; min-height: 64px; }
+.dc-cobro-nota { margin: 0; font-weight: 600; font-size: 15px; color: var(--dc-secondary); }
+.dc-cobro-nota b { color: var(--dc-price); font-family: var(--dc-title); font-weight: 400; }
+.dc-cobro-error { margin: 0; font-weight: 700; font-size: 14px; color: var(--dc-primary); }
+.dc-cobro-listo { width: 560px; height: auto; flex-direction: column; align-items: center; gap: 12px; padding: 36px; text-align: center; }
+.dc-cobro-k { margin: 0; font-weight: 700; font-size: 18px; color: var(--dc-secondary); }
+.dc-cobro-grande { margin: 0; font-family: var(--dc-title); font-size: 72px; color: var(--dc-price); line-height: 1; }

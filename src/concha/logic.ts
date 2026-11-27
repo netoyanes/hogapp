@@ -2,7 +2,7 @@
 // dinero, porciones o sellos vive aquí para poder probarlo solo.
 import type {
   Catalogo, Colaboracion, Descuento, DescuentoAplicado, Existencia, MenuItem,
-  Orden, Platillo, Renglon, Turno,
+  FormaPago, Orden, Pago, Platillo, Renglon, Turno,
 } from './types'
 
 export const TZ = 'America/Mazatlan'
@@ -253,4 +253,63 @@ export function repartoColaboracion(c: Colaboracion, ordenes: Orden[]): RepartoD
     }
   }
   return [...porDia.values()].sort((a, b) => a.fecha.localeCompare(b.fecha))
+}
+
+// ── Cobro ─────────────────────────────────────────────────────────────────
+
+export type ModoCobro = 'efectivo' | 'tarjeta' | 'dividir'
+
+export interface CamposCobro {
+  /** Efectivo que entrega el cliente (en dividir: por la parte en efectivo) */
+  recibido: number
+  /** Propina, aparte de la venta. Puede dejarse en efectivo o con tarjeta */
+  propina: number
+  propinaForma: FormaPago
+  referencia: string
+  /** Solo dividir: cuánto se paga en efectivo; el resto va a tarjeta */
+  enEfectivo: number
+}
+
+/**
+ * Arma los pagos de una orden. La propina nunca suma a la venta: va en su
+ * propio campo del pago con el que se dejó.
+ * - Efectivo: cambio = recibido − total − propina en efectivo.
+ * - Tarjeta: en la terminal se cobra total + propina; aquí solo se registra.
+ * - Dividir: una parte en efectivo y el resto con tarjeta.
+ */
+export function armarPagos(modo: ModoCobro, total: number, c: CamposCobro, nuevoId: () => string = () => crypto.randomUUID()):
+  { pagos: Pago[]; error: string | null } {
+  const ref = c.referencia.trim() || null
+  const propEf = c.propinaForma === 'efectivo' ? c.propina : 0
+  const propTj = c.propinaForma === 'tarjeta' ? c.propina : 0
+  if (modo === 'efectivo') {
+    if (c.propinaForma === 'tarjeta' && c.propina > 0) return { pagos: [], error: 'La propina con tarjeta va con Tarjeta o Dividir' }
+    if (c.recibido < total + propEf) return { pagos: [], error: `Falta: recibido ${pesos(c.recibido)} de ${pesos(total + propEf)}` }
+    return { pagos: [{ id: nuevoId(), forma: 'efectivo', monto: total, recibido: c.recibido, cambio: c.recibido - total - propEf, propina: propEf, referencia: null }], error: null }
+  }
+  if (modo === 'tarjeta') {
+    if (c.propinaForma === 'efectivo' && c.propina > 0) {
+      // Pagó con tarjeta y dejó la propina en efectivo: se registra como un pago en efectivo de $0 con propina
+      return { pagos: [
+        { id: nuevoId(), forma: 'tarjeta', monto: total, recibido: null, cambio: null, propina: 0, referencia: ref },
+        { id: nuevoId(), forma: 'efectivo', monto: 0, recibido: c.propina, cambio: 0, propina: c.propina, referencia: null },
+      ], error: null }
+    }
+    return { pagos: [{ id: nuevoId(), forma: 'tarjeta', monto: total, recibido: null, cambio: null, propina: propTj, referencia: ref }], error: null }
+  }
+  const ef = c.enEfectivo
+  if (ef <= 0 || ef >= total) return { pagos: [], error: 'Captura cuánto se paga en efectivo (menos que el total)' }
+  const recibido = c.recibido || ef + propEf
+  if (recibido < ef + propEf) return { pagos: [], error: `Falta: recibido ${pesos(recibido)} de ${pesos(ef + propEf)}` }
+  return { pagos: [
+    { id: nuevoId(), forma: 'efectivo', monto: ef, recibido, cambio: recibido - ef - propEf, propina: propEf, referencia: null },
+    { id: nuevoId(), forma: 'tarjeta', monto: total - ef, recibido: null, cambio: null, propina: propTj, referencia: ref },
+  ], error: null }
+}
+
+/** Billetes sugeridos para «recibido» (en centavos), mayores o iguales al total */
+export function billetesSugeridos(total: number): number[] {
+  const arriba = (n: number) => Math.ceil(total / n) * n
+  const s = new Set([total, arriba(5000), arriba(10000), 20000, 50000, 100000].filter(x => x >= total))
+  return [...s].sort((a, b) => a - b).slice(0, 4)
 }

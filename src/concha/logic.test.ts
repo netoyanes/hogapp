@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   diaSemana, fechaLarga, folioTxt, horario, lunesDe, menuDelDia, pesos,
-  repartoColaboracion, siguienteFolio, totales, turnoDelDia, aplicado,
+  repartoColaboracion, siguienteFolio, totales, turnoDelDia, aplicado, armarPagos, billetesSugeridos,
 } from './logic'
 import { catalogoDemo } from './seed'
 import type { Orden, Renglon } from './types'
@@ -113,5 +113,34 @@ describe('folio y reparto al chef', () => {
     const r = repartoColaboracion(c, ords)
     expect(r[0]).toMatchObject({ fecha: '2026-11-23', vendidos: 3, ganancia: 27000, alChef: 13500, conReparto: true })
     expect(r[1]).toMatchObject({ fecha: '2026-11-30', vendidos: 2, alChef: 0, conReparto: false })
+  })
+})
+
+describe('cobro', () => {
+  const base = { recibido: 0, propina: 0, propinaForma: 'efectivo' as const, referencia: '', enEfectivo: 0 }
+  it('efectivo: cambio, y la propina en efectivo sale del cambio', () => {
+    const r = armarPagos('efectivo', 25200, { ...base, recibido: 30000, propina: 2000 })
+    expect(r.error).toBeNull()
+    expect(r.pagos[0]).toMatchObject({ forma: 'efectivo', monto: 25200, recibido: 30000, cambio: 2800, propina: 2000 })
+  })
+  it('efectivo: no alcanza', () => {
+    expect(armarPagos('efectivo', 25200, { ...base, recibido: 20000 }).error).toMatch(/Falta/)
+  })
+  it('tarjeta con propina en tarjeta: la venta no cambia', () => {
+    const r = armarPagos('tarjeta', 25200, { ...base, propina: 3000, propinaForma: 'tarjeta', referencia: '1234' })
+    expect(r.pagos).toHaveLength(1)
+    expect(r.pagos[0]).toMatchObject({ forma: 'tarjeta', monto: 25200, propina: 3000, referencia: '1234' })
+  })
+  it('tarjeta con propina en efectivo', () => {
+    const r = armarPagos('tarjeta', 25200, { ...base, propina: 2000, propinaForma: 'efectivo' })
+    expect(r.pagos.map(p => [p.forma, p.monto, p.propina])).toEqual([['tarjeta', 25200, 0], ['efectivo', 0, 2000]])
+  })
+  it('dividido: efectivo exacto por omisión y el resto a tarjeta', () => {
+    const r = armarPagos('dividir', 25200, { ...base, enEfectivo: 10000, propina: 2500, propinaForma: 'tarjeta' })
+    expect(r.pagos.map(p => [p.forma, p.monto, p.propina, p.cambio])).toEqual([['efectivo', 10000, 0, 0], ['tarjeta', 15200, 2500, null]])
+    expect(armarPagos('dividir', 25200, { ...base, enEfectivo: 25200 }).error).toBeTruthy()
+  })
+  it('billetes sugeridos', () => {
+    expect(billetesSugeridos(25200)).toEqual([25200, 30000, 50000, 100000])
   })
 })

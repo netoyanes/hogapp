@@ -5,12 +5,16 @@ import { useEffect, useState, type ReactNode } from 'react'
 import './concha.css'
 import logoConcha from './assets/logo-concha.svg'
 import logoLettering from './assets/logo-lettering.svg'
-import type { Descuento, Orden, Renglon } from './types'
+import type { Descuento, Orden, Pago, Renglon } from './types'
 import {
   aplicado, comidasEnOrden, fechaLarga, fechaLocal, folioTxt, horaCorta, horario,
   menuDelDia, pesos, siguienteFolio, totales, turnoDelDia, type ItemDelDia,
 } from './logic'
 import { cobrarOrden, ErrorCobro, setBorrador, usePOS } from './store'
+import { Cobro } from './Cobro'
+import { subirPendientes, useSesion, useSincronizacion } from './sync'
+import { supabase } from '../lib/supabase'
+import { isValidPin, isValidUsername, normalizeUsername, pinToPassword, usernameToEmail } from '../lib/hohAuth'
 
 // ── Componentes del archivo de Figma ──────────────────────────────────────
 
@@ -130,6 +134,10 @@ export function ConchaPOS() {
   const [sel, setSel] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null)
   const [hojaCodigo, setHojaCodigo] = useState(false)
+  const [hojaCobro, setHojaCobro] = useState(false)
+  const [hojaEntrar, setHojaEntrar] = useState(false)
+  const sesion = useSesion()
+  const errorSync = useSincronizacion(sesion)
 
   useEffect(() => {
     if (!toast) return
@@ -247,30 +255,31 @@ export function ConchaPOS() {
     })
   }
 
-  function cobrar() {
-    if (!orden.renglones.length) return
-    if (!tot.sinCobro && forma === 'dividir') {
-      aviso('El pago dividido llega con la pantalla de Cobro (siguiente paso)', true)
-      return
-    }
-    const pagos = tot.sinCobro || tot.total === 0 ? [] : [{
-      id: crypto.randomUUID(), forma: forma as 'efectivo' | 'tarjeta', monto: tot.total,
-      recibido: forma === 'efectivo' ? tot.total : null, cambio: forma === 'efectivo' ? 0 : null,
-      propina: 0, referencia: null,
-    }]
+  /** Cierra la orden con sus pagos (vacío = sin cobro). Devuelve la orden o el error. */
+  function registrar(pagos: Pago[]): Orden | string {
     try {
       const c = cobrarOrden({
         ...orden, turnoId: turno?.id ?? null, subtotal: tot.subtotal, descuentoMonto: tot.descuento,
         total: tot.total, sinCobro: tot.sinCobro, costoSinCobro: tot.costoSinCobro, sellos: tot.sellos, pagos,
+        cajero: sesion?.user.id ?? null,
       })
       setSel(null)
-      setForma('efectivo')
-      aviso(tot.sinCobro
-        ? `Orden ${folioTxt(c.folio!)} registrada sin cobro · ${orden.descuento?.nombre}`
-        : `Orden ${folioTxt(c.folio!)} cobrada · ${pesos(c.total)}`)
+      subirPendientes().catch(() => {})
+      return c
     } catch (e) {
-      aviso(e instanceof ErrorCobro ? e.message : 'No se pudo guardar la orden', true)
+      return e instanceof ErrorCobro ? e.message : 'No se pudo guardar la orden'
     }
+  }
+
+  function cobrar() {
+    if (!orden.renglones.length) return
+    if (tot.sinCobro || tot.total === 0) {
+      const r = registrar([])
+      if (typeof r === 'string') aviso(r, true)
+      else aviso(tot.sinCobro ? `Orden ${folioTxt(r.folio!)} registrada sin cobro · ${orden.descuento?.nombre}` : `Orden ${folioTxt(r.folio!)} registrada`)
+      return
+    }
+    setHojaCobro(true)
   }
 
   // ── Textos ──
@@ -297,6 +306,8 @@ export function ConchaPOS() {
               {fechaLarga(hoy)} · {turno ? `${turno.nombre} ${horario(turno.inicio, turno.fin)}` : 'Hoy no hay servicio'}
               {!enLinea && <> · <b>Sin internet</b></>}
               {porSubir > 0 && <> · {porSubir} {porSubir === 1 ? 'orden' : 'órdenes'} por subir</>}
+              {sesion === null && <> · <button type="button" className="dc-link" onClick={() => setHojaEntrar(true)}>Entrar para sincronizar</button></>}
+              {sesion && errorSync && errorSync !== 'sin sesión' && <> · <b title={errorSync}>No se pudo subir</b></>}
             </p>
           </div>
         </div>
@@ -458,6 +469,14 @@ export function ConchaPOS() {
         </aside>
       </div>
 
+      {hojaCobro && (
+        <Cobro
+          orden={orden} tot={tot} folio={siguienteFolio(ordenes, hoy)} descTxt={descTxt}
+          modoInicial={forma} onCancelar={() => setHojaCobro(false)} onConfirmar={registrar}
+          onNueva={() => { setHojaCobro(false); setForma('efectivo') }}
+        />
+      )}
+      {hojaEntrar && <HojaEntrar onCerrar={() => setHojaEntrar(false)} />}
       {hojaCodigo && (
         <HojaCodigo
           descuentos={descuentosHoy.filter(d => d.tipo === 'codigo')}
@@ -492,6 +511,43 @@ function HojaCodigo({ descuentos, onCerrar, onAplicar }: {
         <div className="dc-hoja-btns">
           <button type="button" className="dc-pago" onClick={onCerrar}>Cancelar</button>
           <button type="button" className="dc-pago is-on" onClick={aplicar}>Aplicar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Entrar con usuario y PIN de HOG APP (los de piso). La sesión queda guardada en la tablet. */
+function HojaEntrar({ onCerrar }: { onCerrar: () => void }) {
+  const [usuario, setUsuario] = useState('')
+  const [pin, setPin] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [cargando, setCargando] = useState(false)
+  async function entrar() {
+    const u = normalizeUsername(usuario)
+    if (!isValidUsername(u)) { setError('El usuario debe tener al menos 8 letras o números'); return }
+    if (!isValidPin(pin)) { setError('El PIN es de 4 a 6 dígitos'); return }
+    if (!navigator.onLine) { setError('Para entrar la primera vez se necesita internet'); return }
+    setCargando(true)
+    const { error: e } = await supabase.auth.signInWithPassword({ email: usernameToEmail(u), password: pinToPassword(pin) })
+    setCargando(false)
+    if (e) setError('Usuario o PIN incorrectos')
+    else onCerrar()
+  }
+  return (
+    <div className="dc-velo" onClick={onCerrar}>
+      <div className="dc-hoja" onClick={e => e.stopPropagation()}>
+        <h3>Entrar</h3>
+        <p>Con tu usuario y PIN de HOG APP. Se pide una sola vez; después la caja sigue funcionando aunque no haya internet.</p>
+        <input className="dc-input" style={{ textTransform: 'none' }} autoFocus value={usuario} placeholder="Usuario"
+          autoCapitalize="none" autoCorrect="off" onChange={e => { setUsuario(e.target.value); setError(null) }} />
+        <input className="dc-input" value={pin} placeholder="PIN" inputMode="numeric" type="password"
+          onChange={e => { setPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(null) }}
+          onKeyDown={e => e.key === 'Enter' && entrar()} />
+        {error && <p style={{ color: 'var(--dc-primary)' }}>{error}</p>}
+        <div className="dc-hoja-btns">
+          <button type="button" className="dc-pago" onClick={onCerrar}>Cancelar</button>
+          <button type="button" className="dc-pago is-on" onClick={entrar} disabled={cargando}>{cargando ? 'Entrando…' : 'Entrar'}</button>
         </div>
       </div>
     </div>
