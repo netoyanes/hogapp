@@ -134,9 +134,11 @@ create table if not exists public.concha_ordenes (
   sellos              int not null default 0,
   sello_numero        int,
   cajero              uuid references auth.users(id),
+  cajero_usuario      text,
   subida_en           timestamptz not null default now(),
   unique (fecha, dispositivo, folio)
 );
+alter table public.concha_ordenes add column if not exists cajero_usuario text;
 create index if not exists concha_ordenes_fecha_idx on public.concha_ordenes (fecha);
 
 create table if not exists public.concha_orden_renglones (
@@ -224,14 +226,17 @@ begin
   insert into concha_ordenes (id, dispositivo, fecha, folio, creada_en, cobrada_en, turno_id, servicio, canal,
     nombre_cliente, telefono, direccion, costo_envio, estado, descuento_id, descuento_nombre, descuento_tipo,
     descuento_pct, descuento_motivo, codigo_capturado, subtotal, descuento_monto, total, sin_cobro,
-    costo_sin_cobro, sellos, sello_numero, cajero)
+    costo_sin_cobro, sellos, sello_numero, cajero, cajero_usuario)
   values (oid, (o->>'dispositivo')::uuid, (o->>'fecha')::date, (o->>'folio')::int, (o->>'creadaEn')::timestamptz,
     (o->>'cobradaEn')::timestamptz, o->>'turnoId', o->>'servicio', coalesce(o->>'canal', 'mostrador'),
     o->>'nombreCliente', o->>'telefono', o->>'direccion', coalesce((o->>'costoEnvio')::int, 0), o->>'estado',
     o->'descuento'->>'id', o->'descuento'->>'nombre', o->'descuento'->>'tipo', (o->'descuento'->>'porcentaje')::numeric,
     o->'descuento'->>'motivo', o->>'codigoCapturado', (o->>'subtotal')::int, (o->>'descuentoMonto')::int,
     (o->>'total')::int, (o->>'sinCobro')::boolean, (o->>'costoSinCobro')::int, (o->>'sellos')::int,
-    (o->>'selloNumero')::int, auth.uid());
+    (o->>'selloNumero')::int,
+    -- quien cobró (la tablet lo guarda aunque no hubiera red); si no viene, quien sube
+    coalesce((select id from auth.users where id = (o->>'cajero')::uuid), auth.uid()),
+    o->>'cajeroUsuario');
 
   for r in select * from jsonb_array_elements(o->'renglones') loop
     insert into concha_orden_renglones (id, orden_id, tipo, platillo_id, nombre, guarnicion1_id, guarnicion1,

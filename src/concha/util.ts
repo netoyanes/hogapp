@@ -10,7 +10,7 @@ export function nuevaOrden(fecha: string, turnoId: string | null, dispositivo: s
     direccion: null, costoEnvio: 0, estado: 'abierta', renglones: [],
     descuento: null, codigoCapturado: null, subtotal: 0, descuentoMonto: 0, total: 0,
     sinCobro: false, costoSinCobro: 0, sellos: 0, selloNumero: null, pagos: [],
-    cajero: null, sincronizada: false,
+    cajero: null, cajeroUsuario: null, sincronizada: false,
   }
 }
 
