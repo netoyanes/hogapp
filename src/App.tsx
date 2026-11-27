@@ -57,6 +57,8 @@ import { useEffect, useRef } from 'react'
 const Ronqueo = lazy(() => import('./screens/ronqueo/Ronqueo').then(m => ({ default: m.Ronqueo })))
 const RonqueoGracias = lazy(() => import('./screens/ronqueo/RonqueoGracias').then(m => ({ default: m.RonqueoGracias })))
 // /pr/invitaciones — herramienta interna de PR (celular + PIN, sin índice, fuera de la navegación)
+// /concha — punto de venta de Doña Concha (tablet de caja, funciona sin internet)
+const ConchaPOS = lazy(() => import('./concha/ConchaPOS').then(m => ({ default: m.ConchaPOS })))
 const PrInvitaciones = lazy(() => import('./screens/ronqueo/PrInvitaciones').then(m => ({ default: m.PrInvitaciones })))
 
 export function canSeeDashboard(role?: string | null) {
@@ -87,6 +89,7 @@ const _wellness = _params.get('wellness')
 // /ronqueo y /ronqueo/gracias — venta de boletos del ronqueo de Bruma Records
 const _ronqueo = /^\/ronqueo(\.html)?\/?$/i.test(window.location.pathname)
 const _ronqueoGracias = /^\/ronqueo\/gracias\/?$/i.test(window.location.pathname)
+const _concha = /^\/concha\/?$/i.test(window.location.pathname)
 const _prInvitaciones = /^\/pr\/invitaciones\/?$/i.test(window.location.pathname)
 const _cenote = _params.has('cenote') || /^\/cenote(\.html)?\/?$/i.test(window.location.pathname)
 // ?letras=CODIGO (o /letras/CODIGO, lo que va impreso en el QR de la mesa) —
@@ -123,6 +126,7 @@ export default function App() {
   if (_wellness) return <WellnessPortal code={_wellness} />
   // Ronqueo — landing de boletos y confirmación de pago (Stripe)
   if (_ronqueo) return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#161714' }} />}><Ronqueo /></Suspense>
+  if (_concha) return <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: '#F9CA18' }} />}><ConchaPOS /></Suspense>
   if (_prInvitaciones) return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#f4f1e9' }} />}><PrInvitaciones /></Suspense>
   if (_ronqueoGracias) return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#f4f1e9' }} />}><RonqueoGracias /></Suspense>
   // Cenote — sitio comercial del spa
