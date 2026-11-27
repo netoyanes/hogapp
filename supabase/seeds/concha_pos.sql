@@ -16,7 +16,7 @@ returns boolean language sql stable security definer set search_path = public as
   select hog_role() in ('MASTER', 'C_LEVEL', 'DEV')
       or exists (select 1 from user_apps where user_id = auth.uid() and app = 'concha')
 $$;
-revoke all on function public.fn_concha_staff() from public;
+revoke all on function public.fn_concha_staff() from public, anon;
 grant execute on function public.fn_concha_staff() to authenticated;
 
 -- ── Configuración ──────────────────────────────────────────────────────────
@@ -250,7 +250,7 @@ begin
   end loop;
   return oid;
 end $$;
-revoke all on function public.concha_subir_orden(jsonb) from public;
+revoke all on function public.concha_subir_orden(jsonb) from public, anon;
 grant execute on function public.concha_subir_orden(jsonb) to authenticated;
 
 -- ── Vistas para los dashboards de HOG APP ──────────────────────────────────
