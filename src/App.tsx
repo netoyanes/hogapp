@@ -54,12 +54,11 @@ import { useEffect, useRef } from 'react'
 
 // Ronqueo (Bruma Records) — landing público de venta de boletos. Lazy: sus
 // fuentes, CSS y fotos no se cargan en el resto de HOG APP.
-const Ronqueo = lazy(() => import('./screens/ronqueo/Ronqueo').then(m => ({ default: m.Ronqueo })))
-const RonqueoGracias = lazy(() => import('./screens/ronqueo/RonqueoGracias').then(m => ({ default: m.RonqueoGracias })))
-// /pr/invitaciones — herramienta interna de PR (celular + PIN, sin índice, fuera de la navegación)
+// El ronqueo se canceló: /ronqueo, /ronqueo/gracias y /pr/invitaciones muestran el aviso.
+// El landing (Ronqueo, RonqueoGracias, PrInvitaciones) sigue en src/screens/ronqueo por si se reprograma.
+const RonqueoCancelado = lazy(() => import('./screens/ronqueo/RonqueoCancelado').then(m => ({ default: m.RonqueoCancelado })))
 // /concha — punto de venta de Doña Concha (tablet de caja, funciona sin internet)
 const ConchaPOS = lazy(() => import('./concha/ConchaPOS').then(m => ({ default: m.ConchaPOS })))
-const PrInvitaciones = lazy(() => import('./screens/ronqueo/PrInvitaciones').then(m => ({ default: m.PrInvitaciones })))
 
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL' || role === 'DEV'
@@ -125,10 +124,8 @@ export default function App() {
   // el alumno aterriza aquí y ve su clase ya pagada)
   if (_wellness) return <WellnessPortal code={_wellness} />
   // Ronqueo — landing de boletos y confirmación de pago (Stripe)
-  if (_ronqueo) return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#161714' }} />}><Ronqueo /></Suspense>
+  if (_ronqueo || _ronqueoGracias || _prInvitaciones) return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#161714' }} />}><RonqueoCancelado /></Suspense>
   if (_concha) return <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: '#F9CA18' }} />}><ConchaPOS /></Suspense>
-  if (_prInvitaciones) return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#f4f1e9' }} />}><PrInvitaciones /></Suspense>
-  if (_ronqueoGracias) return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#f4f1e9' }} />}><RonqueoGracias /></Suspense>
   // Cenote — sitio comercial del spa
   if (_cenote) return <CenotePortal />
   // Piano nights — letras en vivo para quien escanea el QR de la mesa
