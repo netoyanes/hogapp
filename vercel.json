@@ -33,6 +33,10 @@
       "destination": "/ronqueo.html"
     },
     {
+      "source": "/pr/invitaciones",
+      "destination": "/ronqueo.html"
+    },
+    {
       "source": "/ronqueo/gracias",
       "destination": "/ronqueo.html"
     },
@@ -47,7 +51,7 @@
   ],
   "headers": [
     {
-      "source": "/pr/(.*)",
+      "source": "/(ronqueo|ronqueo/gracias|pr/:path*)",
       "headers": [
         {
           "key": "X-Robots-Tag",
