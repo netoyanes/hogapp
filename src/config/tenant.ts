@@ -17,7 +17,7 @@ export const TENANT: TenantConfig = {
   appSubtitle: 'Command Center',
   logo: { type: 'symbol' },
   enabledViews: [
-    'resumen', 'dashboard', 'pulso', 'finanzas', 'nomina', 'aperturas', 'obras', 'ronqueo', 'wellness', 'pianobar', 'pr', 'prcom', 'tasks', 'crm', 'concierge', 'casa', 'events', 'objectives',
+    'resumen', 'dashboard', 'pulso', 'finanzas', 'nomina', 'aperturas', 'obras', 'ronqueo', 'concha', 'wellness', 'pianobar', 'pr', 'prcom', 'tasks', 'crm', 'concierge', 'casa', 'events', 'objectives',
     'revenue', 'reports', 'activity', 'upload', 'templates',
     'invite', 'profile',
   ],
@@ -31,6 +31,7 @@ export const TENANT: TenantConfig = {
     aperturas: 'Aperturas',
     obras:     'Obras',
     ronqueo:   'Ronqueo · Bruma Records',
+    concha:    'Doña Concha · Reportes',
     pianobar:  'Piano Nights',
     tasks:     'Tareas',
     crm:       'Comercial',

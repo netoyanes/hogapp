@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck, Home, Radio, Landmark, Users, Flower2, Megaphone, Banknote, HardHat, Piano, Hammer, Fish } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, CalendarDays, BarChart3, Upload, ChevronRight, LogOut, UserCircle, UserPlus, Activity, LayoutTemplate, Handshake, FileText, Target, Command, Shell, ClipboardCheck, Home, Radio, Landmark, Users, Flower2, Megaphone, Banknote, HardHat, Piano, Hammer, Fish, Soup } from 'lucide-react'
 import { AppLogoBadge } from '../ui/AppLogo'
 import { TENANT, viewTitle } from '../../config/tenant'
 import { STR } from '../../lib/strings'
@@ -25,6 +25,8 @@ export const NAV_ITEMS = [
   { id: 'obras',      label: STR.nav.obras,      icon: Hammer,          masterOnly: true },
   // Ronqueo (Bruma Records): MASTER y DEV la ven por rol; alguien más, si se le asigna la app 'ronqueo'
   { id: 'ronqueo',    label: STR.nav.ronqueo,    icon: Fish },
+  // Doña Concha: reportes compartibles del POS (MASTER; C_LEVEL entra por la base)
+  { id: 'concha',     label: STR.nav.concha,     icon: Soup,            masterOnly: true },
   { id: 'wellness',   label: STR.nav.wellness,   icon: Flower2 },
   { id: 'pianobar',   label: STR.nav.pianobar,   icon: Piano },
   { id: 'pr',         label: STR.nav.pr,         icon: Megaphone },

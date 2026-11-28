@@ -38,6 +38,7 @@ export const STR = {
     pianobar: 'Piano Nights',
     obras: 'Obras',
     ronqueo: 'Ronqueo',
+    concha: 'Doña Concha',
     tasks: 'Tareas',
     crm: 'Comercial',
     reservations: 'Reservas',

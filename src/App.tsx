@@ -59,6 +59,10 @@ import { useEffect, useRef } from 'react'
 const RonqueoCancelado = lazy(() => import('./screens/ronqueo/RonqueoCancelado').then(m => ({ default: m.RonqueoCancelado })))
 // /concha — punto de venta de Doña Concha (tablet de caja, funciona sin internet)
 const ConchaPOS = lazy(() => import('./concha/ConchaPOS').then(m => ({ default: m.ConchaPOS })))
+// /reporte/<token> — reporte de ventas de Doña Concha compartido con un link que vence
+const ReportePublico = lazy(() => import('./concha/reporte/ReportePublico').then(m => ({ default: m.ReportePublico })))
+// Doña Concha · Reportes (dentro de HOG APP): genera esos links
+const ConchaReportes = lazy(() => import('./screens/ConchaReportes').then(m => ({ default: m.ConchaReportes })))
 
 export function canSeeDashboard(role?: string | null) {
   return role === 'MASTER' || role === 'C_LEVEL' || role === 'DEV'
@@ -89,6 +93,7 @@ const _wellness = _params.get('wellness')
 const _ronqueo = /^\/ronqueo(\.html)?\/?$/i.test(window.location.pathname)
 const _ronqueoGracias = /^\/ronqueo\/gracias\/?$/i.test(window.location.pathname)
 const _concha = /^\/concha\/?$/i.test(window.location.pathname)
+const _conchaReporte = window.location.pathname.match(/^\/reporte\/([a-f0-9]{64})\/?$/i)?.[1] ?? null
 const _prInvitaciones = /^\/pr\/invitaciones\/?$/i.test(window.location.pathname)
 const _cenote = _params.has('cenote') || /^\/cenote(\.html)?\/?$/i.test(window.location.pathname)
 // ?letras=CODIGO (o /letras/CODIGO, lo que va impreso en el QR de la mesa) —
@@ -125,6 +130,7 @@ export default function App() {
   if (_wellness) return <WellnessPortal code={_wellness} />
   // Ronqueo — landing de boletos y confirmación de pago (Stripe)
   if (_ronqueo || _ronqueoGracias || _prInvitaciones) return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#161714' }} />}><RonqueoCancelado /></Suspense>
+  if (_conchaReporte) return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#F9CA18' }} />}><ReportePublico token={_conchaReporte} /></Suspense>
   if (_concha) return <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: '#F9CA18' }} />}><ConchaPOS /></Suspense>
   // Cenote — sitio comercial del spa
   if (_cenote) return <CenotePortal />
@@ -384,6 +390,11 @@ export default function App() {
         return role === 'MASTER' || role === 'DEV' || userApps?.has('ronqueo')
           ? <RonqueoAdmin />
           : <EmptyState icon="🔒" title="Sin acceso" description="Ronqueo se asigna por usuario en Usuarios." />
+      case 'concha':
+        // Reportes de Doña Concha; fn_concha_admin lo vuelve a verificar en la base
+        return role === 'MASTER' || role === 'C_LEVEL'
+          ? <Suspense fallback={null}><ConchaReportes /></Suspense>
+          : <EmptyState icon="🔒" title="Sin acceso" description="Los reportes de Doña Concha son para MASTER y C-Level." />
       case 'tasks':
         return <TaskBoard userRole={role} defaultBuFilter={buFilter} userId={profile?.id} />
       case 'crm':

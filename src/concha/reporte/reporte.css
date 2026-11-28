@@ -1,0 +1,93 @@
+/* Doña Concha · Reporte de ventas — mismos colores y fuentes que el POS.
+   Se lee en pantalla (celular o compu) y se descarga en PDF (imprimir). */
+.dr {
+  --dc-canvas: #F9CA18; --dc-card: #FFF6D1; --dc-primary: #EF3334; --dc-price: #2F4AA6; --dc-secondary: #7C673D; --dc-rule: #EF3334;
+  --dc-title: 'Archivo Black', system-ui, sans-serif; --dc-text: 'Public Sans', system-ui, sans-serif;
+  background: var(--dc-canvas); color: var(--dc-primary); font-family: var(--dc-text); line-height: 1.35;
+  max-width: 1040px; margin: 0 auto; padding: 24px 20px 40px; display: flex; flex-direction: column; gap: 18px;
+}
+:where(.dr) *, :where(.dr) *::before, :where(.dr) *::after { box-sizing: border-box; }
+:where(.dr) button { font: inherit; cursor: pointer; border: 0; background: none; color: inherit; }
+
+.dr-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.dr-head-txt { flex: 1; min-width: 220px; }
+.dr-head h1 { margin: 0; font-family: var(--dc-title); font-weight: 400; font-size: 26px; line-height: 1.1; }
+.dr-head p { margin: 4px 0 0; font-weight: 700; font-size: 15px; color: var(--dc-secondary); }
+.dr-acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+.dr-btn { background: var(--dc-primary); color: var(--dc-card); font-weight: 700; font-size: 15px; border-radius: 999px; padding: 12px 20px; }
+.dr-btn.is-sec { background: var(--dc-card); color: var(--dc-primary); border: 1.5px solid var(--dc-rule); }
+
+.dr-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.dr-kpi { background: var(--dc-card); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.dr-kpi-k { font-weight: 900; font-size: 11px; letter-spacing: .88px; color: var(--dc-secondary); }
+.dr-kpi-v { font-family: var(--dc-title); font-size: 28px; color: var(--dc-price); line-height: 1.15; }
+.dr-kpi-a { font-weight: 600; font-size: 13px; color: var(--dc-secondary); }
+
+.dr-seccion { background: var(--dc-card); border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dr-seccion-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.dr-seccion-head h2 { margin: 0; font-family: var(--dc-title); font-weight: 400; font-size: 15px; letter-spacing: 1.2px; }
+.dr-seccion-head span { font-weight: 600; font-size: 12px; color: var(--dc-secondary); }
+.dr-dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.dr-nota { margin: 0; font-weight: 600; font-size: 13px; color: var(--dc-secondary); }
+.dr-nota b { color: var(--dc-price); font-family: var(--dc-title); font-weight: 400; }
+.dr-vacio { background: var(--dc-card); border-radius: 20px; padding: 32px; font-weight: 700; font-size: 16px; color: var(--dc-secondary); text-align: center; }
+.dr-pie { font-weight: 600; font-size: 12px; color: var(--dc-secondary); text-align: center; }
+
+/* Barras: una serie, marcas delgadas, extremo redondeado de 4px, 2px entre barras */
+.dr-barras { position: relative; padding-top: 18px; }
+.dr-barras-plot { position: relative; height: 180px; display: flex; align-items: flex-end; gap: 2px; border-bottom: 1.5px solid rgba(124, 103, 61, .35); }
+.dr-barra-col { flex: 1; min-width: 0; height: 100%; display: flex; align-items: flex-end; justify-content: center; position: relative; outline: none; }
+.dr-barra { width: 100%; max-width: 28px; background: var(--dc-price); border-radius: 4px 4px 0 0; opacity: .78; transition: opacity .1s; }
+.dr-barra.is-meta { opacity: 1; }
+.dr-barra.is-tenue { opacity: .4; }
+.dr-barra-col:hover .dr-barra, .dr-barra-col:focus .dr-barra { opacity: 1; outline: 2px solid var(--dc-card); }
+.dr-tip { display: none; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: #fff; color: var(--dc-price);
+  border: 1.5px solid var(--dc-price); border-radius: 10px; padding: 6px 10px; font-size: 12px; white-space: nowrap; z-index: 2; pointer-events: none; }
+.dr-tip b { color: var(--dc-secondary); }
+.dr-barra-col:hover .dr-tip, .dr-barra-col:focus .dr-tip { display: block; }
+.dr-meta { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--dc-primary); height: 0; z-index: 1; pointer-events: none; }
+.dr-meta span { position: absolute; right: 0; top: -18px; font-weight: 700; font-size: 11px; background: var(--dc-card); padding: 0 4px; }
+.dr-barras-eje { display: flex; gap: 2px; margin-top: 4px; }
+.dr-barras-eje span { flex: 1; min-width: 0; text-align: center; font-weight: 600; font-size: 10px; color: var(--dc-secondary); white-space: nowrap; overflow: visible; }
+
+.dr-tabla-wrap { overflow-x: auto; max-width: 100%; }
+.dr-tabla { width: 100%; border-collapse: collapse; font-size: 14px; }
+.dr-tabla th { text-align: left; font-weight: 900; font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--dc-secondary); padding: 6px 0; border-bottom: 1.5px solid rgba(239, 51, 52, .35); }
+.dr-tabla td { padding: 7px 0; font-weight: 600; color: var(--dc-primary); border-bottom: 1px solid rgba(239, 51, 52, .12); }
+.dr-tabla .is-r { text-align: right; padding-left: 10px; }
+.dr-tabla td.is-r { color: var(--dc-price); font-family: var(--dc-title); font-weight: 400; }
+.dr-sube { color: var(--dc-price); }
+.dr-baja { color: var(--dc-primary); }
+
+.dr-ranking { display: flex; flex-direction: column; gap: 8px; }
+.dr-rank { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.dr-rank-n { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-rank-barra { height: 10px; background: var(--dc-canvas); border-radius: 999px; overflow: hidden; }
+.dr-rank-barra span { display: block; height: 100%; background: var(--dc-price); border-radius: 999px; }
+.dr-rank-v { font-family: var(--dc-title); font-size: 15px; color: var(--dc-price); min-width: 28px; text-align: right; }
+
+@media (max-width: 760px) {
+  .dr { padding: 16px 12px 32px; gap: 14px; }
+  .dr-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dr-kpi-v { font-size: 22px; }
+  .dr-dos { grid-template-columns: 1fr; }
+  .dr-head h1 { font-size: 21px; }
+  .dr-tabla { font-size: 13px; }
+  .dr-tabla th, .dr-tabla td { white-space: nowrap; }
+  .dr-barras-eje span:not(.is-m) { visibility: hidden; }
+  .dr-barras-plot { height: 150px; }
+}
+
+/* PDF: carta vertical, sin botones, colores intactos */
+@media print {
+  @page { size: letter portrait; margin: 0; }
+  html, body { background: #F9CA18 !important; margin: 0; }
+  .dr { max-width: none; padding: 10mm; }
+  .dr-barras-eje span:not(.is-m) { visibility: hidden; }
+  .dr-acciones, .dr-no-print { display: none !important; }
+  .dr-kpi, .dr-rank, .dr-tabla tr, .dr-barras, .dr-seccion-head { break-inside: avoid; }
+  .dr-seccion-head { break-after: avoid; }
+  .dr-dos > .dr-seccion { break-inside: avoid; }
+  .dr, .dr * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .dr-tip { display: none !important; }
+}
